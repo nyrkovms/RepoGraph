@@ -48,7 +48,7 @@ def test_stats_requires_auth_and_returns_counts(client: TestClient, viewer_token
     assert unauth.status_code == 401
     assert authed.status_code == 200
     payload = authed.json()
-    assert payload["ecosystem"] == "pypi"
+    assert payload["ecosystem"] == "all"
     assert payload["packages"] >= 1
     assert payload["versions"] >= 1
 

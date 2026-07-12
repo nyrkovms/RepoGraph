@@ -9,6 +9,14 @@ from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.tokens import require_viewer
+from app.classifier import CAPABILITIES, ROLES, STATUSES
+from app.classifier.effective import (
+    classification_block,
+    effective_cap_condition,
+    registry_presence,
+    role_condition,
+    status_condition,
+)
 from app.connectors.pypi import PyPIConnector
 from app.db import get_db_session
 from app.fetcher.lazy import LazyFetcher
@@ -46,16 +54,38 @@ class PackageSort(str, Enum):
     downloads_total = "downloads_total"
 
 
+def _parse_caps_param(value: str | None, param: str) -> list[str]:
+    if not value:
+        return []
+    caps = [item.strip() for item in value.split(",") if item.strip()]
+    unknown = [c for c in caps if c not in CAPABILITIES]
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{param}: unknown capabilities {unknown}; allowed: {', '.join(CAPABILITIES)}",
+        )
+    return caps
+
+
 @router.get("/packages", response_model=PackageListResponse, dependencies=[Depends(require_viewer)])
 async def list_packages(
     db: AsyncSession = Depends(get_db_session),
+    ecosystem: str | None = Query(default=None),
     license: str | None = Query(default=None),
     has_vulnerabilities: bool | None = Query(default=None),
     updated_after: datetime | None = Query(default=None),
+    role: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    cap_all: str | None = Query(default=None),
+    cap_none: str | None = Query(default=None),
     sort: PackageSort = Query(default=PackageSort.name),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None),
 ) -> PackageListResponse:
+    if role is not None and role not in ROLES:
+        raise HTTPException(status_code=422, detail=f"unknown role '{role}'; allowed: {', '.join(ROLES)}")
+    if status is not None and status not in STATUSES:
+        raise HTTPException(status_code=422, detail=f"unknown status '{status}'; allowed: {', '.join(STATUSES)}")
     packages, next_cursor, has_more = await _query_packages(
         db=db,
         q=None,
@@ -65,6 +95,11 @@ async def list_packages(
         sort=sort,
         limit=limit,
         cursor=cursor,
+        ecosystem=ecosystem,
+        role=role,
+        status=status,
+        cap_all=_parse_caps_param(cap_all, "cap_all"),
+        cap_none=_parse_caps_param(cap_none, "cap_none"),
     )
     return PackageListResponse(data=packages, cursor=next_cursor, has_more=has_more)
 
@@ -75,9 +110,18 @@ async def get_package(name: str, db: AsyncSession = Depends(get_db_session)) -> 
     if not package:
         raise HTTPException(status_code=404, detail=f"Package '{name}' not found")
 
+    latest_row = await db.scalar(
+        select(PackageVersion).where(
+            PackageVersion.package_id == package.id, PackageVersion.version == package.latest_version
+        )
+    )
+    classification = await classification_block(db, package, latest_row) if latest_row else None
+    registries = await registry_presence(db, package)
+
     return PackageDetailResponse(
         ecosystem=package.ecosystem.value,
         name=package.name,
+        namespace=package.namespace,
         normalized_name=package.normalized_name,
         description=package.description,
         homepage_url=package.homepage_url,
@@ -87,6 +131,10 @@ async def get_package(name: str, db: AsyncSession = Depends(get_db_session)) -> 
         license_spdx=package.license_spdx,
         latest_version=package.latest_version,
         synced_at=package.synced_at,
+        deprecated=package.deprecated,
+        deprecation_message=package.deprecation_message,
+        classification=classification,
+        registries=registries,
     )
 
 
@@ -286,10 +334,29 @@ async def _query_packages(
     sort: PackageSort,
     limit: int,
     cursor: str | None,
+    ecosystem: str | None = None,
+    role: str | None = None,
+    status: str | None = None,
+    cap_all: list[str] | None = None,
+    cap_none: list[str] | None = None,
 ) -> tuple[list[PackageListItem], str | None, bool]:
     cursor_payload = _decode_cursor_or_422(cursor)
 
-    stmt = select(Package).where(Package.ecosystem == Ecosystem.pypi)
+    stmt = select(Package)
+    if ecosystem:
+        try:
+            stmt = stmt.where(Package.ecosystem == Ecosystem(ecosystem))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=f"unknown ecosystem '{ecosystem}'") from exc
+
+    if role:
+        stmt = stmt.where(role_condition(role))
+    if status:
+        stmt = stmt.where(status_condition(status))
+    for capability in cap_all or []:
+        stmt = stmt.where(effective_cap_condition(capability))
+    for capability in cap_none or []:
+        stmt = stmt.where(~effective_cap_condition(capability))
 
     if q:
         needle = f"%{q.lower()}%"

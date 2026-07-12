@@ -22,9 +22,62 @@ class PackageListResponse(BaseModel):
     has_more: bool
 
 
+class FacetItem(BaseModel):
+    role: str
+    confidence: str
+    evidence: str
+    provisional: bool
+
+
+class CapabilityItem(BaseModel):
+    capability: str
+    confidence: str
+    evidence: str
+
+
+class EffectiveCapabilityItem(BaseModel):
+    name: str
+    origin: str  # structural | user
+
+
+class AnnotationItem(BaseModel):
+    capability: str
+    present: bool
+    version: str
+    note: str
+    created_at: datetime
+
+
+class RelationItem(BaseModel):
+    relation: str
+    name: str
+
+
+class ClassificationBlock(BaseModel):
+    classifier_version: str
+    classified_at: datetime
+    version: str
+    status: str
+    status_reason: str
+    facets: list[FacetItem]
+    capabilities: list[CapabilityItem]
+    effective_capabilities: list[EffectiveCapabilityItem]
+    annotations: list[AnnotationItem]
+    relations: list[RelationItem]
+
+
+class RegistryPresenceItem(BaseModel):
+    slug: str
+    registry_type: str
+    is_primary: bool
+    name_collision: bool
+    checksum_mismatch: bool
+
+
 class PackageDetailResponse(BaseModel):
     ecosystem: str
     name: str
+    namespace: str | None = None
     normalized_name: str
     description: str | None
     homepage_url: str | None
@@ -34,6 +87,10 @@ class PackageDetailResponse(BaseModel):
     license_spdx: str | None
     latest_version: str
     synced_at: datetime
+    deprecated: bool = False
+    deprecation_message: str | None = None
+    classification: ClassificationBlock | None = None
+    registries: list[RegistryPresenceItem] = []
 
 
 class VersionItem(BaseModel):

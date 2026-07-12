@@ -51,6 +51,17 @@ def main() -> None:
     classify_cmd.add_argument("--reclassify", action="store_true")
     classify_cmd.add_argument("--limit", type=int, default=None)
 
+    export_ann_cmd = sub.add_parser("export-annotations")
+    export_ann_cmd.add_argument("--output", default="annotations.jsonl")
+
+    import_ann_cmd = sub.add_parser("import-annotations")
+    import_ann_cmd.add_argument("--input", required=True)
+    import_ann_cmd.add_argument("--replace", action="store_true")
+
+    export_llm_cmd = sub.add_parser("export-llm-input")
+    export_llm_cmd.add_argument("--output", default="llm_input.jsonl")
+    export_llm_cmd.add_argument("--max-chars", type=int, default=8000)
+
     sub.add_parser("stats")
 
     args = parser.parse_args()
@@ -72,6 +83,24 @@ def main() -> None:
 
         result = asyncio.run(_run_classification_async(reclassify=args.reclassify, limit=args.limit))
         print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
+    if args.command in ("export-annotations", "import-annotations", "export-llm-input"):
+        from pathlib import Path
+
+        from app.classifier.export import export_annotations, export_llm_input, import_annotations
+
+        async def _run_export() -> dict:
+            async with SessionLocal() as db:
+                if args.command == "export-annotations":
+                    count = await export_annotations(db, Path(args.output))
+                    return {"exported": count, "output": args.output}
+                if args.command == "import-annotations":
+                    return await import_annotations(db, Path(args.input), replace=args.replace)
+                count = await export_llm_input(db, Path(args.output), max_chars=args.max_chars)
+                return {"exported": count, "output": args.output}
+
+        print(json.dumps(asyncio.run(_run_export()), ensure_ascii=False, indent=2))
         return
 
     if args.command == "refresh":
