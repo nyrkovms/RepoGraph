@@ -53,6 +53,7 @@ async def _fetch_package_async(name: str, ecosystem: str = "pypi") -> dict[str, 
                 package_name=normalized,
                 exc=exc,
                 retryable=False,
+                ecosystem=ecosystem,
             )
             await mark_sync_failed(
                 db,
@@ -73,6 +74,7 @@ async def _fetch_package_async(name: str, ecosystem: str = "pypi") -> dict[str, 
                 operation="fetch",
                 package_name=normalized,
                 exc=exc,
+                ecosystem=ecosystem,
             )
             await mark_sync_failed(
                 db,

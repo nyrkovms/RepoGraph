@@ -27,6 +27,7 @@ async def upsert_sync_failure(
     package_name: str,
     exc: Exception,
     retryable: bool | None = None,
+    ecosystem: str = "pypi",
 ) -> SyncFailure:
     settings = get_settings()
     normalized_name = normalize_package_name(package_name)
@@ -41,6 +42,7 @@ async def upsert_sync_failure(
     )
     if row is None:
         row = SyncFailure(
+            ecosystem=ecosystem,
             operation=operation,
             package_name=normalized_name,
             error_class=exc.__class__.__name__,
@@ -53,6 +55,7 @@ async def upsert_sync_failure(
         )
         db.add(row)
     else:
+        row.ecosystem = ecosystem
         row.error_class = exc.__class__.__name__
         row.error_message = _format_error_message(exc)
         row.traceback = _format_traceback(exc)

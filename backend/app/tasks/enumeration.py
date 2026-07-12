@@ -21,7 +21,7 @@ from app.db import SessionLocal
 from app.fetcher.pipeline import find_package, run_sync_pipeline
 from app.fetcher.transport import RegistryAuthError
 from app.models.registry import Registry
-from app.normalizers.names import normalize_package_name
+from app.normalizers.names import normalize_name
 from app.services.metrics import inc_enumeration_synced, inc_fetch_error, observe_sync_duration
 from app.services.sync_failures import upsert_sync_failure
 from app.services.sync_state import get_or_create_sync_state, update_sync_cursor
@@ -72,7 +72,7 @@ async def _enumerate_registry(db, registry: Registry, batch_limit: int) -> dict[
     synced = 0
     failed = 0
     for name in batch:
-        normalized = normalize_package_name(name)
+        normalized = normalize_name(registry.ecosystem.value, name)
         if await find_package(db, registry.ecosystem.value, normalized):
             continue
         try:
@@ -94,7 +94,7 @@ async def _enumerate_registry(db, registry: Registry, batch_limit: int) -> dict[
             logger.exception("Enumeration sync failed: registry=%s package=%s", slug, normalized)
             inc_fetch_error(slug, exc.__class__.__name__)
             await db.rollback()
-            await upsert_sync_failure(db, operation="enumeration", package_name=normalized, exc=exc)
+            await upsert_sync_failure(db, operation="enumeration", package_name=normalized, exc=exc, ecosystem=registry.ecosystem.value)
             await db.commit()
 
     updates: dict = {CURSOR_KEY: new_cursor, "enumeration_total_names": len(set(names))}

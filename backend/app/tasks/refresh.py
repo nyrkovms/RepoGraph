@@ -65,7 +65,8 @@ async def _refresh_registry(db, registry: Registry, limit: int, started: float) 
             inc_fetch_error(slug, "not_found")
             await db.rollback()
             await upsert_sync_failure(
-                db, operation="refresh", package_name=package.normalized_name, exc=exc, retryable=False
+                db, operation="refresh", package_name=package.normalized_name, exc=exc, retryable=False,
+                ecosystem=registry.ecosystem.value,
             )
             await mark_sync_failed(
                 db,
@@ -100,7 +101,7 @@ async def _refresh_registry(db, registry: Registry, limit: int, started: float) 
             logger.exception("Refresh failed: registry=%s package=%s", slug, package.normalized_name)
             inc_fetch_error(slug, exc.__class__.__name__)
             await db.rollback()
-            await upsert_sync_failure(db, operation="refresh", package_name=package.normalized_name, exc=exc)
+            await upsert_sync_failure(db, operation="refresh", package_name=package.normalized_name, exc=exc, ecosystem=registry.ecosystem.value)
             await mark_sync_failed(
                 db,
                 str(exc),

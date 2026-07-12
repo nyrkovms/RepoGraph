@@ -62,3 +62,29 @@ docker compose run --rm api python -m app.cli seed --packages flask django reque
   модуль) — beat-задачи молча дропались; заменено явным `include`.
 - Loop-affinity asyncpg-пула в worker (второй таск в форке падал) — NullPool в
   `worker_process_init`.
+
+---
+
+## Прогон 2026-07-12 (финальный) — объединённое решение: фетчер + классификатор
+
+Ветка `feature/unified-fetcher-classifier`, миграции 0004–0008.
+Этапы: fetcher-redesign → npm-connector → classification-layer →
+classification-api → classification-ui → хвосты (retry per-ecosystem,
+enumeration ecosystem-aware нормализация). Спеки: openspec package-classifire
+(main specs: fetch-metadata, fetch-probe, fetch-reliability, registry-access,
+classification; 5 архивных чейнджей).
+
+- `ruff check` — PASS; `pytest tests/unit` — **121 passed**;
+  `pytest tests/integration` — **30 passed** (мультиреестры, классификация
+  в API, RBAC аннотаций, llm_input); vitest frontend — **17 passed**
+- `./scripts/acceptance_smoke.sh` — **ACCEPTANCE_SMOKE: PASS** (16 блоков;
+  новые: classification через worker — событийная и батч, фильтр role,
+  блок классификации в /stats)
+- Живая проверка UI (браузер): карточка flask с ролями кураторского override
+  и эффективными свойствами; фильтр Role=dev-tool возвращает eslint (npm),
+  Flask и ruff — мультиэкосистемный каталог с классификацией работает
+  end-to-end.
+
+Датасет прогона: 8 вердиктов правил 2.4.0 (pypi: flask/httpie/ruff/six/
+requests; npm: eslint/left-pad/@babel/helper-plugin-utils), эталоны classifire
+воспроизведены (ruff → dev-tool + binary-payload без importable-api).

@@ -13,6 +13,7 @@ class SyncFailure(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    ecosystem: Mapped[str] = mapped_column(String(16), nullable=False, default="pypi", server_default="pypi")
     package_name: Mapped[str] = mapped_column(String(255), nullable=False)
     error_class: Mapped[str] = mapped_column(String(255), nullable=False)
     error_message: Mapped[str] = mapped_column(Text, nullable=False)

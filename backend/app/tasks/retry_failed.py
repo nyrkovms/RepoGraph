@@ -5,7 +5,8 @@ from time import perf_counter
 from app.celery_app import celery_app
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
-from app.connectors.pypi import PyPIConnector
+from app.connectors.factory import build_connector, registry_info_from_row
+from app.fetcher.pipeline import get_or_create_default_registry
 from app.db import SessionLocal
 from app.fetcher.pipeline import run_sync_pipeline
 from app.models.enums import SyncType
@@ -21,7 +22,6 @@ logger = logging.getLogger(__name__)
 async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | str]:
     settings = get_settings()
     started = perf_counter()
-    connector = PyPIConnector()
     batch_limit = limit if limit is not None else settings.sync_failed_retry_batch_limit
 
     recovered = 0
@@ -47,8 +47,10 @@ async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | s
 
         for row in rows:
             try:
+                registry = await get_or_create_default_registry(db, row.ecosystem)
+                connector = build_connector(registry_info_from_row(registry))
                 metadata = await connector.fetch_package_metadata(row.package_name)
-                await run_sync_pipeline(metadata, db)
+                await run_sync_pipeline(metadata, db, registry=registry)
                 await clear_sync_failure(db, package_name=row.package_name)
                 recovered += 1
             except PackageNotFound as exc:
@@ -62,6 +64,7 @@ async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | s
                     package_name=row.package_name,
                     exc=exc,
                     retryable=False,
+                    ecosystem=row.ecosystem,
                 )
                 await mark_sync_failed(
                     db,
@@ -83,6 +86,7 @@ async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | s
                     operation=row.operation,
                     package_name=row.package_name,
                     exc=exc,
+                    ecosystem=row.ecosystem,
                 )
                 await mark_sync_failed(
                     db,
