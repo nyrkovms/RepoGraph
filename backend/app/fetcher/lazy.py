@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.connectors.base import BaseConnector, PackageNotFound
 from app.fetcher.pipeline import find_package, run_sync_pipeline
 from app.fetcher.transport import RegistryAuthError
-from app.normalizers.names import normalize_package_name
+from app.normalizers.names import normalize_name
 
 logger = logging.getLogger(__name__)
 
@@ -26,21 +26,22 @@ class LazyFetchResult:
 
 
 class LazyFetcher:
-    def __init__(self, connector: BaseConnector, db: AsyncSession):
+    def __init__(self, connector: BaseConnector, db: AsyncSession, ecosystem: str = "pypi"):
         self.connector = connector
         self.db = db
+        self.ecosystem = ecosystem
         self._in_flight: dict[str, asyncio.Event] = {}
 
     async def ensure_package_result(self, name: str) -> LazyFetchResult:
-        normalized = normalize_package_name(name)
+        normalized = normalize_name(self.ecosystem, name)
 
-        package = await find_package(self.db, "pypi", normalized)
+        package = await find_package(self.db, self.ecosystem, normalized)
         if package:
             return LazyFetchResult(status="ok", package=package)
 
         if normalized in self._in_flight:
             await self._in_flight[normalized].wait()
-            package = await find_package(self.db, "pypi", normalized)
+            package = await find_package(self.db, self.ecosystem, normalized)
             if package:
                 return LazyFetchResult(status="ok", package=package)
             return LazyFetchResult(status="upstream_error", error="concurrent fetch did not produce the package")

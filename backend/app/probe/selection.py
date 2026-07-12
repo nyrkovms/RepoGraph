@@ -55,3 +55,27 @@ def select_representative_wheel(artifacts: Iterable[ArtifactLike], max_bytes: in
         ),
         error=None,
     )
+
+
+NO_TARBALL_AVAILABLE = "no tarball available"
+TARBALL_EXCEEDS_LIMIT = "tarball too large (unpacked)"
+
+
+def select_npm_tarball(artifacts: Iterable, max_unpacked_bytes: int) -> WheelSelection:
+    """npm version ships a single tgz; the size gate uses dist.unpackedSize
+    (stored in platform_tags) — the same pre-download check classifire used."""
+    tarballs = [a for a in artifacts if a.artifact_type == "tgz"]
+    if not tarballs:
+        return WheelSelection(candidate=None, error=NO_TARBALL_AVAILABLE)
+    chosen = sorted(tarballs, key=lambda a: a.filename)[0]
+    unpacked = (getattr(chosen, "platform_tags", None) or {}).get("unpacked_size") or 0
+    if unpacked > max_unpacked_bytes:
+        return WheelSelection(candidate=None, error=TARBALL_EXCEEDS_LIMIT)
+    return WheelSelection(
+        candidate=WheelCandidate(
+            filename=chosen.filename,
+            download_url=chosen.download_url,
+            size_bytes=chosen.size_bytes,
+        ),
+        error=None,
+    )

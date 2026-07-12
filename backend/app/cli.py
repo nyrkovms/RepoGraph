@@ -39,6 +39,7 @@ def main() -> None:
 
     fetch_cmd = sub.add_parser("fetch")
     fetch_cmd.add_argument("name")
+    fetch_cmd.add_argument("--ecosystem", choices=("pypi", "npm"), default="pypi")
 
     refresh_cmd = sub.add_parser("refresh")
     refresh_cmd.add_argument("--limit", type=int, default=None)
@@ -58,7 +59,7 @@ def main() -> None:
         return
 
     if args.command == "fetch":
-        result = asyncio.run(_fetch_package_async(args.name))
+        result = asyncio.run(_fetch_package_async(args.name, args.ecosystem))
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 

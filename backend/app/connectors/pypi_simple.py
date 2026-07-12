@@ -301,6 +301,19 @@ class PyPISimpleConnector(BaseConnector):
             completeness="minimal",
         )
 
+    async def fetch_version_dependencies(self, name: str, version: str) -> tuple[list[NormalizedDependency], str | None]:
+        """Lazy hydration for a historical version: PEP 658 metadata of that
+        version's wheel when the index publishes it, otherwise no data."""
+        normalized = normalize_package_name(name)
+        page_url = f"{self.index_base_url}/{normalized}/"
+        response = await self._get_with_retry(page_url, not_found_name=name)
+        content_type = response.headers.get("content-type", "")
+        files = self._files_from_json(response.json()) if "json" in content_type else self._files_from_html(response.text, page_url)
+        version_files = [f for f in files if _parse_filename_version(f["filename"]) == version]
+        if not version_files:
+            return [], None
+        return await self._fetch_core_metadata_deps(version_files)
+
     # --- enumeration ----------------------------------------------------------
 
     async def list_package_names(self) -> list[str]:

@@ -18,6 +18,8 @@ class Artifact(UUIDPrimaryKeyMixin, Base):
     size_bytes: Mapped[int | None] = mapped_column(nullable=True)
     checksum_sha256: Mapped[str | None] = mapped_column(String(128), nullable=True)
     checksum_md5: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    checksum_sha1: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    checksum_integrity: Mapped[str | None] = mapped_column(String(256), nullable=True)
     artifact_type: Mapped[str] = mapped_column(String(32), nullable=False)
     platform_tags: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     requires_dist_metadata: Mapped[bool] = mapped_column(default=False, nullable=False)

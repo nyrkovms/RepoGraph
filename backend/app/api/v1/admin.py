@@ -57,9 +57,11 @@ async def trigger_seed(payload: SeedRequest = Body(default_factory=SeedRequest))
     return AdminTaskResponse(task_id=task.id, status="queued", operation="seed")
 
 
-@router.post("/fetch/{name}", response_model=AdminTaskResponse, dependencies=[Depends(require_admin)])
-async def trigger_fetch(name: str) -> AdminTaskResponse:
-    task = fetch_missing_dependencies.delay(name)
+@router.post("/fetch/{name:path}", response_model=AdminTaskResponse, dependencies=[Depends(require_admin)])
+async def trigger_fetch(name: str, ecosystem: str = "pypi") -> AdminTaskResponse:
+    if ecosystem not in ("pypi", "npm"):
+        raise HTTPException(status_code=422, detail="ecosystem must be pypi or npm")
+    task = fetch_missing_dependencies.delay(name, ecosystem)
     return AdminTaskResponse(task_id=task.id, status="queued", operation="fetch")
 
 

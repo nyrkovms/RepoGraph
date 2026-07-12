@@ -23,6 +23,8 @@ class NormalizedArtifact:
     artifact_type: str
     platform_tags: dict | None
     requires_dist_metadata: bool = False
+    checksum_sha1: str | None = None
+    checksum_integrity: str | None = None
 
 
 @dataclass(slots=True)
@@ -35,6 +37,7 @@ class NormalizedVersion:
     dependencies_hydrated: bool = False
     artifacts: list[NormalizedArtifact] = field(default_factory=list)
     dependencies: list[NormalizedDependency] = field(default_factory=list)
+    deprecation_message: str | None = None
 
 
 @dataclass(slots=True)
@@ -84,6 +87,11 @@ class NormalizedPackage:
     # "minimal" — только имена/версии/файлы (pypi-simple): такие данные
     # не должны затирать поля, полученные из более богатого источника.
     completeness: str = "full"
+    namespace: str | None = None
+    # все именованные теги версий (npm dist-tags); минимум — {"latest": ...}
+    dist_tags: dict[str, str] = field(default_factory=dict)
+    deprecated: bool = False
+    deprecation_message: str | None = None
 
 
 class PackageNotFound(Exception):

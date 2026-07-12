@@ -1,11 +1,12 @@
 """Connector selection by registry.protocol (D11: protocol != ecosystem)."""
 
 from app.connectors.base import BaseConnector
+from app.connectors.npm import NpmConnector
 from app.connectors.pypi import PyPIConnector
 from app.connectors.pypi_simple import PyPISimpleConnector
 from app.fetcher.transport import RegistryInfo
 
-SUPPORTED_PROTOCOLS = ("pypi-json", "pypi-simple")
+SUPPORTED_PROTOCOLS = ("pypi-json", "pypi-simple", "npm")
 
 
 class UnsupportedProtocolError(ValueError):
@@ -33,6 +34,8 @@ def build_connector(registry: RegistryInfo) -> BaseConnector:
         return PyPIConnector(registry=registry)
     if registry.protocol == "pypi-simple":
         return PyPISimpleConnector(registry=registry)
+    if registry.protocol == "npm":
+        return NpmConnector(registry=registry)
     raise UnsupportedProtocolError(
         f"protocol '{registry.protocol}' is not supported; known: {', '.join(SUPPORTED_PROTOCOLS)}"
     )

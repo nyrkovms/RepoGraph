@@ -14,11 +14,13 @@ from app.fetcher.transport import RegistryAuthError, RegistryClient
 from app.connectors.factory import registry_info_from_row
 from app.models.artifact import Artifact
 from app.models.dist_probe import DistProbe
+from app.models.package import Package
 from app.models.registry import Registry
 from app.models.version import PackageVersion
 from app.models.version_description import VersionDescription
 from app.probe.extract import extract_wheel_facts
-from app.probe.selection import WheelCandidate, select_representative_wheel
+from app.probe.extract_npm import extract_tarball_facts
+from app.probe.selection import WheelCandidate, select_npm_tarball, select_representative_wheel
 from app.services.metrics import inc_fetch_error, observe_probe
 from app.services.retry_policy import compute_backoff_delay_seconds, is_retryable_upstream_error
 from app.services.sync_failures import upsert_sync_failure
@@ -101,10 +103,10 @@ def _pick_explicit_artifact(artifacts, artifact_filename: str, max_bytes: int) -
     row = next((a for a in artifacts if a.filename == artifact_filename), None)
     if row is None:
         return None, f"artifact '{artifact_filename}' not found for version"
-    if not row.filename.endswith(".whl"):
-        return None, "explicit probe supports wheels only"
+    if not (row.filename.endswith(".whl") or row.artifact_type == "tgz"):
+        return None, "explicit probe supports wheels and npm tarballs only"
     if (row.size_bytes or 0) > max_bytes:
-        return None, "wheel exceeds size limit"
+        return None, "artifact exceeds size limit"
     return WheelCandidate(filename=row.filename, download_url=row.download_url, size_bytes=row.size_bytes), None
 
 
@@ -133,15 +135,19 @@ async def _probe_version_async(version_id: str, artifact_filename: str | None = 
         if existing is not None:
             return {"status": "skipped", "reason": "already probed"}
 
+        package = await db.get(Package, version.package_id)
+        ecosystem = package.ecosystem.value if package else "pypi"
         artifacts = (await db.scalars(select(Artifact).where(Artifact.version_id == version.id))).all()
+        max_bytes = settings.probe_max_tarball_bytes if ecosystem == "npm" else settings.probe_max_wheel_bytes
 
         if is_representative:
-            selection = select_representative_wheel(artifacts, settings.probe_max_wheel_bytes)
+            if ecosystem == "npm":
+                selection = select_npm_tarball(artifacts, settings.probe_max_tarball_bytes)
+            else:
+                selection = select_representative_wheel(artifacts, settings.probe_max_wheel_bytes)
             candidate, permanent_error = selection.candidate, selection.error
         else:
-            candidate, permanent_error = _pick_explicit_artifact(
-                artifacts, artifact_filename, settings.probe_max_wheel_bytes
-            )
+            candidate, permanent_error = _pick_explicit_artifact(artifacts, artifact_filename, max_bytes)
 
         if permanent_error:
             inserted = await _insert_probe_row(
@@ -173,7 +179,7 @@ async def _probe_version_async(version_id: str, artifact_filename: str | None = 
 
             try:
                 payload, permanent_error = await _download_wheel(
-                    client, candidate.download_url, max_bytes=settings.probe_max_wheel_bytes
+                    client, candidate.download_url, max_bytes=max_bytes
                 )
             except RegistryAuthError as exc:
                 # Stale credentials are an operator problem, not a fact about
@@ -194,6 +200,26 @@ async def _probe_version_async(version_id: str, artifact_filename: str | None = 
                 )
                 observe_probe(registry_slug, "unusable", perf_counter() - started)
                 return {"status": "completed", "outcome": "unusable", "error": permanent_error, "inserted": inserted}
+
+            if ecosystem == "npm":
+                tarball = extract_tarball_facts(payload)
+                readme_extracted = False
+                if tarball.readme:
+                    await _store_version_description(db, version.id, "tarball-readme", tarball.readme)
+                    readme_extracted = True
+                inserted = await _insert_probe_row(
+                    db,
+                    version_id=version.id,
+                    registry_slug=registry_slug,
+                    artifact_filename=candidate.filename,
+                    is_representative=is_representative,
+                    file_facts=tarball.file_facts,
+                    readme_extracted=readme_extracted,
+                    error=tarball.error,
+                )
+                outcome = "unusable" if tarball.error else "probed"
+                observe_probe(registry_slug, outcome, perf_counter() - started)
+                return {"status": "completed", "outcome": outcome, "inserted": inserted}
 
             facts = extract_wheel_facts(payload, candidate.filename)
             readme_extracted = False

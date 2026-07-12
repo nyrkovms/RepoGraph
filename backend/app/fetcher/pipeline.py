@@ -33,8 +33,26 @@ from app.models.registry import Registry
 from app.models.sync_state import SyncState
 from app.models.version import PackageVersion
 from app.models.vulnerability import PackageVulnerability, Vulnerability
-from app.normalizers.names import normalize_package_name
+from app.normalizers.names import normalize_name, normalize_package_name
 from app.probe.enqueue import schedule_latest_probe
+
+# Дефолтные публичные реестры: строка создаётся при первом обращении.
+DEFAULT_REGISTRY_PRESETS = {
+    "pypi": {
+        "slug": "pypi",
+        "name": "PyPI",
+        "protocol": "pypi-json",
+        "base_url": "https://pypi.org/",
+        "api_url": "https://pypi.org/pypi/",
+    },
+    "npm": {
+        "slug": "npm",
+        "name": "npm Registry",
+        "protocol": "npm",
+        "base_url": "https://registry.npmjs.org/",
+        "api_url": None,
+    },
+}
 
 # D12: metadata flows from the richest protocol; a poorer protocol never
 # overwrites fields obtained from a richer one.
@@ -53,7 +71,7 @@ async def run_sync_pipeline(
     now = datetime.now(UTC)
 
     if registry is None:
-        registry = await _get_or_create_pypi_registry(db)
+        registry = await get_or_create_default_registry(db, package_data.ecosystem)
 
     package, allow_update = await _upsert_package(db, registry, package_data, now)
     await _upsert_package_registry(db, package.id, registry, package_data.name, now)
@@ -69,11 +87,13 @@ async def run_sync_pipeline(
         if version_id is None:
             continue
         if version.dependencies or version.dependencies_hydrated:
-            await _replace_dependencies(db, version_id, version.dependencies)
+            await _replace_dependencies(db, version_id, version.dependencies, package_data.ecosystem)
         await _replace_artifacts(db, version_id, registry.id, version)
 
     if allow_update:
-        await _upsert_dist_tag(db, package.id, package_data.latest_version, now)
+        dist_tags = package_data.dist_tags or {"latest": package_data.latest_version}
+        for tag, tagged_version in dist_tags.items():
+            await _upsert_dist_tag(db, package.id, tag, tagged_version, now)
         await _upsert_authors(db, package.id, package_data.authors)
         await _upsert_vulnerabilities(db, package.id, package_data.vulnerabilities)
 
@@ -98,19 +118,23 @@ async def find_package(db: AsyncSession, ecosystem: str, normalized_name: str) -
     return result
 
 
-async def _get_or_create_pypi_registry(db: AsyncSession) -> Registry:
-    registry = await db.scalar(select(Registry).where(Registry.slug == "pypi"))
+async def get_or_create_default_registry(db: AsyncSession, ecosystem: str) -> Registry:
+    preset = DEFAULT_REGISTRY_PRESETS.get(ecosystem)
+    if preset is None:
+        raise ValueError(f"no default registry preset for ecosystem '{ecosystem}'")
+
+    registry = await db.scalar(select(Registry).where(Registry.slug == preset["slug"]))
     if registry:
         return registry
 
     registry = Registry(
-        ecosystem=Ecosystem.pypi,
-        name="PyPI",
-        slug="pypi",
+        ecosystem=Ecosystem(ecosystem),
+        name=preset["name"],
+        slug=preset["slug"],
         registry_type=RegistryType.public,
-        protocol="pypi-json",
-        base_url="https://pypi.org/",
-        api_url="https://pypi.org/pypi/",
+        protocol=preset["protocol"],
+        base_url=preset["base_url"],
+        api_url=preset["api_url"],
         tier=Tier.tier1,
         sync_enabled=True,
         sync_priority=0,
@@ -118,6 +142,17 @@ async def _get_or_create_pypi_registry(db: AsyncSession) -> Registry:
     db.add(registry)
     await db.flush()
     return registry
+
+
+async def connector_for_package(db: AsyncSession, package: Package):
+    """Connector for the package's primary registry (falls back to the
+    ecosystem's default public registry preset)."""
+    from app.connectors.factory import build_connector, registry_info_from_row
+
+    registry = await _current_primary_registry(db, package.id)
+    if registry is None:
+        registry = await get_or_create_default_registry(db, package.ecosystem.value)
+    return build_connector(registry_info_from_row(registry))
 
 
 async def _current_primary_registry(db: AsyncSession, package_id) -> Registry | None:
@@ -130,6 +165,9 @@ async def _current_primary_registry(db: AsyncSession, package_id) -> Registry | 
 
 def _apply_package_fields(package: Package, package_data: NormalizedPackage, now: datetime) -> None:
     package.name = package_data.name
+    package.namespace = package_data.namespace
+    package.deprecated = package_data.deprecated
+    package.deprecation_message = package_data.deprecation_message
     package.description = package_data.description
     package.homepage_url = package_data.homepage_url
     package.repository_url = package_data.repository_url
@@ -169,7 +207,7 @@ async def _upsert_package(
 
     package = Package(
         ecosystem=Ecosystem(package_data.ecosystem),
-        namespace=None,
+        namespace=package_data.namespace,
         name=package_data.name,
         normalized_name=package_data.normalized_name,
         primary_registry_id=registry.id,
@@ -269,7 +307,9 @@ def _merge_version_features(features: dict | None, dependencies_hydrated: bool) 
     return merged
 
 
-async def _replace_dependencies(db: AsyncSession, version_id, dependencies: list[NormalizedDependency]) -> None:
+async def _replace_dependencies(
+    db: AsyncSession, version_id, dependencies: list[NormalizedDependency], ecosystem: str = "pypi"
+) -> None:
     await db.execute(delete(Dependency).where(Dependency.version_id == version_id))
 
     for dep in dependencies:
@@ -278,7 +318,7 @@ async def _replace_dependencies(db: AsyncSession, version_id, dependencies: list
                 version_id=version_id,
                 dependency_name=dep.dependency_name,
                 dependency_namespace=None,
-                dependency_ecosystem=Ecosystem.pypi,
+                dependency_ecosystem=Ecosystem(ecosystem),
                 version_constraint=dep.version_constraint,
                 dependency_type=DependencyType(dep.dependency_type),
                 extra_name=dep.extra_name,
@@ -305,7 +345,7 @@ async def ensure_version_dependencies(
         return
 
     dependencies, requires_python = await connector.fetch_version_dependencies(package.normalized_name, version_row.version)
-    await _replace_dependencies(db, version_row.id, dependencies)
+    await _replace_dependencies(db, version_row.id, dependencies, package.ecosystem.value)
     if requires_python:
         version_row.requires_python = requires_python
     version_row.features = {**features, "dependencies_hydrated": True}
@@ -330,6 +370,8 @@ async def _replace_artifacts(db: AsyncSession, version_id, registry_id, version:
                 size_bytes=artifact.size_bytes,
                 checksum_sha256=artifact.checksum_sha256,
                 checksum_md5=artifact.checksum_md5,
+                checksum_sha1=artifact.checksum_sha1,
+                checksum_integrity=artifact.checksum_integrity,
                 artifact_type=artifact.artifact_type,
                 platform_tags=artifact.platform_tags,
                 requires_dist_metadata=artifact.requires_dist_metadata,
@@ -337,20 +379,33 @@ async def _replace_artifacts(db: AsyncSession, version_id, registry_id, version:
         )
 
 
+CHECKSUM_ATTRS = ("checksum_sha256", "checksum_integrity", "checksum_sha1")
+
+
 def find_checksum_conflicts(rows: Iterable) -> set:
     """Registry ids whose artifact for the same (version, filename) carries a
-    different non-null sha256 than another registry's copy (D12 flag)."""
-    by_key: dict[tuple, dict] = {}
-    conflicted: set = set()
+    different checksum than another registry's copy (D12 flag).
+
+    Comparison is per checksum kind: a mismatch is flagged only when two
+    registries publish the SAME kind of hash with different values — a
+    registry that offers only sha1 never falsely conflicts with one that
+    offers only sha256.
+    """
+    by_key: dict[tuple, list] = {}
     for row in rows:
-        if not row.checksum_sha256:
+        checksums = {attr: getattr(row, attr, None) for attr in CHECKSUM_ATTRS}
+        if not any(checksums.values()):
             continue
-        key = (row.version_id, row.filename)
-        seen = by_key.setdefault(key, {})
-        seen[row.registry_id] = row.checksum_sha256
-    for seen in by_key.values():
-        if len(set(seen.values())) > 1:
-            conflicted.update(seen.keys())
+        by_key.setdefault((row.version_id, row.filename), []).append((row.registry_id, checksums))
+
+    conflicted: set = set()
+    for entries in by_key.values():
+        for i, (registry_a, sums_a) in enumerate(entries):
+            for registry_b, sums_b in entries[i + 1 :]:
+                for attr in CHECKSUM_ATTRS:
+                    if sums_a[attr] and sums_b[attr] and sums_a[attr] != sums_b[attr]:
+                        conflicted.update((registry_a, registry_b))
+                        break
     return conflicted
 
 
@@ -383,11 +438,11 @@ async def _update_collision_flags(db: AsyncSession, package_id, version_ids: lis
     await db.flush()
 
 
-async def _upsert_dist_tag(db: AsyncSession, package_id, latest_version: str, now: datetime) -> None:
-    stmt = insert(DistTag).values(package_id=package_id, tag="latest", version=latest_version, updated_at=now)
+async def _upsert_dist_tag(db: AsyncSession, package_id, tag: str, version: str, now: datetime) -> None:
+    stmt = insert(DistTag).values(package_id=package_id, tag=tag, version=version, updated_at=now)
     stmt = stmt.on_conflict_do_update(
         index_elements=["package_id", "tag"],
-        set_={"version": latest_version, "updated_at": now},
+        set_={"version": version, "updated_at": now},
     )
     await db.execute(stmt)
 
@@ -446,10 +501,11 @@ async def _resolve_level1(db: AsyncSession, version_ids: Iterable[str]) -> None:
     ).all()
 
     for dep in dep_rows:
+        dep_ecosystem = dep.dependency_ecosystem.value if hasattr(dep.dependency_ecosystem, "value") else str(dep.dependency_ecosystem)
         candidate_pkg = await db.scalar(
             select(Package).where(
-                Package.ecosystem == Ecosystem.pypi,
-                Package.normalized_name == normalize_package_name(dep.dependency_name),
+                Package.ecosystem == dep.dependency_ecosystem,
+                Package.normalized_name == normalize_name(dep_ecosystem, dep.dependency_name),
             )
         )
         dep.resolved_package_id = candidate_pkg.id if candidate_pkg else None
@@ -458,7 +514,10 @@ async def _resolve_level1(db: AsyncSession, version_ids: Iterable[str]) -> None:
             dep.resolved_version_id = None
             continue
 
-        dep.resolved_version_id = await _find_best_version_id(db, candidate_pkg.id, dep.version_constraint)
+        # npm: node-semver диапазоны не парсятся PEP 440 — берётся latest stable
+        # (задокументированное ограничение Level-1 до npm-стратегии резолвера).
+        constraint = dep.version_constraint if dep_ecosystem == "pypi" else None
+        dep.resolved_version_id = await _find_best_version_id(db, candidate_pkg.id, constraint)
 
 
 async def _find_best_version_id(db: AsyncSession, package_id, constraint: str | None):

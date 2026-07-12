@@ -12,7 +12,7 @@ from app.auth.tokens import require_viewer
 from app.connectors.pypi import PyPIConnector
 from app.db import get_db_session
 from app.fetcher.lazy import LazyFetcher
-from app.fetcher.pipeline import ensure_version_dependencies, resolve_dependency_links
+from app.fetcher.pipeline import connector_for_package, ensure_version_dependencies, resolve_dependency_links
 from app.models.artifact import Artifact
 from app.models.dependency import Dependency
 from app.models.enums import DependencyType, Ecosystem
@@ -188,8 +188,8 @@ async def get_dependencies_tree(
         raise HTTPException(status_code=404, detail=f"Version '{ver}' not found")
 
     env = _build_marker_environment(python_version=python_version, os_name=os)
-    connector = PyPIConnector()
-    fetcher = LazyFetcher(connector=connector, db=db)
+    connector = await connector_for_package(db, package)
+    fetcher = LazyFetcher(connector=connector, db=db, ecosystem=package.ecosystem.value)
     await ensure_version_dependencies(db, package, version_row, connector)
     max_depth = depth or FULL_TREE_MAX_DEPTH
     nodes = await _build_tree_for_version(

@@ -81,6 +81,7 @@ Frontend token можно менять в верхней панели прило
 ```bash
 docker compose run --rm api python -m app.cli seed --packages flask django
 docker compose run --rm api python -m app.cli fetch requests
+docker compose run --rm api python -m app.cli fetch left-pad --ecosystem npm
 docker compose run --rm api python -m app.cli refresh --limit 100
 docker compose run --rm api python -m app.cli retry-failed --limit 100
 docker compose run --rm api python -m app.cli stats
@@ -190,7 +191,8 @@ GitHub Actions workflow: [`.github/workflows/ci.yml`](/Users/mikhail/Documents/W
 Протокол задаётся полем `protocol` и определяет коннектор:
 
 - `pypi-json` — JSON API pypi.org;
-- `pypi-simple` — PEP 503/691 simple index (+PEP 658 metadata): PyTorch index, внутренние Nexus/Artifactory hosted.
+- `pypi-simple` — PEP 503/691 simple index (+PEP 658 metadata): PyTorch index, внутренние Nexus/Artifactory hosted;
+- `npm` — протокол npm registry: npmjs.org, Verdaccio, Nexus npm hosted (scoped-имена, dist-tags, deprecated, shasum/integrity).
 
 Из Nexus подключаются **только hosted**-репозитории (group и proxy не регистрируются).
 
