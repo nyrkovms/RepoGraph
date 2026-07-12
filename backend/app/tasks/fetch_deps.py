@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from datetime import UTC, datetime
 from time import perf_counter
@@ -13,6 +12,8 @@ from app.normalizers.names import normalize_package_name
 from app.services.metrics import observe_sync_duration
 from app.services.sync_failures import clear_sync_failure, upsert_sync_failure
 from app.services.sync_state import mark_sync_failed, mark_sync_progress, mark_sync_running, mark_sync_success
+
+from app.tasks.runner import run_async
 
 logger = logging.getLogger(__name__)
 
@@ -94,4 +95,4 @@ async def _fetch_package_async(name: str) -> dict[str, str]:
 
 @celery_app.task(name="app.tasks.fetch_deps.fetch_missing_dependencies")
 def fetch_missing_dependencies(name: str) -> dict[str, str]:
-    return asyncio.run(_fetch_package_async(name))
+    return run_async(_fetch_package_async(name))

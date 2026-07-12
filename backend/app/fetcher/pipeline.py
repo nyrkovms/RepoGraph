@@ -34,30 +34,60 @@ from app.models.sync_state import SyncState
 from app.models.version import PackageVersion
 from app.models.vulnerability import PackageVulnerability, Vulnerability
 from app.normalizers.names import normalize_package_name
+from app.probe.enqueue import schedule_latest_probe
+
+# D12: metadata flows from the richest protocol; a poorer protocol never
+# overwrites fields obtained from a richer one.
+PROTOCOL_RICHNESS = {"pypi-json": 2, "npm": 2, "pypi-simple": 1}
 
 
-async def run_sync_pipeline(package_data: NormalizedPackage, db: AsyncSession) -> Package:
+def protocol_richness(protocol: str | None) -> int:
+    return PROTOCOL_RICHNESS.get(protocol or "", 0)
+
+
+async def run_sync_pipeline(
+    package_data: NormalizedPackage,
+    db: AsyncSession,
+    registry: Registry | None = None,
+) -> Package:
     now = datetime.now(UTC)
 
-    registry = await _get_or_create_pypi_registry(db)
-    package = await _upsert_package(db, registry.id, package_data, now)
-    await _upsert_package_registry(db, package.id, registry.id, package_data.name, now)
+    if registry is None:
+        registry = await _get_or_create_pypi_registry(db)
 
-    version_id_by_version = await _upsert_versions(db, package.id, package_data.versions)
+    package, allow_update = await _upsert_package(db, registry, package_data, now)
+    await _upsert_package_registry(db, package.id, registry, package_data.name, now)
+    if allow_update:
+        await _promote_primary(db, package, registry)
+
+    version_id_by_version = await _upsert_versions(
+        db, package.id, package_data.versions, allow_update=allow_update
+    )
 
     for version in package_data.versions:
-        version_id = version_id_by_version[version.version]
-        await _replace_dependencies(db, version_id, version.dependencies)
+        version_id = version_id_by_version.get(version.version)
+        if version_id is None:
+            continue
+        if version.dependencies or version.dependencies_hydrated:
+            await _replace_dependencies(db, version_id, version.dependencies)
         await _replace_artifacts(db, version_id, registry.id, version)
 
-    await _upsert_dist_tag(db, package.id, package_data.latest_version, now)
-    await _upsert_authors(db, package.id, package_data.authors)
-    await _upsert_vulnerabilities(db, package.id, package_data.vulnerabilities)
+    if allow_update:
+        await _upsert_dist_tag(db, package.id, package_data.latest_version, now)
+        await _upsert_authors(db, package.id, package_data.authors)
+        await _upsert_vulnerabilities(db, package.id, package_data.vulnerabilities)
+
+    await _update_collision_flags(db, package.id, list(version_id_by_version.values()))
     await _resolve_level1(db, version_id_by_version.values())
     await _upsert_sync_state(db, registry.id, now)
 
     await db.commit()
     await db.refresh(package)
+    if allow_update:
+        schedule_latest_probe(
+            package_data.latest_version,
+            {version: str(version_id) for version, version_id in version_id_by_version.items()},
+        )
     return package
 
 
@@ -78,6 +108,7 @@ async def _get_or_create_pypi_registry(db: AsyncSession) -> Registry:
         name="PyPI",
         slug="pypi",
         registry_type=RegistryType.public,
+        protocol="pypi-json",
         base_url="https://pypi.org/",
         api_url="https://pypi.org/pypi/",
         tier=Tier.tier1,
@@ -89,31 +120,59 @@ async def _get_or_create_pypi_registry(db: AsyncSession) -> Registry:
     return registry
 
 
-async def _upsert_package(db: AsyncSession, registry_id, package_data: NormalizedPackage, now: datetime) -> Package:
-    existing = await find_package(db, "pypi", package_data.normalized_name)
+async def _current_primary_registry(db: AsyncSession, package_id) -> Registry | None:
+    return await db.scalar(
+        select(Registry)
+        .join(PackageRegistry, PackageRegistry.registry_id == Registry.id)
+        .where(PackageRegistry.package_id == package_id, PackageRegistry.is_primary.is_(True))
+    )
+
+
+def _apply_package_fields(package: Package, package_data: NormalizedPackage, now: datetime) -> None:
+    package.name = package_data.name
+    package.description = package_data.description
+    package.homepage_url = package_data.homepage_url
+    package.repository_url = package_data.repository_url
+    package.documentation_url = package_data.documentation_url
+    package.license_raw = package_data.license_raw
+    package.license_spdx = package_data.license_spdx
+    package.keywords = package_data.keywords
+    package.latest_version = package_data.latest_version
+    package.downloads_total = package_data.downloads_total
+    package.downloads_recent = package_data.downloads_recent
+    package.updated_at = package_data.updated_at
+    package.synced_at = now
+    package.raw_metadata = package_data.raw_metadata
+
+
+async def _upsert_package(
+    db: AsyncSession,
+    registry: Registry,
+    package_data: NormalizedPackage,
+    now: datetime,
+) -> tuple[Package, bool]:
+    """Returns (package, allow_update): whether this sync owns package metadata.
+
+    The syncing registry owns metadata when it is (or becomes) the primary:
+    it already is primary, the package is new, or its protocol is strictly
+    richer than the current primary's (promotion, D12).
+    """
+    existing = await find_package(db, package_data.ecosystem, package_data.normalized_name)
     if existing:
-        existing.name = package_data.name
-        existing.description = package_data.description
-        existing.homepage_url = package_data.homepage_url
-        existing.repository_url = package_data.repository_url
-        existing.documentation_url = package_data.documentation_url
-        existing.license_raw = package_data.license_raw
-        existing.license_spdx = package_data.license_spdx
-        existing.keywords = package_data.keywords
-        existing.latest_version = package_data.latest_version
-        existing.downloads_total = package_data.downloads_total
-        existing.downloads_recent = package_data.downloads_recent
-        existing.updated_at = package_data.updated_at
-        existing.synced_at = now
-        existing.raw_metadata = package_data.raw_metadata
-        return existing
+        primary = await _current_primary_registry(db, existing.id)
+        is_primary = primary is not None and primary.id == registry.id
+        richer = protocol_richness(registry.protocol) > protocol_richness(primary.protocol if primary else None)
+        allow_update = is_primary or primary is None or richer
+        if allow_update:
+            _apply_package_fields(existing, package_data, now)
+        return existing, allow_update
 
     package = Package(
-        ecosystem=Ecosystem.pypi,
+        ecosystem=Ecosystem(package_data.ecosystem),
         namespace=None,
         name=package_data.name,
         normalized_name=package_data.normalized_name,
-        primary_registry_id=registry_id,
+        primary_registry_id=registry.id,
         description=package_data.description,
         homepage_url=package_data.homepage_url,
         repository_url=package_data.repository_url,
@@ -130,22 +189,45 @@ async def _upsert_package(db: AsyncSession, registry_id, package_data: Normalize
     )
     db.add(package)
     await db.flush()
-    return package
+    return package, True
 
 
-async def _upsert_package_registry(db: AsyncSession, package_id, registry_id, name: str, now: datetime) -> None:
+async def _upsert_package_registry(db: AsyncSession, package_id, registry: Registry, name: str, now: datetime) -> None:
+    if registry.slug == "pypi":
+        source_url = f"https://pypi.org/project/{name}/"
+    else:
+        source_url = f"{registry.base_url.rstrip('/')}/{normalize_package_name(name)}/"
     stmt = insert(PackageRegistry).values(
         package_id=package_id,
-        registry_id=registry_id,
+        registry_id=registry.id,
         first_seen_at=now,
-        source_url=f"https://pypi.org/project/{name}/",
-        is_primary=True,
+        source_url=source_url,
+        is_primary=False,
     )
     stmt = stmt.on_conflict_do_nothing(index_elements=["package_id", "registry_id"])
     await db.execute(stmt)
 
 
-async def _upsert_versions(db: AsyncSession, package_id, versions: Iterable[NormalizedVersion]) -> dict[str, str]:
+async def _promote_primary(db: AsyncSession, package: Package, registry: Registry) -> None:
+    links = (
+        await db.scalars(select(PackageRegistry).where(PackageRegistry.package_id == package.id))
+    ).all()
+    for link in links:
+        link.is_primary = link.registry_id == registry.id
+    package.primary_registry_id = registry.id
+    await db.flush()
+
+
+async def _upsert_versions(
+    db: AsyncSession,
+    package_id,
+    versions: Iterable[NormalizedVersion],
+    *,
+    allow_update: bool = True,
+) -> dict[str, str]:
+    """Version rows are the union across registries: a secondary registry may
+    add versions unknown to the primary (torch 2.1.0+cu121), but only the
+    metadata owner updates existing rows."""
     version_ids: dict[str, str] = {}
     for version in versions:
         existing = await db.scalar(
@@ -153,11 +235,12 @@ async def _upsert_versions(db: AsyncSession, package_id, versions: Iterable[Norm
         )
 
         if existing:
-            existing.release_date = version.release_date
-            existing.status = PackageVersionStatus(version.status)
-            existing.requires_python = version.requires_python
-            existing.features = _merge_version_features(existing.features, version.dependencies_hydrated)
-            existing.raw_metadata = version.raw_metadata
+            if allow_update:
+                existing.release_date = version.release_date
+                existing.status = PackageVersionStatus(version.status)
+                existing.requires_python = version.requires_python
+                existing.features = _merge_version_features(existing.features, version.dependencies_hydrated)
+                existing.raw_metadata = version.raw_metadata
             version_ids[version.version] = existing.id
             continue
 
@@ -231,7 +314,11 @@ async def ensure_version_dependencies(
 
 
 async def _replace_artifacts(db: AsyncSession, version_id, registry_id, version: NormalizedVersion) -> None:
-    await db.execute(delete(Artifact).where(Artifact.version_id == version_id))
+    """Scoped to the syncing registry: another registry's artifacts of the
+    same version must survive (multi-registry union, D12)."""
+    await db.execute(
+        delete(Artifact).where(Artifact.version_id == version_id, Artifact.registry_id == registry_id)
+    )
 
     for artifact in version.artifacts:
         db.add(
@@ -248,6 +335,52 @@ async def _replace_artifacts(db: AsyncSession, version_id, registry_id, version:
                 requires_dist_metadata=artifact.requires_dist_metadata,
             )
         )
+
+
+def find_checksum_conflicts(rows: Iterable) -> set:
+    """Registry ids whose artifact for the same (version, filename) carries a
+    different non-null sha256 than another registry's copy (D12 flag)."""
+    by_key: dict[tuple, dict] = {}
+    conflicted: set = set()
+    for row in rows:
+        if not row.checksum_sha256:
+            continue
+        key = (row.version_id, row.filename)
+        seen = by_key.setdefault(key, {})
+        seen[row.registry_id] = row.checksum_sha256
+    for seen in by_key.values():
+        if len(set(seen.values())) > 1:
+            conflicted.update(seen.keys())
+    return conflicted
+
+
+async def _update_collision_flags(db: AsyncSession, package_id, version_ids: list) -> None:
+    links = (
+        await db.scalars(select(PackageRegistry).where(PackageRegistry.package_id == package_id))
+    ).all()
+    if not links:
+        return
+    registries = {
+        r.id: r
+        for r in (
+            await db.scalars(select(Registry).where(Registry.id.in_([link.registry_id for link in links])))
+        ).all()
+    }
+
+    types = {registries[link.registry_id].registry_type for link in links if link.registry_id in registries}
+    if RegistryType.corporate in types and RegistryType.public in types:
+        for link in links:
+            link.name_collision = True
+
+    if version_ids:
+        artifact_rows = (
+            await db.scalars(select(Artifact).where(Artifact.version_id.in_(version_ids)))
+        ).all()
+        conflicted_registries = find_checksum_conflicts(artifact_rows)
+        for link in links:
+            if link.registry_id in conflicted_registries:
+                link.checksum_mismatch = True
+    await db.flush()
 
 
 async def _upsert_dist_tag(db: AsyncSession, package_id, latest_version: str, now: datetime) -> None:

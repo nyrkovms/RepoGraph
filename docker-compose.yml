@@ -1,3 +1,13 @@
+x-backend-build: &backend-build
+  context: ./backend
+  args:
+    PYPI_REPOSITORY_URL: ${PYPI_REPOSITORY_URL:-https://pypi.org/simple}
+
+x-backend-environment: &backend-environment
+  POSTGRES_HOST: postgres
+  REDIS_HOST: redis
+  SYNC_PYPI_JSON_BASE_URL: ${SYNC_PYPI_JSON_BASE_URL:-https://pypi.org/pypi}
+
 services:
   postgres:
     image: postgres:16
@@ -26,13 +36,11 @@ services:
       retries: 10
 
   api:
-    build:
-      context: ./backend
+    build: *backend-build
     env_file:
-      - .env.example
+      - .env
     environment:
-      POSTGRES_HOST: postgres
-      REDIS_HOST: redis
+      <<: *backend-environment
       LOG_FILE: /var/log/packagehub/api.log
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
@@ -45,19 +53,17 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      test: ["CMD", "curl", "-f", "-H", "Host: ${API_HEALTHCHECK_HOST:-localhost}", "http://localhost:8000/api/v1/health"]
       interval: 10s
       timeout: 3s
       retries: 10
 
   worker:
-    build:
-      context: ./backend
+    build: *backend-build
     env_file:
-      - .env.example
+      - .env
     environment:
-      POSTGRES_HOST: postgres
-      REDIS_HOST: redis
+      <<: *backend-environment
       LOG_FILE: /var/log/packagehub/worker.log
     command: ["celery", "-A", "app.celery_app:celery_app", "worker", "--loglevel=INFO"]
     volumes:
@@ -69,13 +75,11 @@ services:
         condition: service_healthy
 
   beat:
-    build:
-      context: ./backend
+    build: *backend-build
     env_file:
-      - .env.example
+      - .env
     environment:
-      POSTGRES_HOST: postgres
-      REDIS_HOST: redis
+      <<: *backend-environment
       LOG_FILE: /var/log/packagehub/beat.log
     command: ["celery", "-A", "app.celery_app:celery_app", "beat", "--loglevel=INFO"]
     volumes:
@@ -89,9 +93,12 @@ services:
   frontend:
     build:
       context: ./frontend
+    env_file:
+      - .env
     environment:
-      VITE_API_BASE_URL: http://localhost:8000
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
       VITE_API_TOKEN: ${API_TOKEN_VIEWER:-phub_viewer_dev}
+      UI_ALLOWED_HOSTS: ${UI_ALLOWED_HOSTS:-localhost,127.0.0.1}
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
     ports:
       - "5173:5173"

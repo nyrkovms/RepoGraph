@@ -14,7 +14,15 @@ PyPI-first MVP: каталог метаданных пакетов, demand-drive
 cp .env.example .env
 ```
 
-Если metadata JSON нужно брать через приватный forward proxy, переопределите в `.env`:
+Если сборка контейнера должна ходить в PyPI через приватный forward proxy, переопределите в `.env`:
+
+```bash
+PYPI_REPOSITORY_URL=http://your-proxy.example/repository/pypi/simple
+```
+
+`PYPI_REPOSITORY_URL` прокидывается в `docker compose` как build arg для backend-образа. Допускается `http://` без TLS: при такой схеме Docker build автоматически добавляет `pip --trusted-host` для хоста proxy.
+
+Если metadata JSON приложение тоже должно забирать через proxy, задайте отдельный runtime-параметр:
 
 ```bash
 SYNC_PYPI_JSON_BASE_URL=https://your-proxy.example/pypi
@@ -175,6 +183,63 @@ GitHub Actions workflow: [`.github/workflows/ci.yml`](/Users/mikhail/Documents/W
 - `packagehub_sync_duration_seconds`
 - `packagehub_sync_last_duration_seconds`
 - `packagehub_sync_last_status`
+
+## Registries (multi-registry)
+
+Фетчер работает per-registry: у каждого реестра свои протокол, auth, расписание и курсор.
+Протокол задаётся полем `protocol` и определяет коннектор:
+
+- `pypi-json` — JSON API pypi.org;
+- `pypi-simple` — PEP 503/691 simple index (+PEP 658 metadata): PyTorch index, внутренние Nexus/Artifactory hosted.
+
+Из Nexus подключаются **только hosted**-репозитории (group и proxy не регистрируются).
+
+Регистрация внутреннего реестра:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/admin/registries \
+  -H "Authorization: Bearer phub_admin_dev" -H "Content-Type: application/json" \
+  -d '{"ecosystem":"pypi","name":"Nexus PyPI hosted","slug":"nexus-pypi",
+       "protocol":"pypi-simple","registry_type":"corporate",
+       "base_url":"https://nexus.corp/repository/pypi-hosted/simple/",
+       "auth_config":{"type":"basic","username":"svc","password":"..."},
+       "enumerate_enabled":true}'
+curl -X POST http://localhost:8000/api/v1/admin/registries/nexus-pypi/test \
+  -H "Authorization: Bearer phub_admin_dev"
+```
+
+- `enumerate_enabled: true` включает полную индексацию (контур enumeration, каждые
+  `ENUMERATION_INTERVAL_HOURS`, батч `ENUMERATION_BATCH_LIMIT`, курсор в sync_state).
+- Auth-заголовок отправляется только на хост реестра: при редиректе артефакта на CDN
+  credentials не передаются.
+- Коллизии имён internal↔public и расхождение checksum одинаковых файлов помечаются
+  флагами `name_collision` / `checksum_mismatch` на связке пакет↔реестр (сигнал
+  dependency confusion).
+
+## Probe дистрибутивов
+
+После sync пакета фоновая задача probe скачивает представительный wheel latest-версии
+(предпочтение `none-any`, лимит `PROBE_MAX_WHEEL_BYTES`) и извлекает офлайн-факты:
+`entry_points.txt`, `top_level.txt`, состав файлов, скрипты из `.data/scripts/`,
+описание из `METADATA` (в `version_descriptions`). Результат — immutable-строка в
+`dist_probes` (одна на пару версия+файл); ошибка («no wheel available», превышение
+лимита, битый архив) — тоже результат и не ретраится.
+
+```bash
+# probe конкретной версии/дистрибутива
+curl -X POST http://localhost:8000/api/v1/admin/probe \
+  -H "Authorization: Bearer phub_admin_dev" -H "Content-Type: application/json" \
+  -d '{"name":"ruff","version":"0.15.21"}'
+# сброс результата для re-probe
+curl -X POST http://localhost:8000/api/v1/admin/probe/delete \
+  -H "Authorization: Bearer phub_admin_dev" -H "Content-Type: application/json" \
+  -d '{"name":"ruff","version":"0.15.21"}'
+```
+
+Разбор ошибок probe: `SELECT artifact_filename, error FROM dist_probes WHERE error IS NOT NULL;`
+сетевые сбои probe ретраятся Celery и после исчерпания попыток видны в `sync_failures`
+(operation `probe`). Метрики: `packagehub_probe_*`, `packagehub_enumeration_*`,
+`packagehub_fetch_errors_total` — в разрезе реестра.
 
 ## Shutdown
 

@@ -41,6 +41,30 @@ SYNC_LAST_STATUS = Gauge(
     "Last known sync status from DB (idle=0,running=1,failed=2)",
 )
 
+PROBE_DURATION_SECONDS = Histogram(
+    "packagehub_probe_duration_seconds",
+    "Distribution probe duration",
+    ["registry", "outcome"],
+)
+
+PROBE_OUTCOMES = Counter(
+    "packagehub_probe_outcomes_total",
+    "Probe outcomes (probed/unusable/skipped/failed)",
+    ["registry", "outcome"],
+)
+
+ENUMERATION_SYNCED = Counter(
+    "packagehub_enumeration_synced_total",
+    "Packages discovered and synced by the enumeration loop",
+    ["registry"],
+)
+
+FETCH_ERRORS = Counter(
+    "packagehub_fetch_errors_total",
+    "Fetcher errors by class",
+    ["registry", "error_class"],
+)
+
 
 class observe_api_latency:
     def __init__(self, method: str, route: str):
@@ -75,6 +99,19 @@ def inc_resolve_cache_miss() -> None:
 
 def observe_sync_duration(operation: str, elapsed_seconds: float) -> None:
     SYNC_DURATION_SECONDS.labels(operation=operation).observe(elapsed_seconds)
+
+
+def observe_probe(registry: str, outcome: str, elapsed_seconds: float) -> None:
+    PROBE_DURATION_SECONDS.labels(registry=registry, outcome=outcome).observe(elapsed_seconds)
+    PROBE_OUTCOMES.labels(registry=registry, outcome=outcome).inc()
+
+
+def inc_enumeration_synced(registry: str, count: int = 1) -> None:
+    ENUMERATION_SYNCED.labels(registry=registry).inc(count)
+
+
+def inc_fetch_error(registry: str, error_class: str) -> None:
+    FETCH_ERRORS.labels(registry=registry, error_class=error_class).inc()
 
 
 def update_sync_gauges(states: Iterable) -> None:

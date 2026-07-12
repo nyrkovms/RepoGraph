@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from collections import deque
 from datetime import UTC, datetime
@@ -20,6 +19,8 @@ from app.normalizers.names import normalize_package_name
 from app.services.metrics import observe_sync_duration
 from app.services.sync_failures import clear_sync_failure, upsert_sync_failure
 from app.services.sync_state import mark_sync_failed, mark_sync_progress, mark_sync_running, mark_sync_success
+
+from app.tasks.runner import run_async
 
 logger = logging.getLogger(__name__)
 
@@ -148,4 +149,4 @@ async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str,
 def run_seed(packages: list[str] | None = None) -> dict[str, int | str]:
     settings = get_settings()
     seed_packages = packages or settings.seed_package_list
-    return asyncio.run(_run_seed_async(seed_packages))
+    return run_async(_run_seed_async(seed_packages))

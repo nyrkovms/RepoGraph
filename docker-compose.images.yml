@@ -1,0 +1,120 @@
+x-backend-environment: &backend-environment
+  POSTGRES_HOST: postgres
+  REDIS_HOST: redis
+  SYNC_PYPI_JSON_BASE_URL: ${SYNC_PYPI_JSON_BASE_URL:-https://pypi.org/pypi}
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-packagehub}
+      POSTGRES_USER: ${POSTGRES_USER:-packagehub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-packagehub}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-packagehub} -d ${POSTGRES_DB:-packagehub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    image: ${BACKEND_IMAGE:-repograph-backend:linux-arm64}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      <<: *backend-environment
+      LOG_FILE: /var/log/packagehub/api.log
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./logs:/var/log/packagehub
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "-H",
+          "Host: ${API_HEALTHCHECK_HOST:-localhost}",
+          "http://localhost:8000/api/v1/health",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  worker:
+    image: ${BACKEND_IMAGE:-repograph-backend:linux-arm64}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      <<: *backend-environment
+      LOG_FILE: /var/log/packagehub/worker.log
+    command: ["celery", "-A", "app.celery_app:celery_app", "worker", "--loglevel=INFO"]
+    volumes:
+      - ./logs:/var/log/packagehub
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  beat:
+    image: ${BACKEND_IMAGE:-repograph-backend:linux-arm64}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      <<: *backend-environment
+      LOG_FILE: /var/log/packagehub/beat.log
+    command: ["celery", "-A", "app.celery_app:celery_app", "beat", "--loglevel=INFO"]
+    volumes:
+      - ./logs:/var/log/packagehub
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-repograph-frontend:linux-arm64}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+      VITE_API_TOKEN: ${API_TOKEN_VIEWER:-phub_viewer_dev}
+      UI_ALLOWED_HOSTS: ${UI_ALLOWED_HOSTS:-}
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+    ports:
+      - "5173:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pg_data:

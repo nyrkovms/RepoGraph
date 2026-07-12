@@ -2,12 +2,14 @@ from app.models.artifact import Artifact, DistTag
 from app.models.author import Author, PackageAuthor
 from app.models.base import Base
 from app.models.dependency import Dependency
+from app.models.dist_probe import DistProbe
 from app.models.package import Package
 from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
 from app.models.sync_state import SyncState
 from app.models.sync_failure import SyncFailure
 from app.models.version import PackageVersion
+from app.models.version_description import VersionDescription
 from app.models.vulnerability import PackageVulnerability, Vulnerability
 
 __all__ = [
@@ -15,6 +17,7 @@ __all__ = [
     "Author",
     "Base",
     "Dependency",
+    "DistProbe",
     "DistTag",
     "Package",
     "PackageAuthor",
@@ -24,5 +27,6 @@ __all__ = [
     "Registry",
     "SyncState",
     "SyncFailure",
+    "VersionDescription",
     "Vulnerability",
 ]

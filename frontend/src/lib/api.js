@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 const DEFAULT_TOKEN = import.meta.env.VITE_API_TOKEN || "phub_viewer_dev";
 
 export function getAuthToken() {

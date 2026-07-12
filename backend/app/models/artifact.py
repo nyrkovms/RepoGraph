@@ -22,7 +22,12 @@ class Artifact(UUIDPrimaryKeyMixin, Base):
     platform_tags: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     requires_dist_metadata: Mapped[bool] = mapped_column(default=False, nullable=False)
 
-    __table_args__ = (UniqueConstraint("version_id", "filename", name="uq_artifact_version_filename"),)
+    # Uniqueness includes the registry: the same filename may legitimately be
+    # served by several registries (mirror/hosted copies); cross-registry
+    # checksum drift is surfaced via PackageRegistry.checksum_mismatch.
+    __table_args__ = (
+        UniqueConstraint("version_id", "registry_id", "filename", name="uq_artifact_version_registry_filename"),
+    )
 
 
 class DistTag(UUIDPrimaryKeyMixin, Base):

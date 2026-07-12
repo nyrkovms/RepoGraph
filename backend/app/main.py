@@ -11,6 +11,7 @@ from app.api.v1.resolve import router as resolve_router
 from app.api.v1.search import router as search_router
 from app.api.v1.system import router as system_router
 from app.config import get_settings
+from app.fetcher.transport import aclose_shared_client
 from app.logging_config import setup_logging
 from app.services.metrics import observe_http_request
 
@@ -24,6 +25,7 @@ async def lifespan(_app: FastAPI):
     if errors:
         raise RuntimeError("Production baseline check failed: " + " | ".join(errors))
     yield
+    await aclose_shared_client()
 
 
 app = FastAPI(

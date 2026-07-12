@@ -3,6 +3,7 @@ import logging
 from datetime import UTC, datetime
 
 import httpx
+from packaging.version import InvalidVersion, Version
 
 from app.config import get_settings
 from app.connectors.base import (
@@ -15,6 +16,7 @@ from app.connectors.base import (
     NormalizedVulnerability,
     PackageNotFound,
 )
+from app.fetcher.transport import RegistryAuthError, RegistryClient, RegistryInfo
 from app.normalizers.license import normalize_license
 from app.normalizers.names import normalize_package_name
 from app.normalizers.pep508 import parse_pep508
@@ -23,17 +25,35 @@ from app.services.retry_policy import compute_backoff_delay_seconds, is_retryabl
 logger = logging.getLogger(__name__)
 
 
+def default_pypi_registry_info() -> RegistryInfo:
+    settings = get_settings()
+    return RegistryInfo(
+        slug="pypi",
+        ecosystem="pypi",
+        protocol="pypi-json",
+        base_url="https://pypi.org/",
+        api_url=settings.sync_pypi_json_base_url_normalized,
+    )
+
+
 class PyPIConnector(BaseConnector):
     ecosystem = "pypi"
+    protocol = "pypi-json"
 
-    def __init__(self, timeout_seconds: float | None = None) -> None:
+    def __init__(self, timeout_seconds: float | None = None, registry: RegistryInfo | None = None) -> None:
         settings = get_settings()
-        self.json_base_url = settings.sync_pypi_json_base_url_normalized
+        self.registry = registry or default_pypi_registry_info()
+        self.json_base_url = (self.registry.api_url or self.registry.base_url).rstrip("/")
         self.timeout_seconds = timeout_seconds or settings.sync_http_timeout_seconds
         self.max_retries = settings.sync_http_max_retries
         self.retry_base_seconds = settings.sync_http_retry_base_seconds
         self.retry_max_seconds = settings.sync_http_retry_max_seconds
         self.retry_jitter_seconds = settings.sync_http_retry_jitter_seconds
+        self.client = RegistryClient(
+            registry=self.registry,
+            min_interval_seconds=self.get_rate_limit(),
+            timeout_seconds=self.timeout_seconds,
+        )
 
     async def fetch_package_metadata(self, name: str) -> NormalizedPackage:
         url = f"{self.json_base_url}/{name}/json"
@@ -91,18 +111,29 @@ class PyPIConnector(BaseConnector):
         info = payload.get("info", {})
         return _parse_dependencies(info.get("requires_dist") or []), info.get("requires_python")
 
+    async def test_connection(self) -> tuple[bool, str]:
+        url = f"{self.json_base_url}/pip/json"
+        try:
+            response = await self.client.get(url)
+        except RegistryAuthError as exc:
+            return False, str(exc)
+        except Exception as exc:  # noqa: BLE001
+            return False, f"{exc.__class__.__name__}: {exc}"
+        if response.status_code >= 500:
+            return False, f"upstream status {response.status_code}"
+        return True, f"status {response.status_code}"
+
     async def _fetch_with_retry(self, url: str, package_name: str) -> httpx.Response:
         attempt = 0
         while True:
             attempt += 1
             try:
-                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                    response = await client.get(url)
+                response = await self.client.get(url)
                 if response.status_code == 404:
                     raise PackageNotFound(package_name)
                 response.raise_for_status()
                 return response
-            except PackageNotFound:
+            except (PackageNotFound, RegistryAuthError):
                 raise
             except Exception as exc:  # noqa: BLE001
                 is_retryable = is_retryable_upstream_error(exc)
@@ -232,7 +263,17 @@ class PyPIConnector(BaseConnector):
 def _pick_latest_version(releases: dict) -> str:
     if not releases:
         return "0"
-    return sorted(releases.keys())[-1]
+    parsed: list[tuple[Version, str]] = []
+    for raw in releases:
+        try:
+            parsed.append((Version(raw), raw))
+        except InvalidVersion:
+            continue
+    if not parsed:
+        return sorted(releases.keys())[-1]
+    stable = [(version, raw) for version, raw in parsed if not version.is_prerelease]
+    pool = stable or parsed
+    return max(pool, key=lambda item: item[0])[1]
 
 
 def _parse_dependencies(raw_requirements: list[str]) -> list[NormalizedDependency]:

@@ -80,6 +80,10 @@ class NormalizedPackage:
     versions: list[NormalizedVersion] = field(default_factory=list)
     vulnerabilities: list[NormalizedVulnerability] = field(default_factory=list)
     authors: list[NormalizedAuthor] = field(default_factory=list)
+    # "full" — протокол отдаёт полные метаданные (pypi-json, npm);
+    # "minimal" — только имена/версии/файлы (pypi-simple): такие данные
+    # не должны затирать поля, полученные из более богатого источника.
+    completeness: str = "full"
 
 
 class PackageNotFound(Exception):
@@ -95,4 +99,16 @@ class BaseConnector(ABC):
 
     @abstractmethod
     def get_rate_limit(self) -> float:
+        raise NotImplementedError
+
+    async def list_package_names(self) -> list[str]:
+        """Full listing of package names for the enumeration loop.
+
+        Supported by protocols with a listing endpoint (pypi-simple root,
+        internal npm catalogs). Protocols without one raise.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} does not support enumeration")
+
+    async def test_connection(self) -> tuple[bool, str]:
+        """Admin 'test connection': (ok, human-readable detail)."""
         raise NotImplementedError

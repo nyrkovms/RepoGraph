@@ -17,6 +17,8 @@ class Registry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     registry_type: Mapped[RegistryType] = mapped_column(
         Enum(RegistryType, name="registry_type_enum"), nullable=False, default=RegistryType.public
     )
+    protocol: Mapped[str] = mapped_column(String(32), nullable=False, default="pypi-json", server_default="pypi-json")
+    enumerate_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
     base_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     api_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     url_pattern: Mapped[str | None] = mapped_column(String(2048), nullable=True)

@@ -37,3 +37,28 @@ docker compose run --rm api python -m app.cli seed --packages flask django reque
 
 - Acceptance smoke проходит после фикса.
 - Текущий MVP-контур поднимается одной командой и отрабатывает ключевые сценарии.
+
+---
+
+## Прогон 2026-07-12 — fetcher-redesign (мультиреестры + probe)
+
+Контур: локальный `docker compose` (`postgres`, `redis`, `api`, `worker`), миграции
+`20260712_0004` (registry.protocol/enumerate_enabled, dist_probes, version_descriptions,
+флаги коллизий) и `20260712_0005` (уникальность артефактов per-registry).
+
+- `ruff check app tests` — PASS
+- `pytest tests/unit` — **73 passed** (транспорт/auth/CDN-редиректы, pypi-simple коннектор
+  PEP 503/691/658, фабрика протоколов, правила слияния и checksum-коллизии, курсор
+  enumeration, селектор/распаковка probe, типизированный lazy fetch)
+- `pytest tests/integration` — **22 passed**, включая герметичный мультиреестровый
+  сценарий: enumeration внутреннего hosted → union версий (`1.0.0` + `1.0.0+internal1`),
+  артефакты помнят реестр, флаги `name_collision`/`checksum_mismatch`, primary сохраняется
+- `./scripts/acceptance_smoke.sh` — **ACCEPTANCE_SMOKE: PASS** (15 блоков; новые:
+  admin registries + test connection, probe latest с ожиданием строки в `dist_probes`,
+  probe-метрики)
+
+Исправленные по ходу дефекты инфраструктуры:
+- Celery-задачи не регистрировались воркером (`autodiscover_tasks` искал несуществующий
+  модуль) — beat-задачи молча дропались; заменено явным `include`.
+- Loop-affinity asyncpg-пула в worker (второй таск в форке падал) — NullPool в
+  `worker_process_init`.
