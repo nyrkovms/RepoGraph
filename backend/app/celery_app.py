@@ -28,6 +28,7 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.redis_url,
     include=[
+        "app.tasks.classify",
         "app.tasks.enumeration",
         "app.tasks.fetch_deps",
         "app.tasks.probe",

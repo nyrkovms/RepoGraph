@@ -1,6 +1,16 @@
 from app.models.artifact import Artifact, DistTag
 from app.models.author import Author, PackageAuthor
 from app.models.base import Base
+from app.models.classification import (
+    Classification,
+    ClassificationCapability,
+    ClassificationFacet,
+    EntryGroupRule,
+    LlmVerdict,
+    PackageRelation,
+    RoleOverride,
+    UserCapability,
+)
 from app.models.dependency import Dependency
 from app.models.dist_probe import DistProbe
 from app.models.package import Package
@@ -16,6 +26,14 @@ __all__ = [
     "Artifact",
     "Author",
     "Base",
+    "Classification",
+    "ClassificationCapability",
+    "ClassificationFacet",
+    "EntryGroupRule",
+    "LlmVerdict",
+    "PackageRelation",
+    "RoleOverride",
+    "UserCapability",
     "Dependency",
     "DistProbe",
     "DistTag",

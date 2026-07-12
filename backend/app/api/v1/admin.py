@@ -25,6 +25,7 @@ from app.schemas.admin import (
     SyncStatusResponse,
 )
 from app.services.sync_state import get_or_create_pypi_sync_state
+from app.tasks.classify import run_classification
 from app.tasks.enumeration import run_enumeration
 from app.tasks.fetch_deps import fetch_missing_dependencies
 from app.tasks.probe import probe_version
@@ -81,6 +82,12 @@ async def trigger_retry_failed(payload: RetryFailedRequest = Body(default_factor
 async def trigger_enumeration() -> AdminTaskResponse:
     task = run_enumeration.delay()
     return AdminTaskResponse(task_id=task.id, status="queued", operation="enumeration")
+
+
+@router.post("/classify", response_model=AdminTaskResponse, dependencies=[Depends(require_admin)])
+async def trigger_classification(reclassify: bool = False) -> AdminTaskResponse:
+    task = run_classification.delay(reclassify)
+    return AdminTaskResponse(task_id=task.id, status="queued", operation="classify")
 
 
 @router.get("/registries", response_model=list[RegistryResponse], dependencies=[Depends(require_admin)])

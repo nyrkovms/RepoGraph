@@ -47,6 +47,10 @@ def main() -> None:
     retry_failed_cmd = sub.add_parser("retry-failed")
     retry_failed_cmd.add_argument("--limit", type=int, default=None)
 
+    classify_cmd = sub.add_parser("classify")
+    classify_cmd.add_argument("--reclassify", action="store_true")
+    classify_cmd.add_argument("--limit", type=int, default=None)
+
     sub.add_parser("stats")
 
     args = parser.parse_args()
@@ -60,6 +64,13 @@ def main() -> None:
 
     if args.command == "fetch":
         result = asyncio.run(_fetch_package_async(args.name, args.ecosystem))
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "classify":
+        from app.tasks.classify import _run_classification_async
+
+        result = asyncio.run(_run_classification_async(reclassify=args.reclassify, limit=args.limit))
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 

@@ -98,7 +98,7 @@ class PyPIConnector(BaseConnector):
             downloads_recent=None,
             created_at=created_at,
             updated_at=updated_at,
-            raw_metadata=payload,
+            raw_metadata={"info": info, "urls": payload.get("urls") or []},
             versions=versions_sorted,
             vulnerabilities=vulnerabilities,
             authors=authors,

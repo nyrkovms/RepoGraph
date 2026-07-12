@@ -159,6 +159,7 @@ async def _probe_version_async(version_id: str, artifact_filename: str | None = 
                 error=permanent_error,
             )
             observe_probe("", "unusable", perf_counter() - started)
+            _enqueue_classify(version.id)
             return {"status": "completed", "outcome": "unusable", "error": permanent_error, "inserted": inserted}
 
         artifact_row = next(a for a in artifacts if a.filename == candidate.filename)
@@ -199,6 +200,7 @@ async def _probe_version_async(version_id: str, artifact_filename: str | None = 
                     error=permanent_error,
                 )
                 observe_probe(registry_slug, "unusable", perf_counter() - started)
+                _enqueue_classify(version.id)
                 return {"status": "completed", "outcome": "unusable", "error": permanent_error, "inserted": inserted}
 
             if ecosystem == "npm":
@@ -219,6 +221,7 @@ async def _probe_version_async(version_id: str, artifact_filename: str | None = 
                 )
                 outcome = "unusable" if tarball.error else "probed"
                 observe_probe(registry_slug, outcome, perf_counter() - started)
+                _enqueue_classify(version.id)
                 return {"status": "completed", "outcome": outcome, "inserted": inserted}
 
             facts = extract_wheel_facts(payload, candidate.filename)
@@ -240,12 +243,25 @@ async def _probe_version_async(version_id: str, artifact_filename: str | None = 
             )
             outcome = "unusable" if facts.error else "probed"
             observe_probe(registry_slug, outcome, perf_counter() - started)
+            _enqueue_classify(version.id)
             return {"status": "completed", "outcome": outcome, "inserted": inserted}
         finally:
             try:
                 await redis.delete(lock_key)
             finally:
                 await redis.aclose()
+
+
+
+def _enqueue_classify(version_id) -> None:
+    """Классификация — потребитель probe: ставится после любого завершённого
+    probe (в т.ч. unusable — «probe недоступен» тоже вход классификатора)."""
+    try:
+        from app.tasks.classify import classify_version
+
+        classify_version.delay(str(version_id))
+    except Exception:  # noqa: BLE001
+        logger.warning("Failed to enqueue classification: version_id=%s", version_id, exc_info=True)
 
 
 async def _record_probe_failure(version_id: str, exc: Exception) -> None:
