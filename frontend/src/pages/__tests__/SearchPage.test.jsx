@@ -147,4 +147,28 @@ describe("SearchPage", () => {
       expect(api.searchPackages).toHaveBeenCalledWith({ q: "requests", limit: 8, sort: "name" });
     });
   });
+
+  it("passes facet filters to the catalog request", async () => {
+    render(
+      <MemoryRouter>
+        <SearchPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(api.fetchPackages).toHaveBeenCalled());
+    api.fetchPackages.mockClear();
+
+    await userEvent.selectOptions(screen.getByLabelText("Role filter"), "dev-tool");
+    await waitFor(() =>
+      expect(api.fetchPackages).toHaveBeenCalledWith(expect.objectContaining({ role: "dev-tool" }))
+    );
+
+    await userEvent.selectOptions(screen.getByLabelText("Status filter"), "needs-data");
+    await waitFor(() =>
+      expect(api.fetchPackages).toHaveBeenCalledWith(
+        expect.objectContaining({ role: "dev-tool", status: "needs-data" })
+      )
+    );
+  });
+
 });

@@ -41,6 +41,30 @@ describe("PackagePage", () => {
       license_spdx: "BSD-3-Clause",
       latest_version: "3.1.3",
       synced_at: "2026-03-09T00:00:00Z",
+      classification: {
+        classifier_version: "2.4.0",
+        classified_at: "2026-07-12T00:00:00Z",
+        version: "3.1.3",
+        status: "ok",
+        status_reason: "",
+        facets: [
+          { role: "runtime-component", confidence: "high", evidence: "curated override", provisional: false },
+          { role: "dev-service", confidence: "high", evidence: "curated override", provisional: false },
+        ],
+        capabilities: [{ capability: "cli", confidence: "high", evidence: "console_scripts: flask" }],
+        effective_capabilities: [
+          { name: "cli", origin: "structural" },
+          { name: "tui-app", origin: "user" },
+        ],
+        annotations: [
+          { capability: "tui-app", present: true, version: "", note: "curator note", created_at: "2026-07-12T00:00:00Z" },
+        ],
+        relations: [],
+      },
+      registries: [
+        { slug: "pypi", registry_type: "public", is_primary: true, name_collision: false, checksum_mismatch: false },
+        { slug: "nexus-pypi", registry_type: "corporate", is_primary: false, name_collision: true, checksum_mismatch: false },
+      ],
     });
     api.fetchVersions.mockResolvedValue({
       data: [
@@ -344,4 +368,27 @@ describe("PackagePage", () => {
     await user.click(screen.getByRole("button", { name: "Expand tree" }));
     expect(await screen.findByText("markupsafe")).toBeInTheDocument();
   });
+
+  it("renders classification block with roles, effective capabilities and registry flags", async () => {
+    render(
+      <MemoryRouter initialEntries={["/package/flask"]}>
+        <Routes>
+          <Route path="/package/:name" element={<PackagePage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(api.fetchPackage).toHaveBeenCalled());
+
+    expect(await screen.findByText("Classification")).toBeInTheDocument();
+    expect(screen.getByText("runtime-component")).toBeInTheDocument();
+    expect(screen.getByText("dev-service")).toBeInTheDocument();
+    // эффективное свойство от куратора помечено
+    expect(screen.getByText("tui-app")).toBeInTheDocument();
+    expect(screen.getByText("(curated)")).toBeInTheDocument();
+    // реестры и флаг коллизии имени
+    expect(screen.getByText("nexus-pypi")).toBeInTheDocument();
+    expect(screen.getByText("name collision")).toBeInTheDocument();
+  });
+
 });

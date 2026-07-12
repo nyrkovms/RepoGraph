@@ -168,6 +168,106 @@ function DependencyTree({ nodes, packageName, parentId = "root", collapsedNodes,
   );
 }
 
+const STATUS_TAG_CLASSES = {
+  ok: "tag",
+  "needs-data": "tag warn",
+  "undecidable-by-spec": "tag warn",
+};
+
+function ClassificationSection({ classification, registries }) {
+  if (!classification) {
+    return null;
+  }
+  const facets = classification.facets || [];
+  const effective = classification.effective_capabilities || [];
+  const annotations = classification.annotations || [];
+  const relations = classification.relations || [];
+
+  return (
+    <div className="classification-section">
+      <h3>Classification</h3>
+      <p>
+        <span className={STATUS_TAG_CLASSES[classification.status] || "tag"}>{classification.status}</span>
+        <span className="muted">
+          {" "}
+          rules {classification.classifier_version} · version {classification.version}
+        </span>
+      </p>
+      {classification.status_reason ? <p className="muted">{classification.status_reason}</p> : null}
+
+      <h4>Roles</h4>
+      {facets.length === 0 ? <p className="muted">No roles assigned</p> : null}
+      <ul className="inline-list">
+        {facets.map((facet) => (
+          <li key={facet.role} title={facet.evidence}>
+            <span className={facet.provisional ? "tag warn" : "tag"}>{facet.role}</span>
+            {facet.confidence === "low" ? <span className="muted"> (low)</span> : null}
+            {facet.provisional ? <span className="muted"> (provisional)</span> : null}
+          </li>
+        ))}
+      </ul>
+
+      <h4>Effective capabilities</h4>
+      {effective.length === 0 ? <p className="muted">None</p> : null}
+      <ul className="inline-list">
+        {effective.map((capability) => (
+          <li key={capability.name}>
+            <span className={capability.origin === "user" ? "tag cond" : "tag"}>{capability.name}</span>
+            {capability.origin === "user" ? <span className="muted"> (curated)</span> : null}
+          </li>
+        ))}
+      </ul>
+
+      {annotations.length ? (
+        <>
+          <h4>Curator annotations</h4>
+          <ul className="result-list">
+            {annotations.map((annotation) => (
+              <li key={`${annotation.capability}-${annotation.version}`}>
+                <span className="tag cond">
+                  {annotation.present ? "+" : "-"}
+                  {annotation.capability}
+                </span>
+                {annotation.version ? <span className="muted"> @{annotation.version}</span> : <span className="muted"> (all versions)</span>}
+                {annotation.note ? <span className="muted"> — {annotation.note}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      {relations.length ? (
+        <>
+          <h4>Relations</h4>
+          <ul className="inline-list">
+            {relations.map((relation) => (
+              <li key={`${relation.relation}-${relation.name}`}>
+                <span className="tag">{relation.relation}</span> <code>{relation.name}</code>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      {registries?.length ? (
+        <>
+          <h4>Registries</h4>
+          <ul className="inline-list">
+            {registries.map((registry) => (
+              <li key={registry.slug}>
+                <span className="tag">{registry.slug}</span>
+                {registry.is_primary ? <span className="muted"> (primary)</span> : null}
+                {registry.name_collision ? <span className="tag warn">name collision</span> : null}
+                {registry.checksum_mismatch ? <span className="tag warn">checksum mismatch</span> : null}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export default function PackagePage() {
   const { name } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -341,6 +441,8 @@ export default function PackagePage() {
               <b>Repo</b>: {pkg.repository_url || "n/a"}
             </span>
           </div>
+
+          <ClassificationSection classification={pkg.classification} registries={pkg.registries} />
 
           <h3>Versions</h3>
           <ul className="inline-list">

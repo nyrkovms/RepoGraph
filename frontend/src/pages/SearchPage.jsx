@@ -6,11 +6,30 @@ import { getPackageDescriptionPreview } from "../lib/packageDescription";
 
 const AUTOCOMPLETE_LIMIT = 8;
 
+const ROLE_OPTIONS = [
+  "",
+  "runtime-component",
+  "buildtime-component",
+  "dev-config",
+  "asset",
+  "dev-tool",
+  "dev-service",
+  "service",
+  "application",
+  "platform-runtime",
+  "binary-payload",
+];
+const STATUS_OPTIONS = ["", "ok", "needs-data", "undecidable-by-spec"];
+const ECOSYSTEM_OPTIONS = ["", "pypi", "npm"];
+
 export default function SearchPage() {
   const navigate = useNavigate();
   const autocompleteRequestId = useRef(0);
 
   const [query, setQuery] = useState("");
+  const [role, setRole] = useState("");
+  const [status, setStatus] = useState("");
+  const [ecosystem, setEcosystem] = useState("");
   const [rows, setRows] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -22,7 +41,7 @@ export default function SearchPage() {
   useEffect(() => {
     loadFirstPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [role, status, ecosystem]);
 
   useEffect(() => {
     const handler = () => loadFirstPage();
@@ -65,13 +84,27 @@ export default function SearchPage() {
     return () => window.clearTimeout(timeoutId);
   }, [query]);
 
+  function facetParams() {
+    const params = {};
+    if (role) {
+      params.role = role;
+    }
+    if (status) {
+      params.status = status;
+    }
+    if (ecosystem) {
+      params.ecosystem = ecosystem;
+    }
+    return params;
+  }
+
   async function loadFirstPage() {
     setLoading(true);
     setError("");
     try {
       const payload = query.trim()
-        ? await searchPackages({ q: query.trim(), limit: 20, sort: "name" })
-        : await fetchPackages({ limit: 20, sort: "name" });
+        ? await searchPackages({ q: query.trim(), limit: 20, sort: "name", ...facetParams() })
+        : await fetchPackages({ limit: 20, sort: "name", ...facetParams() });
       setRows(payload.data || []);
       setCursor(payload.cursor || null);
     } catch (err) {
@@ -89,8 +122,8 @@ export default function SearchPage() {
     setError("");
     try {
       const payload = query.trim()
-        ? await searchPackages({ q: query.trim(), limit: 20, sort: "name", cursor })
-        : await fetchPackages({ limit: 20, sort: "name", cursor });
+        ? await searchPackages({ q: query.trim(), limit: 20, sort: "name", cursor, ...facetParams() })
+        : await fetchPackages({ limit: 20, sort: "name", cursor, ...facetParams() });
       setRows((prev) => [...prev, ...(payload.data || [])]);
       setCursor(payload.cursor || null);
     } catch (err) {
@@ -200,15 +233,46 @@ export default function SearchPage() {
         <button type="button" onClick={handleSubmit} disabled={loading}>
           {loading ? "Loading..." : "Search"}
         </button>
+        <label>
+          Role
+          <select aria-label="Role filter" value={role} onChange={(e) => setRole(e.target.value)}>
+            {ROLE_OPTIONS.map((item) => (
+              <option key={item || "any"} value={item}>
+                {item || "any"}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Status
+          <select aria-label="Status filter" value={status} onChange={(e) => setStatus(e.target.value)}>
+            {STATUS_OPTIONS.map((item) => (
+              <option key={item || "any"} value={item}>
+                {item || "any"}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Ecosystem
+          <select aria-label="Ecosystem filter" value={ecosystem} onChange={(e) => setEcosystem(e.target.value)}>
+            {ECOSYSTEM_OPTIONS.map((item) => (
+              <option key={item || "any"} value={item}>
+                {item || "any"}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {error ? <p className="error">{error}</p> : null}
 
       <ul className="result-list">
         {rows.map((item) => (
-          <li key={`${item.normalized_name}-${item.latest_version}`}>
+          <li key={`${item.ecosystem}-${item.normalized_name}-${item.latest_version}`}>
             <Link to={`/package/${item.normalized_name}`}>{item.name}</Link>
             <span className="tag">{item.latest_version}</span>
+            {item.ecosystem ? <span className="tag muted-tag">{item.ecosystem}</span> : null}
             {item.license_spdx ? <span className="tag">{item.license_spdx}</span> : null}
             {item.has_vulnerabilities ? <span className="tag warn">vuln</span> : null}
             <p>{getPackageDescriptionPreview(item.description, 220) || "No description"}</p>
