@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     enumeration_batch_limit: int = 200
     enumeration_interval_hours: int = 6
 
+    facts_timeout_seconds: float = 30.0
+
     probe_enabled: bool = True
     probe_max_wheel_bytes: int = 20_000_000
     probe_max_tarball_bytes: int = 30_000_000

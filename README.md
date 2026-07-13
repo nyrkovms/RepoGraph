@@ -243,6 +243,34 @@ curl -X POST http://localhost:8000/api/v1/admin/probe/delete \
 (operation `probe`). Метрики: `packagehub_probe_*`, `packagehub_enumeration_*`,
 `packagehub_fetch_errors_total` — в разрезе реестра.
 
+## Facts API (интеграция с системой проверок прокси)
+
+PackageHub — **каталог фактов**: роли, свойства, статусы, evidence. Вердикты
+допуска/блокировки решение не выдаёт — их принимает система проверок
+прокси-репозитория на основе фактов.
+
+```bash
+# синхронно: fetch + probe + классификация latest, если чего-то нет
+curl -H "Authorization: Bearer phub_viewer_dev" \
+  "http://localhost:8000/api/v1/facts/pypi/ruff"
+# принудительная пересинхронизация метаданных (свежий deprecated / сдвиг latest)
+curl -H "Authorization: Bearer phub_viewer_dev" \
+  "http://localhost:8000/api/v1/facts/npm/left-pad?refresh=true"
+```
+
+Семантика: fail-fast (404 — нет в upstream, 502 — auth реестра, 503 — upstream
+недоступен, 504 — таймаут `FACTS_TIMEOUT_SECONDS`); «нет пригодного
+дистрибутива» — не ошибка, а факт (классификация по правилам probe-недоступности).
+
+> **⚠ Требует проработки (решение не принято):** режим обновления вердиктов.
+> Автоматическая классификация сейчас — только latest-версия каждого пакета.
+> Открытые вопросы: ре-классификация при изменении жизненного цикла
+> (deprecated/yanked после классификации), пер-версионная классификация
+> (кандидаты-политики: новые версии при refresh, версии из resolve/access-log
+> прокси, кураторский --all-versions), привязка блока классификации к селектору
+> версий в UI (модель deps.dev). Детали: openspec, архив чейнджа
+> on-demand-classification (design.md → Open Questions).
+
 ## Shutdown
 
 ```bash
