@@ -117,6 +117,15 @@ class BaseConnector(ABC):
         """
         raise NotImplementedError(f"{self.__class__.__name__} does not support enumeration")
 
+    async def fetch_version_metadata(self, name: str, version: str) -> NormalizedVersion:
+        """Normalized metadata of ONE version (facts by exact version).
+
+        The returned version's raw_metadata MUST carry everything the
+        classifier needs for this version (pypi: {info, urls}; npm: the
+        version manifest). Absent version upstream -> PackageNotFound.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} does not support version metadata")
+
     async def test_connection(self) -> tuple[bool, str]:
         """Admin 'test connection': (ok, human-readable detail)."""
         raise NotImplementedError

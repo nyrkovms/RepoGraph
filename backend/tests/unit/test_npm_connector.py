@@ -154,6 +154,17 @@ def test_optional_not_duplicated_from_dependencies():
     assert any(d.dependency_name == "chalk" and d.dependency_type == "runtime" for d in deps)
 
 
+def test_fetch_version_metadata_from_versioned_endpoint(monkeypatch):
+    connector = make_connector(monkeypatch, packument_handler)
+    version = asyncio.run(connector.fetch_version_metadata("@acme/toolkit", "1.0.0"))
+    assert version.version == "1.0.0"
+    assert version.status == "deprecated"  # 1.0.0 помечена deprecated в фикстуре
+    assert version.dependencies_hydrated is True
+    # npm-версия несёт полный манифест как raw_metadata
+    assert version.raw_metadata["version"] == "1.0.0"
+    assert version.artifacts[0].artifact_type == "tgz"
+
+
 def test_encode_npm_name():
     assert encode_npm_name("@types/node") == "@types%2Fnode"
     assert encode_npm_name("lodash") == "lodash"

@@ -72,3 +72,59 @@ def test_refresh_resyncs_metadata(client, viewer_token):
     body = client.get(f"/api/v1/facts/pypi/{COLD_PACKAGE}?refresh=true", headers=auth(viewer_token)).json()
     assert body["classification"] is not None
     assert body["version_status"] in ("active", "yanked", "deprecated", "unlisted")
+
+
+# --- version-scoped facts (version-scoped-facts) ---------------------------
+
+VERSIONED_PACKAGE = "six"
+OLD_VERSION = "1.16.0"  # не latest (latest 1.17.0), кроссплатформенный wheel, стабилен
+
+
+def test_version_scoped_facts_for_non_latest(client, viewer_token):
+    response = client.get(
+        f"/api/v1/facts/pypi/{VERSIONED_PACKAGE}?version={OLD_VERSION}", headers=auth(viewer_token)
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["requested_version"] == OLD_VERSION
+    block = body["classification"]
+    assert block is not None
+    # факты относятся ИМЕННО к запрошенной версии, не к latest
+    assert block["version"] == OLD_VERSION
+    assert block["facets"]
+    # six — библиотека
+    assert "runtime-component" in {f["role"] for f in block["facets"]}
+
+
+def test_version_scoped_does_not_move_latest(client, viewer_token):
+    # запрос старой версии
+    client.get(f"/api/v1/facts/pypi/{VERSIONED_PACKAGE}?version={OLD_VERSION}", headers=auth(viewer_token))
+    # latest-факты по-прежнему про latest
+    latest = client.get(f"/api/v1/facts/pypi/{VERSIONED_PACKAGE}", headers=auth(viewer_token)).json()
+    assert latest["requested_version"] == latest["latest_version"]
+    assert latest["latest_version"] != OLD_VERSION
+    assert latest["classification"]["version"] == latest["latest_version"]
+
+
+def test_nonexistent_version_404(client, viewer_token):
+    response = client.get(
+        f"/api/v1/facts/pypi/{VERSIONED_PACKAGE}?version=99.99.99", headers=auth(viewer_token)
+    )
+    assert response.status_code == 404
+
+
+def test_version_scoped_no_verdict_fields(client, viewer_token):
+    body = client.get(
+        f"/api/v1/facts/pypi/{VERSIONED_PACKAGE}?version={OLD_VERSION}", headers=auth(viewer_token)
+    ).json()
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                assert key.lower() not in FORBIDDEN_VERDICT_FIELDS, f"поле вердикта: {key}"
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(body)

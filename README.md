@@ -253,10 +253,17 @@ PackageHub — **каталог фактов**: роли, свойства, ст
 # синхронно: fetch + probe + классификация latest, если чего-то нет
 curl -H "Authorization: Bearer phub_viewer_dev" \
   "http://localhost:8000/api/v1/facts/pypi/ruff"
+# факты по КОНКРЕТНОЙ версии (её тянет установщик; может не быть в каталоге)
+curl -H "Authorization: Bearer phub_viewer_dev" \
+  "http://localhost:8000/api/v1/facts/pypi/six?version=1.16.0"
 # принудительная пересинхронизация метаданных (свежий deprecated / сдвиг latest)
 curl -H "Authorization: Bearer phub_viewer_dev" \
   "http://localhost:8000/api/v1/facts/npm/left-pad?refresh=true"
 ```
+
+`?version=` — факты именно этой версии: если версии нет в каталоге, она
+загружается (метаданные + probe) и классифицируется в том же вызове;
+несуществующая версия → 404. Ответ содержит `requested_version`.
 
 Семантика: fail-fast (404 — нет в upstream, 502 — auth реестра, 503 — upstream
 недоступен, 504 — таймаут `FACTS_TIMEOUT_SECONDS`); «нет пригодного

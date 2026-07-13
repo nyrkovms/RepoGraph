@@ -24,6 +24,8 @@ class FactsResponse(BaseModel):
     namespace: str | None
     normalized_name: str
     latest_version: str
+    # версия, к которой относятся факты (== latest, если version не задан)
+    requested_version: str
     synced_at: datetime
     deprecated: bool
     deprecation_message: str | None
@@ -36,6 +38,7 @@ class FactsResponse(BaseModel):
 async def get_facts(
     ecosystem: str,
     name: str,
+    version: str | None = Query(default=None, description="конкретная версия; по умолчанию latest"),
     refresh: bool = Query(default=False),
     db: AsyncSession = Depends(get_db_session),
 ) -> FactsResponse:
@@ -45,7 +48,7 @@ async def get_facts(
     settings = get_settings()
     try:
         payload = await asyncio.wait_for(
-            ensure_facts(db, ecosystem, name, refresh=refresh),
+            ensure_facts(db, ecosystem, name, version=version, refresh=refresh),
             timeout=settings.facts_timeout_seconds,
         )
     except FactsUnavailable as exc:

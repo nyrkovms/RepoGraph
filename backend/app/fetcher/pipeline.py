@@ -155,6 +155,44 @@ async def connector_for_package(db: AsyncSession, package: Package):
     return build_connector(registry_info_from_row(registry))
 
 
+async def ensure_version_row(db: AsyncSession, package: Package, version_str: str) -> PackageVersion:
+    """Guarantee a version row that carries a classifier-ready manifest.
+
+    Creates the row if the version is missing (published after last sync);
+    for pypi also backfills the version-scoped manifest ({info, urls} of THIS
+    version) when the row was created by bulk sync with only {files}. Absent
+    version upstream -> PackageNotFound (facts service maps to 404).
+    """
+    ecosystem = package.ecosystem.value
+    row = await db.scalar(
+        select(PackageVersion).where(
+            PackageVersion.package_id == package.id, PackageVersion.version == version_str
+        )
+    )
+    # pypi историческая версия из bulk-sync хранит только {files} — info для
+    # классификатора нет; такую строку дозагружаем version-scoped-манифестом.
+    needs_manifest = row is None or (ecosystem == "pypi" and not (row.raw_metadata or {}).get("info"))
+    if not needs_manifest:
+        return row
+
+    from app.connectors.factory import build_connector, registry_info_from_row
+
+    registry = await _current_primary_registry(db, package.id)
+    if registry is None:
+        registry = await get_or_create_default_registry(db, ecosystem)
+    connector = build_connector(registry_info_from_row(registry))
+
+    normalized_version = await connector.fetch_version_metadata(package.normalized_name, version_str)
+    version_ids = await _upsert_versions(db, package.id, [normalized_version], allow_update=True)
+    version_id = version_ids[version_str]
+    await _replace_artifacts(db, version_id, registry.id, normalized_version)
+    if normalized_version.dependencies:
+        await _replace_dependencies(db, version_id, normalized_version.dependencies, ecosystem)
+    await _resolve_level1(db, [version_id])
+    await db.flush()
+    return await db.get(PackageVersion, version_id)
+
+
 async def _current_primary_registry(db: AsyncSession, package_id) -> Registry | None:
     return await db.scalar(
         select(Registry)

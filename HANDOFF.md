@@ -22,15 +22,14 @@ classifire (`~/Claude/Projects/package-classifire`) — заморожен, ос
 - Приёмка на момент передачи: ruff чистый, **121 unit + 37 integration**
   (backend), **17 vitest** (frontend), **ACCEPTANCE_SMOKE: PASS (16/16)**.
 
-## ПРИОРИТЕТ #1 — активный openspec-чейндж `version-scoped-facts`
+## Готово: `version-scoped-facts` (реализовано 2026-07-13, Opus)
 
-Не реализован. Полный контракт: `package-classifire/openspec/changes/version-scoped-facts/`
-(proposal + design + specs + tasks, 0/13). Суть: сервис фактов должен уметь
-классифицировать КОНКРЕТНУЮ версию `foo@1.2.3` (её тянет установщик), которой
-может не быть в каталоге. Внутри — **скрытый баг**: `classifier/service.py:79
-build_manifest` для pypi всегда берёт манифест latest → классификация любой
-не-latest pypi-версии сейчас неверна. Начинать отсюда:
-`openspec show version-scoped-facts` → tasks.md.
+Сервис фактов принимает `?version=1.2.3` — классифицирует конкретную версию,
+которой может не быть в каталоге (загружает + probe + classify inline).
+Попутно исправлен скрытый баг `build_manifest`: не-latest pypi-версия
+классифицировалась по манифесту latest; теперь берёт version-scoped `{info,urls}`
+(коннекторы получили `fetch_version_metadata`, pipeline — `ensure_version_row`).
+Архив: `openspec/changes/archive/2026-07-13-version-scoped-facts/`.
 
 ## Прочие открытые вопросы (не решены, ждут решения продукта)
 

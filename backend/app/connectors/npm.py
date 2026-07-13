@@ -208,6 +208,16 @@ class NpmConnector(BaseConnector):
         )
         return parse_manifest_dependencies(manifest), None
 
+    async def fetch_version_metadata(self, name: str, version: str) -> NormalizedVersion:
+        normalized = normalize_name("npm", name)
+        manifest = await self._get_json_with_retry(
+            f"{self.base_url}/{encode_npm_name(normalized)}/{quote(version)}",
+            not_found_name=f"{name}@{version}",
+        )
+        # versioned endpoint не отдаёт packument-level `time`; release_date у
+        # version-scoped-запроса опускается (не нужен классификатору).
+        return self._normalize_version(manifest, {}, hydrate_deps=True)
+
     @staticmethod
     def _normalize_authors(packument: dict) -> list[NormalizedAuthor]:
         authors: list[NormalizedAuthor] = []

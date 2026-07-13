@@ -70,7 +70,9 @@ class PyPIConnector(BaseConnector):
 
         latest_version = info.get("version") or _pick_latest_version(releases)
         latest_dependencies = _parse_dependencies(info.get("requires_dist") or [])
-        versions = self._normalize_versions(releases, latest_version, latest_dependencies)
+        versions = self._normalize_versions(
+            releases, latest_version, latest_dependencies, info, payload.get("urls") or []
+        )
 
         versions_sorted = sorted(versions, key=lambda v: v.release_date or datetime.min.replace(tzinfo=UTC), reverse=True)
         created_at = versions_sorted[-1].release_date if versions_sorted and versions_sorted[-1].release_date else datetime.now(UTC)
@@ -110,6 +112,14 @@ class PyPIConnector(BaseConnector):
         payload = response.json()
         info = payload.get("info", {})
         return _parse_dependencies(info.get("requires_dist") or []), info.get("requires_python")
+
+    async def fetch_version_metadata(self, name: str, version: str) -> NormalizedVersion:
+        url = f"{self.json_base_url}/{name}/{version}/json"
+        response = await self._fetch_with_retry(url, f"{name}=={version}")
+        payload = response.json()
+        info = payload.get("info", {})
+        urls = payload.get("urls") or []
+        return _normalize_single_version(version, info, urls)
 
     async def test_connection(self) -> tuple[bool, str]:
         url = f"{self.json_base_url}/pip/json"
@@ -160,6 +170,8 @@ class PyPIConnector(BaseConnector):
         releases: dict,
         latest_version: str,
         latest_dependencies: list[NormalizedDependency],
+        info: dict,
+        urls: list,
     ) -> list[NormalizedVersion]:
         versions: list[NormalizedVersion] = []
 
@@ -167,35 +179,12 @@ class PyPIConnector(BaseConnector):
             if not files:
                 continue
 
-            release_date = None
-            status = "active"
-            artifacts: list[NormalizedArtifact] = []
-
-            for file_payload in files:
-                upload_time = file_payload.get("upload_time_iso_8601")
-                if upload_time:
-                    dt = _parse_datetime(upload_time)
-                    if dt and (release_date is None or dt > release_date):
-                        release_date = dt
-
-                if file_payload.get("yanked"):
-                    status = "yanked"
-
-                digests = file_payload.get("digests") or {}
-                artifacts.append(
-                    NormalizedArtifact(
-                        filename=file_payload.get("filename", ""),
-                        download_url=file_payload.get("url", ""),
-                        size_bytes=file_payload.get("size"),
-                        checksum_sha256=digests.get("sha256"),
-                        checksum_md5=digests.get("md5"),
-                        artifact_type="wheel" if (file_payload.get("packagetype") == "bdist_wheel") else "sdist",
-                        platform_tags=None,
-                        requires_dist_metadata=bool(file_payload.get("dist_info_metadata")),
-                    )
-                )
-
-            dependencies = latest_dependencies if version == latest_version else []
+            release_date = _max_upload_time(files)
+            status = "yanked" if any(f.get("yanked") for f in files) else "active"
+            # Только latest-версия несёт классификатору свой info (JSON API отдаёт
+            # info пакета == info latest); историческим версиям info дозагружается
+            # лениво через fetch_version_metadata при version-scoped-запросе.
+            raw_metadata = {"info": info, "urls": urls} if version == latest_version else {"files": files}
 
             versions.append(
                 NormalizedVersion(
@@ -203,10 +192,10 @@ class PyPIConnector(BaseConnector):
                     release_date=release_date,
                     status=status,
                     requires_python=files[0].get("requires_python") if files else None,
-                    raw_metadata={"files": files},
+                    raw_metadata=raw_metadata,
                     dependencies_hydrated=version == latest_version,
-                    artifacts=artifacts,
-                    dependencies=dependencies,
+                    artifacts=_artifacts_from_files(files),
+                    dependencies=latest_dependencies if version == latest_version else [],
                 )
             )
 
@@ -274,6 +263,50 @@ def _pick_latest_version(releases: dict) -> str:
     stable = [(version, raw) for version, raw in parsed if not version.is_prerelease]
     pool = stable or parsed
     return max(pool, key=lambda item: item[0])[1]
+
+
+def _artifacts_from_files(files: list) -> list[NormalizedArtifact]:
+    artifacts: list[NormalizedArtifact] = []
+    for file_payload in files:
+        digests = file_payload.get("digests") or {}
+        artifacts.append(
+            NormalizedArtifact(
+                filename=file_payload.get("filename", ""),
+                download_url=file_payload.get("url", ""),
+                size_bytes=file_payload.get("size"),
+                checksum_sha256=digests.get("sha256"),
+                checksum_md5=digests.get("md5"),
+                artifact_type="wheel" if (file_payload.get("packagetype") == "bdist_wheel") else "sdist",
+                platform_tags=None,
+                requires_dist_metadata=bool(file_payload.get("dist_info_metadata")),
+            )
+        )
+    return artifacts
+
+
+def _max_upload_time(files: list):
+    latest = None
+    for file_payload in files:
+        dt = _parse_datetime(file_payload.get("upload_time_iso_8601"))
+        if dt and (latest is None or dt > latest):
+            latest = dt
+    return latest
+
+
+def _normalize_single_version(version: str, info: dict, urls: list) -> NormalizedVersion:
+    """One pypi version from {name}/{version}/json — the version-scoped manifest
+    the classifier needs (info + urls of exactly this version)."""
+    yanked = bool(info.get("yanked")) or any(u.get("yanked") for u in urls)
+    return NormalizedVersion(
+        version=version,
+        release_date=_max_upload_time(urls),
+        status="yanked" if yanked else "active",
+        requires_python=info.get("requires_python"),
+        raw_metadata={"info": info, "urls": urls},
+        dependencies_hydrated=True,
+        artifacts=_artifacts_from_files(urls),
+        dependencies=_parse_dependencies(info.get("requires_dist") or []),
+    )
 
 
 def _parse_dependencies(raw_requirements: list[str]) -> list[NormalizedDependency]:

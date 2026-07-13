@@ -12,9 +12,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.classifier.effective import classification_block, current_classification, registry_presence
+from app.connectors.base import PackageNotFound
 from app.connectors.factory import build_connector, registry_info_from_row
 from app.fetcher.lazy import LazyFetcher
 from app.fetcher.pipeline import find_package, get_or_create_default_registry, run_sync_pipeline
+from app.fetcher.transport import RegistryAuthError
 from app.models.dist_probe import DistProbe
 from app.models.package import Package
 from app.models.version import PackageVersion
@@ -100,28 +102,53 @@ async def _ensure_classification(db: AsyncSession, version: PackageVersion, pack
     await db.commit()
 
 
-async def ensure_facts(db: AsyncSession, ecosystem: str, name: str, refresh: bool = False) -> dict:
-    """Facts for the package's latest version, computing missing steps inline."""
+async def _resolve_version_row(
+    db: AsyncSession, package: Package, version: str | None
+) -> PackageVersion:
+    """The version to report facts about. None -> latest; an explicit version
+    is ensured (fetched + row created) even if absent from the catalog."""
+    if version is None:
+        row = await _latest_version_row(db, package)
+        if row is None:
+            raise FactsUnavailable(
+                "upstream_error", f"latest version '{package.latest_version}' has no catalog row"
+            )
+        return row
+
+    from app.fetcher.pipeline import ensure_version_row
+
+    try:
+        return await ensure_version_row(db, package, version)
+    except PackageNotFound as exc:
+        raise FactsUnavailable("not_found", f"version '{version}' not found upstream") from exc
+    except RegistryAuthError as exc:
+        raise FactsUnavailable("auth_error", str(exc)) from exc
+
+
+async def ensure_facts(
+    db: AsyncSession, ecosystem: str, name: str, version: str | None = None, refresh: bool = False
+) -> dict:
+    """Facts for a package version (latest by default, or an explicit version),
+    computing missing steps inline."""
     package = await _ensure_package(db, ecosystem, name, refresh)
 
-    version = await _latest_version_row(db, package)
-    if version is None:
-        raise FactsUnavailable("upstream_error", f"latest version '{package.latest_version}' has no catalog row")
+    version_row = await _resolve_version_row(db, package, version)
 
-    await _ensure_probe(db, version)
-    await _ensure_classification(db, version, package)
+    await _ensure_probe(db, version_row)
+    await _ensure_classification(db, version_row, package)
 
-    classification = await classification_block(db, package, version)
+    classification = await classification_block(db, package, version_row)
     return {
         "ecosystem": package.ecosystem.value,
         "name": package.name,
         "namespace": package.namespace,
         "normalized_name": package.normalized_name,
         "latest_version": package.latest_version,
+        "requested_version": version_row.version,
         "synced_at": package.synced_at,
         "deprecated": package.deprecated,
         "deprecation_message": package.deprecation_message,
-        "version_status": version.status.value,
+        "version_status": version_row.status.value,
         "classification": classification,
         "registries": await registry_presence(db, package),
     }

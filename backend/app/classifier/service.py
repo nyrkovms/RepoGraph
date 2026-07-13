@@ -77,14 +77,30 @@ async def _representative_probe(db: AsyncSession, version_id) -> ProbeView | Non
 
 
 def build_manifest(package: Package, version: PackageVersion) -> dict:
-    """classifire-shaped manifest per ecosystem.
+    """classifire-shaped manifest for the classified VERSION.
 
     npm: the version manifest (stored per version).
-    pypi: {"info", "urls"} — package-level info corresponds to the latest
-    version, which is exactly the version we classify.
+    pypi: {"info", "urls"} of this version — taken from the version row
+    (ensure_version_row fills it for any version). Falls back to the
+    package-level manifest only when the version row lacks its own info AND
+    it is the latest version (package.raw_metadata == latest's info+urls);
+    for a non-latest version without info this would misclassify, so callers
+    MUST run ensure_version_row first.
     """
     if package.ecosystem.value == "npm":
         return dict(version.raw_metadata or {})
+
+    version_raw = version.raw_metadata or {}
+    if version_raw.get("info"):
+        return {"info": version_raw["info"], "urls": version_raw.get("urls") or []}
+
+    if version.version != package.latest_version:
+        logger.warning(
+            "pypi manifest fallback to package-level for non-latest version "
+            "%s@%s — verdict may be inaccurate; ensure_version_row should precede classify",
+            package.normalized_name,
+            version.version,
+        )
     raw = package.raw_metadata or {}
     return {"info": raw.get("info") or {}, "urls": raw.get("urls") or []}
 
