@@ -9,13 +9,14 @@ PackageHub (этот репозиторий) — **каталог фактов**
 2.4.0). Позиционирование: решение выдаёт ТОЛЬКО факты; вердикты допуска/
 блокировки принимает система проверок прокси-репозитория (вне решения).
 classifire (`~/Claude/Projects/package-classifire`) — заморожен, остаётся
-референсом методики и домом openspec-спек.
+референсом методики. **Спеки (openspec) с 2026-07-13 живут здесь, в repograph** —
+`openspec/specs/` (main specs) и `openspec/changes/archive/` (история чейнджей).
 
 ## Состояние (всё закоммичено, ничего не запушено)
 
 - **repograph**: `main` = baseline MVP; ветка **`feature/unified-fetcher-classifier`**
   = вся работа (8 коммитов, миграции 0004–0008). Рабочее дерево чистое.
-- **package-classifire**: ветка **`feature/openspec-sdd`** = спеки.
+- **package-classifire**: ветка **`feature/openspec-sdd`** = история переезда спек (сами спеки теперь в этом репо).
 - Реализовано и заархивировано (openspec, 6 чейнджей): fetcher-redesign,
   npm-connector, classification-layer, classification-api, classification-ui,
   on-demand-classification.
@@ -29,7 +30,7 @@ classifire (`~/Claude/Projects/package-classifire`) — заморожен, ос
 Попутно исправлен скрытый баг `build_manifest`: не-latest pypi-версия
 классифицировалась по манифесту latest; теперь берёт version-scoped `{info,urls}`
 (коннекторы получили `fetch_version_metadata`, pipeline — `ensure_version_row`).
-Архив: `openspec/changes/archive/2026-07-13-version-scoped-facts/`.
+Архив: `openspec/changes/archive/2026-07-13-version-scoped-facts/` (в этом репо).
 
 ## Прочие открытые вопросы (не решены, ждут решения продукта)
 
@@ -83,5 +84,5 @@ docker run --rm -u "$(id -u):$(id -g)" -e npm_config_cache=/tmp/.npm \
 
 Каждая доработка — через openspec: `openspec new change <name>` →
 proposal/design/specs/tasks → реализация → тесты → живая проверка →
-`openspec archive <name> --yes` → коммит в ветку. Спеки живут в
-package-classifire (`openspec/`), код — здесь.
+`openspec archive <name> --yes` → коммит в ветку. Спеки и код — в этом
+репозитории (`openspec/` рядом с `backend/`).
