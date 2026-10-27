@@ -2,6 +2,7 @@ import re
 from dataclasses import dataclass
 
 from packaging.requirements import InvalidRequirement, Requirement
+from packaging.utils import canonicalize_name
 
 _MARKER_PATTERN = re.compile(r"([a-zA-Z_][a-zA-Z0-9_]*)\s*(==|!=|>=|<=|>|<)\s*['\"]([^'\"]+)['\"]")
 
@@ -23,6 +24,13 @@ def _parse_marker_conditions(marker_str: str) -> list[dict[str, str]]:
     return conditions
 
 
+def _parent_extra(conditions: list[dict[str, str]]) -> str | None:
+    for condition in conditions:
+        if condition["marker"] == "extra" and condition["op"] == "==":
+            return canonicalize_name(condition["value"])
+    return None
+
+
 def parse_pep508(requirement_str: str) -> ParsedRequirement:
     try:
         req = Requirement(requirement_str)
@@ -30,16 +38,19 @@ def parse_pep508(requirement_str: str) -> ParsedRequirement:
         raise ValueError(f"Invalid PEP 508 requirement: {requirement_str}") from exc
 
     marker_payload: dict | None = None
+    conditions: list[dict[str, str]] = []
     if req.marker is not None:
         marker_str = str(req.marker)
+        conditions = _parse_marker_conditions(marker_str)
         marker_payload = {
             "type": "python_environment",
             "expression": marker_str,
-            "conditions": _parse_marker_conditions(marker_str),
+            "conditions": conditions,
         }
 
-    extras = sorted(req.extras)
-    extra_name = extras[0] if extras else None
+    # `extra == "test"` in the marker means the dependency belongs to the parent's extra.
+    # Extras requested from the dependency itself (`requests[socks]`) stay in raw_spec only.
+    extra_name = _parent_extra(conditions)
     dep_type = "optional" if extra_name else "runtime"
 
     return ParsedRequirement(
