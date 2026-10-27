@@ -4,7 +4,8 @@
 
 ## 1. Security baseline
 
-- [x] API не стартует в `APP_ENV=production` с дефолтными токенами.
+- [x] API не стартует в `APP_ENV=production` с дефолтным admin-токеном.
+- [ ] Read API и Web UI доступны только из внутренней сети, VPN или через OIDC-прокси. Read-эндпоинты работают без токена, а `POST /resolve` может пополнять каталог.
 - [x] API не стартует в `APP_ENV=production` с wildcard CORS/Trusted Hosts.
 - [x] Зафиксированы security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`).
 - [x] Сравнение API токенов выполняется через constant-time compare.

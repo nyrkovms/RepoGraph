@@ -51,7 +51,7 @@ curl -X POST http://localhost:8000/api/v1/admin/seed \
 
 - Frontend: `http://localhost:5173`
 - API health: `http://localhost:8000/api/v1/health`
-- API stats: `http://localhost:8000/api/v1/stats` (Bearer viewer/admin)
+- API stats: `http://localhost:8000/api/v1/stats`
 - API metrics (Prometheus): `http://localhost:8000/api/v1/metrics`
 
 ## Test stand
@@ -77,12 +77,10 @@ Removing the data is a deliberate manual step: `docker volume rm packagehub_stan
 - DB backup: `./scripts/db_backup.sh`
 - DB restore: `./scripts/db_restore.sh <backup-file.sql> --yes` (перезапускает `api/worker` после восстановления)
 
-## Tokens (dev defaults)
+## Access
 
-- Viewer: `phub_viewer_dev`
-- Admin: `phub_admin_dev`
-
-Frontend token можно менять в верхней панели приложения.
+- Read API и Web UI открыты без токена. Доступ к ним ограничивайте сетью (внутренний контур, VPN, позже OIDC-прокси).
+- Admin API (`/admin/*`) требует `Authorization: Bearer <API_TOKEN_ADMIN>`. Dev-значение: `phub_admin_dev`.
 
 ## Available CLI
 

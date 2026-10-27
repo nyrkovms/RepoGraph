@@ -28,10 +28,11 @@
 
 ### 2.2 Аутентификация
 
-- Схема: `Authorization: Bearer <token>`.
-- Роли:
-  - `viewer`: read-only endpoints.
-  - `admin`: read + admin endpoints.
+- Read-эндпоинты открыты, токен не нужен. Это каталог (§3), `POST /resolve` (§4), дайджест `/updates` (SPEC-DAILY-UPDATE §5) и системные эндпоинты (§6).
+- Доступ к ним ограничивается на уровне сети: внутренний контур или VPN. Позже перед UI и API встанет OIDC-прокси (SPEC.md §7).
+- Admin-эндпоинты (§5, `/admin/*`) требуют заголовок `Authorization: Bearer <token>` с токеном `API_TOKEN_ADMIN`. Если токена нет или он неверный, ответ `401`.
+- Роли `viewer` нет. Раньше её токен был вшит в бандл UI, поэтому доступ он не ограничивал, а только требовал общеизвестный заголовок.
+- Открытый доступ включает запись: `POST /resolve` и дерево зависимостей делают lazy fetch (§2.5), то есть загружают незнакомые пакеты из PyPI и сохраняют их в БД. Любой клиент, которому сеть даёт доступ к API, может пополнять каталог.
 
 ### 2.3 Пагинация
 
@@ -62,7 +63,6 @@ Cursor-based ответ для списков:
 
 - `validation_error` → HTTP `422`
 - `unauthorized` → HTTP `401`
-- `forbidden` → HTTP `403`
 - `not_found` → HTTP `404`
 - `resolver_conflict` → HTTP `409`
 - `upstream_timeout` → HTTP `504`
@@ -84,7 +84,7 @@ Cursor-based ответ для списков:
 
 ## 3.1 `GET /api/v1/packages`
 
-- Auth: `viewer|admin`
+- Auth: none
 - Query:
   - `license: string?`
   - `has_vulnerabilities: boolean?`
@@ -112,11 +112,11 @@ Cursor-based ответ для списков:
 }
 ```
 
-- Errors: `401/403/422/500`
+- Errors: `422/500`
 
 ## 3.2 `GET /api/v1/packages/pypi/{name}`
 
-- Auth: `viewer|admin`
+- Auth: none
 - Path: `name` (PyPI canonical name rules)
 - Behavior: при miss в БД запускает lazy fetch.
 - Response `200`:
@@ -136,11 +136,11 @@ Cursor-based ответ для списков:
 }
 ```
 
-- Errors: `401/403/404/504/500`
+- Errors: `404/504/500`
 
 ## 3.3 `GET /api/v1/packages/pypi/{name}/versions`
 
-- Auth: `viewer|admin`
+- Auth: none
 - Query:
   - `limit: int=50 (max 200)`
   - `cursor: string?`
@@ -161,11 +161,11 @@ Cursor-based ответ для списков:
 }
 ```
 
-- Errors: `401/403/404/422/500`
+- Errors: `404/422/500`
 
 ## 3.4 `GET /api/v1/packages/pypi/{name}/versions/{ver}`
 
-- Auth: `viewer|admin`
+- Auth: none
 - Response `200`:
 
 ```json
@@ -179,11 +179,11 @@ Cursor-based ответ для списков:
 }
 ```
 
-- Errors: `401/403/404/500`
+- Errors: `404/500`
 
 ## 3.5 `GET /api/v1/packages/pypi/{name}/versions/{ver}/dependencies`
 
-- Auth: `viewer|admin`
+- Auth: none
 - Query:
   - `depth: int? (max 50, optional; default = full tree within server limit)`
   - `include_optional: bool=false`
@@ -216,11 +216,11 @@ Cursor-based ответ для списков:
 }
 ```
 
-- Errors: `401/403/404/422/500`
+- Errors: `404/422/500`
 
 ## 3.6 `GET /api/v1/packages/pypi/{name}/versions/{ver}/artifacts`
 
-- Auth: `viewer|admin`
+- Auth: none
 - Response `200`:
 
 ```json
@@ -238,11 +238,11 @@ Cursor-based ответ для списков:
 }
 ```
 
-- Errors: `401/403/404/500`
+- Errors: `404/500`
 
 ## 3.7 `GET /api/v1/packages/pypi/{name}/vulnerabilities`
 
-- Auth: `viewer|admin`
+- Auth: none
 - Response `200`:
 
 ```json
@@ -261,7 +261,7 @@ Cursor-based ответ для списков:
 }
 ```
 
-- Errors: `401/403/404/500`
+- Errors: `404/500`
 
 `Decisions fixed`
 - Контракты каталога описаны только в этом разделе.
@@ -273,7 +273,7 @@ Cursor-based ответ для списков:
 
 ## 4.1 `POST /api/v1/resolve`
 
-- Auth: `viewer|admin`
+- Auth: none
 - Request body:
 
 ```json
@@ -383,14 +383,14 @@ Cursor-based ответ для списков:
 }
 ```
 
-- Errors: `401/403/422/500`
+- Errors: `401/422/500`
 
 ## 5.2 `POST /api/v1/admin/fetch/{name}`
 
 - Auth: `admin`
 - Behavior: запустить lazy fetch вручную.
 - Response `202` with task info.
-- Errors: `401/403/404/500`
+- Errors: `401/404/500`
 
 ## 5.3 `POST /api/v1/admin/refresh`
 
@@ -404,7 +404,7 @@ Cursor-based ответ для списков:
 ```
 
 - Response `202` with task info.
-- Errors: `401/403/422/500`
+- Errors: `401/422/500`
 
 ## 5.4 `POST /api/v1/admin/retry-failed`
 
@@ -418,7 +418,7 @@ Cursor-based ответ для списков:
 ```
 
 - Response `202` with task info.
-- Errors: `401/403/422/500`
+- Errors: `401/422/500`
 
 ## 5.5 `GET /api/v1/admin/sync/status`
 
@@ -441,7 +441,7 @@ Cursor-based ответ для списков:
 }
 ```
 
-- Errors: `401/403/500`
+- Errors: `401/500`
 
 `Decisions fixed`
 - Admin endpoints возвращают `202` для долгих операций через Celery.
@@ -462,7 +462,7 @@ Cursor-based ответ для списков:
 
 ## 6.2 `GET /api/v1/stats`
 
-- Auth: `viewer|admin`
+- Auth: none
 - Response `200`:
 
 ```json

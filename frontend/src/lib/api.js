@@ -1,23 +1,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-const DEFAULT_TOKEN = import.meta.env.VITE_API_TOKEN || "phub_viewer_dev";
-
-export function getAuthToken() {
-  return localStorage.getItem("phub_token") || DEFAULT_TOKEN;
-}
-
-export function setAuthToken(token) {
-  if (!token) {
-    localStorage.removeItem("phub_token");
-    return;
-  }
-  localStorage.setItem("phub_token", token.trim());
-}
 
 async function request(path, { method = "GET", body } = {}) {
-  const headers = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${getAuthToken()}`,
-  };
+  const headers = { "Content-Type": "application/json" };
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,

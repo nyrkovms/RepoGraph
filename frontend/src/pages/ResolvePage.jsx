@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { resolveDependencies } from "../lib/api";
 import { buildRuntimeEnvironment, OS_OPTIONS, PYTHON_VERSIONS } from "../lib/runtimeEnv";
@@ -220,16 +220,6 @@ export default function ResolvePage() {
     () => allNodeIds.length > 0 && allNodeIds.every((nodeId) => collapsedNodes.has(nodeId)),
     [allNodeIds, collapsedNodes]
   );
-
-  useEffect(() => {
-    const handler = () => {
-      setResult(null);
-      setError("");
-      setCollapsedNodes(new Set());
-    };
-    window.addEventListener("phub-token-updated", handler);
-    return () => window.removeEventListener("phub-token-updated", handler);
-  }, []);
 
   async function onResolve() {
     setLoading(true);

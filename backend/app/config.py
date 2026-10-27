@@ -29,7 +29,6 @@ class Settings(BaseSettings):
     trusted_hosts: str = "localhost,127.0.0.1,testserver"
     security_hsts_enabled: bool = False
 
-    api_token_viewer: str = "phub_viewer_dev"
     api_token_admin: str = "phub_admin_dev"
 
     sync_refresh_enabled: bool = False
@@ -100,8 +99,6 @@ class Settings(BaseSettings):
         if not self.is_production:
             return errors
 
-        if self.api_token_viewer == "phub_viewer_dev":
-            errors.append("API_TOKEN_VIEWER must be overridden in production.")
         if self.api_token_admin == "phub_admin_dev":
             errors.append("API_TOKEN_ADMIN must be overridden in production.")
 

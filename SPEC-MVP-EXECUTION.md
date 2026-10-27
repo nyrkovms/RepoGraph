@@ -235,7 +235,7 @@ flowchart TD
 - Tasks:
   - `GET /packages`, `GET /search`;
   - cursor pagination;
-  - auth dependency (`viewer|admin`).
+  - auth dependency (`viewer|admin`; роль viewer позже убрана, read API открыт — см. SPEC-MVP-API §2.2).
 - DoD:
   - фильтры `license`, `has_vulnerabilities`, `updated_after`, `sort` работают.
 - Required tests:

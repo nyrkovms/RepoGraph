@@ -159,7 +159,7 @@ Batch refresh по `synced_at` отключается (`SYNC_REFRESH_ENABLED=fal
 
 ### 5.1 API
 
-`GET /api/v1/updates` — лента событий (viewer):
+`GET /api/v1/updates` — лента событий (без авторизации, см. SPEC-MVP-API §2.2):
 
 | Параметр | По умолчанию | Смысл |
 |---|---|---|
