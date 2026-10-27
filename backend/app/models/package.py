@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -36,5 +36,8 @@ class Package(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     deprecated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     deprecation_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     deprecation_alternative: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    last_serial: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    unavailable_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     raw_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False)

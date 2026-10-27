@@ -10,6 +10,7 @@ from app.api.v1.packages import router as packages_router
 from app.api.v1.resolve import router as resolve_router
 from app.api.v1.search import router as search_router
 from app.api.v1.system import router as system_router
+from app.api.v1.updates import router as updates_router
 from app.config import get_settings
 from app.logging_config import setup_logging
 from app.services.metrics import observe_http_request
@@ -78,4 +79,5 @@ app.include_router(system_router, prefix="/api/v1", tags=["system"])
 app.include_router(packages_router, prefix="/api/v1", tags=["packages"])
 app.include_router(search_router, prefix="/api/v1", tags=["search"])
 app.include_router(resolve_router, prefix="/api/v1", tags=["resolve"])
+app.include_router(updates_router, prefix="/api/v1", tags=["updates"])
 app.include_router(admin_router, prefix="/api/v1/admin", tags=["admin"])

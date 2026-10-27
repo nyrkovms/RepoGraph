@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import Any
 
+from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 from resolvelib import AbstractProvider
@@ -124,19 +125,23 @@ class PyPIProvider(AbstractProvider):
                 continue
             if dep.dependency_type in {DependencyType.build, DependencyType.peer, DependencyType.provided}:
                 continue
-            if dep.dependency_type == DependencyType.optional:
-                if not dep.extra_name or dep.extra_name not in candidate.extras:
-                    continue
             if dep.dependency_ecosystem != Ecosystem.pypi:
                 continue
-            if not marker_applies(dep.environment_markers, self.environment):
+            if dep.dependency_type == DependencyType.optional:
+                # The marker names the parent's extra (`extra == "test"`); it applies if any requested extra matches.
+                if not any(
+                    marker_applies(dep.environment_markers, {**self.environment, "extra": extra})
+                    for extra in candidate.extras
+                ):
+                    continue
+            elif not marker_applies(dep.environment_markers, self.environment):
                 continue
 
             requirements.append(
                 ResolverRequirement.from_input(
                     name=dep.dependency_name,
                     version_spec=dep.version_constraint,
-                    extras=[],
+                    extras=_requested_extras(dep.raw_spec),
                     dependency_type=dep.dependency_type.value,
                     extra_name=dep.extra_name,
                     environment_markers=dep.environment_markers,
@@ -310,3 +315,11 @@ def _wheel_filename_matches_platform(filename: str, sys_platform: str) -> bool:
     if sys_platform == "linux":
         return "manylinux" in filename or "musllinux" in filename or "linux_" in filename
     return True
+
+
+def _requested_extras(raw_spec: str) -> list[str]:
+    # Extras the parent asks of this dependency, e.g. `requests[socks]`.
+    try:
+        return sorted(Requirement(raw_spec).extras)
+    except InvalidRequirement:
+        return []

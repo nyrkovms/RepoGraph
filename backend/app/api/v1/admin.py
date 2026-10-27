@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Body, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.updates import fetch_last_update_run
 from app.auth.tokens import require_admin
 from app.db import get_db_session
 from app.schemas.admin import AdminTaskResponse, RefreshRequest, RetryFailedRequest, SeedRequest, SyncStatusResponse
@@ -37,9 +38,18 @@ async def trigger_retry_failed(payload: RetryFailedRequest = Body(default_factor
     return AdminTaskResponse(task_id=task.id, status="queued", operation="retry_failed")
 
 
+@router.post("/daily-update", response_model=AdminTaskResponse, dependencies=[Depends(require_admin)])
+async def trigger_daily_update() -> AdminTaskResponse:
+    from app.tasks.daily_update import run_daily_update
+
+    task = run_daily_update.delay()
+    return AdminTaskResponse(task_id=task.id, status="queued", operation="daily_update")
+
+
 @router.get("/sync/status", response_model=SyncStatusResponse, dependencies=[Depends(require_admin)])
 async def sync_status(db: AsyncSession = Depends(get_db_session)) -> SyncStatusResponse:
     row = await get_or_create_pypi_sync_state(db)
+    last_update_run = await fetch_last_update_run(db)
     await db.commit()
     return SyncStatusResponse(
         status=row.status.value,
@@ -49,4 +59,5 @@ async def sync_status(db: AsyncSession = Depends(get_db_session)) -> SyncStatusR
         packages_synced=row.packages_synced,
         packages_total=row.packages_total,
         cursor_data=row.cursor_data,
+        last_update_run=last_update_run,
     )

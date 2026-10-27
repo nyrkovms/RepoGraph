@@ -4,7 +4,7 @@ from collections import deque
 from datetime import UTC, datetime
 from time import perf_counter
 
-from sqlalchemy import distinct, func, select
+from sqlalchemy import func, select
 
 from app.celery_app import celery_app
 from app.config import get_settings
@@ -13,7 +13,7 @@ from app.connectors.pypi import PyPIConnector
 from app.db import SessionLocal
 from app.fetcher.pipeline import run_sync_pipeline
 from app.models.dependency import Dependency
-from app.models.enums import SyncType
+from app.models.enums import DependencyType, SyncType
 from app.models.package import Package
 from app.models.version import PackageVersion
 from app.normalizers.names import normalize_package_name
@@ -25,13 +25,15 @@ logger = logging.getLogger(__name__)
 
 
 async def _unresolved_dependency_names(db, package_id) -> list[str]:
+    # Only required dependencies: following extras (test, doc, ...) pulls in thousands of unrelated packages.
     rows = (
         await db.scalars(
-            select(distinct(Dependency.dependency_name))
+            select(Dependency.dependency_name).distinct()
             .join(PackageVersion, PackageVersion.id == Dependency.version_id)
             .where(
                 PackageVersion.package_id == package_id,
                 Dependency.dependency_ecosystem == "pypi",
+                Dependency.dependency_type == DependencyType.runtime,
                 Dependency.resolved_package_id.is_(None),
             )
         )

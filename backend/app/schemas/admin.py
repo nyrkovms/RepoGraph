@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from app.schemas.updates import UpdateRunInfo
+
 
 class SeedRequest(BaseModel):
     packages: list[str] | None = None
@@ -27,3 +29,4 @@ class SyncStatusResponse(BaseModel):
     packages_synced: int
     packages_total: int
     cursor_data: dict
+    last_update_run: UpdateRunInfo | None = None

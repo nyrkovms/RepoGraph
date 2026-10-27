@@ -82,6 +82,7 @@ class PyPIConnector(BaseConnector):
             versions=versions_sorted,
             vulnerabilities=vulnerabilities,
             authors=authors,
+            last_serial=_parse_last_serial(payload.get("last_serial")),
         )
 
     async def fetch_version_dependencies(self, name: str, version: str) -> tuple[list[NormalizedDependency], str | None]:
@@ -134,10 +135,24 @@ class PyPIConnector(BaseConnector):
 
         for version, files in releases.items():
             if not files:
+                # Release without files is not installable: keep it in the list so the pipeline can mark it removed.
+                versions.append(
+                    NormalizedVersion(
+                        version=version,
+                        release_date=None,
+                        status="removed",
+                        requires_python=None,
+                        raw_metadata={"files": []},
+                        dependencies_hydrated=version == latest_version,
+                        artifacts=[],
+                        dependencies=latest_dependencies if version == latest_version else [],
+                    )
+                )
                 continue
 
             release_date = None
             status = "active"
+            yanked_reason: str | None = None
             artifacts: list[NormalizedArtifact] = []
 
             for file_payload in files:
@@ -149,6 +164,10 @@ class PyPIConnector(BaseConnector):
 
                 if file_payload.get("yanked"):
                     status = "yanked"
+                    if yanked_reason is None:
+                        reason = file_payload.get("yanked_reason")
+                        if isinstance(reason, str) and reason.strip():
+                            yanked_reason = reason
 
                 digests = file_payload.get("digests") or {}
                 artifacts.append(
@@ -176,6 +195,7 @@ class PyPIConnector(BaseConnector):
                     dependencies_hydrated=version == latest_version,
                     artifacts=artifacts,
                     dependencies=dependencies,
+                    yanked_reason=yanked_reason,
                 )
             )
 
@@ -227,6 +247,12 @@ class PyPIConnector(BaseConnector):
 
     def get_rate_limit(self) -> float:
         return 0.0
+
+
+def _parse_last_serial(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
 
 
 def _pick_latest_version(releases: dict) -> str:

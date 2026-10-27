@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     api_token_viewer: str = "phub_viewer_dev"
     api_token_admin: str = "phub_admin_dev"
 
+    sync_refresh_enabled: bool = False
     sync_refresh_interval_hours: int = 6
     sync_refresh_batch_limit: int = 500
     sync_pypi_json_base_url: str = "https://pypi.org/pypi"
@@ -47,7 +48,14 @@ class Settings(BaseSettings):
     sync_failed_retry_max_backoff_seconds: float = 1800.0
     sync_failed_retry_jitter_seconds: float = 3.0
 
-    seed_packages: str = "flask,django,fastapi,requests,numpy,pandas"
+    daily_update_enabled: bool = True
+    daily_update_hour_utc: int = 3
+    daily_update_minute_utc: int = 0
+    daily_update_concurrency: int = 4
+    daily_update_stale_retry_seconds: float = 300.0
+    sync_pypi_simple_base_url: str = "https://pypi.org/simple"
+
+    seed_packages: str ="flask,django,fastapi,requests,numpy,pandas"
 
     @property
     def async_db_url(self) -> str:

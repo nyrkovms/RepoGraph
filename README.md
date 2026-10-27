@@ -54,6 +54,22 @@ curl -X POST http://localhost:8000/api/v1/admin/seed \
 - API stats: `http://localhost:8000/api/v1/stats` (Bearer viewer/admin)
 - API metrics (Prometheus): `http://localhost:8000/api/v1/metrics`
 
+## Test stand
+
+A long-lived stand whose database survives for the whole project lifecycle. Postgres data lives in
+the external volume `packagehub_stand_pg_data`: `docker compose down -v`, image rebuilds and
+`scripts/stand.sh down` never remove it. Containers restart automatically, beat runs the daily update.
+
+```bash
+scripts/stand.sh up        # first run creates the volume; later runs rebuild and migrate
+scripts/stand.sh seed      # SEED_PACKAGES, or: scripts/stand.sh seed flask requests
+scripts/stand.sh status
+scripts/stand.sh backup    # backups/packagehub_<timestamp>.sql
+```
+
+Do not run the plain `docker compose up` alongside the stand: both use ports 5432, 6379, 8000 and 5173.
+Removing the data is a deliberate manual step: `docker volume rm packagehub_stand_pg_data`.
+
 ## Production baseline
 
 - Production env template: [`.env.prod.example`](/Users/mikhail/Documents/Work/repograph/.env.prod.example)
@@ -75,8 +91,25 @@ docker compose run --rm api python -m app.cli seed --packages flask django
 docker compose run --rm api python -m app.cli fetch requests
 docker compose run --rm api python -m app.cli refresh --limit 100
 docker compose run --rm api python -m app.cli retry-failed --limit 100
+docker compose run --rm api python -m app.cli daily-update
 docker compose run --rm api python -m app.cli stats
 ```
+
+## Daily update & digest
+
+- Раз в сутки `celery beat` запускает task `run_daily_update`: берёт индекс PyPI, обновляет изменившиеся пакеты каталога, пишет журнал изменений в `package_events` и прогон в `update_runs`.
+- Ручной запуск:
+
+```bash
+docker compose run --rm api python -m app.cli daily-update
+curl -X POST -H "Authorization: Bearer phub_admin_dev" http://localhost:8000/api/v1/admin/daily-update
+```
+
+- `GET /api/v1/updates` — лента событий (`since`, `until`, `kind`, `package`, `cursor`, `limit`), окно по `detected_at`.
+- `GET /api/v1/updates/summary` — дайджест по пакетам (`period=day|week` или `since`/`until`, `tz` — IANA-зона для границы «сегодня»); содержит статус последнего прогона.
+- `GET /api/v1/admin/sync/status` дополнительно отдаёт `last_update_run`.
+- UI: страница `/updates` («Обновления»): Сегодня / Неделя / Период, фильтр по типу события.
+- Метрики: `packagehub_daily_update_*`, `packagehub_package_events_total{kind}`.
 
 ## Retry failed sync
 
@@ -175,6 +208,10 @@ GitHub Actions workflow: [`.github/workflows/ci.yml`](/Users/mikhail/Documents/W
 - `packagehub_sync_duration_seconds`
 - `packagehub_sync_last_duration_seconds`
 - `packagehub_sync_last_status`
+- `packagehub_daily_update_duration_seconds`
+- `packagehub_daily_update_packages{result}`
+- `packagehub_daily_update_last_success_timestamp`
+- `packagehub_package_events_total{kind}`
 
 ## Shutdown
 

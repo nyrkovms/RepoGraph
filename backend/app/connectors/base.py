@@ -35,6 +35,7 @@ class NormalizedVersion:
     dependencies_hydrated: bool = False
     artifacts: list[NormalizedArtifact] = field(default_factory=list)
     dependencies: list[NormalizedDependency] = field(default_factory=list)
+    yanked_reason: str | None = None
 
 
 @dataclass(slots=True)
@@ -80,6 +81,7 @@ class NormalizedPackage:
     versions: list[NormalizedVersion] = field(default_factory=list)
     vulnerabilities: list[NormalizedVulnerability] = field(default_factory=list)
     authors: list[NormalizedAuthor] = field(default_factory=list)
+    last_serial: int | None = None
 
 
 class PackageNotFound(Exception):

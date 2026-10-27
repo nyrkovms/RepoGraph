@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import PackagePage from "./pages/PackagePage";
 import ResolvePage from "./pages/ResolvePage";
 import SearchPage from "./pages/SearchPage";
+import UpdatesPage from "./pages/UpdatesPage";
 import { getAuthToken, setAuthToken } from "./lib/api";
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
           <Link to="/">Search</Link>
           <Link to="/package/flask">Package</Link>
           <Link to="/resolve">Resolve</Link>
+          <Link to="/updates">Updates</Link>
         </nav>
       </header>
 
@@ -47,6 +49,7 @@ export default function App() {
           <Route path="/" element={<SearchPage />} />
           <Route path="/package/:name" element={<PackagePage />} />
           <Route path="/resolve" element={<ResolvePage />} />
+          <Route path="/updates" element={<UpdatesPage />} />
         </Routes>
       </main>
     </div>
