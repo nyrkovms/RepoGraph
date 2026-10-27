@@ -3,7 +3,6 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.tokens import require_viewer
 from app.db import get_db_session
 from app.api.v1.packages import PackageSort, _query_packages
 from app.schemas.search import SearchResponse
@@ -11,7 +10,7 @@ from app.schemas.search import SearchResponse
 router = APIRouter()
 
 
-@router.get("/search", response_model=SearchResponse, dependencies=[Depends(require_viewer)])
+@router.get("/search", response_model=SearchResponse)
 async def search_packages(
     q: str = Query(..., min_length=1),
     db: AsyncSession = Depends(get_db_session),

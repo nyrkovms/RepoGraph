@@ -23,38 +23,35 @@ def _resolve_request_payload() -> dict:
     }
 
 
-def test_packages_requires_auth(client: TestClient) -> None:
-    response = client.get("/api/v1/packages")
-    assert response.status_code == 401
+def test_read_endpoints_are_open_without_token(client: TestClient) -> None:
+    for path in ("/api/v1/packages", "/api/v1/search?q=flask", "/api/v1/stats", "/api/v1/updates/summary"):
+        assert client.get(path).status_code == 200, path
 
 
-def test_search_validation_error_for_empty_query(client: TestClient, viewer_token: str) -> None:
-    response = client.get("/api/v1/search", headers=_auth_headers(viewer_token), params={"q": ""})
+def test_search_validation_error_for_empty_query(client: TestClient) -> None:
+    response = client.get("/api/v1/search", params={"q": ""})
     assert response.status_code == 422
 
 
-def test_packages_validation_error_for_invalid_sort(client: TestClient, viewer_token: str) -> None:
+def test_packages_validation_error_for_invalid_sort(client: TestClient) -> None:
     response = client.get(
         "/api/v1/packages",
-        headers=_auth_headers(viewer_token),
         params={"sort": "unknown-sort", "limit": 10},
     )
     assert response.status_code == 422
 
 
-def test_packages_validation_error_for_invalid_limit(client: TestClient, viewer_token: str) -> None:
+def test_packages_validation_error_for_invalid_limit(client: TestClient) -> None:
     response = client.get(
         "/api/v1/packages",
-        headers=_auth_headers(viewer_token),
         params={"sort": "name", "limit": 0},
     )
     assert response.status_code == 422
 
 
-def test_packages_cursor_sort_mismatch_returns_422(client: TestClient, viewer_token: str) -> None:
+def test_packages_cursor_sort_mismatch_returns_422(client: TestClient) -> None:
     first = client.get(
         "/api/v1/packages",
-        headers=_auth_headers(viewer_token),
         params={"sort": "name", "limit": 1},
     )
     assert first.status_code == 200
@@ -63,7 +60,6 @@ def test_packages_cursor_sort_mismatch_returns_422(client: TestClient, viewer_to
 
     second = client.get(
         "/api/v1/packages",
-        headers=_auth_headers(viewer_token),
         params={"sort": "updated_at", "limit": 1, "cursor": cursor},
     )
     assert second.status_code == 422
@@ -75,9 +71,9 @@ def test_admin_sync_status_requires_auth(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_admin_refresh_forbidden_for_viewer(client: TestClient, viewer_token: str) -> None:
-    response = client.post("/api/v1/admin/refresh", headers=_auth_headers(viewer_token), json={"limit": 5})
-    assert response.status_code == 403
+def test_admin_refresh_rejects_non_admin_token(client: TestClient) -> None:
+    response = client.post("/api/v1/admin/refresh", headers=_auth_headers("not-an-admin-token"), json={"limit": 5})
+    assert response.status_code == 401
 
 
 def test_admin_refresh_validation_422(client: TestClient, admin_token: str) -> None:
@@ -85,13 +81,8 @@ def test_admin_refresh_validation_422(client: TestClient, admin_token: str) -> N
     assert response.status_code == 422
 
 
-def test_resolve_requires_auth(client: TestClient) -> None:
-    response = client.post("/api/v1/resolve", json=_resolve_request_payload())
-    assert response.status_code == 401
-
-
-def test_resolve_validation_422_for_empty_dependencies(client: TestClient, viewer_token: str) -> None:
+def test_resolve_validation_422_for_empty_dependencies(client: TestClient) -> None:
     payload = _resolve_request_payload()
     payload["dependencies"] = []
-    response = client.post("/api/v1/resolve", headers=_auth_headers(viewer_token), json=payload)
+    response = client.post("/api/v1/resolve", json=payload)
     assert response.status_code == 422

@@ -11,7 +11,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.tokens import require_viewer
 from app.db import get_db_session
 from app.models.enums import PackageEventKind
 from app.models.package import Package
@@ -256,7 +255,7 @@ def _decode_cursor_or_422(cursor: str | None) -> tuple[datetime, int] | None:
 # --------------------------------------------------------------------------- endpoints
 
 
-@router.get("/updates", response_model=UpdateEventListResponse, dependencies=[Depends(require_viewer)])
+@router.get("/updates", response_model=UpdateEventListResponse)
 async def list_updates(
     db: AsyncSession = Depends(get_db_session),
     since: datetime | None = Query(default=None),
@@ -315,7 +314,7 @@ async def list_updates(
     return UpdateEventListResponse(data=data, cursor=next_cursor, has_more=has_more)
 
 
-@router.get("/updates/summary", response_model=UpdatesSummaryResponse, dependencies=[Depends(require_viewer)])
+@router.get("/updates/summary", response_model=UpdatesSummaryResponse)
 async def updates_summary(
     db: AsyncSession = Depends(get_db_session),
     period: SummaryPeriod = Query(default=SummaryPeriod.day),

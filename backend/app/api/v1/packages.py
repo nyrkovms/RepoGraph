@@ -8,7 +8,6 @@ from packaging.markers import Marker
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.tokens import require_viewer
 from app.connectors.pypi import PyPIConnector
 from app.db import get_db_session
 from app.fetcher.lazy import LazyFetcher
@@ -46,7 +45,7 @@ class PackageSort(str, Enum):
     downloads_total = "downloads_total"
 
 
-@router.get("/packages", response_model=PackageListResponse, dependencies=[Depends(require_viewer)])
+@router.get("/packages", response_model=PackageListResponse)
 async def list_packages(
     db: AsyncSession = Depends(get_db_session),
     license: str | None = Query(default=None),
@@ -69,7 +68,7 @@ async def list_packages(
     return PackageListResponse(data=packages, cursor=next_cursor, has_more=has_more)
 
 
-@router.get("/packages/pypi/{name}", response_model=PackageDetailResponse, dependencies=[Depends(require_viewer)])
+@router.get("/packages/pypi/{name}", response_model=PackageDetailResponse)
 async def get_package(name: str, db: AsyncSession = Depends(get_db_session)) -> PackageDetailResponse:
     package = await _find_or_fetch_package(db, name)
     if not package:
@@ -90,7 +89,7 @@ async def get_package(name: str, db: AsyncSession = Depends(get_db_session)) -> 
     )
 
 
-@router.get("/packages/pypi/{name}/versions", response_model=VersionListResponse, dependencies=[Depends(require_viewer)])
+@router.get("/packages/pypi/{name}/versions", response_model=VersionListResponse)
 async def list_versions(
     name: str,
     db: AsyncSession = Depends(get_db_session),
@@ -145,7 +144,7 @@ async def list_versions(
     return VersionListResponse(data=data, cursor=next_cursor, has_more=has_more)
 
 
-@router.get("/packages/pypi/{name}/versions/{ver}", response_model=VersionDetailResponse, dependencies=[Depends(require_viewer)])
+@router.get("/packages/pypi/{name}/versions/{ver}", response_model=VersionDetailResponse)
 async def get_version(name: str, ver: str, db: AsyncSession = Depends(get_db_session)) -> VersionDetailResponse:
     package = await _find_or_fetch_package(db, name)
     if not package:
@@ -168,7 +167,6 @@ async def get_version(name: str, ver: str, db: AsyncSession = Depends(get_db_ses
 @router.get(
     "/packages/pypi/{name}/versions/{ver}/dependencies",
     response_model=DependencyTreeResponse,
-    dependencies=[Depends(require_viewer)],
 )
 async def get_dependencies_tree(
     name: str,
@@ -218,7 +216,6 @@ async def get_dependencies_tree(
 @router.get(
     "/packages/pypi/{name}/versions/{ver}/artifacts",
     response_model=ArtifactListResponse,
-    dependencies=[Depends(require_viewer)],
 )
 async def list_artifacts(name: str, ver: str, db: AsyncSession = Depends(get_db_session)) -> ArtifactListResponse:
     package = await _find_or_fetch_package(db, name)
@@ -246,7 +243,7 @@ async def list_artifacts(name: str, ver: str, db: AsyncSession = Depends(get_db_
     )
 
 
-@router.get("/packages/pypi/{name}/vulnerabilities", response_model=VulnerabilityListResponse, dependencies=[Depends(require_viewer)])
+@router.get("/packages/pypi/{name}/vulnerabilities", response_model=VulnerabilityListResponse)
 async def list_vulnerabilities(name: str, db: AsyncSession = Depends(get_db_session)) -> VulnerabilityListResponse:
     package = await _find_or_fetch_package(db, name)
     if not package:

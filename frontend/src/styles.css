@@ -49,18 +49,6 @@ nav a {
   font-weight: 700;
 }
 
-.token-panel {
-  display: flex;
-  gap: 12px;
-  align-items: end;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-  padding: 12px;
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
-}
-
 main {
   padding: 20px;
   border-radius: 14px;

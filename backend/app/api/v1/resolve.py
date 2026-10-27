@@ -1,7 +1,6 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from app.auth.tokens import require_viewer
 from app.resolver.errors import (
     ResolveConflictError,
     ResolveInternalError,
@@ -17,7 +16,6 @@ router = APIRouter()
 @router.post(
     "/resolve",
     response_model=ResolveSuccessResponse,
-    dependencies=[Depends(require_viewer)],
     responses={
         404: {"model": ErrorResponse},
         409: {"model": ErrorResponse},

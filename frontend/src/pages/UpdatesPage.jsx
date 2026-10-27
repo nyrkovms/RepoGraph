@@ -168,7 +168,6 @@ export default function UpdatesPage() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [tokenVersion, setTokenVersion] = useState(0);
   const [expanded, setExpanded] = useState({});
   const [events, setEvents] = useState({});
 
@@ -176,12 +175,6 @@ export default function UpdatesPage() {
   const customSince = customRange?.since;
   const customUntil = customRange?.until;
   const waitingForRange = period === "custom" && !customRange;
-
-  useEffect(() => {
-    const handler = () => setTokenVersion((value) => value + 1);
-    window.addEventListener("phub-token-updated", handler);
-    return () => window.removeEventListener("phub-token-updated", handler);
-  }, []);
 
   useEffect(() => {
     if (waitingForRange) {
@@ -215,7 +208,7 @@ export default function UpdatesPage() {
           setLoading(false);
         }
       });
-  }, [period, customSince, customUntil, waitingForRange, tokenVersion]);
+  }, [period, customSince, customUntil, waitingForRange]);
 
   async function loadEvents(name, cursor = null) {
     const current = (eventsRequestIds.current[name] || 0) + 1;

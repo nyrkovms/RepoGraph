@@ -25,13 +25,6 @@ export default function SearchPage() {
   }, []);
 
   useEffect(() => {
-    const handler = () => loadFirstPage();
-    window.addEventListener("phub-token-updated", handler);
-    return () => window.removeEventListener("phub-token-updated", handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
-
-  useEffect(() => {
     const trimmedQuery = query.trim();
     if (!trimmedQuery) {
       setSuggestions([]);

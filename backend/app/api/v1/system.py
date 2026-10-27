@@ -3,7 +3,6 @@ from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.tokens import require_viewer
 from app.db import get_db_session
 from app.models.dependency import Dependency
 from app.models.package import Package
@@ -20,7 +19,7 @@ async def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
-@router.get("/stats", response_model=StatsResponse, dependencies=[Depends(require_viewer)])
+@router.get("/stats", response_model=StatsResponse)
 async def stats(db: AsyncSession = Depends(get_db_session)) -> StatsResponse:
     package_count = await db.scalar(select(func.count(Package.id)).where(Package.ecosystem == "pypi"))
     version_count = await db.scalar(select(func.count(PackageVersion.id)))

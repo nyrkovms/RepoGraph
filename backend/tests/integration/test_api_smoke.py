@@ -41,22 +41,20 @@ def test_health_endpoint(client: TestClient) -> None:
     assert response.headers.get("Referrer-Policy") == "no-referrer"
 
 
-def test_stats_requires_auth_and_returns_counts(client: TestClient, viewer_token: str) -> None:
-    unauth = client.get("/api/v1/stats")
-    authed = client.get("/api/v1/stats", headers=_auth_headers(viewer_token))
+def test_stats_returns_counts(client: TestClient) -> None:
+    response = client.get("/api/v1/stats")
 
-    assert unauth.status_code == 401
-    assert authed.status_code == 200
-    payload = authed.json()
+    assert response.status_code == 200
+    payload = response.json()
     assert payload["ecosystem"] == "pypi"
     assert payload["packages"] >= 1
     assert payload["versions"] >= 1
 
 
-def test_catalog_and_package_endpoints(client: TestClient, viewer_token: str) -> None:
-    packages = client.get("/api/v1/packages", headers=_auth_headers(viewer_token), params={"limit": 5, "sort": "name"})
-    search = client.get("/api/v1/search", headers=_auth_headers(viewer_token), params={"q": "flask", "limit": 5})
-    package = client.get("/api/v1/packages/pypi/flask", headers=_auth_headers(viewer_token))
+def test_catalog_and_package_endpoints(client: TestClient) -> None:
+    packages = client.get("/api/v1/packages", params={"limit": 5, "sort": "name"})
+    search = client.get("/api/v1/search", params={"q": "flask", "limit": 5})
+    package = client.get("/api/v1/packages/pypi/flask")
 
     assert packages.status_code == 200
     list_payload = packages.json()
@@ -73,8 +71,8 @@ def test_catalog_and_package_endpoints(client: TestClient, viewer_token: str) ->
     assert package_payload["latest_version"]
 
 
-def test_resolve_endpoint_returns_result(client: TestClient, viewer_token: str) -> None:
-    response = client.post("/api/v1/resolve", headers=_auth_headers(viewer_token), json=_resolve_request_payload())
+def test_resolve_endpoint_returns_result(client: TestClient) -> None:
+    response = client.post("/api/v1/resolve", json=_resolve_request_payload())
 
     assert response.status_code == 200
     payload = response.json()
@@ -83,12 +81,12 @@ def test_resolve_endpoint_returns_result(client: TestClient, viewer_token: str) 
     assert "flask" in payload["resolved"]
 
 
-def test_resolve_not_found_error_mapping(client: TestClient, viewer_token: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_not_found_error_mapping(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fake_resolve(_payload):
         raise ResolveNotFoundError("missing-pkg")
 
     monkeypatch.setattr(resolve_api, "resolve_dependencies", _fake_resolve)
-    response = client.post("/api/v1/resolve", headers=_auth_headers(viewer_token), json=_resolve_request_payload())
+    response = client.post("/api/v1/resolve", json=_resolve_request_payload())
     payload = response.json()
 
     assert response.status_code == 404
@@ -96,12 +94,12 @@ def test_resolve_not_found_error_mapping(client: TestClient, viewer_token: str, 
     assert payload["error"]["details"]["package"] == "missing-pkg"
 
 
-def test_resolve_conflict_error_mapping(client: TestClient, viewer_token: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_conflict_error_mapping(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fake_resolve(_payload):
         raise ResolveConflictError("dependency conflict", details={"root": "flask"})
 
     monkeypatch.setattr(resolve_api, "resolve_dependencies", _fake_resolve)
-    response = client.post("/api/v1/resolve", headers=_auth_headers(viewer_token), json=_resolve_request_payload())
+    response = client.post("/api/v1/resolve", json=_resolve_request_payload())
     payload = response.json()
 
     assert response.status_code == 409
@@ -109,12 +107,12 @@ def test_resolve_conflict_error_mapping(client: TestClient, viewer_token: str, m
     assert payload["error"]["details"] == {"root": "flask"}
 
 
-def test_resolve_timeout_error_mapping(client: TestClient, viewer_token: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_timeout_error_mapping(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fake_resolve(_payload):
         raise ResolveUpstreamTimeoutError("slow-pkg")
 
     monkeypatch.setattr(resolve_api, "resolve_dependencies", _fake_resolve)
-    response = client.post("/api/v1/resolve", headers=_auth_headers(viewer_token), json=_resolve_request_payload())
+    response = client.post("/api/v1/resolve", json=_resolve_request_payload())
     payload = response.json()
 
     assert response.status_code == 504
@@ -122,12 +120,12 @@ def test_resolve_timeout_error_mapping(client: TestClient, viewer_token: str, mo
     assert payload["error"]["details"]["package"] == "slow-pkg"
 
 
-def test_resolve_internal_error_mapping(client: TestClient, viewer_token: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_internal_error_mapping(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fake_resolve(_payload):
         raise ResolveInternalError("internal blowup")
 
     monkeypatch.setattr(resolve_api, "resolve_dependencies", _fake_resolve)
-    response = client.post("/api/v1/resolve", headers=_auth_headers(viewer_token), json=_resolve_request_payload())
+    response = client.post("/api/v1/resolve", json=_resolve_request_payload())
     payload = response.json()
 
     assert response.status_code == 500
@@ -135,11 +133,13 @@ def test_resolve_internal_error_mapping(client: TestClient, viewer_token: str, m
     assert payload["error"]["message"] == "internal blowup"
 
 
-def test_admin_sync_status_rbac(client: TestClient, viewer_token: str, admin_token: str) -> None:
-    viewer_resp = client.get("/api/v1/admin/sync/status", headers=_auth_headers(viewer_token))
+def test_admin_sync_status_requires_admin_token(client: TestClient, admin_token: str) -> None:
+    anonymous_resp = client.get("/api/v1/admin/sync/status")
+    wrong_resp = client.get("/api/v1/admin/sync/status", headers=_auth_headers("not-an-admin-token"))
     admin_resp = client.get("/api/v1/admin/sync/status", headers=_auth_headers(admin_token))
 
-    assert viewer_resp.status_code == 403
+    assert anonymous_resp.status_code == 401
+    assert wrong_resp.status_code == 401
     assert admin_resp.status_code == 200
     payload = admin_resp.json()
     assert "status" in payload

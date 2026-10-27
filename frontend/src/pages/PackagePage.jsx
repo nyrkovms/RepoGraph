@@ -225,17 +225,6 @@ export default function PackagePage() {
   }, [selectedVersion, pythonVersion, os, includeOptional, setSearchParams]);
 
   useEffect(() => {
-    const handler = () => {
-      if (name) {
-        loadPackage();
-      }
-    };
-    window.addEventListener("phub-token-updated", handler);
-    return () => window.removeEventListener("phub-token-updated", handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name]);
-
-  useEffect(() => {
     if (!name || !selectedVersion) {
       return;
     }
