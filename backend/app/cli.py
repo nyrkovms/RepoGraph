@@ -46,6 +46,8 @@ def main() -> None:
     retry_failed_cmd = sub.add_parser("retry-failed")
     retry_failed_cmd.add_argument("--limit", type=int, default=None)
 
+    sub.add_parser("daily-update")
+
     sub.add_parser("stats")
 
     args = parser.parse_args()
@@ -71,6 +73,13 @@ def main() -> None:
     if args.command == "retry-failed":
         result = asyncio.run(_run_retry_failed_async(limit=args.limit))
         print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "daily-update":
+        from app.tasks.daily_update import _run_daily_update_async
+
+        result = asyncio.run(_run_daily_update_async())
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
         return
 
     if args.command == "stats":

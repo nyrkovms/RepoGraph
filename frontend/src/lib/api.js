@@ -104,3 +104,25 @@ export async function fetchVulnerabilities(name) {
 export async function resolveDependencies(body) {
   return request(`/api/v1/resolve`, { method: "POST", body });
 }
+
+export async function fetchUpdatesSummary(params = {}) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      search.set(key, String(value));
+    }
+  });
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return request(`/api/v1/updates/summary${suffix}`);
+}
+
+export async function fetchUpdates(params = {}) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      search.set(key, String(value));
+    }
+  });
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return request(`/api/v1/updates${suffix}`);
+}

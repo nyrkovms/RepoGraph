@@ -41,6 +41,28 @@ SYNC_LAST_STATUS = Gauge(
     "Last known sync status from DB (idle=0,running=1,failed=2)",
 )
 
+DAILY_UPDATE_DURATION_SECONDS = Histogram(
+    "packagehub_daily_update_duration_seconds",
+    "Daily update run duration",
+)
+
+DAILY_UPDATE_PACKAGES = Gauge(
+    "packagehub_daily_update_packages",
+    "Packages by result in the last daily update run",
+    ["result"],
+)
+
+DAILY_UPDATE_LAST_SUCCESS_TIMESTAMP = Gauge(
+    "packagehub_daily_update_last_success_timestamp",
+    "Unix timestamp of the last successful (or partial) daily update run",
+)
+
+PACKAGE_EVENTS_TOTAL = Counter(
+    "packagehub_package_events_total",
+    "Total package change events recorded",
+    ["kind"],
+)
+
 
 class observe_api_latency:
     def __init__(self, method: str, route: str):
@@ -95,6 +117,27 @@ def update_sync_gauges(states: Iterable) -> None:
                 continue
 
     SYNC_LAST_STATUS.set(max_status)
+
+
+def record_daily_update_run(
+    status: str,
+    duration_seconds: float,
+    updated: int,
+    failed: int,
+    unavailable: int,
+    finished_at_ts: float,
+) -> None:
+    DAILY_UPDATE_DURATION_SECONDS.observe(duration_seconds)
+    DAILY_UPDATE_PACKAGES.labels(result="updated").set(updated)
+    DAILY_UPDATE_PACKAGES.labels(result="failed").set(failed)
+    DAILY_UPDATE_PACKAGES.labels(result="unavailable").set(unavailable)
+    if status in {"success", "partial"}:
+        DAILY_UPDATE_LAST_SUCCESS_TIMESTAMP.set(finished_at_ts)
+
+
+def inc_package_events(kind: str, count: int = 1) -> None:
+    if count > 0:
+        PACKAGE_EVENTS_TOTAL.labels(kind=kind).inc(count)
 
 
 def render_metrics() -> tuple[bytes, str]:

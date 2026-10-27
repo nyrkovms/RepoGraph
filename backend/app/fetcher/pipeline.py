@@ -3,7 +3,7 @@ from typing import Iterable
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,7 @@ from app.connectors.base import (
     NormalizedVersion,
 )
 from app.connectors.pypi import PyPIConnector
+from app.fetcher.events import EventDraft, PackageSnapshot, diff_package
 from app.models.artifact import Artifact, DistTag
 from app.models.author import Author, PackageAuthor
 from app.models.dependency import Dependency
@@ -28,6 +29,7 @@ from app.models.enums import (
     VulnerabilitySource,
 )
 from app.models.package import Package
+from app.models.package_event import PackageEvent
 from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
 from app.models.sync_state import SyncState
@@ -36,24 +38,33 @@ from app.models.vulnerability import PackageVulnerability, Vulnerability
 from app.normalizers.names import normalize_package_name
 
 
-async def run_sync_pipeline(package_data: NormalizedPackage, db: AsyncSession) -> Package:
+async def run_sync_pipeline(package_data: NormalizedPackage, db: AsyncSession, run_id=None) -> Package:
     now = datetime.now(UTC)
 
     registry = await _get_or_create_pypi_registry(db)
+    existing = await find_package(db, "pypi", package_data.normalized_name)
+    snapshot = await _load_snapshot(db, existing) if existing else None
+
     package = await _upsert_package(db, registry.id, package_data, now)
     await _upsert_package_registry(db, package.id, registry.id, package_data.name, now)
 
     version_id_by_version = await _upsert_versions(db, package.id, package_data.versions)
+    await _mark_missing_versions_removed(db, package.id, version_id_by_version.keys())
 
     for version in package_data.versions:
         version_id = version_id_by_version[version.version]
-        await _replace_dependencies(db, version_id, version.dependencies)
+        # Connector only carries dependencies for hydrated versions; leave lazily fetched ones intact.
+        if version.dependencies_hydrated:
+            await _replace_dependencies(db, version_id, version.dependencies)
         await _replace_artifacts(db, version_id, registry.id, version)
 
     await _upsert_dist_tag(db, package.id, package_data.latest_version, now)
     await _upsert_authors(db, package.id, package_data.authors)
     await _upsert_vulnerabilities(db, package.id, package_data.vulnerabilities)
     await _resolve_level1(db, version_id_by_version.values())
+    if snapshot is None:
+        await _link_dependents(db, package)
+    await _record_events(db, package.id, diff_package(snapshot, package_data), run_id, now)
     await _upsert_sync_state(db, registry.id, now)
 
     await db.commit()
@@ -66,6 +77,69 @@ async def find_package(db: AsyncSession, ecosystem: str, normalized_name: str) -
         select(Package).where(Package.ecosystem == Ecosystem(ecosystem), Package.normalized_name == normalized_name)
     )
     return result
+
+
+async def _load_snapshot(db: AsyncSession, package: Package) -> PackageSnapshot:
+    version_rows = (
+        await db.execute(select(PackageVersion.version, PackageVersion.status).where(PackageVersion.package_id == package.id))
+    ).all()
+    vuln_rows = (
+        await db.execute(
+            select(Vulnerability.source_id, Vulnerability.withdrawn_at)
+            .join(PackageVulnerability, PackageVulnerability.vulnerability_id == Vulnerability.id)
+            .where(PackageVulnerability.package_id == package.id)
+        )
+    ).all()
+    return PackageSnapshot(
+        latest_version=package.latest_version,
+        version_statuses={row.version: row.status for row in version_rows},
+        vulnerability_withdrawn={row.source_id: row.withdrawn_at for row in vuln_rows},
+        unavailable=package.unavailable_at is not None,
+    )
+
+
+async def _mark_missing_versions_removed(db: AsyncSession, package_id, present_versions: Iterable[str]) -> None:
+    await db.execute(
+        update(PackageVersion)
+        .where(
+            PackageVersion.package_id == package_id,
+            PackageVersion.version.not_in(list(present_versions)),
+            PackageVersion.status != PackageVersionStatus.removed,
+        )
+        .values(status=PackageVersionStatus.removed)
+    )
+
+
+async def _link_dependents(db: AsyncSession, package: Package) -> None:
+    """Point already stored dependencies at a package that just entered the catalog."""
+    normalized_dep_name = func.lower(func.regexp_replace(Dependency.dependency_name, "[-_.]+", "-", "g"))
+    dep_rows = (
+        await db.scalars(
+            select(Dependency).where(
+                Dependency.dependency_ecosystem == Ecosystem.pypi,
+                Dependency.resolved_package_id.is_(None),
+                normalized_dep_name == package.normalized_name,
+            )
+        )
+    ).all()
+    for dep in dep_rows:
+        dep.resolved_package_id = package.id
+        dep.resolved_version_id = await _find_best_version_id(db, package.id, dep.version_constraint)
+
+
+async def _record_events(db: AsyncSession, package_id, events: list[EventDraft], run_id, now: datetime) -> None:
+    for event in events:
+        db.add(
+            PackageEvent(
+                package_id=package_id,
+                version=event.version,
+                kind=event.kind,
+                detected_at=now,
+                occurred_at=event.occurred_at,
+                run_id=run_id,
+                details=event.details,
+            )
+        )
 
 
 async def _get_or_create_pypi_registry(db: AsyncSession) -> Registry:
@@ -106,6 +180,9 @@ async def _upsert_package(db: AsyncSession, registry_id, package_data: Normalize
         existing.updated_at = package_data.updated_at
         existing.synced_at = now
         existing.raw_metadata = package_data.raw_metadata
+        if package_data.last_serial is not None:
+            existing.last_serial = package_data.last_serial
+        existing.unavailable_at = None
         return existing
 
     package = Package(
@@ -127,6 +204,7 @@ async def _upsert_package(db: AsyncSession, registry_id, package_data: Normalize
         updated_at=package_data.updated_at,
         synced_at=now,
         raw_metadata=package_data.raw_metadata,
+        last_serial=package_data.last_serial,
     )
     db.add(package)
     await db.flush()
@@ -303,6 +381,10 @@ async def _upsert_vulnerabilities(db: AsyncSession, package_id, vulnerabilities)
             )
             db.add(vuln)
             await db.flush()
+        else:
+            vuln.aliases = item.aliases
+            vuln.fixed_in = item.fixed_in
+            vuln.withdrawn_at = item.withdrawn_at
 
         db.add(PackageVulnerability(package_id=package_id, vulnerability_id=vuln.id, affected_versions=None))
 
