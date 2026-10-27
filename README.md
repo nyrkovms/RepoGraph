@@ -54,6 +54,22 @@ curl -X POST http://localhost:8000/api/v1/admin/seed \
 - API stats: `http://localhost:8000/api/v1/stats` (Bearer viewer/admin)
 - API metrics (Prometheus): `http://localhost:8000/api/v1/metrics`
 
+## Test stand
+
+A long-lived stand whose database survives for the whole project lifecycle. Postgres data lives in
+the external volume `packagehub_stand_pg_data`: `docker compose down -v`, image rebuilds and
+`scripts/stand.sh down` never remove it. Containers restart automatically, beat runs the daily update.
+
+```bash
+scripts/stand.sh up        # first run creates the volume; later runs rebuild and migrate
+scripts/stand.sh seed      # SEED_PACKAGES, or: scripts/stand.sh seed flask requests
+scripts/stand.sh status
+scripts/stand.sh backup    # backups/packagehub_<timestamp>.sql
+```
+
+Do not run the plain `docker compose up` alongside the stand: both use ports 5432, 6379, 8000 and 5173.
+Removing the data is a deliberate manual step: `docker volume rm packagehub_stand_pg_data`.
+
 ## Production baseline
 
 - Production env template: [`.env.prod.example`](/Users/mikhail/Documents/Work/repograph/.env.prod.example)

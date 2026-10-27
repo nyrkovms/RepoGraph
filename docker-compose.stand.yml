@@ -1,0 +1,23 @@
+# Long-lived test stand: docker compose -f docker-compose.yml -f docker-compose.stand.yml ...
+# (or scripts/stand.sh). Postgres data lives in an external volume, so `down -v` never removes it;
+# the volume is created once by scripts/stand.sh and survives rebuilds of every container and image.
+name: packagehub-stand
+
+services:
+  postgres:
+    restart: unless-stopped
+  redis:
+    restart: unless-stopped
+  api:
+    restart: unless-stopped
+  worker:
+    restart: unless-stopped
+  beat:
+    restart: unless-stopped
+  frontend:
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+    external: true
+    name: packagehub_stand_pg_data
