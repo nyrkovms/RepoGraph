@@ -1,5 +1,5 @@
 {
-  "note": "Cases that need only the generic grammar. Left out: pypi name normalization, and canonical forms that percent-encode '/' in qualifier values (we keep '/' readable, see SPEC-MULTI-ECOSYSTEM.md section 4).",
+  "note": "Cases that need only the generic grammar. Left out: pypi name normalization, Canonical output percent-encodes '/' in qualifier values, as the official suite expects.",
   "source": "https://github.com/package-url/purl-spec tests/spec/specification-test.json and tests/types/*-test.json (cases that need only the generic grammar)",
   "tests": [
     {

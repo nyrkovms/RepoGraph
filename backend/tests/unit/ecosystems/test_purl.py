@@ -16,7 +16,7 @@ SPEC_EXAMPLES = [
     "pkg:golang/github.com/redis/go-redis/v9",
     "pkg:cargo/serde",
     "pkg:rpm/redhat/openssl?distro=rhel-9",
-    "pkg:pypi/torch@2.5.1%2Bcu121?repository_url=https://download.pytorch.org/whl/cu121",
+    "pkg:pypi/torch@2.5.1%2Bcu121?repository_url=https:%2F%2Fdownload.pytorch.org%2Fwhl%2Fcu121",
 ]
 
 
@@ -26,7 +26,7 @@ def test_spec_examples_round_trip(text: str) -> None:
 
 
 def test_components_are_decoded() -> None:
-    purl = parse("pkg:pypi/torch@2.5.1%2Bcu121?repository_url=https://download.pytorch.org/whl/cu121")
+    purl = parse("pkg:pypi/torch@2.5.1%2Bcu121?repository_url=https://download.pytorch.org/whl/cu121")  # unencoded input is accepted
 
     assert purl == Purl(
         type="pypi",
@@ -78,7 +78,7 @@ def test_qualifiers_are_sorted_when_built_from_a_dict() -> None:
 def test_qualifier_value_is_encoded() -> None:
     purl = Purl(type="npm", name="a", qualifiers={"vcs_url": "git://h/r.git@abc", "tag": "a b&c"})
 
-    assert purl.to_string() == "pkg:npm/a?tag=a%20b%26c&vcs_url=git://h/r.git%40abc"
+    assert purl.to_string() == "pkg:npm/a?tag=a%20b%26c&vcs_url=git:%2F%2Fh%2Fr.git%40abc"
     assert parse(purl.to_string()) == purl
 
 

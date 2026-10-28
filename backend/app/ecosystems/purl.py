@@ -120,7 +120,7 @@ class Purl:
         if self.version:
             out.append(f"@{_quote(self.version)}")
         if self.qualifiers:
-            pairs = (f"{key}={_quote(value, safe=':/')}" for key, value in self.qualifiers.items())
+            pairs = (f"{key}={_quote(value, safe=':')}" for key, value in self.qualifiers.items())
             out.append(f"?{'&'.join(pairs)}")
         if self.subpath:
             out.append(f"#{'/'.join(_quote(segment) for segment in self.subpath.split('/'))}")
