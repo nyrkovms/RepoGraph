@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     redis_port: int = 6379
     redis_db: int = 0
 
+    # Discovery in sources (SPEC-MULTI-ECOSYSTEM.md §6.6); a registry's config may override the cache TTL.
+    source_negative_cache_ttl_seconds: int = 3600
+    source_breaker_failures: int = 5
+    source_breaker_cooldown_seconds: int = 600
+
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     log_level: str = "INFO"

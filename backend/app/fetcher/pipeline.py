@@ -32,7 +32,7 @@ from app.ecosystems.base import (
 from app.ecosystems.merge import dependencies_digest
 from app.ecosystems.registry import get_plugin, load_builtin_plugins
 from app.ecosystems.versions_common import fallback_sort_key
-from app.fetcher import sources
+from app.fetcher import discovery, sources
 from app.fetcher.events import EventDraft, PackageSnapshot, diff_package
 from app.models.artifact import Artifact, DistTag
 from app.models.author import Author, PackageAuthor
@@ -101,27 +101,23 @@ async def sync_package(
     plugin = plugin_for(ref.ecosystem)
     existing = await find_package(db, ref)
     registries = await sources.package_registries(db, existing.id) if existing else []
-    if not registries:
+    if registries:
+        fetched = await discovery.fetch_known(db, plugin, ref, registries, _ProfileLookup(plugin, registries))
+    else:
         profile = profile or await sources.default_profile(db, ref.ecosystem)
-        registries = sources.by_priority(plugin.sources_for(ref, profile))
-    if not registries and ref.ecosystem == "pypi" and await db.scalar(select(Registry.id).where(Registry.slug == "pypi")) is None:
-        registries = [sources.registry_config(await get_or_create_pypi_registry(db))]
-    if not registries:
-        raise PackageNotFound(f"no enabled source for {plugin.coordinates.display(ref)}")
+        registries = list(plugin.sources_for(ref, profile))
+        if not registries and ref.ecosystem == "pypi" and await db.scalar(select(Registry.id).where(Registry.slug == "pypi")) is None:
+            registries = [sources.registry_config(await get_or_create_pypi_registry(db))]
+        if not registries:
+            raise PackageNotFound(f"no enabled source for {plugin.coordinates.display(ref)}")
+        fetched = await discovery.discover(
+            db, plugin, ref, registries, _ProfileLookup(plugin, registries),
+            use_negative_cache=origin not in (PackageOrigin.seed, PackageOrigin.manual),
+        )
 
-    lookup = _ProfileLookup(plugin, registries)
-    snapshots: list[NormalizedPackage] = []
-    missing: list[str] = []
-    for registry in registries:
-        snapshot = await plugin.adapter(registry).fetch_package(ref, lookup)
-        if snapshot is None:
-            missing.append(registry.id)
-        else:
-            snapshots.append(snapshot)
-
-    if not snapshots:
+    if not fetched.snapshots:
         raise PackageNotFound(plugin.coordinates.display(ref))
-    return await write_package(db, plugin, snapshots, missing_registry_ids=missing, origin=origin, run_id=run_id)
+    return await write_package(db, plugin, fetched.snapshots, missing_registry_ids=fetched.missing, origin=origin, run_id=run_id)
 
 
 async def write_package(
@@ -176,7 +172,7 @@ async def write_package(
 
     slugs = {registry_id: row.slug for registry_id, row in registry_rows.items()}
     await _record_events(db, package.id, diff_package(snapshot, merged, plugin.versions, latest, slugs), run_id, now)
-    for registry_id in by_registry:
+    for registry_id in [*by_registry, *missing_registry_ids]:
         await _upsert_sync_state(db, registry_id, now)
 
     await db.flush()
@@ -857,6 +853,9 @@ async def _upsert_sync_state(db: AsyncSession, registry_id, now: datetime) -> No
         row.status = SyncStatus.idle
         row.last_success_at = now
         row.last_error = None
+        # An answer, also "no such package", closes the circuit breaker.
+        row.consecutive_failures = 0
+        row.degraded_until = None
         return
 
     db.add(

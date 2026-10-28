@@ -2,6 +2,8 @@
 
 from collections.abc import Mapping, Sequence
 
+from packaging.utils import canonicalize_name
+
 from app.ecosystems.base import (
     Coordinates,
     Ecosystem,
@@ -22,6 +24,7 @@ from app.ecosystems.pypi.coordinates import PyPICoordinates
 from app.ecosystems.pypi.environment import PythonEnvironment, dependency_applies, parse_environment
 from app.ecosystems.pypi.versions import PyPIVersionScheme
 from app.ecosystems.registry import register
+from app.ecosystems.routing import route
 
 
 class PyPIPlugin:
@@ -38,8 +41,8 @@ class PyPIPlugin:
         raise ValueError(f"PyPI plugin has no adapter for protocol {registry.protocol!r} (registry {registry.slug})")
 
     def sources_for(self, ref: PackageRef, profile: SourceProfile) -> Sequence[RegistryConfig]:
-        # Profile order only; routing modes (allow/block/exclusive/priority) arrive with ecosystems/routing.py (B2).
-        return list(profile.registries)
+        # PyPI rules list project names, like index pinning in uv.
+        return route(ref, profile.registries, "packages", _same_project)
 
     def merge(self, per_source: Sequence[NormalizedPackage]) -> MergedPackage:
         return merge_by_priority(per_source)
@@ -58,6 +61,10 @@ class PyPIPlugin:
 
     def resolver(self) -> Resolver:
         raise NotImplementedError("the PyPI resolver moves behind the contract with the graph format (E0-C2)")
+
+
+def _same_project(ref: PackageRef, pattern: str) -> bool:
+    return canonicalize_name(pattern) == ref.name
 
 
 PLUGIN = PyPIPlugin()
