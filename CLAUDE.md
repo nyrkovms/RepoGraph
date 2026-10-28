@@ -15,8 +15,9 @@ FastAPI + SQLAlchemy async + Alembic + Celery + Postgres 16 + Redis; React/Vite 
 ## Layout
 
 ```
-backend/app/            api/v1 (routes), models, schemas, fetcher (pipeline, events), tasks (celery),
-                        connectors (PyPI today; moves to ecosystems/ in E0), resolver, services
+backend/app/            api/v1 (routes), models, schemas, fetcher (pipeline, events), tasks (celery), resolver, services
+backend/app/ecosystems/ plugin contract (base.py), registry, purl, one package per ecosystem (pypi/: plugin, adapters,
+                        change detector, versions, environment, connector); connectors/base.py = legacy types until B1
 backend/alembic/versions/
 backend/tests/unit, backend/tests/integration
 frontend/src/pages, frontend/src/lib/api.js

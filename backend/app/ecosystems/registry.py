@@ -30,7 +30,7 @@ def registered() -> list[EcosystemPlugin]:
 
 
 # Modules whose import registers a built-in plugin; each stage adds its ecosystem (E0-A6: pypi).
-BUILTIN_PLUGIN_MODULES: tuple[str, ...] = ()
+BUILTIN_PLUGIN_MODULES: tuple[str, ...] = ("app.ecosystems.pypi.plugin",)
 
 
 def load_builtin_plugins() -> list[EcosystemPlugin]:
