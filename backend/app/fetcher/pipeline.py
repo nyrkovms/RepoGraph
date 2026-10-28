@@ -21,6 +21,7 @@ from app.models.enums import (
     DependencyType,
     Ecosystem,
     PackageVersionStatus,
+    RegistryProtocol,
     RegistryType,
     SyncStatus,
     SyncType,
@@ -157,6 +158,9 @@ async def _get_or_create_pypi_registry(db: AsyncSession) -> Registry:
         tier=Tier.tier1,
         sync_enabled=True,
         sync_priority=0,
+        protocol=RegistryProtocol.pypi_warehouse,
+        priority=0,
+        enabled=True,
     )
     db.add(registry)
     await db.flush()
