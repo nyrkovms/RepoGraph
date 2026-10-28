@@ -123,6 +123,10 @@ class WarehouseAdapter:
     async def exists(self, ref: PackageRef) -> bool:
         return await self.fetch_package(ref, _NO_LOOKUP) is not None
 
+    async def test_connection(self) -> None:
+        # The JSON API has no root document; a project every index carries stands in for it.
+        await self.exists(PackageRef(ecosystem="pypi", namespace="", name="pip"))
+
     def change_detector(self) -> ChangeDetector:
         return WarehouseChangeDetector()
 

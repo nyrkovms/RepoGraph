@@ -1,6 +1,9 @@
 import asyncio
 from datetime import UTC, datetime
 
+import httpx
+import pytest
+
 from app.connectors import base as legacy
 from app.ecosystems.base import NormalizedDependency, PackageRef, RegistryConfig, TrackedPackage
 from app.ecosystems.pypi.adapters import WarehouseAdapter, to_contract
@@ -154,6 +157,19 @@ def test_adapter_returns_none_for_missing_package() -> None:
     ref = PackageRef(ecosystem="pypi", namespace="", name="nope")
     assert asyncio.run(adapter.exists(ref)) is False
     assert asyncio.run(adapter.exists(PackageRef(ecosystem="pypi", namespace="", name="flask"))) is True
+
+
+class _UnauthorizedConnector(_Connector):
+    async def fetch_package_metadata(self, name: str) -> legacy.NormalizedPackage:
+        request = httpx.Request("GET", f"https://pypi.invalid/pypi/{name}/json")
+        raise httpx.HTTPStatusError("401", request=request, response=httpx.Response(401, request=request))
+
+
+def test_connection_check_fails_only_on_source_errors() -> None:
+    # A reachable index without the probe project is fine; an authorization error is not.
+    asyncio.run(WarehouseAdapter(REGISTRY, connector=_Connector()).test_connection())  # type: ignore[arg-type]
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(WarehouseAdapter(REGISTRY, connector=_UnauthorizedConnector()).test_connection())  # type: ignore[arg-type]
 
 
 # --- environment: same semantics as the tree endpoint ------------------------------------------------------------
