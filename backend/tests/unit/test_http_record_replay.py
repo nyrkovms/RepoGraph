@@ -91,3 +91,77 @@ def test_recording_passes_through_a_gzip_encoded_upstream_response(tmp_path) -> 
     live, replayed = asyncio.run(scenario())
 
     assert live == replayed == {"info": {"name": "flask"}}
+
+
+def _routes(request: httpx.Request) -> httpx.Response:
+    path = request.url.path
+    if path == "/missing":
+        return httpx.Response(404, text="not found")
+    if path == "/old":
+        return httpx.Response(301, headers={"location": "https://repo.example/new"})
+    if path == "/metadata.xml":
+        if request.headers.get("if-modified-since"):
+            return httpx.Response(304)
+        return httpx.Response(200, text="<metadata/>", headers={"last-modified": "Wed, 21 Oct 2026 07:28:00 GMT"})
+    if request.method == "POST":
+        return httpx.Response(200, json={"echo": request.content.decode()})
+    return httpx.Response(200, text="get-body")
+
+
+def _record_and_replay(tmp_path, calls):
+    async def run(transport):
+        async with httpx.AsyncClient(transport=transport) as client:
+            return [await call(client) for call in calls]
+
+    live = asyncio.run(run(RecordingTransport(tmp_path, inner=httpx.MockTransport(_routes))))
+    replayed = asyncio.run(run(ReplayTransport(tmp_path)))
+    return live, replayed
+
+
+def test_replay_keeps_404_redirect_and_method(tmp_path) -> None:
+    calls = [
+        lambda c: c.get("https://repo.example/missing"),
+        lambda c: c.get("https://repo.example/old"),
+        lambda c: c.head("https://repo.example/file"),
+        lambda c: c.get("https://repo.example/file"),
+    ]
+    _, replayed = _record_and_replay(tmp_path, calls)
+
+    missing, redirect, head, get = replayed
+    assert missing.status_code == 404
+    assert redirect.status_code == 301 and redirect.headers["location"] == "https://repo.example/new"
+    assert head.status_code == 200 and get.text == "get-body"
+
+
+def test_replay_answers_if_modified_since_from_last_modified(tmp_path) -> None:
+    calls = [lambda c: c.get("https://repo.example/metadata.xml")]
+    _record_and_replay(tmp_path, calls)
+
+    async def conditional(since: str) -> int:
+        async with httpx.AsyncClient(transport=ReplayTransport(tmp_path)) as client:
+            response = await client.get("https://repo.example/metadata.xml", headers={"If-Modified-Since": since})
+            return response.status_code
+
+    assert asyncio.run(conditional("Wed, 21 Oct 2026 07:28:00 GMT")) == 304
+    assert asyncio.run(conditional("Tue, 20 Oct 2026 07:28:00 GMT")) == 200
+
+
+def test_post_bodies_are_part_of_the_key(tmp_path) -> None:
+    calls = [
+        lambda c: c.post("https://api.example/query", content=b"a"),
+        lambda c: c.post("https://api.example/query", content=b"b"),
+    ]
+    _, replayed = _record_and_replay(tmp_path, calls)
+
+    assert [r.json()["echo"] for r in replayed] == ["a", "b"]
+
+
+def test_replay_miss_is_logged_for_ci(tmp_path, caplog) -> None:
+    async def scenario() -> None:
+        async with httpx.AsyncClient(transport=ReplayTransport(tmp_path)) as client:
+            await client.get("https://pypi.org/pypi/unknown/json")
+
+    with pytest.raises(ReplayMiss):
+        asyncio.run(scenario())
+
+    assert any("REPLAY_MISS GET https://pypi.org/pypi/unknown/json" in r.getMessage() for r in caplog.records)

@@ -27,10 +27,10 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-  "pytest>=9.0.0"
+  "pytest==9.2.0"
 ]
 lint = [
-  "ruff>=0.12.0"
+  "ruff==0.17.3"
 ]
 
 [tool.setuptools]
@@ -49,3 +49,16 @@ select = ["E9", "F"]
 
 [tool.mypy]
 python_version = "3.12"
+
+# Strict typing is enforced for the plugin layer only; legacy modules it imports are not checked (yet).
+[[tool.mypy.overrides]]
+module = ["app.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["app.ecosystems", "app.ecosystems.*"]
+ignore_errors = false
+
+[[tool.mypy.overrides]]
+module = ["celery.*", "resolvelib.*", "kombu.*"]
+ignore_missing_imports = true

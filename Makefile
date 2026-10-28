@@ -2,22 +2,26 @@
 # (integration tests, acceptance smoke) and the frontend production build.
 
 UV_RUN = uv run -q --python 3.12
+# Same versions as the CI image (backend/pyproject.toml extras), so local and CI verdicts match.
+RUFF = ruff==0.17.3
+MYPY = mypy==2.4.0
+PYTEST = pytest==9.2.0
 
 .PHONY: check backend-lint mypy backend-unit frontend
 
 check: backend-lint mypy backend-unit frontend
 
 backend-lint:
-	cd backend && $(UV_RUN) --with ruff -- ruff check app tests
+	cd backend && $(UV_RUN) --with $(RUFF) -- ruff check app tests
 
 # The plugin contract (design artifact) and, once it exists, the ecosystems package must pass `mypy --strict`.
 MYPY_TARGETS = ../design/ecosystem_contract.py $(if $(wildcard backend/app/ecosystems),app/ecosystems)
 
 mypy:
-	cd backend && $(UV_RUN) --with-editable . --with mypy -- mypy --strict $(MYPY_TARGETS)
+	cd backend && $(UV_RUN) --with-editable . --with $(MYPY) -- mypy --strict $(MYPY_TARGETS)
 
 backend-unit:
-	cd backend && LOG_TO_FILE=false $(UV_RUN) --with-editable . --with pytest --with greenlet -- pytest tests/unit
+	cd backend && LOG_TO_FILE=false $(UV_RUN) --with-editable . --with $(PYTEST) --with greenlet -- pytest tests/unit
 
 frontend:
 	@test -d frontend/node_modules || { echo "frontend/node_modules is missing: run 'cd frontend && npm ci'"; exit 1; }

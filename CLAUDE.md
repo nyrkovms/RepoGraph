@@ -32,7 +32,7 @@ make backend-unit               # backend unit tests only
 make frontend                   # frontend lint + tests
 scripts/stand.sh status         # test stand: containers, migration, catalog size
 scripts/stand.sh migrate        # backup, stop worker/beat, alembic upgrade head, start them again
-scripts/check_migrations.sh     # migrations on synthetic data: base -> head -> downgrade -> head (needs postgres from compose)
+scripts/check_migrations.sh     # migrations on synthetic data: base -> head -> downgrade -> head (own compose project)
 scripts/record_fixtures.sh       # re-record upstream responses for offline CI (live network)
 ```
 

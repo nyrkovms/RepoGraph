@@ -1,27 +1,34 @@
 #!/usr/bin/env bash
 # Migrations on data (IMPL P0.7): fresh database -> base revision -> synthetic catalog -> head -> invariants,
-# then downgrade to the base and upgrade again. Uses the compose stack of the caller (CI: default project;
-# locally: COMPOSE_FILE=docker-compose.yml:docker-compose.stand.yml to borrow the stand's postgres).
+# then downgrade to the base and upgrade again. Runs its own compose project (postgres + api image built from
+# this checkout), so it is safe next to the long-lived stand; the project is removed at the end.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-DB="${MIGRATION_CHECK_DB:-migration_check}"
+PROJECT="${MIGRATION_CHECK_PROJECT:-packagehub-migcheck}"
+if [[ "$PROJECT" == "packagehub-stand" ]]; then
+  echo "refusing to run against the stand project" >&2
+  exit 1
+fi
+
+DB="migration_check"
 BASE_REV="20261027_0005"
 SEED="backend/tests/migrations/seed_${BASE_REV##*_}.sql"
 CHECKS="backend/tests/migrations/check_head.sql"
-COMPOSE=(docker compose)
+unset COMPOSE_FILE HTTP_REPLAY_DIR HTTP_RECORD_DIR
+COMPOSE=(docker compose -p "$PROJECT" -f docker-compose.yml -f docker-compose.isolated.yml)
 
 psql_admin() { "${COMPOSE[@]}" exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -q -U "$POSTGRES_USER" -d "$POSTGRES_DB"'; }
 psql_db() { "${COMPOSE[@]}" exec -T postgres sh -c "psql -v ON_ERROR_STOP=1 -q -U \"\$POSTGRES_USER\" -d $DB"; }
 alembic() { "${COMPOSE[@]}" run --rm --no-deps -e POSTGRES_DB="$DB" api alembic "$@"; }
 
-cleanup() { echo "DROP DATABASE IF EXISTS $DB;" | psql_admin; }
+cleanup() { "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 "${COMPOSE[@]}" build -q api
-echo "DROP DATABASE IF EXISTS $DB;" | psql_admin
+"${COMPOSE[@]}" up -d --wait postgres
 echo "CREATE DATABASE $DB;" | psql_admin
 
 alembic upgrade "$BASE_REV"

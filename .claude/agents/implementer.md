@@ -15,6 +15,8 @@ How you work:
 - A move or rename is its own commit with no logic changes.
 - Run the check command from the task and `make check`; fix what you broke. Never skip or delete failing tests to get
   green; report them instead.
-- Commit on the current branch with an imperative English subject and a body. Do not push.
+- Work only inside the task's `WP_DIR` (absolute paths; every shell command starts with `cd <WP_DIR> &&`).
+  Commit on branch `wp/<id>` there, after checking the branch name, with an imperative English subject and a body.
+  Do not push and do not remove the worktree.
 - Finish with the report from `.claude/templates/wp-report.md`, filled in honestly: what is not done or not verified
   goes into the report, not under the carpet.
