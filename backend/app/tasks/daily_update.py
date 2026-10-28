@@ -298,9 +298,10 @@ def _record_metrics(summary: dict) -> None:
         failed=summary["failed"],
         unavailable=summary["unavailable"],
         finished_at_ts=datetime.fromisoformat(summary["finished_at"]).timestamp(),
+        ecosystem=summary["ecosystem"],
     )
     for kind, count in summary["events"].items():
-        inc_package_events(kind, count)
+        inc_package_events(kind, count, ecosystem=summary["ecosystem"])
 
 
 @celery_app.task(name="app.tasks.daily_update.run_daily_update")
