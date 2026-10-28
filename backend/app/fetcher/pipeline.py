@@ -94,13 +94,17 @@ async def sync_package(
 ) -> Package:
     """Fetch `ref` from all its sources and write the merged result. Raises PackageNotFound if no source has it.
 
-    A known package is re-read from the registries where it lives (package_registries); a new one from the
-    sources of `profile` (the ecosystem's default profile when not given). A source error propagates: the package
-    is left as it was and the caller records a sync failure, so a flaky source never looks like a removal.
+    A known package is re-read from the enabled registries where it lives (package_registries) that its routing
+    still allows; a new one from the sources of `profile` (the ecosystem's default profile when not given).
+    Sources not asked are frozen: what only they publish stays as it was (SPEC §6.4). A source error, or a
+    degraded source of a known package, propagates: the package is left as it was and the caller records a sync
+    failure, so a flaky source never looks like a removal.
     """
     plugin = plugin_for(ref.ecosystem)
     existing = await find_package(db, ref)
     registries = await sources.package_registries(db, existing.id) if existing else []
+    # Routing applies to known packages too: a source that no longer matches is not asked, i.e. frozen.
+    registries = list(plugin.sources_for(ref, SourceProfile(ecosystem=ref.ecosystem, slug="catalog", registries=registries)))
     if registries:
         fetched = await discovery.fetch_known(db, plugin, ref, registries, _ProfileLookup(plugin, registries))
     else:
@@ -144,6 +148,8 @@ async def write_package(
     existing = await find_package(db, ref)
     snapshot = await _load_snapshot(db, existing) if existing else None
     latest = _latest_version(plugin, merged)
+    incoming_versions = {v.version.version for v in merged.versions}
+    frozen = await _frozen_versions(db, existing.id, registry_rows.keys(), incoming_versions) if existing else set()
 
     package = await _upsert_package(db, plugin, merged, latest, origin, now, existing)
     await _upsert_package_registries(db, package, merged, missing_registry_ids, now)
@@ -152,7 +158,7 @@ async def write_package(
     version_rows, metadata_moved = await _upsert_versions(db, plugin, package.id, merged.versions)
     version_ids = {version: row.id for version, row in version_rows.items()}
     await _write_version_sources(db, package.id, version_ids, merged.versions, source_versions, registry_rows.keys(), now)
-    await _mark_missing_versions_removed(db, package.id, version_ids.keys())
+    await _mark_missing_versions_removed(db, package.id, [*version_ids.keys(), *frozen])
     for merged_version in merged.versions:
         row = version_rows[merged_version.version.version]
         await _write_dependencies(db, row, merged_version, source_versions, merged_version.version.version in metadata_moved)
@@ -171,7 +177,7 @@ async def write_package(
         await _link_dependents(db, package)
 
     slugs = {registry_id: row.slug for registry_id, row in registry_rows.items()}
-    await _record_events(db, package.id, diff_package(snapshot, merged, plugin.versions, latest, slugs), run_id, now)
+    await _record_events(db, package.id, diff_package(snapshot, merged, plugin.versions, latest, slugs, frozen), run_id, now)
     for registry_id in [*by_registry, *missing_registry_ids]:
         await _upsert_sync_state(db, registry_id, now)
 
@@ -503,6 +509,24 @@ def _chunks(rows: list[dict], size: int = 1000) -> Iterable[list[dict]]:
     # A multi-row INSERT is one statement; asyncpg allows 32767 bind parameters per statement.
     for start in range(0, len(rows), size):
         yield rows[start:start + size]
+
+
+async def _frozen_versions(
+    db: AsyncSession, package_id, asked_registry_ids: Iterable[str], incoming: set[str]
+) -> set[str]:
+    """Versions no asked source returned that a source not asked (disabled, or no longer matching its routing)
+    still lists. Such a source is frozen: its data stays as it was, nothing is removed and no events follow."""
+    rows = await db.scalars(
+        select(PackageVersion.version)
+        .join(VersionSource, VersionSource.version_id == PackageVersion.id)
+        .where(
+            PackageVersion.package_id == package_id,
+            VersionSource.registry_id.not_in(list(asked_registry_ids)),
+            VersionSource.status != PackageVersionStatus.removed,
+        )
+        .distinct()
+    )
+    return {version for version in rows if version not in incoming}
 
 
 async def _mark_missing_versions_removed(db: AsyncSession, package_id, present_versions: Iterable[str]) -> None:

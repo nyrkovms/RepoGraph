@@ -20,7 +20,7 @@ from app.ecosystems.base import (
     PackageRef,
 )
 from app.ecosystems.pypi.adapters import WarehouseAdapter
-from app.fetcher import pipeline
+from app.fetcher import discovery, pipeline
 from app.fetcher.lazy import LazyFetcher
 from app.models.artifact import Artifact
 from app.models.author import PackageAuthor
@@ -312,5 +312,43 @@ def test_variant_becomes_canonical_when_the_metadata_source_drops_the_version() 
         assert await _deps(db, version.id) == ["filelock"]
         assert await _deps(db, version.id, variant=mirror) == []
         assert version.dependencies_state == DependenciesState.hydrated
+
+    _in_rolled_back_transaction(test)
+
+
+def test_source_not_asked_is_frozen() -> None:
+    async def test(db: AsyncSession, pypi: str, mirror: str) -> None:
+        name = _name()
+        package = await _write(db, _snapshot(name, pypi, [_version("1.0", [])]),
+                               _snapshot(name, mirror, [_version("1.0", []), _version("1.0+cu", [])]))
+        # The mirror is disabled (or its routing no longer matches): only pypi answers, the mirror is not asked.
+        await _write(db, _snapshot(name, pypi, [_version("1.0", []), _version("1.1", [])]))
+        versions = await _versions(db, package.id)
+        assert versions["1.0+cu"].status.value == "active"
+        assert await _sources(db, versions["1.0+cu"].id) == {mirror: "active"}
+        assert await _sources(db, versions["1.0"].id) == {pypi: "active", mirror: "active"}
+        events = await _events(db, package.id)
+        assert ("release_added", "1.1") in events and not any(kind == "release_removed" for kind, _ in events)
+
+    _in_rolled_back_transaction(test)
+
+
+def test_known_package_is_not_asked_from_a_source_its_routing_excludes(monkeypatch) -> None:
+    async def test(db: AsyncSession, pypi: str, mirror: str) -> None:
+        name = _name()
+        await _write(db, _snapshot(name, pypi, [_version("1.0", [])]), _snapshot(name, mirror, [_version("1.0", [])]))
+        row = await db.get(Registry, uuid.UUID(mirror))
+        row.routing = {"mode": "block", "packages": [name]}
+        await db.flush()
+
+        asked: list[str] = []
+
+        async def fetch_known(db, plugin, ref, registries, lookup):
+            asked.extend(r.id for r in registries)
+            return discovery.Fetched(snapshots=[_snapshot(name, pypi, [_version("1.0", [])])])
+
+        monkeypatch.setattr(pipeline.discovery, "fetch_known", fetch_known)
+        await pipeline.sync_package(db, PackageRef(ecosystem="pypi", namespace="", name=name))
+        assert asked == [pypi]
 
     _in_rolled_back_transaction(test)

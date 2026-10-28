@@ -16,7 +16,7 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.api.v1 import admin as admin_api
@@ -524,16 +524,8 @@ def test_fetch_packages_task_counts_and_records_failures(monkeypatch: pytest.Mon
         if ref.name == "b3-boom":
             raise httpx.ReadTimeout("upstream slow")
 
-    async def work() -> dict:
-        engine = create_async_engine(get_settings().async_db_url, poolclass=NullPool)
-        try:
-            monkeypatch.setattr(fetch_task, "SessionLocal", async_sessionmaker(engine, expire_on_commit=False))
-            monkeypatch.setattr(fetch_task, "sync_package", fake_sync)
-            return await fetch_task._fetch_packages_async([f"pkg:pypi/{n}" for n in names])
-        finally:
-            await engine.dispose()
-
-    result = asyncio.run(work())
+    monkeypatch.setattr(fetch_task, "sync_package", fake_sync)
+    result = asyncio.run(fetch_task._fetch_packages_async([f"pkg:pypi/{n}" for n in names]))
     assert (result["requested"], result["fetched"], result["not_found"], result["failed"]) == (3, 1, 1, 1)
     assert seen == ["b3-ok:manual", "b3-missing:manual", "b3-boom:manual"]
 

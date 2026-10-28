@@ -1,6 +1,6 @@
 """Events from comparing the stored state of a package with its merged sources (SPEC-MULTI-ECOSYSTEM.md §8.3)."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -42,8 +42,10 @@ def diff_package(
     scheme: VersionScheme,
     latest_version: str | None,
     registry_slugs: Mapping[str, str] | None = None,
+    frozen_versions: Set[str] = frozenset(),
 ) -> list[EventDraft]:
-    """Compare stored state with freshly merged metadata and describe what changed."""
+    """Compare stored state with freshly merged metadata and describe what changed. `frozen_versions` are kept by
+    sources that were not asked (disabled): their absence from `after` is not a removal."""
     if before is None:
         return [EventDraft(kind=PackageEventKind.tracking_started, details={"latest_version": latest_version})]
 
@@ -102,6 +104,8 @@ def diff_package(
                                              details={"registry": slugs.get(registry_id, registry_id)}))
 
     for name in sorted(before.version_statuses, key=scheme.sort_key):
+        if name in frozen_versions:
+            continue
         old_status = before.version_statuses[name]
         new_merged = incoming.get(name)
         new_status = PackageVersionStatus(new_merged.version.status) if new_merged else PackageVersionStatus.removed

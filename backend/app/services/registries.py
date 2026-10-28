@@ -288,7 +288,7 @@ async def delete_registry(db: AsyncSession, slug: str) -> None:
 
 async def set_enabled(db: AsyncSession, slug: str, enabled: bool) -> RegistryResponse:
     row = await _row(db, slug)
-    # Only the flag: what disabling means for data already in the catalog is an open product question (IMPL B1 (7)).
+    # Only the flag: a disabled source is no longer asked, and the pipeline keeps its data frozen (SPEC §6.4).
     await db.execute(update(Registry).where(Registry.id == row.id).values(enabled=enabled))
     await db.refresh(row)
     return (await _views(db, [row]))[0]

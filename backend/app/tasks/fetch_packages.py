@@ -5,7 +5,7 @@ from time import perf_counter
 
 from app.celery_app import celery_app
 from app.connectors.base import PackageNotFound
-from app.db import SessionLocal
+from app.db import loop_local_session
 from app.ecosystems.base import PackageRef
 from app.ecosystems.purl import parse as parse_purl
 from app.ecosystems.registry import registered
@@ -40,7 +40,7 @@ async def _fetch_packages_async(purls: list[str]) -> dict[str, object]:
     started = perf_counter()
     counts = {"fetched": 0, "not_found": 0, "failed": 0}
 
-    async with SessionLocal() as db:
+    async with loop_local_session() as db:
         for purl in purls:
             try:
                 ref = ref_from_purl(purl)
