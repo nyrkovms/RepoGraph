@@ -11,7 +11,7 @@ from app.config import get_settings
 from app.connectors.base import PackageNotFound
 from app.ecosystems.pypi.connector import PyPIConnector
 from app.ecosystems.pypi.simple_index import PyPISimpleIndex
-from app.db import SessionLocal
+from app.db import loop_local_session
 from app.fetcher.pipeline import run_sync_pipeline
 from app.models.enums import Ecosystem, PackageEventKind, UpdateRunStatus
 from app.models.package import Package
@@ -91,7 +91,7 @@ async def _mark_unavailable(db, package_id, run_id) -> bool:
 
 async def _update_package(connector: PyPIConnector, package: TrackedPackage, expected_serial: int | None, run_id) -> str:
     """Fetch one package and run the pipeline. Returns updated | stale | unavailable | failed."""
-    async with SessionLocal() as db:
+    async with loop_local_session() as db:
         try:
             metadata = await connector.fetch_package_metadata(package.name)
         except PackageNotFound:
@@ -142,7 +142,7 @@ async def _run_daily_update_async() -> dict:
     started = perf_counter()
     concurrency = max(1, settings.daily_update_concurrency)
 
-    async with SessionLocal() as db:
+    async with loop_local_session() as db:
         running = await db.scalar(
             select(UpdateRun).where(
                 UpdateRun.status == UpdateRunStatus.running,
@@ -192,7 +192,7 @@ async def _run_daily_update_async() -> dict:
         status = UpdateRunStatus.failed
         error = f"{exc.__class__.__name__}: {exc}"[:2000]
 
-    async with SessionLocal() as db:
+    async with loop_local_session() as db:
         run = await db.scalar(select(UpdateRun).where(UpdateRun.id == run_id))
         events_by_kind = dict(
             (

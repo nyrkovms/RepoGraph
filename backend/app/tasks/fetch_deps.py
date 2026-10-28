@@ -6,7 +6,7 @@ from time import perf_counter
 from app.celery_app import celery_app
 from app.connectors.base import PackageNotFound
 from app.ecosystems.pypi.connector import PyPIConnector
-from app.db import SessionLocal
+from app.db import loop_local_session
 from app.fetcher.pipeline import run_sync_pipeline
 from app.models.enums import SyncType
 from app.normalizers.names import normalize_package_name
@@ -22,7 +22,7 @@ async def _fetch_package_async(name: str) -> dict[str, str]:
     connector = PyPIConnector()
     normalized = normalize_package_name(name)
 
-    async with SessionLocal() as db:
+    async with loop_local_session() as db:
         await mark_sync_running(db, SyncType.incremental, packages_total=1)
         await db.commit()
 
