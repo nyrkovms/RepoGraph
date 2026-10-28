@@ -187,7 +187,7 @@ async def _upsert_package(db: AsyncSession, registry_id, package_data: Normalize
 
     package = Package(
         ecosystem=Ecosystem.pypi,
-        namespace=None,
+        namespace="",
         name=package_data.name,
         normalized_name=package_data.normalized_name,
         primary_registry_id=registry_id,
@@ -272,7 +272,7 @@ async def _replace_dependencies(db: AsyncSession, version_id, dependencies: list
             Dependency(
                 version_id=version_id,
                 dependency_name=dep.dependency_name,
-                dependency_namespace=None,
+                dependency_namespace="",
                 dependency_ecosystem=Ecosystem.pypi,
                 version_constraint=dep.version_constraint,
                 dependency_type=DependencyType(dep.dependency_type),

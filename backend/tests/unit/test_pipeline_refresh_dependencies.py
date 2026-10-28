@@ -101,3 +101,39 @@ def test_refresh_keeps_dependencies_of_non_hydrated_versions(monkeypatch) -> Non
 
     assert [version_id for version_id, _ in replaced] == ["id-3.0.0"]
     assert [dep.dependency_name for dep in replaced[0][1]] == ["click"]
+
+
+class _RecordingSession:
+    def __init__(self) -> None:
+        self.added: list = []
+
+    def add(self, obj) -> None:
+        self.added.append(obj)
+
+    async def execute(self, _statement) -> None:
+        pass
+
+    async def flush(self) -> None:
+        pass
+
+
+def test_new_package_is_written_with_empty_namespace(monkeypatch) -> None:
+    async def not_found(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(pipeline, "find_package", not_found)
+    session = _RecordingSession()
+
+    package = asyncio.run(pipeline._upsert_package(session, "registry", _make_package(), datetime.now(UTC)))
+
+    assert package.namespace == ""
+    assert session.added == [package]
+
+
+def test_dependencies_are_written_with_empty_namespace() -> None:
+    session = _RecordingSession()
+    dependencies = _make_package().versions[0].dependencies
+
+    asyncio.run(pipeline._replace_dependencies(session, "version", dependencies))
+
+    assert [dep.dependency_namespace for dep in session.added] == [""]

@@ -183,7 +183,7 @@ class PyPIProvider(AbstractProvider):
                     Dependency(
                         version_id=version_row.id,
                         dependency_name=dep.dependency_name,
-                        dependency_namespace=None,
+                        dependency_namespace="",
                         dependency_ecosystem=Ecosystem.pypi,
                         version_constraint=dep.version_constraint,
                         dependency_type=DependencyType(dep.dependency_type),
