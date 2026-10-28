@@ -32,8 +32,9 @@ async def loop_local_session() -> AsyncGenerator[AsyncSession, None]:
 @asynccontextmanager
 async def loop_local_sessionmaker(pool_size: int = 5) -> AsyncGenerator[async_sessionmaker[AsyncSession], None]:
     """Pooled sessions for one event loop, e.g. a task that updates many packages concurrently inside asyncio.run:
-    the pool is created and disposed in that loop."""
-    loop_engine = create_async_engine(settings.async_db_url, pool_size=pool_size, max_overflow=0, pool_pre_ping=True)
+    the pool is created and disposed in that loop. The overflow leaves room for the breaker's side transaction,
+    opened while every worker still holds its own connection."""
+    loop_engine = create_async_engine(settings.async_db_url, pool_size=pool_size, max_overflow=pool_size, pool_pre_ping=True)
     try:
         yield async_sessionmaker(bind=loop_engine, expire_on_commit=False, class_=AsyncSession)
     finally:

@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
+from urllib.parse import urlsplit
 
 import yaml
 from pydantic import ValidationError
@@ -141,6 +142,17 @@ def validate_registry(fields: RegistryFields) -> None:
         raise RegistryInvalid(f"credentials_ref is required for auth_type {fields.auth_type!r}")
     if not fields.base_url.startswith(("http://", "https://")):
         raise RegistryInvalid(f"base_url must be an http(s) URL, got {fields.base_url!r}")
+    if urlsplit(fields.base_url).username is not None:
+        # The URL is shown by GET /registries and lands in error messages; secrets go through credentials_ref.
+        raise RegistryInvalid("base_url must not carry credentials; use auth_type and credentials_ref")
+    ttl = fields.config.get("negative_cache_ttl_seconds")
+    if ttl is not None and (not isinstance(ttl, int) or isinstance(ttl, bool) or ttl < 0):
+        raise RegistryInvalid("config.negative_cache_ttl_seconds must be a non-negative integer")
+    for key in ("api_url", "simple_url"):
+        url = fields.config.get(key)
+        if url is not None and (not isinstance(url, str) or not url.startswith(("http://", "https://"))
+                                or urlsplit(url).username is not None):
+            raise RegistryInvalid(f"config.{key} must be an http(s) URL without credentials")
     config = fields.contract()
     try:
         plugin.adapter(config)

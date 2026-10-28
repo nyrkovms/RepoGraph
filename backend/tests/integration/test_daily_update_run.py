@@ -3,12 +3,15 @@ which packages are re-read, what the run journal says, and how a failing source 
 
 import asyncio
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from sqlalchemy import delete, select, update
 
 from app.db import loop_local_session
 from app.ecosystems.base import ChangeSet
+from app.models.package_event import PackageEvent
+from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
 from app.models.run import Run
 from app.models.sync_state import SyncState
@@ -113,3 +116,66 @@ def test_overlapping_run_is_skipped(monkeypatch) -> None:
         assert summary["status"] == "skipped" and summary["running_run_id"] == run_id
     finally:
         asyncio.run(_cleanup(run_id))
+
+
+def test_outcomes_of_the_package_write(monkeypatch) -> None:
+    """Gone everywhere -> unavailable; a source error -> a failure keyed by purl."""
+    from app.connectors.base import PackageNotFound
+    from app.models.package import Package
+    from app.models.sync_failure import SyncFailure
+
+    picked: list = []
+
+    def pick(tracked, cursor):
+        picked.extend(tracked[:2])
+        return ChangeSet(changed=[(tracked[0], None)], missing=[tracked[1]], cursor=cursor)
+
+    async def fake_sync(db, ref, *, run_id=None, **_):
+        if ref.name == picked[1].ref.name:
+            raise PackageNotFound(ref.name)
+        raise httpx.ReadTimeout("slow")
+
+    monkeypatch.setattr(daily_update, "plugin_for", lambda ecosystem: _Plugin(_Detector(pick)))
+    monkeypatch.setattr(daily_update, "sync_package", fake_sync)
+    summary = asyncio.run(daily_update._run_daily_update_async("pypi"))
+
+    async def check_and_restore() -> None:
+        async with loop_local_session() as db:
+            failure = await db.scalar(select(SyncFailure).where(SyncFailure.operation == "daily_update",
+                                                                SyncFailure.package_ref == f"pkg:pypi/{picked[0].ref.name}"))
+            gone = await db.get(Package, uuid.UUID(picked[1].package_id))
+            assert failure is not None and failure.ecosystem.value == "pypi"
+            assert gone.unavailable_at is not None
+            # Restore the shared catalog for the other tests.
+            gone.unavailable_at = None
+            await db.execute(update(PackageRegistry).where(PackageRegistry.package_id == gone.id).values(missing_since=None))
+            await db.execute(delete(SyncFailure).where(SyncFailure.id == failure.id))
+            await db.execute(delete(PackageEvent).where(PackageEvent.run_id == uuid.UUID(summary["run_id"])))
+            await db.commit()
+
+    try:
+        assert (summary["status"], summary["failed"], summary["unavailable"]) == ("partial", 1, 1)
+        asyncio.run(check_and_restore())
+    finally:
+        asyncio.run(_cleanup(summary["run_id"]))
+
+
+def test_degraded_source_is_skipped_by_change_detection(monkeypatch) -> None:
+    def pick(tracked, cursor):
+        raise AssertionError("a degraded source must not be asked")
+
+    async def degrade(on: bool) -> None:
+        async with loop_local_session() as db:
+            pypi = select(Registry.id).where(Registry.slug == "pypi").scalar_subquery()
+            until = datetime.now(UTC) + timedelta(minutes=10) if on else None
+            await db.execute(update(SyncState).where(SyncState.registry_id == pypi).values(degraded_until=until))
+            await db.commit()
+
+    monkeypatch.setattr(daily_update, "plugin_for", lambda ecosystem: _Plugin(_Detector(pick)))
+    asyncio.run(degrade(True))
+    try:
+        summary = asyncio.run(daily_update._run_daily_update_async("pypi"))
+        assert summary["status"] == "partial" and summary["per_registry"]["pypi"] == {"status": "degraded"}
+        asyncio.run(_cleanup(summary["run_id"]))
+    finally:
+        asyncio.run(degrade(False))

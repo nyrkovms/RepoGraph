@@ -193,3 +193,39 @@ def test_priority_source_with_the_package_is_its_only_source() -> None:
         assert [s.registry_id for s in fetched.snapshots] == [first.id] and fetched.missing == [corp.id]
 
     _in_rolled_back_transaction(test, second_routing={"mode": "priority"})
+
+
+def test_degraded_priority_source_stops_discovery() -> None:
+    async def test(db: AsyncSession, first: RegistryConfig, corp: RegistryConfig) -> None:
+        ref = _ref()
+        public = _Adapter(_snapshot(ref, first))
+        plugin = _Plugin({first.id: public, corp.id: _Adapter(None)})
+        await db.execute(insert_state(corp.id, degraded=True))
+        with pytest.raises(SourceDegraded):
+            await discovery.discover(db, plugin, ref, [first, corp], None)
+        assert public.calls == 0    # the public source must not claim the name meanwhile
+
+    _in_rolled_back_transaction(test, second_routing={"mode": "priority"})
+
+
+def test_an_absent_answer_closes_the_breaker() -> None:
+    async def test(db: AsyncSession, first: RegistryConfig, second: RegistryConfig) -> None:
+        ref = _ref()
+        await db.execute(insert_state(first.id, degraded=False, failures=3))
+        await discovery.discover(db, _Plugin({first.id: _Adapter(None), second.id: _Adapter(None)}), ref, [first], None)
+        state = await _state(db, first)
+        assert (state.consecutive_failures, state.degraded_until) == (0, None)
+
+    _in_rolled_back_transaction(test)
+
+
+def insert_state(registry_id: str, *, degraded: bool, failures: int = 5):
+    from datetime import timedelta
+
+    from sqlalchemy.dialects.postgresql import insert
+
+    from app.models.enums import SyncStatus, SyncType
+
+    until = datetime.now(UTC) + timedelta(minutes=10) if degraded else None
+    return insert(SyncState).values(registry_id=registry_id, sync_type=SyncType.incremental, status=SyncStatus.idle,
+                                    cursor_data={}, consecutive_failures=failures, degraded_until=until)

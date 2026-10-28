@@ -49,6 +49,11 @@ def test_valid_registry_passes() -> None:
         ({"auth_type": "basic"}, "credentials_ref is required"),
         ({"auth_type": "tls_client_cert", "credentials_ref": ""}, "credentials_ref is required"),
         ({"base_url": "ftp://mirror.invalid/"}, "base_url must be an http"),
+        ({"base_url": "https://user:secret@mirror.invalid/"}, "must not carry credentials"),
+        ({"routing": {"pakages": ["torch"]}}, "unknown routing keys"),
+        ({"config": {"negative_cache_ttl_seconds": "1h"}}, "must be a non-negative integer"),
+        ({"config": {"negative_cache_ttl_seconds": -1}}, "must be a non-negative integer"),
+        ({"config": {"api_url": "https://u:p@mirror.invalid/json"}}, "config.api_url must be an http"),
     ],
 )
 def test_invalid_registry_is_rejected_with_a_readable_message(overrides: dict, message: str) -> None:

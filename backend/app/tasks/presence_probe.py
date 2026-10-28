@@ -15,7 +15,8 @@ from app.celery_app import celery_app
 from app.connectors.base import PackageNotFound
 from app.db import loop_local_session
 from app.ecosystems.base import EcosystemPlugin, PackageRef, RegistryConfig, SourceProfile
-from app.fetcher.discovery import NegativeCache, degraded_registry_ids, record_source_failure
+from app.ecosystems.routing import is_priority
+from app.fetcher.discovery import NegativeCache, degraded_registry_ids, record_source_answer, record_source_failure
 from app.fetcher.pipeline import plugin_for, sync_package
 from app.fetcher.sources import default_profile
 from app.models.enums import Ecosystem, PackageOrigin
@@ -36,6 +37,7 @@ class Target:
 
     ref: PackageRef
     known: frozenset[str] = frozenset()
+    present: frozenset[str] = frozenset()     # the subset with `missing_since IS NULL`
 
 
 @dataclass(slots=True)
@@ -55,14 +57,18 @@ async def catalog_targets(db, ecosystem: str) -> list[Target]:
         )
     ).all()
     known: dict[object, set[str]] = {}
+    present: dict[object, set[str]] = {}
     links = await db.execute(
-        select(PackageRegistry.package_id, PackageRegistry.registry_id).where(PackageRegistry.ecosystem == Ecosystem(ecosystem))
+        select(PackageRegistry.package_id, PackageRegistry.registry_id, PackageRegistry.missing_since)
+        .where(PackageRegistry.ecosystem == Ecosystem(ecosystem))
     )
-    for package_id, registry_id in links.all():
+    for package_id, registry_id, missing_since in links.all():
         known.setdefault(package_id, set()).add(str(registry_id))
+        if missing_since is None:
+            present.setdefault(package_id, set()).add(str(registry_id))
     return [
         Target(PackageRef(ecosystem=ecosystem, namespace=namespace or "", name=name),  # type: ignore[arg-type]
-               frozenset(known.get(package_id, ())))
+               frozenset(known.get(package_id, ())), frozenset(present.get(package_id, ())))
         for package_id, namespace, name in rows
     ]
 
@@ -80,9 +86,12 @@ async def probe_packages(
     result = ProbeResult()
     # Degraded sources are not probed; one that fails during this run joins them.
     skipped = await degraded_registry_ids(db)
+    priority_ids = {r.id for r in profile.registries if is_priority(r)}
 
     for target in targets:
         ref = target.ref
+        if target.present & priority_ids:
+            continue   # a priority source has it: no other source may serve the name (SPEC §6.2)
         candidates = [r for r in plugin.sources_for(ref, profile) if r.id not in target.known and r.id not in skipped]
         if not candidates:
             continue
@@ -137,6 +146,7 @@ async def _probe_sources(
             logger.exception("Presence probe: source %s failed on %s", registry.slug, purl)
             skipped.add(registry.id)
             continue
+        await record_source_answer(db, registry.id)
         if present:
             stats["found"] += 1
             found.append(registry)

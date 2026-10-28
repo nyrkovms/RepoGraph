@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 from packaging.utils import canonicalize_name
 
+from app.config import get_settings
 from app.connectors import base as legacy
 from app.connectors.base import PackageNotFound
 from app.ecosystems.base import (
@@ -28,6 +29,7 @@ from app.ecosystems.base import (
 from app.ecosystems.pypi.changes import WarehouseChangeDetector
 from app.ecosystems.pypi.connector import PyPIConnector
 from app.ecosystems.pypi.simple_index import PyPISimpleIndex
+from app.services.http import make_client
 
 
 def _dependency(dep: legacy.NormalizedDependency) -> NormalizedDependency:
@@ -141,8 +143,14 @@ class WarehouseAdapter:
         return await self.fetch_package(ref, _NO_LOOKUP) is not None
 
     async def test_connection(self) -> None:
-        # The JSON API has no root document; a project every index carries stands in for it.
-        await self.exists(PackageRef(ecosystem="pypi", namespace="", name="pip"))
+        # The JSON API has no root document; a project every public index carries stands in for it.
+        if await self.exists(PackageRef(ecosystem="pypi", namespace="", name="pip")):
+            return
+        # A private index may lack `pip`, but it serves its Simple root; a wrong base_url fails here.
+        root = (self.simple_url or get_settings().sync_pypi_simple_base_url).rstrip("/") + "/"
+        async with make_client(timeout=30.0) as client:
+            response = await client.get(root, headers={"Accept": "application/vnd.pypi.simple.v1+json, text/html;q=0.1"})
+        response.raise_for_status()
 
     def change_detector(self) -> ChangeDetector:
         return WarehouseChangeDetector(PyPISimpleIndex(base_url=self.simple_url))

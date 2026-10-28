@@ -39,6 +39,7 @@ def test_parse_rule() -> None:
     {"mode": "exclusive"},                     # nothing to pin
     {"mode": "allow", "packages": []},
     {"packages": "torch"},                     # not a list
+    {"pakages": ["torch"]},                    # misspelt key: would otherwise serve everything
 ])
 def test_parse_rule_rejects_bad_config(routing: dict) -> None:
     with pytest.raises(ValueError):

@@ -78,20 +78,20 @@ async def _update_package(make_session: Callable[[], AsyncSession], work: _Work,
     async with make_session() as db:
         try:
             package = await sync_package(db, work.ref, run_id=run_id)
-            await clear_sync_failure(db, package_name=work.ref.name, operation=OPERATION)
+            await clear_sync_failure(db, ref=work.ref, operation=OPERATION)
             await db.commit()
         except PackageNotFound:
             # Gone from every source it was asked from.
             await db.rollback()
             existing = await db.get(Package, uuid.UUID(str(work.package_id)))
             newly = await mark_unavailable(db, existing, run_id) if existing else False
-            await clear_sync_failure(db, package_name=work.ref.name, operation=OPERATION)
+            await clear_sync_failure(db, ref=work.ref, operation=OPERATION)
             await db.commit()
             return "unavailable" if newly else "updated"
         except Exception as exc:  # noqa: BLE001 - also SourceDegraded: the package waits for its source
             logger.warning("Daily update failed: package=%s error=%s", work.ref.name, exc.__class__.__name__)
             await db.rollback()
-            await upsert_sync_failure(db, operation=OPERATION, package_name=work.ref.name, exc=exc)
+            await upsert_sync_failure(db, operation=OPERATION, ref=work.ref, exc=exc)
             await db.commit()
             return "failed"
 

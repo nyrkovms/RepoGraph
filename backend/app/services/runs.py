@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import Ecosystem
@@ -24,9 +24,13 @@ async def running_run(db: AsyncSession, operation: str, ecosystem: str | None) -
 
 
 async def start_run(db: AsyncSession, operation: str, ecosystem: str | None, *, exclusive: bool = True) -> Run | None:
-    """A new running row, flushed. With `exclusive`, None while a run of the same operation and ecosystem is going."""
-    if exclusive and await running_run(db, operation, ecosystem) is not None:
-        return None
+    """A new running row, flushed. With `exclusive`, None while a run of the same operation and ecosystem is going;
+    the caller commits right away, which releases the lock taken here."""
+    if exclusive:
+        # Serializes the check and the insert: beat and a manual start at the same moment get one run, not two.
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"run:{operation}:{ecosystem}"})
+        if await running_run(db, operation, ecosystem) is not None:
+            return None
     run = Run(operation=operation, ecosystem=Ecosystem(ecosystem) if ecosystem else None, status=RUNNING,
               started_at=datetime.now(UTC))
     db.add(run)

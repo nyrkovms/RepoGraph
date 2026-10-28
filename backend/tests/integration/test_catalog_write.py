@@ -380,3 +380,45 @@ def test_dependencies_are_not_loaded_from_a_disabled_source(monkeypatch) -> None
         assert version.dependencies_state == DependenciesState.hydrated and await _deps(db, version.id) == ["idna"]
 
     _in_rolled_back_transaction(test)
+
+
+def test_known_package_in_a_priority_source_is_read_from_it_only(monkeypatch) -> None:
+    async def test(db: AsyncSession, pypi: str, mirror: str) -> None:
+        name = _name()
+        await _write(db, _snapshot(name, pypi, [_version("1.0", [])]), _snapshot(name, mirror, [_version("1.0", [])]))
+        corp = await db.get(Registry, uuid.UUID(mirror))
+        corp.routing, corp.protocol = {"mode": "priority"}, RegistryProtocol.pypi_warehouse   # pypi-simple: E0.5
+        await db.flush()
+        asked: list[str] = []
+
+        async def fetch_known(db, plugin, ref, registries, lookup):
+            asked.extend(r.id for r in registries)
+            return discovery.Fetched(snapshots=[_snapshot(name, mirror, [_version("1.0", [])])])
+
+        monkeypatch.setattr(pipeline.discovery, "fetch_known", fetch_known)
+        await pipeline.sync_package(db, PackageRef(ecosystem="pypi", namespace="", name=name))
+        assert asked == [mirror]    # pypi.org is frozen for this package, not asked
+
+    _in_rolled_back_transaction(test)
+
+
+def test_package_gone_from_asked_sources_but_listed_by_a_frozen_one_is_not_unavailable(monkeypatch) -> None:
+    async def test(db: AsyncSession, pypi: str, mirror: str) -> None:
+        name = _name()
+        package = await _write(db, _snapshot(name, pypi, [_version("1.0", [])]), _snapshot(name, mirror, [_version("1.0", [])]))
+        (await db.get(Registry, uuid.UUID(mirror))).enabled = False
+        await db.flush()
+
+        async def fetch_known(db, plugin, ref, registries, lookup):
+            return discovery.Fetched(missing=[r.id for r in registries])
+
+        monkeypatch.setattr(pipeline.discovery, "fetch_known", fetch_known)
+        written = await pipeline.sync_package(db, PackageRef(ecosystem="pypi", namespace="", name=name))
+        assert written.id == package.id and written.unavailable_at is None
+        rows = {str(r.registry_id): r.missing_since for r in (await db.scalars(
+            select(PackageRegistry).where(PackageRegistry.package_id == package.id)
+            .execution_options(populate_existing=True))).all()}
+        assert rows[pypi] is not None and rows[mirror] is None
+        assert not any(kind == "project_unavailable" for kind, _ in await _events(db, package.id))
+
+    _in_rolled_back_transaction(test)

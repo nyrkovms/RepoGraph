@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 from redis.asyncio import Redis
-from sqlalchemy import case, func, select, text
+from sqlalchemy import case, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -65,7 +65,10 @@ class NegativeCache:
     @staticmethod
     def ttl_seconds(registry: RegistryConfig) -> int:
         value = registry.config.get("negative_cache_ttl_seconds")
-        return int(value) if isinstance(value, int | str) else get_settings().source_negative_cache_ttl_seconds
+        # Validated on write (services/registries.py); anything else falls back to the default instead of failing.
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        return get_settings().source_negative_cache_ttl_seconds
 
     async def is_absent(self, registry: RegistryConfig, purl: str) -> bool:
         try:
@@ -95,6 +98,21 @@ class NegativeCache:
 async def degraded_registry_ids(db: AsyncSession) -> set[str]:
     rows = await db.scalars(select(SyncState.registry_id).where(SyncState.degraded_until > func.now()))
     return {str(registry_id) for registry_id in rows}
+
+
+async def failing_registry_ids(db: AsyncSession) -> set[str]:
+    """Sources with failures counted: their next answer closes the breaker."""
+    rows = await db.scalars(select(SyncState.registry_id).where(SyncState.consecutive_failures > 0))
+    return {str(registry_id) for registry_id in rows}
+
+
+async def record_source_answer(db: AsyncSession, registry_id: str) -> None:
+    """Any answer of a source, also "no such package", closes its breaker (in the caller's transaction: losing the
+    reset to a rollback only means the next answer resets it)."""
+    await db.execute(
+        update(SyncState).where(SyncState.registry_id == registry_id, SyncState.consecutive_failures > 0)
+        .values(consecutive_failures=0, degraded_until=None)
+    )
 
 
 async def record_source_failure(db: AsyncSession, registry: RegistryConfig, error: BaseException) -> None:
@@ -137,14 +155,19 @@ async def record_source_failure(db: AsyncSession, registry: RegistryConfig, erro
 
 
 async def _fetch(
-    db: AsyncSession, plugin: EcosystemPlugin, registry: RegistryConfig, ref: PackageRef, lookup: SourceLookup
+    db: AsyncSession, plugin: EcosystemPlugin, registry: RegistryConfig, ref: PackageRef, lookup: SourceLookup,
+    failing: set[str],
 ) -> NormalizedPackage | None:
     try:
-        return await plugin.adapter(registry).fetch_package(ref, lookup)
+        snapshot = await plugin.adapter(registry).fetch_package(ref, lookup)
     except httpx.HTTPError as exc:
         # Only failures of the source count for the breaker; a parsing bug in the adapter is not the source's fault.
         await record_source_failure(db, registry, exc)
         raise
+    if registry.id in failing:
+        await record_source_answer(db, registry.id)
+        failing.discard(registry.id)
+    return snapshot
 
 
 # --- asking sources --------------------------------------------------------------------------------
@@ -164,9 +187,10 @@ async def fetch_known(
         if registry.id in degraded:
             raise SourceDegraded(registry)
 
+    failing = await failing_registry_ids(db)
     fetched = Fetched()
     for registry in registries:
-        snapshot = await _fetch(db, plugin, registry, ref, lookup)
+        snapshot = await _fetch(db, plugin, registry, ref, lookup, failing)
         if snapshot is None:
             fetched.missing.append(registry.id)
         else:
@@ -185,7 +209,8 @@ async def discover(
 ) -> Fetched:
     """A package new to the catalog, from the sources routing gave (`sources_for`).
 
-    Degraded sources are skipped with a warning. `priority` sources are asked first: the first one that has the
+    Degraded sources are skipped with a warning, except a degraded `priority` source, which stops the discovery
+    (SourceDegraded): its answer decides whether other sources may serve the name. `priority` sources are asked first: the first one that has the
     package is its only source. Answers "no such package" are cached; `use_negative_cache=False` (an explicit seed
     or admin request) asks anyway. `fetch_package` doubles as the existence probe: for the protocols we have the
     probe would be the same request.
@@ -193,10 +218,14 @@ async def discover(
     degraded = await degraded_registry_ids(db)
     asked = []
     for registry in registries:
-        if registry.id in degraded:
-            logger.warning("Source %s is degraded: skipped in discovery of %s", registry.slug, plugin.coordinates.display(ref))
-        else:
+        if registry.id not in degraded:
             asked.append(registry)
+        elif is_priority(registry):
+            # Without the priority source's answer another source could claim the name (dependency confusion).
+            raise SourceDegraded(registry)
+        else:
+            logger.warning("Source %s is degraded: skipped in discovery of %s", registry.slug, plugin.coordinates.display(ref))
+    failing = await failing_registry_ids(db)
 
     purl = plugin.coordinates.to_purl(ref)
     fetched = Fetched()
@@ -205,7 +234,7 @@ async def discover(
             for registry in group:
                 if use_negative_cache and await cache.is_absent(registry, purl):
                     continue
-                snapshot = await _fetch(db, plugin, registry, ref, lookup)
+                snapshot = await _fetch(db, plugin, registry, ref, lookup, failing)
                 if snapshot is None:
                     await cache.remember_absent(registry, purl)
                     fetched.missing.append(registry.id)

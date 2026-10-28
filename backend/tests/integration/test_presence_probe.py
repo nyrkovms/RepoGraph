@@ -2,6 +2,7 @@
 transaction that is rolled back; the task wrapper test uses the shared database and cleans up after itself."""
 
 import asyncio
+import dataclasses
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -294,3 +295,17 @@ def test_a_crashing_probe_closes_its_run_as_failed(monkeypatch: pytest.MonkeyPat
 
     (run,) = _run_db(rows)
     assert run.status == runs.FAILED and "redis is gone" in run.error and run.finished_at is not None
+
+
+def test_a_package_in_a_priority_source_is_not_looked_up_elsewhere(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test(db, home, other, profile, adapters) -> None:
+        # Dependency confusion: a same-named package published on the public source later must not be merged in.
+        ref = await _known_package(db, home)
+        corp = dataclasses.replace(home, routing={"mode": "priority"})
+        priority_profile = dataclasses.replace(profile, registries=[other, corp])
+
+        result = await _probe(db, priority_profile, adapters, [Target(ref, frozenset({home.id}), frozenset({home.id}))])
+        assert (result.checked, result.updated) == (0, 0) and adapters[other.id].exists_calls == 0
+        assert await _registry_ids(db, ref) == {home.id}
+
+    _probe_test(test, monkeypatch)

@@ -27,6 +27,10 @@ class Rule:
 def parse_rule(routing: Mapping[str, object] | None, patterns_key: str) -> Rule:
     if not routing:
         return Rule(None, ())
+    unknown = sorted(set(routing) - {"mode", patterns_key})
+    if unknown:
+        # A misspelt key would otherwise silently mean "serves every package".
+        raise ValueError(f"unknown routing keys {unknown}; expected 'mode' and {patterns_key!r}")
     raw = routing.get(patterns_key)
     if raw is None:
         patterns: tuple[str, ...] = ()

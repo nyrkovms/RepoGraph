@@ -165,11 +165,33 @@ class _UnauthorizedConnector(_Connector):
         raise httpx.HTTPStatusError("401", request=request, response=httpx.Response(401, request=request))
 
 
-def test_connection_check_fails_only_on_source_errors() -> None:
-    # A reachable index without the probe project is fine; an authorization error is not.
+def _simple_root(monkeypatch, status: int) -> list[str]:
+    from app.ecosystems.pypi import adapters
+
+    asked: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(str(request.url))
+        return httpx.Response(status, text="<html></html>")
+
+    monkeypatch.setattr(adapters, "make_client", lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    return asked
+
+
+def test_connection_check_fails_only_on_source_errors(monkeypatch) -> None:
+    # Without the probe project, a reachable index still serves its Simple root.
+    asked = _simple_root(monkeypatch, 200)
     asyncio.run(WarehouseAdapter(REGISTRY, connector=_Connector()).test_connection())  # type: ignore[arg-type]
+    assert asked == ["https://pypi.org/simple/"]
     with pytest.raises(httpx.HTTPStatusError):
         asyncio.run(WarehouseAdapter(REGISTRY, connector=_UnauthorizedConnector()).test_connection())  # type: ignore[arg-type]
+
+
+def test_connection_check_fails_on_a_wrong_base_url(monkeypatch) -> None:
+    # Everything 404s: no `pip` and no Simple root, so the source is not what base_url claims.
+    _simple_root(monkeypatch, 404)
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(WarehouseAdapter(REGISTRY, connector=_Connector()).test_connection())  # type: ignore[arg-type]
 
 
 # --- environment: same semantics as the tree endpoint ------------------------------------------------------------

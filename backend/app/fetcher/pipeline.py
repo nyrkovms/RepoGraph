@@ -31,6 +31,7 @@ from app.ecosystems.base import (
 )
 from app.ecosystems.merge import dependencies_digest
 from app.ecosystems.registry import get_plugin, load_builtin_plugins
+from app.ecosystems.routing import is_priority
 from app.ecosystems.versions_common import fallback_sort_key
 from app.fetcher import discovery, sources
 from app.fetcher.events import EventDraft, PackageSnapshot, diff_package
@@ -104,14 +105,18 @@ async def sync_package(
     """
     plugin = plugin_for(ref.ecosystem)
     existing = await find_package(db, ref)
-    registries = await sources.package_registries(db, existing.id) if existing else []
-    # Routing applies to known packages too: a source that no longer matches is not asked, i.e. frozen.
-    registries = list(plugin.sources_for(ref, SourceProfile(ecosystem=ref.ecosystem, slug="catalog", registries=registries)))
-    if existing and extra_registries:
-        registries = sources.by_priority([*registries, *(r for r in extra_registries if r.id not in {k.id for k in registries})])
-    if registries:
-        fetched = await discovery.fetch_known(db, plugin, ref, registries, _ProfileLookup(plugin, registries))
-    else:
+    fetched: discovery.Fetched | None = None
+    if existing is not None:
+        registries, frozen = await _known_sources(db, plugin, ref, existing.id, extra_registries)
+        if registries:
+            fetched = await discovery.fetch_known(db, plugin, ref, registries, _ProfileLookup(plugin, registries))
+            if not fetched.snapshots and frozen:
+                # Gone from the sources asked, still listed by a frozen one: not unavailable, nothing else changes.
+                await _mark_registries_missing(db, existing.id, fetched.missing)
+                return existing
+        elif frozen:
+            return existing   # only frozen sources list it: nothing to ask
+    if fetched is None:
         profile = profile or await sources.default_profile(db, ref.ecosystem)
         registries = list(plugin.sources_for(ref, profile))
         if not registries and ref.ecosystem == "pypi" and await db.scalar(select(Registry.id).where(Registry.slug == "pypi")) is None:
@@ -126,6 +131,48 @@ async def sync_package(
     if not fetched.snapshots:
         raise PackageNotFound(plugin.coordinates.display(ref))
     return await write_package(db, plugin, fetched.snapshots, missing_registry_ids=fetched.missing, origin=origin, run_id=run_id)
+
+
+async def _known_sources(
+    db: AsyncSession, plugin: EcosystemPlugin, ref: PackageRef, package_id, extra: Sequence[RegistryConfig]
+) -> tuple[list[RegistryConfig], bool]:
+    """Sources to re-read a catalog package from, and whether a source left out still lists it (it is frozen).
+
+    Enabled sources it is linked to that its routing allows, plus `extra`. A `priority` source that has the package
+    is its only source (SPEC §6.2): the others are not asked, so a same-named package published elsewhere later
+    never gets merged in.
+    """
+    rows = (
+        await db.execute(
+            select(Registry, PackageRegistry.missing_since)
+            .join(PackageRegistry, PackageRegistry.registry_id == Registry.id)
+            .where(PackageRegistry.package_id == package_id)
+            .order_by(Registry.priority, Registry.slug)
+        )
+    ).all()
+    enabled = [(sources.registry_config(row), missing is None) for row, missing in rows if row.enabled and row.protocol]
+    allowed = {r.id for r in plugin.sources_for(ref, SourceProfile(ecosystem=ref.ecosystem, slug="catalog",
+                                                                   registries=[c for c, _ in enabled]))}
+    present_priority = [c for c, active in enabled if active and c.id in allowed and is_priority(c)]
+    if present_priority:
+        ask = present_priority[:1]
+    else:
+        ask = [c for c, _ in enabled if c.id in allowed]
+        ask = sources.by_priority([*ask, *(r for r in extra if r.id not in {c.id for c in ask})])
+    asked = {c.id for c in ask}
+    frozen = any(missing is None and str(row.id) not in asked for row, missing in rows)
+    return ask, frozen
+
+
+async def _mark_registries_missing(db: AsyncSession, package_id, registry_ids: Sequence[str]) -> None:
+    if registry_ids:
+        now = datetime.now(UTC)
+        await db.execute(
+            update(PackageRegistry)
+            .where(PackageRegistry.package_id == package_id, PackageRegistry.registry_id.in_(list(registry_ids)))
+            .values(is_primary=False, checked_at=now, missing_since=func.coalesce(PackageRegistry.missing_since, now))
+        )
+        await db.flush()
 
 
 async def write_package(
@@ -151,9 +198,11 @@ async def write_package(
 
     existing = await find_package(db, ref)
     snapshot = await _load_snapshot(db, existing) if existing else None
-    latest = _latest_version(plugin, merged)
     incoming_versions = {v.version.version for v in merged.versions}
     frozen = await _frozen_versions(db, existing.id, registry_rows.keys(), incoming_versions) if existing else set()
+    latest = _latest_version(plugin, merged)
+    if existing is not None and existing.latest_version in frozen:
+        latest = existing.latest_version   # a frozen source's newest version stays the latest until profiles (E0-C)
 
     package = await _upsert_package(db, plugin, merged, latest, origin, now, existing)
     await _upsert_package_registries(db, package, merged, missing_registry_ids, now)
@@ -765,18 +814,23 @@ async def ensure_version_dependencies(db: AsyncSession, package: Package, versio
 
 async def _dependencies_source(db: AsyncSession, package: Package, version_row: PackageVersion) -> Registry | None:
     """The version's metadata source if enabled; otherwise the highest-priority enabled source that lists it."""
-    preferred = version_row.metadata_registry_id or package.primary_registry_id
-    registry = await db.get(Registry, preferred) if preferred else None
-    if registry is not None and registry.enabled:
-        return registry
-    return await db.scalar(
-        select(Registry)
-        .join(VersionSource, VersionSource.registry_id == Registry.id)
-        .where(VersionSource.version_id == version_row.id, VersionSource.status != PackageVersionStatus.removed,
-               Registry.enabled.is_(True))
-        .order_by(Registry.priority, Registry.slug)
-        .limit(1)
-    )
+    candidates = (
+        await db.scalars(
+            select(Registry)
+            .join(VersionSource, VersionSource.registry_id == Registry.id)
+            .where(VersionSource.version_id == version_row.id, VersionSource.status != PackageVersionStatus.removed,
+                   Registry.enabled.is_(True), Registry.protocol.is_not(None))
+            .order_by(Registry.priority, Registry.slug)
+        )
+    ).all()
+    plugin = plugin_for(package.ecosystem.value)
+    ref = PackageRef(ecosystem=package.ecosystem.value, namespace=package.namespace or "", name=package.normalized_name)
+    # Routing freezes sources like disabling does: an excluded source does not describe the version either.
+    allowed = {r.id for r in plugin.sources_for(ref, SourceProfile(ecosystem=ref.ecosystem, slug="catalog",
+                                                                   registries=[sources.registry_config(c) for c in candidates]))}
+    by_id = {str(c.id): c for c in candidates if str(c.id) in allowed}
+    preferred = str(version_row.metadata_registry_id or package.primary_registry_id)
+    return by_id.get(preferred) or next(iter(by_id.values()), None)
 
 
 # --- level-1 links ---------------------------------------------------------------------------------------

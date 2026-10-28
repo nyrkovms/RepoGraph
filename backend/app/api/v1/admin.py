@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.updates import fetch_last_update_run
 from app.auth.tokens import require_admin
 from app.db import get_db_session
-from app.models.enums import Ecosystem
+from app.ecosystems.registry import load_builtin_plugins, registered
 from app.models.run import Run
 from app.schemas.admin import (
     AdminTaskResponse,
@@ -71,8 +71,9 @@ async def trigger_daily_update() -> AdminTaskResponse:
 
 @router.post("/presence-probe", response_model=AdminTaskResponse, dependencies=[Depends(require_admin)])
 async def trigger_presence_probe(payload: PresenceProbeRequest = Body(default_factory=PresenceProbeRequest)) -> AdminTaskResponse:
-    if payload.ecosystem not in {e.value for e in Ecosystem}:
-        raise HTTPException(status_code=422, detail=f"unknown ecosystem {payload.ecosystem!r}")
+    load_builtin_plugins()
+    if payload.ecosystem not in {plugin.ecosystem for plugin in registered()}:
+        raise HTTPException(status_code=422, detail=f"no plugin for ecosystem {payload.ecosystem!r}")
     task = run_presence_probe.delay(payload.ecosystem)
     return AdminTaskResponse(task_id=task.id, status="queued", operation="presence_probe")
 
