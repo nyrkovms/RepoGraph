@@ -11,7 +11,8 @@ settings = get_settings()
 TASK_MODULES = [
     "app.tasks.daily_update",
     "app.tasks.fetch_deps",
-    "app.tasks.refresh",
+    "app.tasks.fetch_packages",
+    "app.tasks.presence_probe",
     "app.tasks.retry_failed",
     "app.tasks.seed",
 ]
@@ -28,11 +29,12 @@ if settings.daily_update_enabled:
         "task": "app.tasks.daily_update.run_daily_update",
         "schedule": crontab(hour=settings.daily_update_hour_utc, minute=settings.daily_update_minute_utc),
     }
-if settings.sync_refresh_enabled:
-    beat_schedule["batch-refresh"] = {
-        "task": "app.tasks.refresh.run_batch_refresh",
-        "schedule": settings.sync_refresh_interval_hours * 3600,
-        "kwargs": {"limit": settings.sync_refresh_batch_limit},
+if settings.presence_probe_enabled:
+    # Weekly (SPEC-MULTI-ECOSYSTEM.md §6.6): finds catalog packages in sources they appeared in later.
+    beat_schedule["presence-probe"] = {
+        "task": "app.tasks.presence_probe.run_presence_probe",
+        "schedule": crontab(day_of_week=settings.presence_probe_day_of_week, hour=settings.presence_probe_hour_utc,
+                            minute=0),
     }
 
 celery_app.conf.update(

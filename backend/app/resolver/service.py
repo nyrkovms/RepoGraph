@@ -11,9 +11,10 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
-from app.ecosystems.pypi.connector import PyPIConnector
+from app.ecosystems.base import PackageRef
 from app.db import loop_local_session
-from app.fetcher.pipeline import run_sync_pipeline
+from app.fetcher.pipeline import sync_package
+from app.models.enums import PackageOrigin
 from app.resolver.cache import ResolveCache
 from app.resolver.errors import (
     ResolveConflictError,
@@ -185,21 +186,17 @@ def _serialize_dependencies(provider, mapping, candidate, max_depth: int, depth:
 
 
 async def _lazy_fetch_async(name: str) -> str:
-    connector = PyPIConnector(timeout_seconds=10.0)
-
-    try:
-        metadata = await connector.fetch_package_metadata(name)
-    except PackageNotFound:
-        return "not_found"
-    except httpx.TimeoutException:
-        return "timeout"
-    except Exception:  # noqa: BLE001
-        return "error"
-
+    """Lazy fetch through the catalog write path (IMPL B1) with origin=discovered."""
+    ref = PackageRef(ecosystem="pypi", namespace="", name=name)
     async with loop_local_session() as db:
         try:
-            await run_sync_pipeline(metadata, db)
+            await sync_package(db, ref, origin=PackageOrigin.discovered)
+            await db.commit()
             return "fetched"
+        except PackageNotFound:
+            return "not_found"
+        except httpx.TimeoutException:
+            return "timeout"
         except Exception:  # noqa: BLE001
             return "error"
 

@@ -3,7 +3,11 @@ from datetime import UTC, datetime
 import pytest
 
 from app.connectors.base import NormalizedPackage, NormalizedVersion, NormalizedVulnerability
-from app.fetcher.events import PackageSnapshot, classify_bump, diff_package
+from app.ecosystems.merge import merge_by_priority
+from app.ecosystems.pypi.adapters import to_contract
+from app.ecosystems.pypi.versions import PyPIVersionScheme
+from app.fetcher.events import PackageSnapshot, classify_bump
+from app.fetcher.events import diff_package as _diff
 from app.models.enums import PackageEventKind, PackageVersionStatus
 
 NOW = datetime(2026, 10, 27, 3, 0, tzinfo=UTC)
@@ -65,6 +69,11 @@ def _snapshot(statuses: dict[str, str], latest: str, vulns: dict | None = None, 
         vulnerability_withdrawn=vulns or {},
         unavailable=unavailable,
     )
+
+
+def diff_package(before, after: NormalizedPackage):
+    """The legacy connector output, as the pipeline sees it: one source, merged."""
+    return _diff(before, merge_by_priority([to_contract(after, "reg-pypi")]), PyPIVersionScheme(), after.latest_version)
 
 
 def _kinds(events) -> list[tuple[PackageEventKind, str | None]]:

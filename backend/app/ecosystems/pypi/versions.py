@@ -6,6 +6,7 @@ The byte key is ported from design/schema-check/sortkey_proto.py (checked agains
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion as _PackagingInvalidVersion
@@ -17,7 +18,9 @@ from app.ecosystems.versions_common import encode_number, fallback_sort_key
 _PRE_RANK = {"a": 1, "b": 2, "rc": 3}
 
 
+@lru_cache(maxsize=65536)
 def _parse(raw: str) -> Version:
+    # Cached: level-1 linking and resolve test the same versions against many constraints.
     try:
         return Version(raw)
     except _PackagingInvalidVersion as exc:
@@ -57,8 +60,8 @@ class PyPIConstraint:
 
     def contains(self, version: str) -> bool:
         try:
-            parsed = Version(version)
-        except _PackagingInvalidVersion:
+            parsed = _parse(version)
+        except InvalidVersion:
             return False
         if self._spec is None:
             return True

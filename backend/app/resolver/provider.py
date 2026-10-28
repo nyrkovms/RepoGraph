@@ -6,13 +6,13 @@ from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 from resolvelib import AbstractProvider
-from sqlalchemy import delete, func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.ecosystems.pypi.connector import PyPIConnector
-from app.fetcher.pipeline import _merge_version_features
+from app.db import loop_local_session
+from app.fetcher.pipeline import ensure_version_dependencies
 from app.models.dependency import Dependency
-from app.models.enums import DependencyType, Ecosystem, PackageVersionStatus
+from app.models.enums import DependenciesState, DependencyType, Ecosystem, PackageVersionStatus
 from app.models.package import Package
 from app.models.version import PackageVersion
 from app.normalizers.names import normalize_package_name
@@ -35,7 +35,6 @@ class PyPIProvider(AbstractProvider):
         self.environment = environment
         self.lazy_fetch = lazy_fetch
         self.include_dev = include_dev
-        self.connector = PyPIConnector()
 
         self._candidates_cache: dict[str, list[ResolverCandidate]] = {}
         self._deps_cache: dict[tuple[str, tuple[str, ...]], list[ResolverRequirement]] = {}
@@ -112,7 +111,8 @@ class PyPIProvider(AbstractProvider):
             rows = (
                 session.execute(
                     select(Dependency)
-                    .where(Dependency.version_id == candidate.version_id)
+                    # Canonical set only; per-source variants are chosen by profile in the graph format (E0-C2).
+                    .where(Dependency.version_id == candidate.version_id, Dependency.variant_registry_id.is_(None))
                     .order_by(Dependency.dependency_name.asc())
                 )
                 .scalars()
@@ -153,49 +153,11 @@ class PyPIProvider(AbstractProvider):
 
     def _ensure_candidate_dependencies(self, candidate: ResolverCandidate) -> None:
         with self.session_factory() as session:
-            row = session.execute(
-                select(PackageVersion, Package.normalized_name)
-                .join(Package, Package.id == PackageVersion.package_id)
-                .where(PackageVersion.id == candidate.version_id)
-            ).one_or_none()
-            if not row:
-                return
-
-            version_row, package_name = row
-            features = dict(version_row.features or {})
-            if features.get("dependencies_hydrated") is True:
-                return
-
-            dep_count = session.execute(
-                select(func.count(Dependency.id)).where(Dependency.version_id == version_row.id)
-            ).scalar_one()
-            if dep_count and features.get("dependencies_hydrated") is None:
-                version_row.features = {**features, "dependencies_hydrated": True}
-                session.commit()
-                return
-
-            dependencies, requires_python = asyncio.run(
-                self.connector.fetch_version_dependencies(package_name, version_row.version)
-            )
-            session.execute(delete(Dependency).where(Dependency.version_id == version_row.id))
-            for dep in dependencies:
-                session.add(
-                    Dependency(
-                        version_id=version_row.id,
-                        dependency_name=normalize_package_name(dep.dependency_name),  # T14
-                        dependency_namespace="",
-                        dependency_ecosystem=Ecosystem.pypi,
-                        version_constraint=dep.version_constraint,
-                        dependency_type=DependencyType(dep.dependency_type),
-                        extra_name=dep.extra_name,
-                        environment_markers=dep.environment_markers,
-                        raw_spec=dep.raw_spec,
-                    )
-                )
-            if requires_python:
-                version_row.requires_python = requires_python
-            version_row.features = _merge_version_features(features, True)
-            session.commit()
+            state = session.scalar(select(PackageVersion.dependencies_state).where(PackageVersion.id == candidate.version_id))
+        if state != DependenciesState.pending:
+            return
+        # Lazy dependencies go through the catalog write path (IMPL B1).
+        asyncio.run(_hydrate_version(candidate.version_id))
 
     def _candidate_satisfies_all(self, candidate: ResolverCandidate, reqs: list[ResolverRequirement]) -> bool:
         for req in reqs:
@@ -323,3 +285,18 @@ def _requested_extras(raw_spec: str) -> list[str]:
         return sorted(Requirement(raw_spec).extras)
     except InvalidRequirement:
         return []
+
+
+async def _hydrate_version(version_id) -> None:
+    async with loop_local_session() as db:
+        row = (
+            await db.execute(
+                select(PackageVersion, Package).join(Package, Package.id == PackageVersion.package_id)
+                .where(PackageVersion.id == version_id)
+            )
+        ).one_or_none()
+        if row is None:
+            return
+        version_row, package = row
+        await ensure_version_dependencies(db, package, version_row)
+        await db.commit()

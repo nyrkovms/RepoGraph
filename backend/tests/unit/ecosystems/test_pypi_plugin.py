@@ -1,6 +1,9 @@
 import asyncio
 from datetime import UTC, datetime
 
+import httpx
+import pytest
+
 from app.connectors import base as legacy
 from app.ecosystems.base import NormalizedDependency, PackageRef, RegistryConfig, TrackedPackage
 from app.ecosystems.pypi.adapters import WarehouseAdapter, to_contract
@@ -156,6 +159,41 @@ def test_adapter_returns_none_for_missing_package() -> None:
     assert asyncio.run(adapter.exists(PackageRef(ecosystem="pypi", namespace="", name="flask"))) is True
 
 
+class _UnauthorizedConnector(_Connector):
+    async def fetch_package_metadata(self, name: str) -> legacy.NormalizedPackage:
+        request = httpx.Request("GET", f"https://pypi.invalid/pypi/{name}/json")
+        raise httpx.HTTPStatusError("401", request=request, response=httpx.Response(401, request=request))
+
+
+def _simple_root(monkeypatch, status: int) -> list[str]:
+    from app.ecosystems.pypi import adapters
+
+    asked: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(str(request.url))
+        return httpx.Response(status, text="<html></html>")
+
+    monkeypatch.setattr(adapters, "make_client", lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    return asked
+
+
+def test_connection_check_fails_only_on_source_errors(monkeypatch) -> None:
+    # Without the probe project, a reachable index still serves its Simple root.
+    asked = _simple_root(monkeypatch, 200)
+    asyncio.run(WarehouseAdapter(REGISTRY, connector=_Connector()).test_connection())  # type: ignore[arg-type]
+    assert asked == ["https://pypi.org/simple/"]
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(WarehouseAdapter(REGISTRY, connector=_UnauthorizedConnector()).test_connection())  # type: ignore[arg-type]
+
+
+def test_connection_check_fails_on_a_wrong_base_url(monkeypatch) -> None:
+    # Everything 404s: no `pip` and no Simple root, so the source is not what base_url claims.
+    _simple_root(monkeypatch, 404)
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(WarehouseAdapter(REGISTRY, connector=_Connector()).test_connection())  # type: ignore[arg-type]
+
+
 # --- environment: same semantics as the tree endpoint ------------------------------------------------------------
 
 
@@ -224,3 +262,24 @@ def test_marker_semantics_match_the_tree_endpoint() -> None:
                 dep = _dep("optional" if include_optional else "runtime", expression, conditions)
                 if dependency_applies(dep, new_env, include_optional) != expected:
                     pytest.fail(f"{raw_env} {expression!r} include_optional={include_optional}: expected {expected}")
+
+
+def test_warehouse_source_reads_from_its_own_urls(monkeypatch) -> None:
+    from dataclasses import replace
+
+    from app.config import get_settings
+
+    # pypi.org follows the settings (README: a proxy in front of pypi.org).
+    monkeypatch.setattr(get_settings(), "sync_pypi_json_base_url", "https://proxy.invalid/pypi/")
+    adapter = WarehouseAdapter(REGISTRY)
+    assert adapter.connector.json_base_url == "https://proxy.invalid/pypi"
+
+    mirror = replace(REGISTRY, id="reg-mirror", slug="mirror", base_url="https://mirror.invalid/root/")
+    adapter = WarehouseAdapter(mirror)
+    assert adapter.connector.json_base_url == "https://mirror.invalid/root/pypi"
+    assert adapter.change_detector().index.base_url == "https://mirror.invalid/root/simple"  # type: ignore[attr-defined]
+
+    custom = replace(mirror, config={"api_url": "https://mirror.invalid/json/", "simple_url": "https://mirror.invalid/idx"})
+    adapter = WarehouseAdapter(custom)
+    assert adapter.connector.json_base_url == "https://mirror.invalid/json"
+    assert adapter.change_detector().index.base_url == "https://mirror.invalid/idx"  # type: ignore[attr-defined]

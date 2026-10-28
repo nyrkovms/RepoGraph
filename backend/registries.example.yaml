@@ -1,0 +1,38 @@
+# Sources and profiles for `python -m app.cli registries import registries.yaml` (SPEC-MULTI-ECOSYSTEM.md §6).
+#
+# Idempotent by slug: a missing source is created, an existing one gets the fields of this file, profiles are
+# created or replaced. A source is created disabled; `enabled: true` takes effect only after a connection test
+# passes (like POST /admin/registries/{slug}/enable). Without `enabled` the current state is left alone.
+# Secrets never go here: `credentials_ref` names a secret kept outside the database.
+
+registries:
+  - slug: pypi-mirror
+    name: Corporate PyPI mirror
+    ecosystem: pypi
+    protocol: pypi-warehouse
+    base_url: https://pypi.mirror.example.com/
+    priority: 10
+    auth_type: none
+    # enabled: true     # switched on only if the connection test passes
+
+  # PyTorch CUDA index. Can be imported once E0.5 brings the `pypi-simple` adapter; until then the protocol is
+  # rejected on import.
+  #
+  # - slug: pytorch-cu121
+  #   name: PyTorch CUDA 12.1
+  #   ecosystem: pypi
+  #   protocol: pypi-simple
+  #   base_url: https://download.pytorch.org/whl/cu121/
+  #   priority: 50
+  #   routing:
+  #     mode: exclusive
+  #     packages: [torch, torchvision, torchaudio]
+
+profiles:
+  - slug: default
+    name: Default
+    ecosystem: pypi
+    is_default: true
+    registries:
+      - slug: pypi-mirror
+      # - slug: pytorch-cu121

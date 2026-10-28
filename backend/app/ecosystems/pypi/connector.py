@@ -28,9 +28,9 @@ logger = logging.getLogger(__name__)
 class PyPIConnector(BaseConnector):
     ecosystem = "pypi"
 
-    def __init__(self, timeout_seconds: float | None = None) -> None:
+    def __init__(self, timeout_seconds: float | None = None, json_base_url: str | None = None) -> None:
         settings = get_settings()
-        self.json_base_url = settings.sync_pypi_json_base_url_normalized
+        self.json_base_url = json_base_url.rstrip("/") if json_base_url else settings.sync_pypi_json_base_url_normalized
         self.timeout_seconds = timeout_seconds or settings.sync_http_timeout_seconds
         self.max_retries = settings.sync_http_max_retries
         self.retry_base_seconds = settings.sync_http_retry_base_seconds

@@ -66,6 +66,8 @@ case "$cmd" in
   up)
     ensure_volume
     "${COMPOSE[@]}" up -d --build --wait postgres redis
+    # The migration runs in the api image: build it from this checkout first, or the new migrations are not in it.
+    "${COMPOSE[@]}" build
     migrate
     "${COMPOSE[@]}" up -d --build
     ;;

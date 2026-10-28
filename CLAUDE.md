@@ -45,6 +45,8 @@ scripts/record_fixtures.sh       # re-record upstream responses for offline CI (
   (`HTTP_REPLAY_DIR`); never add tests that need the live internet to the default suite.
 - The stand (`packagehub-stand`) holds long-lived data. Do not run `docker compose down -v` against it and do not
   drop its database. Take `scripts/stand.sh backup` before anything that changes its schema.
+  The stand runs `main` from its own worktree `.claude/worktrees/stand` (detached; its `backups/` live there). After a
+  stage merges: `git -C .claude/worktrees/stand checkout -q --detach origin/main` after a fetch, then `stand.sh up` from it.
 
 ## Rules
 
@@ -76,3 +78,7 @@ scripts/record_fixtures.sh       # re-record upstream responses for offline CI (
 - A reviewer subagent checks every stage PR against the spec before it is marked ready.
 - When the stage review is addressed and checks are green, Opus updates the PR description, marks it ready and
   enables auto-merge (merge commit) without asking, then starts the next stage from the updated `main`.
+- Opus runs WPs and stages back to back in one turn: WP, checks, stage review, auto-merge, stand, next stage. The
+  turn ends only for a question that is the owner's to answer (rule 1), a failure Opus cannot fix, or the end of the
+  plan; progress notes go out along the way without ending the turn. CI failures, conflicts and review comments on
+  the stage PR wake the session through the app's PR monitor (auto-fix), so nobody restarts it by hand.

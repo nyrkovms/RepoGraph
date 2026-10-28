@@ -71,14 +71,10 @@ def test_admin_sync_status_requires_auth(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_admin_refresh_rejects_non_admin_token(client: TestClient) -> None:
-    response = client.post("/api/v1/admin/refresh", headers=_auth_headers("not-an-admin-token"), json={"limit": 5})
-    assert response.status_code == 401
-
-
-def test_admin_refresh_validation_422(client: TestClient, admin_token: str) -> None:
-    response = client.post("/api/v1/admin/refresh", headers=_auth_headers(admin_token), json={"limit": 0})
-    assert response.status_code == 422
+def test_admin_refresh_is_gone(client: TestClient, admin_token: str) -> None:
+    # The batch refresh was removed (IMPL R3): the daily update replaces it.
+    response = client.post("/api/v1/admin/refresh", headers=_auth_headers(admin_token), json={"limit": 5})
+    assert response.status_code in (404, 405)
 
 
 def test_resolve_validation_422_for_empty_dependencies(client: TestClient) -> None:

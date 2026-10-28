@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from sqlalchemy import func, select
@@ -6,10 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db_session
 from app.models.dependency import Dependency
 from app.models.package import Package
+from app.models.registry import Registry
 from app.models.sync_state import SyncState
 from app.models.version import PackageVersion
 from app.schemas.system import HealthResponse, StatsResponse
-from app.services.metrics import render_metrics, update_sync_gauges
+from app.services.metrics import render_metrics, update_source_gauges, update_sync_gauges
 
 router = APIRouter()
 
@@ -23,7 +26,7 @@ async def health() -> HealthResponse:
 async def stats(db: AsyncSession = Depends(get_db_session)) -> StatsResponse:
     package_count = await db.scalar(select(func.count(Package.id)).where(Package.ecosystem == "pypi"))
     version_count = await db.scalar(select(func.count(PackageVersion.id)))
-    dependency_count = await db.scalar(select(func.count(Dependency.id)))
+    dependency_count = await db.scalar(select(func.count(Dependency.id)).where(Dependency.variant_registry_id.is_(None)))
     last_sync_at = await db.scalar(select(func.max(SyncState.last_success_at)))
 
     return StatsResponse(
@@ -39,5 +42,8 @@ async def stats(db: AsyncSession = Depends(get_db_session)) -> StatsResponse:
 async def metrics(db: AsyncSession = Depends(get_db_session)) -> Response:
     states = (await db.scalars(select(SyncState))).all()
     update_sync_gauges(states)
+    per_source = (await db.execute(select(Registry.ecosystem, Registry.slug, SyncState)
+                                   .join(SyncState, SyncState.registry_id == Registry.id))).all()
+    update_source_gauges(((eco.value, slug, state) for eco, slug, state in per_source), datetime.now(UTC))
     payload, content_type = render_metrics()
     return Response(content=payload, media_type=content_type)

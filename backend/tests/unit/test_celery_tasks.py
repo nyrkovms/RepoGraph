@@ -5,9 +5,10 @@ from pathlib import Path
 EXPECTED = {
     "app.tasks.daily_update.run_daily_update",
     "app.tasks.fetch_deps.fetch_missing_dependencies",
-    "app.tasks.refresh.run_batch_refresh",
+    "app.tasks.presence_probe.run_presence_probe",
     "app.tasks.retry_failed.run_retry_failed_sync",
     "app.tasks.seed.run_seed",
+    "app.tasks.fetch_packages.fetch_packages",
 }
 
 # What a fresh worker process registers: in this process other tests may have imported the task modules already (#8).

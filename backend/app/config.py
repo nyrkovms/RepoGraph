@@ -16,6 +16,14 @@ class Settings(BaseSettings):
     redis_port: int = 6379
     redis_db: int = 0
 
+    # Discovery in sources (SPEC-MULTI-ECOSYSTEM.md §6.6); a registry's config may override the cache TTL.
+    source_negative_cache_ttl_seconds: int = 3600
+    source_breaker_failures: int = 5
+    source_breaker_cooldown_seconds: int = 600
+    presence_probe_enabled: bool = True
+    presence_probe_day_of_week: int = 0      # Sunday
+    presence_probe_hour_utc: int = 4
+
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     log_level: str = "INFO"
@@ -31,9 +39,6 @@ class Settings(BaseSettings):
 
     api_token_admin: str = "phub_admin_dev"
 
-    sync_refresh_enabled: bool = False
-    sync_refresh_interval_hours: int = 6
-    sync_refresh_batch_limit: int = 500
     sync_pypi_json_base_url: str = "https://pypi.org/pypi"
     sync_http_timeout_seconds: float = 10.0
     sync_http_max_retries: int = 3

@@ -4,9 +4,11 @@ output into the contract types; `pypi-simple` (PEP 503/691 indexes) comes in E0.
 
 from collections.abc import Sequence
 from typing import cast
+from urllib.parse import urlsplit
 
 from packaging.utils import canonicalize_name
 
+from app.config import get_settings
 from app.connectors import base as legacy
 from app.connectors.base import PackageNotFound
 from app.ecosystems.base import (
@@ -26,6 +28,8 @@ from app.ecosystems.base import (
 )
 from app.ecosystems.pypi.changes import WarehouseChangeDetector
 from app.ecosystems.pypi.connector import PyPIConnector
+from app.ecosystems.pypi.simple_index import PyPISimpleIndex
+from app.services.http import make_client
 
 
 def _dependency(dep: legacy.NormalizedDependency) -> NormalizedDependency:
@@ -98,12 +102,27 @@ def to_contract(package: legacy.NormalizedPackage, registry_id: str) -> Normaliz
     )
 
 
+def warehouse_urls(registry: RegistryConfig) -> tuple[str | None, str | None]:
+    """JSON API and Simple index of a warehouse source. pypi.org keeps the SYNC_PYPI_*_BASE_URL settings (None here),
+    which README offers for a proxy in front of it; any other source is read from its own `base_url`, with
+    `config.api_url` / `config.simple_url` for a non-standard layout."""
+    if urlsplit(registry.base_url).hostname == "pypi.org":
+        return None, None
+    base = registry.base_url.rstrip("/")
+    api_url, simple_url = registry.config.get("api_url"), registry.config.get("simple_url")
+    return (
+        api_url if isinstance(api_url, str) and api_url else f"{base}/pypi",
+        simple_url if isinstance(simple_url, str) and simple_url else f"{base}/simple",
+    )
+
+
 class WarehouseAdapter:
     """pypi.org: JSON API for metadata, Simple index serials for change detection."""
 
     def __init__(self, registry: RegistryConfig, connector: PyPIConnector | None = None) -> None:
         self.registry = registry
-        self.connector = connector or PyPIConnector()
+        self.json_url, self.simple_url = warehouse_urls(registry)
+        self.connector = connector or PyPIConnector(json_base_url=self.json_url)
 
     async def fetch_package(self, ref: PackageRef, lookup: SourceLookup) -> NormalizedPackage | None:
         try:
@@ -123,8 +142,18 @@ class WarehouseAdapter:
     async def exists(self, ref: PackageRef) -> bool:
         return await self.fetch_package(ref, _NO_LOOKUP) is not None
 
+    async def test_connection(self) -> None:
+        # The JSON API has no root document; a project every public index carries stands in for it.
+        if await self.exists(PackageRef(ecosystem="pypi", namespace="", name="pip")):
+            return
+        # A private index may lack `pip`, but it serves its Simple root; a wrong base_url fails here.
+        root = (self.simple_url or get_settings().sync_pypi_simple_base_url).rstrip("/") + "/"
+        async with make_client(timeout=30.0) as client:
+            response = await client.get(root, headers={"Accept": "application/vnd.pypi.simple.v1+json, text/html;q=0.1"})
+        response.raise_for_status()
+
     def change_detector(self) -> ChangeDetector:
-        return WarehouseChangeDetector()
+        return WarehouseChangeDetector(PyPISimpleIndex(base_url=self.simple_url))
 
     def min_interval_seconds(self) -> float:
         return self.connector.get_rate_limit()

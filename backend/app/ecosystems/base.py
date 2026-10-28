@@ -222,6 +222,12 @@ class SourceAdapter(Protocol):
         """Cheap discovery probe; results are cached negatively in Redis."""
         ...
 
+    async def test_connection(self) -> None:
+        """Connection and authorization check before a source is enabled (`/admin/registries/{slug}/test`):
+        reads the protocol's service document (Simple root, `repomd.xml`, NuGet `index.json`, ...); raises on
+        failure. "No such document" from a reachable, authorized source is not a failure."""
+        ...
+
     def change_detector(self) -> ChangeDetector: ...
 
     def min_interval_seconds(self) -> float: ...
@@ -351,7 +357,8 @@ class EcosystemPlugin(Protocol):
 
     def merge(self, per_source: Sequence[NormalizedPackage]) -> MergedPackage:
         """Several sources -> one catalog row: package fields from the highest-priority source that has them,
-        a version's metadata from the highest-priority source publishing it, per-source statuses kept."""
+        a version's metadata from the highest-priority source publishing it, per-source statuses kept.
+        `per_source` is ordered by global source priority, highest first (the first one is the primary source)."""
         ...
 
     def parse_environment(self, raw: Mapping[str, object]) -> Environment: ...

@@ -1,240 +1,294 @@
+"""Daily update (SPEC-DAILY-UPDATE.md, SPEC-MULTI-ECOSYSTEM.md §8). Per ecosystem: every enabled source finds what
+changed with its own ChangeDetector; a package changed in any source is re-read from all its sources (§8.1)."""
+
 import asyncio
 import logging
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+import uuid
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
+from datetime import datetime
 from time import perf_counter
 
-from sqlalchemy import func, select
+import httpx
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.celery_app import celery_app
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
-from app.ecosystems.pypi.connector import PyPIConnector
-from app.ecosystems.pypi.simple_index import PyPISimpleIndex
-from app.db import loop_local_session
-from app.fetcher.pipeline import run_sync_pipeline
-from app.models.enums import Ecosystem, PackageEventKind, UpdateRunStatus
+from app.db import loop_local_session, loop_local_sessionmaker
+from app.ecosystems.base import PackageRef, RegistryConfig, TrackedPackage
+from app.ecosystems.registry import registered
+from app.fetcher import discovery, sources
+from app.fetcher.pipeline import load_builtin_plugins, mark_unavailable, plugin_for, sync_package
+from app.models.enums import Ecosystem, SyncStatus, SyncType, UpdateRunStatus
 from app.models.package import Package
-from app.models.package_event import PackageEvent
+from app.models.package_registry import PackageRegistry
+from app.models.run import Run
+from app.models.sync_state import SyncState
 from app.models.update_run import UpdateRun
+from app.services import runs
 from app.services.sync_failures import clear_sync_failure, upsert_sync_failure
 
 logger = logging.getLogger(__name__)
 
 OPERATION = "daily_update"
-RUN_OVERLAP_GUARD = timedelta(hours=6)
+_OUTCOMES = ("updated", "stale", "unavailable", "failed")
 
 
 @dataclass(slots=True)
-class TrackedPackage:
-    id: object
-    name: str
-    last_serial: int | None
-    unavailable: bool
+class _Work:
+    """A package to re-read, with the revision each source reported (None: the source no longer lists it)."""
+
+    package_id: object
+    ref: PackageRef
+    expected: dict[str, str | None] = field(default_factory=dict)
 
 
-def plan_updates(
-    tracked: list[TrackedPackage], index_serials: dict[str, int]
-) -> tuple[list[tuple[TrackedPackage, int]], list[TrackedPackage]]:
-    """Split catalog packages into changed (with the serial PyPI reports) and missing from the index."""
-    changed: list[tuple[TrackedPackage, int]] = []
-    missing: list[TrackedPackage] = []
-    for package in tracked:
-        serial = index_serials.get(package.name)
-        if serial is None:
-            # Already known to be unavailable: nothing new to report until it comes back.
-            if not package.unavailable:
-                missing.append(package)
-            continue
-        if package.unavailable or serial > (package.last_serial or 0):
-            changed.append((package, serial))
-    return changed, missing
-
-
-async def _load_tracked_packages(db) -> list[TrackedPackage]:
+async def _tracked(db: AsyncSession, registry: RegistryConfig) -> list[TrackedPackage]:
     rows = (
         await db.execute(
-            select(Package.id, Package.normalized_name, Package.last_serial, Package.unavailable_at).where(
-                Package.ecosystem == Ecosystem.pypi
-            )
+            select(Package.id, Package.ecosystem, Package.namespace, Package.normalized_name,
+                   PackageRegistry.upstream_revision, PackageRegistry.etag, PackageRegistry.missing_since)
+            .join(PackageRegistry, PackageRegistry.package_id == Package.id)
+            .where(PackageRegistry.registry_id == registry.id)
         )
     ).all()
     return [
-        TrackedPackage(id=row.id, name=row.normalized_name, last_serial=row.last_serial, unavailable=row.unavailable_at is not None)
+        TrackedPackage(
+            ref=PackageRef(ecosystem=row.ecosystem.value, namespace=row.namespace or "", name=row.normalized_name),
+            package_id=str(row.id), revision=row.upstream_revision, etag=row.etag,
+            unavailable=row.missing_since is not None,   # already known to be gone from this source
+        )
         for row in rows
     ]
 
 
-async def _fetch_serials_per_project(index: PyPISimpleIndex, tracked: list[TrackedPackage], concurrency: int) -> dict[str, int]:
-    semaphore = asyncio.Semaphore(concurrency)
-    serials: dict[str, int] = {}
-
-    async def one(package: TrackedPackage) -> None:
-        async with semaphore:
-            serial = await index.fetch_project_serial(package.name)
-        if serial is not None:
-            serials[package.name] = serial
-
-    await asyncio.gather(*(one(package) for package in tracked))
-    return serials
-
-
-async def _mark_unavailable(db, package_id, run_id) -> bool:
-    package = await db.scalar(select(Package).where(Package.id == package_id))
-    if package is None or package.unavailable_at is not None:
+def is_stale(expected: str | None, stored: str | None) -> bool:
+    """A source answered with an older revision than its change feed announced: PyPI JSON is served through a CDN
+    and may lag behind the index right after a release. Only numeric revisions (serials) are comparable."""
+    if expected is None or stored is None or not (expected.isdigit() and stored.isdigit()):
         return False
-    now = datetime.now(UTC)
-    package.unavailable_at = now
-    db.add(PackageEvent(package_id=package.id, kind=PackageEventKind.project_unavailable, detected_at=now, run_id=run_id))
-    return True
+    return int(stored) < int(expected)
 
 
-async def _update_package(connector: PyPIConnector, package: TrackedPackage, expected_serial: int | None, run_id) -> str:
-    """Fetch one package and run the pipeline. Returns updated | stale | unavailable | failed."""
-    async with loop_local_session() as db:
+async def _update_package(make_session: Callable[[], AsyncSession], work: _Work, run_id) -> str:
+    """Re-read one package from its sources and write it. Returns updated | stale | unavailable | failed."""
+    async with make_session() as db:
         try:
-            metadata = await connector.fetch_package_metadata(package.name)
+            package = await sync_package(db, work.ref, run_id=run_id)
+            await clear_sync_failure(db, ref=work.ref, operation=OPERATION)
+            await db.commit()
         except PackageNotFound:
-            newly = await _mark_unavailable(db, package.id, run_id)
-            await clear_sync_failure(db, package_name=package.name, operation=OPERATION)
+            # Gone from every source it was asked from.
+            await db.rollback()
+            existing = await db.get(Package, uuid.UUID(str(work.package_id)))
+            newly = await mark_unavailable(db, existing, run_id) if existing else False
+            await clear_sync_failure(db, ref=work.ref, operation=OPERATION)
             await db.commit()
             return "unavailable" if newly else "updated"
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Daily update fetch failed: package=%s error=%s", package.name, exc.__class__.__name__)
-            await upsert_sync_failure(db, operation=OPERATION, package_name=package.name, exc=exc)
-            await db.commit()
-            return "failed"
-
-        try:
-            await run_sync_pipeline(metadata, db, run_id=run_id)
-            await clear_sync_failure(db, package_name=package.name, operation=OPERATION)
-            await db.commit()
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Daily update pipeline failed: package=%s", package.name)
+        except Exception as exc:  # noqa: BLE001 - also SourceDegraded: the package waits for its source
+            logger.warning("Daily update failed: package=%s error=%s", work.ref.name, exc.__class__.__name__)
             await db.rollback()
-            await upsert_sync_failure(db, operation=OPERATION, package_name=package.name, exc=exc)
+            await upsert_sync_failure(db, operation=OPERATION, ref=work.ref, exc=exc)
             await db.commit()
             return "failed"
 
-    # PyPI JSON is served through a CDN and may lag behind the index right after a release.
-    if expected_serial is not None and metadata.last_serial is not None and metadata.last_serial < expected_serial:
+        stored = dict(
+            (str(registry_id), revision)
+            for registry_id, revision in (
+                await db.execute(select(PackageRegistry.registry_id, PackageRegistry.upstream_revision)
+                                 .where(PackageRegistry.package_id == package.id))
+            ).all()
+        )
+    if any(is_stale(expected, stored.get(registry_id)) for registry_id, expected in work.expected.items()):
         return "stale"
     return "updated"
 
 
-async def _update_many(
-    connector: PyPIConnector, items: list[tuple[TrackedPackage, int | None]], run_id, concurrency: int
-) -> dict[str, list[tuple[TrackedPackage, int | None]]]:
+async def _update_many(make_session: Callable[[], AsyncSession], items: list[_Work], run_id,
+                       concurrency: int) -> dict[str, list[_Work]]:
     semaphore = asyncio.Semaphore(concurrency)
-    results: dict[str, list[tuple[TrackedPackage, int | None]]] = {"updated": [], "stale": [], "unavailable": [], "failed": []}
+    results: dict[str, list[_Work]] = {outcome: [] for outcome in _OUTCOMES}
 
-    async def one(item: tuple[TrackedPackage, int | None]) -> None:
+    async def one(work: _Work) -> None:
         async with semaphore:
-            outcome = await _update_package(connector, item[0], item[1], run_id)
-        results[outcome].append(item)
+            results[await _update_package(make_session, work, run_id)].append(work)
 
-    await asyncio.gather(*(one(item) for item in items))
+    await asyncio.gather(*(one(work) for work in items))
     return results
 
 
-async def _run_daily_update_async() -> dict:
+async def _detect(db: AsyncSession, registries: list[RegistryConfig]) -> tuple[dict[object, _Work], dict[str, dict], dict[str, Mapping[str, object]], int]:
+    """Ask every source's change detector. Returns the work, per-source details for the run, new cursors, and the
+    number of distinct packages tracked."""
+    degraded = await discovery.degraded_registry_ids(db)
+    cursors = {
+        str(state.registry_id): state.cursor_data or {}
+        for state in (await db.scalars(select(SyncState).where(SyncState.registry_id.in_([r.id for r in registries])))).all()
+    }
+    work: dict[object, _Work] = {}
+    per_registry: dict[str, dict] = {}
+    new_cursors: dict[str, Mapping[str, object]] = {}
+    checked: set[str] = set()
+    for registry in registries:
+        if registry.id in degraded:
+            logger.warning("Daily update: source %s is degraded, skipped", registry.slug)
+            per_registry[registry.slug] = {"status": "degraded"}
+            continue
+        tracked = await _tracked(db, registry)
+        checked.update(package.package_id for package in tracked)
+        try:
+            plugin = plugin_for(registry.ecosystem)
+            changes = await plugin.adapter(registry).change_detector().detect(tracked, cursors.get(registry.id, {}))
+        except Exception as exc:  # noqa: BLE001 - one source failing does not stop the others
+            logger.exception("Daily update: change detection failed for %s", registry.slug)
+            if isinstance(exc, httpx.HTTPError):
+                await discovery.record_source_failure(db, registry, exc)
+            per_registry[registry.slug] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"[:500]}
+            continue
+
+        for package, revision in changes.changed:
+            work.setdefault(package.package_id, _Work(package.package_id, package.ref)).expected[registry.id] = revision
+        for package in changes.missing:
+            work.setdefault(package.package_id, _Work(package.package_id, package.ref)).expected[registry.id] = None
+        if changes.reconcile_all:
+            # The feed was lost (npm seq reset): every package of the source is checked.
+            for package in tracked:
+                work.setdefault(package.package_id, _Work(package.package_id, package.ref))
+        new_cursors[registry.id] = changes.cursor
+        per_registry[registry.slug] = {
+            "status": "ok", "tracked": len(tracked), "changed": len(changes.changed), "missing": len(changes.missing),
+            "cursor": dict(changes.cursor),
+        }
+    return work, per_registry, new_cursors, len(checked)
+
+
+async def _save_cursors(db: AsyncSession, cursors: Mapping[str, Mapping[str, object]]) -> None:
+    for registry_id, cursor in cursors.items():
+        stmt = insert(SyncState).values(registry_id=registry_id, sync_type=SyncType.incremental, status=SyncStatus.idle,
+                                        cursor_data=dict(cursor))
+        await db.execute(stmt.on_conflict_do_update(index_elements=["registry_id"], set_={"cursor_data": dict(cursor)}))
+
+
+async def run_ecosystem(ecosystem: str) -> dict:
     settings = get_settings()
     started = perf_counter()
     concurrency = max(1, settings.daily_update_concurrency)
 
     async with loop_local_session() as db:
-        running = await db.scalar(
-            select(UpdateRun).where(
-                UpdateRun.status == UpdateRunStatus.running,
-                UpdateRun.started_at > datetime.now(UTC) - RUN_OVERLAP_GUARD,
-            )
-        )
-        if running is not None:
-            logger.warning("Daily update skipped: run %s is still running", running.id)
-            return {"status": "skipped", "operation": OPERATION, "running_run_id": str(running.id)}
-
-        run = UpdateRun(status=UpdateRunStatus.running)
-        db.add(run)
-        await db.commit()
+        run = await runs.start_run(db, OPERATION, ecosystem)
+        if run is None:
+            running = await runs.running_run(db, OPERATION, ecosystem)
+            logger.warning("Daily update of %s skipped: run %s is still running", ecosystem, running.id if running else "?")
+            return {"status": "skipped", "operation": OPERATION, "ecosystem": ecosystem,
+                    "running_run_id": str(running.id) if running else None}
         run_id = run.id
-        tracked = await _load_tracked_packages(db)
-
-    index = PyPISimpleIndex()
-    connector = PyPIConnector()
-    index_serial: int | None = None
-    try:
-        try:
-            index_serial, index_serials = await index.fetch_all_serials()
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Simple index unavailable (%s), falling back to per-project serials", exc.__class__.__name__)
-            index_serials = await _fetch_serials_per_project(index, tracked, concurrency)
-
-        changed, missing = plan_updates(tracked, index_serials)
-        logger.info("Daily update: checked=%s changed=%s missing=%s", len(tracked), len(changed), len(missing))
-
-        results = await _update_many(connector, changed + [(package, None) for package in missing], run_id, concurrency)
-
-        if results["stale"]:
-            await asyncio.sleep(settings.daily_update_stale_retry_seconds)
-            retry = await _update_many(connector, results["stale"], run_id, concurrency)
-            if retry["stale"]:
-                logger.warning("Daily update: %s packages still stale, next run will pick them up", len(retry["stale"]))
-            results["stale"] = retry["stale"]
-            for outcome in ("updated", "unavailable", "failed"):
-                results[outcome].extend(retry[outcome])
-
-        status = UpdateRunStatus.success if not results["failed"] else UpdateRunStatus.partial
-        error = None
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("Daily update failed")
-        results = {"updated": [], "stale": [], "unavailable": [], "failed": []}
-        changed = []
-        status = UpdateRunStatus.failed
-        error = f"{exc.__class__.__name__}: {exc}"[:2000]
-
-    async with loop_local_session() as db:
-        run = await db.scalar(select(UpdateRun).where(UpdateRun.id == run_id))
-        events_by_kind = dict(
-            (
-                await db.execute(
-                    select(PackageEvent.kind, func.count(PackageEvent.id))
-                    .where(PackageEvent.run_id == run_id)
-                    .group_by(PackageEvent.kind)
-                )
-            ).all()
-        )
-        run.finished_at = datetime.now(UTC)
-        run.status = status
-        run.error = error
-        run.index_serial = index_serial
-        run.packages_checked = len(tracked)
-        run.packages_changed = len(changed)
-        run.packages_updated = len(results["updated"]) + len(results["stale"])
-        run.packages_failed = len(results["failed"])
-        run.packages_unavailable = len(results["unavailable"])
-        run.events_created = sum(events_by_kind.values())
+        if ecosystem == "pypi":
+            # update_runs stays filled until 0007 (readers move to runs in E0-C); same id, as 0006 backfills.
+            db.add(UpdateRun(id=run_id, status=UpdateRunStatus.running))
         await db.commit()
+        registries = await sources.enabled_registries(db, ecosystem)
 
-        summary = {
-            "status": status.value,
-            "operation": OPERATION,
-            "run_id": str(run_id),
-            "index_serial": index_serial,
-            "checked": run.packages_checked,
-            "changed": run.packages_changed,
-            "updated": run.packages_updated,
-            "failed": run.packages_failed,
-            "unavailable": run.packages_unavailable,
-            "events": {kind.value: count for kind, count in events_by_kind.items()},
-            "duration_ms": round((perf_counter() - started) * 1000, 2),
-            "finished_at": run.finished_at.isoformat(),
-        }
+    results: dict[str, list[_Work]] = {outcome: [] for outcome in _OUTCOMES}
+    work: dict[object, _Work] = {}
+    per_registry: dict[str, dict] = {}
+    cursors: dict[str, Mapping[str, object]] = {}
+    checked = 0
+    error = None
+    try:
+        async with loop_local_session() as db:
+            work, per_registry, cursors, checked = await _detect(db, registries)
+        logger.info("Daily update %s: checked=%s changed=%s", ecosystem, checked, len(work))
 
-    _record_metrics(summary, events_by_kind)
+        async with loop_local_sessionmaker(pool_size=concurrency) as make_session:
+            results = await _update_many(make_session, list(work.values()), run_id, concurrency)
+            if results["stale"]:
+                await asyncio.sleep(settings.daily_update_stale_retry_seconds)
+                retry = await _update_many(make_session, results["stale"], run_id, concurrency)
+                if retry["stale"]:
+                    logger.warning("Daily update: %s packages still stale, next run picks them up", len(retry["stale"]))
+                results["stale"] = retry["stale"]
+                for outcome in ("updated", "unavailable", "failed"):
+                    results[outcome].extend(retry[outcome])
+
+        sources_ok = all(details["status"] == "ok" for details in per_registry.values())
+        status = runs.SUCCESS if not results["failed"] and sources_ok else runs.PARTIAL
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Daily update of %s failed", ecosystem)
+        status = runs.FAILED
+        error = f"{exc.__class__.__name__}: {exc}"
+
+    counts = {
+        "packages_total": checked,
+        "packages_checked": checked,
+        "packages_changed": len(work),
+        "packages_updated": len(results["updated"]) + len(results["stale"]),
+        "packages_failed": len(results["failed"]),
+        "packages_unavailable": len(results["unavailable"]),
+    }
+    index_serial = next((d.get("cursor", {}).get("index_serial") for d in per_registry.values() if "index_serial" in d.get("cursor", {})), None)
+    async with loop_local_session() as db:
+        run = await db.get(Run, run_id)
+        events = await runs.finish_run(db, run, status, error=error, per_registry=per_registry, **counts)
+        if status != runs.FAILED:
+            await _save_cursors(db, cursors)
+        legacy = await db.get(UpdateRun, run_id)
+        if legacy is not None:
+            legacy.status = UpdateRunStatus(status)
+            legacy.finished_at = run.finished_at
+            legacy.error = run.error
+            legacy.index_serial = index_serial
+            legacy.packages_checked = counts["packages_checked"]
+            legacy.packages_changed = counts["packages_changed"]
+            legacy.packages_updated = counts["packages_updated"]
+            legacy.packages_failed = counts["packages_failed"]
+            legacy.packages_unavailable = counts["packages_unavailable"]
+            legacy.events_created = run.events_created
+        await db.commit()
+        finished_at = run.finished_at
+
+    summary = {
+        "status": status,
+        "operation": OPERATION,
+        "ecosystem": ecosystem,
+        "run_id": str(run_id),
+        "index_serial": index_serial,
+        "checked": counts["packages_checked"],
+        "changed": counts["packages_changed"],
+        "updated": counts["packages_updated"],
+        "failed": counts["packages_failed"],
+        "unavailable": counts["packages_unavailable"],
+        "events": events,
+        "per_registry": per_registry,
+        "duration_ms": round((perf_counter() - started) * 1000, 2),
+        "finished_at": finished_at.isoformat(),
+    }
+    _record_metrics(summary)
     return summary
 
 
-def _record_metrics(summary: dict, events_by_kind: dict) -> None:
+async def _ecosystems_to_update() -> list[str]:
+    """Ecosystems with a plugin and at least one enabled source, in enum order."""
+    load_builtin_plugins()
+    with_plugin = {plugin.ecosystem for plugin in registered()}
+    async with loop_local_session() as db:
+        return [e.value for e in Ecosystem if e.value in with_plugin and await sources.enabled_registries(db, e.value)]
+
+
+async def _run_daily_update_async(ecosystem: str | None = None) -> dict:
+    """One ecosystem, or every ecosystem in turn (each its own run, guarded against overlap separately)."""
+    if ecosystem is not None:
+        return await run_ecosystem(ecosystem)
+    summaries = [await run_ecosystem(e) for e in await _ecosystems_to_update()]
+    if len(summaries) == 1:
+        return summaries[0]
+    worst = next((s for s in (runs.FAILED, runs.PARTIAL, "skipped") if any(x["status"] == s for x in summaries)), runs.SUCCESS)
+    return {"status": worst, "operation": OPERATION, "runs": summaries}
+
+
+def _record_metrics(summary: dict) -> None:
     from app.services.metrics import inc_package_events, record_daily_update_run
 
     record_daily_update_run(
@@ -244,11 +298,13 @@ def _record_metrics(summary: dict, events_by_kind: dict) -> None:
         failed=summary["failed"],
         unavailable=summary["unavailable"],
         finished_at_ts=datetime.fromisoformat(summary["finished_at"]).timestamp(),
+        ecosystem=summary["ecosystem"],
     )
-    for kind, count in events_by_kind.items():
-        inc_package_events(kind.value, count)
+    for kind, count in summary["events"].items():
+        inc_package_events(kind, count, ecosystem=summary["ecosystem"])
 
 
 @celery_app.task(name="app.tasks.daily_update.run_daily_update")
-def run_daily_update() -> dict:
-    return asyncio.run(_run_daily_update_async())
+def run_daily_update(ecosystem: str | None = None) -> dict:
+    return asyncio.run(_run_daily_update_async(ecosystem))
+
