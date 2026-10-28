@@ -17,9 +17,9 @@ SIMPLE_JSON_ACCEPT = "application/vnd.pypi.simple.v1+json"
 class PyPISimpleIndex:
     """Reads project serials from the PEP 691 Simple API to detect which packages changed."""
 
-    def __init__(self, timeout_seconds: float = 120.0) -> None:
+    def __init__(self, timeout_seconds: float = 120.0, base_url: str | None = None) -> None:
         settings = get_settings()
-        self.base_url = settings.sync_pypi_simple_base_url.rstrip("/")
+        self.base_url = (base_url or settings.sync_pypi_simple_base_url).rstrip("/")
         self.timeout_seconds = timeout_seconds
         self.max_retries = settings.sync_http_max_retries
         self.retry_base_seconds = settings.sync_http_retry_base_seconds

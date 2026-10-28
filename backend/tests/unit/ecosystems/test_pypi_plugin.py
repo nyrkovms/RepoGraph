@@ -240,3 +240,24 @@ def test_marker_semantics_match_the_tree_endpoint() -> None:
                 dep = _dep("optional" if include_optional else "runtime", expression, conditions)
                 if dependency_applies(dep, new_env, include_optional) != expected:
                     pytest.fail(f"{raw_env} {expression!r} include_optional={include_optional}: expected {expected}")
+
+
+def test_warehouse_source_reads_from_its_own_urls(monkeypatch) -> None:
+    from dataclasses import replace
+
+    from app.config import get_settings
+
+    # pypi.org follows the settings (README: a proxy in front of pypi.org).
+    monkeypatch.setattr(get_settings(), "sync_pypi_json_base_url", "https://proxy.invalid/pypi/")
+    adapter = WarehouseAdapter(REGISTRY)
+    assert adapter.connector.json_base_url == "https://proxy.invalid/pypi"
+
+    mirror = replace(REGISTRY, id="reg-mirror", slug="mirror", base_url="https://mirror.invalid/root/")
+    adapter = WarehouseAdapter(mirror)
+    assert adapter.connector.json_base_url == "https://mirror.invalid/root/pypi"
+    assert adapter.change_detector().index.base_url == "https://mirror.invalid/root/simple"  # type: ignore[attr-defined]
+
+    custom = replace(mirror, config={"api_url": "https://mirror.invalid/json/", "simple_url": "https://mirror.invalid/idx"})
+    adapter = WarehouseAdapter(custom)
+    assert adapter.connector.json_base_url == "https://mirror.invalid/json"
+    assert adapter.change_detector().index.base_url == "https://mirror.invalid/idx"  # type: ignore[attr-defined]
