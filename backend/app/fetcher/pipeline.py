@@ -6,6 +6,7 @@ Callers commit; nothing here does.
 """
 
 import logging
+import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 
@@ -22,6 +23,7 @@ from app.ecosystems.base import (
     NormalizedArtifact,
     NormalizedDependency,
     NormalizedPackage,
+    NormalizedVersion,
     PackageRef,
     RegistryConfig,
     SourceAdapter,
@@ -102,7 +104,7 @@ async def sync_package(
     if not registries:
         profile = profile or await sources.default_profile(db, ref.ecosystem)
         registries = sources.by_priority(plugin.sources_for(ref, profile))
-    if not registries and ref.ecosystem == "pypi":
+    if not registries and ref.ecosystem == "pypi" and await db.scalar(select(Registry.id).where(Registry.slug == "pypi")) is None:
         registries = [sources.registry_config(await get_or_create_pypi_registry(db))]
     if not registries:
         raise PackageNotFound(f"no enabled source for {plugin.coordinates.display(ref)}")
@@ -150,16 +152,16 @@ async def write_package(
     package = await _upsert_package(db, plugin, merged, latest, origin, now, existing)
     await _upsert_package_registries(db, package, merged, missing_registry_ids, now)
 
-    version_ids = await _upsert_versions(db, plugin, package.id, merged.versions)
-    await _write_version_sources(db, package.id, version_ids, merged.versions, by_registry, registry_rows.keys(), now)
+    source_versions = {registry_id: {v.version: v for v in source.versions} for registry_id, source in by_registry.items()}
+    version_rows, metadata_moved = await _upsert_versions(db, plugin, package.id, merged.versions)
+    version_ids = {version: row.id for version, row in version_rows.items()}
+    await _write_version_sources(db, package.id, version_ids, merged.versions, source_versions, registry_rows.keys(), now)
     await _mark_missing_versions_removed(db, package.id, version_ids.keys())
     for merged_version in merged.versions:
-        version_id = version_ids[merged_version.version.version]
-        await _write_dependencies(db, version_id, merged_version, by_registry)
-        for registry_id, source in by_registry.items():
-            source_version = _find_version(source, merged_version.version.version)
-            if source_version is not None:
-                await _replace_artifacts(db, version_id, registry_id, source_version.artifacts)
+        row = version_rows[merged_version.version.version]
+        await _write_dependencies(db, row, merged_version, source_versions, merged_version.version.version in metadata_moved)
+    for registry_id, versions in source_versions.items():
+        await _replace_artifacts(db, registry_id, {version_ids[v]: sv.artifacts for v, sv in versions.items()})
 
     if merged.package.dist_tags is not None:
         await _replace_dist_tags(db, package.id, merged.package.dist_tags, now)
@@ -220,11 +222,15 @@ async def _load_snapshot(db: AsyncSession, package: Package) -> PackageSnapshot:
         await db.execute(
             select(PackageVersion.version, VersionSource.registry_id)
             .join(VersionSource, VersionSource.version_id == PackageVersion.id)
-            .where(PackageVersion.package_id == package.id, VersionSource.status != PackageVersionStatus.removed)
+            .where(PackageVersion.package_id == package.id)
         )
     ).all()
+    # A source the package went missing from counts as new when it answers again: one package-level event.
     registry_ids = (
-        await db.scalars(select(PackageRegistry.registry_id).where(PackageRegistry.package_id == package.id))
+        await db.scalars(
+            select(PackageRegistry.registry_id)
+            .where(PackageRegistry.package_id == package.id, PackageRegistry.missing_since.is_(None))
+        )
     ).all()
     vuln_rows = (
         await db.execute(
@@ -233,9 +239,11 @@ async def _load_snapshot(db: AsyncSession, package: Package) -> PackageSnapshot:
             .where(PackageVulnerability.package_id == package.id)
         )
     ).all()
-    version_sources: dict[str, set[str]] = {row.version: set() for row in version_rows}
+    # Only versions with version_sources rows: those written by 0005-era code before 0007 have none, and "no rows"
+    # means "unknown", not "in no source" (no source_added for them). Rows of every status count as known.
+    version_sources: dict[str, set[str]] = {}
     for row in source_rows:
-        version_sources[row.version].add(str(row.registry_id))
+        version_sources.setdefault(row.version, set()).add(str(row.registry_id))
     return PackageSnapshot(
         latest_version=package.latest_version,
         version_statuses={row.version: row.status for row in version_rows},
@@ -245,10 +253,6 @@ async def _load_snapshot(db: AsyncSession, package: Package) -> PackageSnapshot:
         version_sources=version_sources,
         deprecated_versions={row.version for row in version_rows if row.deprecation is not None},
     )
-
-
-def _find_version(source: NormalizedPackage, version: str):
-    return next((v for v in source.versions if v.version == version), None)
 
 
 def _latest_version(plugin: EcosystemPlugin, merged: MergedPackage) -> str | None:
@@ -271,6 +275,12 @@ def _is_valid(plugin: EcosystemPlugin, version: str) -> bool:
 
 
 # --- package --------------------------------------------------------------------------------------
+
+
+_KEPT_WHEN_MISSING = frozenset({
+    "description", "homepage_url", "repository_url", "documentation_url", "license_raw", "license_spdx", "keywords",
+    "downloads_total", "downloads_recent",
+})
 
 
 async def _upsert_package(
@@ -309,6 +319,9 @@ async def _upsert_package(
 
     if existing:
         for key, value in values.items():
+            # None = no answering source provides the field (an index with files only): keep what is stored.
+            if value is None and key in _KEPT_WHEN_MISSING:
+                continue
             setattr(existing, key, value)
         return existing
 
@@ -350,6 +363,12 @@ async def _upsert_package_registries(
         )
         await db.execute(stmt)
 
+    # Exactly one primary row, also when the previous primary source was not asked (disabled).
+    await db.execute(
+        update(PackageRegistry)
+        .where(PackageRegistry.package_id == package.id)
+        .values(is_primary=PackageRegistry.registry_id == merged.primary_registry_id)
+    )
     if missing_registry_ids:
         await db.execute(
             update(PackageRegistry)
@@ -367,8 +386,14 @@ async def _upsert_package_registries(
 
 async def _upsert_versions(
     db: AsyncSession, plugin: EcosystemPlugin, package_id, versions: Iterable[MergedVersion]
-) -> dict[str, object]:
-    version_ids: dict[str, object] = {}
+) -> tuple[dict[str, PackageVersion], set[str]]:
+    """Returns the rows by version and the versions whose metadata source changed."""
+    stored = {
+        row.version: row
+        for row in (await db.scalars(select(PackageVersion).where(PackageVersion.package_id == package_id))).all()
+    }
+    rows: dict[str, PackageVersion] = {}
+    metadata_moved: set[str] = set()
     for merged in versions:
         version = merged.version
         raw_metadata = dict(version.raw_metadata)
@@ -397,19 +422,20 @@ async def _upsert_versions(
         }
         hydrated = version.dependencies is not None
 
-        existing = await db.scalar(
-            select(PackageVersion).where(PackageVersion.package_id == package_id, PackageVersion.version == version.version)
-        )
+        existing = stored.get(version.version)
         if existing:
+            if existing.metadata_registry_id is not None and str(existing.metadata_registry_id) != merged.metadata_registry_id:
+                metadata_moved.add(version.version)
             for key, value in values.items():
                 setattr(existing, key, value)
             existing.features = _features(existing.features, version.features, hydrated)
             if hydrated:
                 existing.dependencies_state = DependenciesState.hydrated
-            version_ids[version.version] = existing.id
+            rows[version.version] = existing
             continue
 
         row = PackageVersion(
+            id=uuid.uuid4(),
             package_id=package_id,
             version=version.version,
             features=_features(None, version.features, hydrated),
@@ -417,9 +443,9 @@ async def _upsert_versions(
             **values,
         )
         db.add(row)
-        await db.flush()
-        version_ids[version.version] = row.id
-    return version_ids
+        rows[version.version] = row
+    await db.flush()
+    return rows, metadata_moved
 
 
 def _features(stored: dict | None, incoming: Mapping[str, object] | None, hydrated: bool) -> dict:
@@ -436,32 +462,31 @@ async def _write_version_sources(
     db: AsyncSession,
     package_id,
     version_ids: Mapping[str, object],
-    versions: Iterable[MergedVersion],
-    by_registry: Mapping[str, NormalizedPackage],
+    versions: Sequence[MergedVersion],
+    source_versions: Mapping[str, Mapping[str, NormalizedVersion]],
     asked_registry_ids: Iterable[str],
     now: datetime,
 ) -> None:
+    rows = []
     for merged in versions:
-        version_id = version_ids[merged.version.version]
         for registry_id, status in merged.sources.items():
-            source_version = _find_version(by_registry[registry_id], merged.version.version)
-            digest = (
-                dependencies_digest(source_version.dependencies)
-                if source_version is not None and source_version.dependencies is not None
-                else None
-            )
-            stmt = insert(VersionSource).values(
-                version_id=version_id, registry_id=registry_id, first_seen_at=now,
-                status=PackageVersionStatus(status), metadata_digest=digest,
-            )
-            stmt = stmt.on_conflict_do_update(
-                index_elements=["version_id", "registry_id"],
-                set_={
-                    "status": stmt.excluded.status,
-                    "metadata_digest": func.coalesce(stmt.excluded.metadata_digest, VersionSource.metadata_digest),
-                },
-            )
-            await db.execute(stmt)
+            source_version = source_versions[registry_id].get(merged.version.version)
+            known = source_version is not None and source_version.dependencies is not None
+            rows.append({
+                "version_id": version_ids[merged.version.version], "registry_id": registry_id, "first_seen_at": now,
+                "status": PackageVersionStatus(status),
+                "metadata_digest": dependencies_digest(source_version.dependencies) if known else None,
+            })
+    for chunk in _chunks(rows):
+        stmt = insert(VersionSource).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["version_id", "registry_id"],
+            set_={
+                "status": stmt.excluded.status,
+                "metadata_digest": func.coalesce(stmt.excluded.metadata_digest, VersionSource.metadata_digest),
+            },
+        )
+        await db.execute(stmt)
 
     # A source that answered but no longer lists a version: removed there (the aggregate follows the merge).
     for registry_id in asked_registry_ids:
@@ -476,6 +501,12 @@ async def _write_version_sources(
             )
             .values(status=PackageVersionStatus.removed)
         )
+
+
+def _chunks(rows: list[dict], size: int = 1000) -> Iterable[list[dict]]:
+    # A multi-row INSERT is one statement; asyncpg allows 32767 bind parameters per statement.
+    for start in range(0, len(rows), size):
+        yield rows[start:start + size]
 
 
 async def _mark_missing_versions_removed(db: AsyncSession, package_id, present_versions: Iterable[str]) -> None:
@@ -494,30 +525,52 @@ async def _mark_missing_versions_removed(db: AsyncSession, package_id, present_v
 
 
 async def _write_dependencies(
-    db: AsyncSession, version_id, merged: MergedVersion, by_registry: Mapping[str, NormalizedPackage]
+    db: AsyncSession,
+    row: PackageVersion,
+    merged: MergedVersion,
+    source_versions: Mapping[str, Mapping[str, NormalizedVersion]],
+    metadata_moved: bool,
 ) -> None:
     """Canonical set (variant_registry_id NULL) from the metadata source; a variant for every other source whose
     known set differs (Q17). A source with unknown dependencies (lazy) keeps what is stored."""
     canonical = merged.version.dependencies
     if canonical is not None:
-        await _replace_dependency_rows(db, version_id, None, canonical)
-    await db.execute(
-        delete(Dependency).where(Dependency.version_id == version_id,
-                                 Dependency.variant_registry_id == merged.metadata_registry_id)
-    )
+        await _replace_dependency_rows(db, row.id, None, canonical)
+        await db.execute(
+            delete(Dependency).where(Dependency.version_id == row.id,
+                                     Dependency.variant_registry_id == merged.metadata_registry_id)
+        )
+    elif metadata_moved:
+        # The previous metadata source stopped publishing the version; the new one has not given its dependencies.
+        # Its stored variant becomes the canonical set; without one the stale set waits for lazy hydration.
+        variant = await db.scalar(
+            select(func.count(Dependency.id)).where(Dependency.version_id == row.id,
+                                                    Dependency.variant_registry_id == merged.metadata_registry_id)
+        )
+        if variant:
+            await db.execute(delete(Dependency).where(Dependency.version_id == row.id, Dependency.variant_registry_id.is_(None)))
+            await db.execute(
+                update(Dependency)
+                .where(Dependency.version_id == row.id, Dependency.variant_registry_id == merged.metadata_registry_id)
+                .values(variant_registry_id=None)
+            )
+        else:
+            row.dependencies_state = DependenciesState.pending
+            row.features = {**(row.features or {}), "dependencies_hydrated": False}
+
     for registry_id in merged.sources:
         if registry_id == merged.metadata_registry_id:
             continue
-        source_version = _find_version(by_registry[registry_id], merged.version.version)
+        source_version = source_versions[registry_id].get(merged.version.version)
         if source_version is None or source_version.dependencies is None:
             continue
         variant = merged.dependency_variants.get(registry_id)
         if variant is None:
             await db.execute(
-                delete(Dependency).where(Dependency.version_id == version_id, Dependency.variant_registry_id == registry_id)
+                delete(Dependency).where(Dependency.version_id == row.id, Dependency.variant_registry_id == registry_id)
             )
         else:
-            await _replace_dependency_rows(db, version_id, registry_id, variant)
+            await _replace_dependency_rows(db, row.id, registry_id, variant)
 
 
 async def _replace_dependency_rows(
@@ -552,26 +605,36 @@ _CHECKSUM_COLUMNS = {"sha256": "checksum_sha256", "md5": "checksum_md5", "sha1":
                      "sha512": "checksum_sha512", "integrity": "checksum_integrity"}
 
 
-async def _replace_artifacts(db: AsyncSession, version_id, registry_id: str, artifacts: Sequence[NormalizedArtifact]) -> None:
-    """Only this source's artifacts are replaced (§6.5 p. 4)."""
-    await db.execute(delete(Artifact).where(Artifact.version_id == version_id, Artifact.registry_id == registry_id))
-    for artifact in artifacts:
-        checksums = {column: artifact.checksums[kind] for kind, column in _CHECKSUM_COLUMNS.items() if kind in artifact.checksums}
-        stmt = insert(Artifact).values(
-            version_id=version_id,
-            registry_id=registry_id,
-            filename=artifact.filename,
-            download_url=artifact.download_url,
-            size_bytes=artifact.size_bytes,
-            artifact_type=artifact.artifact_type,
-            arch=artifact.arch,
-            platform_tags=dict(artifact.platform_tags) if artifact.platform_tags is not None else None,
-            has_metadata_file=artifact.has_metadata_file,
-            requires_dist_metadata=artifact.has_metadata_file,  # read by the 0005-era code until 0007
-            **checksums,
+async def _replace_artifacts(
+    db: AsyncSession, registry_id: str, artifacts_by_version: Mapping[object, Sequence[NormalizedArtifact]]
+) -> None:
+    """Only this source's artifacts of the versions it lists are replaced (§6.5 p. 4)."""
+    version_ids = list(artifacts_by_version)
+    for start in range(0, len(version_ids), 1000):
+        await db.execute(
+            delete(Artifact).where(Artifact.registry_id == registry_id, Artifact.version_id.in_(version_ids[start:start + 1000]))
         )
+    rows = [
+        {
+            "id": uuid.uuid4(),
+            "version_id": version_id,
+            "registry_id": registry_id,
+            "filename": artifact.filename,
+            "download_url": artifact.download_url,
+            "size_bytes": artifact.size_bytes,
+            "artifact_type": artifact.artifact_type,
+            "arch": artifact.arch,
+            "platform_tags": dict(artifact.platform_tags) if artifact.platform_tags is not None else None,
+            "has_metadata_file": artifact.has_metadata_file,
+            "requires_dist_metadata": artifact.has_metadata_file,  # read by the 0005-era code until 0007
+            **{column: artifact.checksums.get(kind) for kind, column in _CHECKSUM_COLUMNS.items()},
+        }
+        for version_id, artifacts in artifacts_by_version.items()
+        for artifact in artifacts
+    ]
+    for chunk in _chunks(rows):
         # Until 0007 drops uq_artifact_version_filename, the same file name in a second source is skipped.
-        await db.execute(stmt.on_conflict_do_nothing())
+        await db.execute(insert(Artifact).values(chunk).on_conflict_do_nothing())
 
 
 async def _replace_dist_tags(db: AsyncSession, package_id, tags: Mapping[str, str], now: datetime) -> None:
@@ -678,19 +741,22 @@ async def ensure_version_dependencies(db: AsyncSession, package: Package, versio
 async def resolve_dependency_links(db: AsyncSession, version_ids: Iterable[object]) -> None:
     """Point each dependency at the catalog package with the same (ecosystem, namespace, name) and the best
     version satisfying its constraint."""
-    dep_rows = (await db.scalars(select(Dependency).where(Dependency.version_id.in_(list(version_ids))))).all()
-    targets: dict[tuple[str, str, str], Package | None] = {}
-    for dep in dep_rows:
-        key = (dep.dependency_ecosystem.value, dep.dependency_namespace or "", dep.dependency_name)
-        if key not in targets:
-            targets[key] = await find_package(db, PackageRef(ecosystem=key[0], namespace=key[1], name=key[2]))
-        target = targets[key]
-        dep.resolved_package_id = target.id if target else None
-        dep.resolved_version_id = await _find_best_version_id(db, target, dep.version_constraint) if target else None
+    picker = _VersionPicker(db)
+    ids = list(version_ids)
+    for start in range(0, len(ids), 1000):
+        dep_rows = (await db.scalars(select(Dependency).where(Dependency.version_id.in_(ids[start:start + 1000])))).all()
+        for dep in dep_rows:
+            target = await picker.package(
+                PackageRef(ecosystem=dep.dependency_ecosystem.value, namespace=dep.dependency_namespace or "",
+                           name=dep.dependency_name)
+            )
+            dep.resolved_package_id = target.id if target else None
+            dep.resolved_version_id = await picker.best(target, dep.version_constraint) if target else None
 
 
 async def _link_dependents(db: AsyncSession, package: Package) -> None:
     """Point already stored dependencies at a package that just entered the catalog."""
+    picker = _VersionPicker(db)
     dep_rows = (
         await db.scalars(
             select(Dependency).where(
@@ -703,31 +769,67 @@ async def _link_dependents(db: AsyncSession, package: Package) -> None:
     ).all()
     for dep in dep_rows:
         dep.resolved_package_id = package.id
-        dep.resolved_version_id = await _find_best_version_id(db, package, dep.version_constraint)
+        dep.resolved_version_id = await picker.best(package, dep.version_constraint)
 
 
-async def _find_best_version_id(db: AsyncSession, package: Package, constraint: str | None):
-    rows = (
-        await db.execute(
-            select(PackageVersion.id, PackageVersion.version).where(
-                PackageVersion.package_id == package.id, PackageVersion.status == PackageVersionStatus.active
-            )
-        )
-    ).all()
-    return select_best_version(plugin_for(package.ecosystem.value), [(row.version, row.id) for row in rows], constraint)
+class _VersionPicker:
+    """Level-1 link targets for one write: every target package and its versions are loaded and parsed once,
+    and the answer per (package, constraint) is reused. A refresh of boto3 links hundreds of hydrated versions to
+    botocore with thousands of versions; without this that is a query and a full scan per dependency."""
+
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+        self._packages: dict[PackageRef, Package | None] = {}
+        self._candidates: dict[object, list[tuple[str, object, bool]]] = {}
+        self._best: dict[tuple[object, str], object] = {}
+
+    async def package(self, ref: PackageRef) -> Package | None:
+        if ref not in self._packages:
+            self._packages[ref] = await find_package(self.db, ref)
+        return self._packages[ref]
+
+    async def best(self, package: Package, constraint: str | None):
+        key = (package.id, constraint or "")
+        if key not in self._best:
+            if package.id not in self._candidates:
+                rows = (
+                    await self.db.execute(
+                        select(PackageVersion.version, PackageVersion.id).where(
+                            PackageVersion.package_id == package.id,
+                            PackageVersion.status == PackageVersionStatus.active,
+                        )
+                    )
+                ).all()
+                self._candidates[package.id] = _candidates(plugin_for(package.ecosystem.value), rows)
+            self._best[key] = _pick(plugin_for(package.ecosystem.value), self._candidates[package.id], constraint)
+        return self._best[key]
+
+
+def _candidates(plugin: EcosystemPlugin, versions: Iterable[tuple[str, object]]) -> list[tuple[str, object, bool]]:
+    """Valid versions, highest first, with their prerelease flag."""
+    valid = [(version, row_id) for version, row_id in versions if _is_valid(plugin, version)]
+    valid.sort(key=lambda item: plugin.versions.sort_key(item[0]), reverse=True)
+    return [(version, row_id, plugin.versions.is_prerelease(version)) for version, row_id in valid]
+
+
+def _pick(plugin: EcosystemPlugin, candidates: Sequence[tuple[str, object, bool]], constraint: str | None):
+    try:
+        spec = plugin.versions.constraint(constraint or "*")
+    except InvalidVersion:
+        spec = plugin.versions.constraint("*")
+    fallback = None
+    for version, row_id, prerelease in candidates:
+        if not spec.contains(version):
+            continue
+        if not prerelease:
+            return row_id
+        fallback = fallback or row_id
+    return fallback
 
 
 def select_best_version(plugin: EcosystemPlugin, versions: Iterable[tuple[str, object]], constraint: str | None):
     """Highest valid version satisfying the constraint, stable ones first; an unparsable constraint matches any."""
-    scheme = plugin.versions
-    try:
-        spec = scheme.constraint(constraint or "*")
-    except InvalidVersion:
-        spec = scheme.constraint("*")
-    matching = [(version, row_id) for version, row_id in versions if _is_valid(plugin, version) and spec.contains(version)]
-    stable = [item for item in matching if not scheme.is_prerelease(item[0])]
-    pool = stable or matching
-    return max(pool, key=lambda item: scheme.sort_key(item[0]))[1] if pool else None
+    return _pick(plugin, _candidates(plugin, versions), constraint)
 
 
 # --- events and source state ---------------------------------------------------------------------------

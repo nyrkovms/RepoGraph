@@ -29,12 +29,14 @@ class LazyFetcher:
         event = asyncio.Event()
         self._in_flight[ref] = event
         try:
-            package = await sync_package(self.db, ref, origin=PackageOrigin.discovered)
+            # A savepoint: a failed fetch rolls back only its own writes. A full rollback would expire every object
+            # of the request session (the tree being built) and the next attribute access would fail in async code.
+            async with self.db.begin_nested():
+                package = await sync_package(self.db, ref, origin=PackageOrigin.discovered)
             await self.db.commit()
             return package
         except Exception as exc:  # noqa: BLE001
             logger.warning("Lazy fetch failed for %s: %s", ref, exc)
-            await self.db.rollback()
             return None
         finally:
             event.set()

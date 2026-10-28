@@ -5,7 +5,7 @@ import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -222,6 +222,7 @@ def test_index_without_package_metadata_does_not_wipe_authors_and_vulnerabilitie
         authors = (await db.scalars(select(PackageAuthor).where(PackageAuthor.package_id == package.id))).all()
         vulns = (await db.scalars(select(PackageVulnerability).where(PackageVulnerability.package_id == package.id))).all()
         assert len(authors) == 1 and len(vulns) == 1
+        assert package.description == "d"   # not wiped by a source that has no description
 
     _in_rolled_back_transaction(test)
 
@@ -243,5 +244,73 @@ def test_lazy_fetch_writes_through_the_pipeline(monkeypatch) -> None:
         assert package.description == "lazy"
         versions = await _versions(db, package.id)
         assert await _deps(db, versions["1.0"].id) == ["filelock"]
+
+    _in_rolled_back_transaction(test)
+
+
+def test_failed_lazy_fetch_keeps_the_request_session_usable(monkeypatch) -> None:
+    async def not_found(self, ref, lookup):
+        return None
+
+    monkeypatch.setattr(WarehouseAdapter, "fetch_package", not_found)
+
+    async def test(db: AsyncSession, pypi: str, _mirror: str) -> None:
+        name = _name()
+        # Loaded from the database, as the tree's package and version rows are (objects created in the rolled-back
+        # transaction would be expunged rather than expired, which hides the problem).
+        registry = await db.scalar(select(Registry).where(Registry.id == uuid.UUID(pypi)))
+        monkeypatch.setattr(db, "commit", db.flush)
+
+        assert await LazyFetcher(db=db).ensure_package(PackageRef(ecosystem="pypi", namespace="", name=f"{name}-missing")) is None
+        # The tree goes on with the objects it already holds (a full rollback would expire them).
+        assert registry.slug == "pypi"
+
+    _in_rolled_back_transaction(test)
+
+
+def test_versions_without_version_sources_give_no_source_events() -> None:
+    async def test(db: AsyncSession, pypi: str, _mirror: str) -> None:
+        name = _name()
+        package = await _write(db, _snapshot(name, pypi, [_version("1.0", [])]))
+        # Rows written by the 0005-era code between 0006 and this change have no version_sources yet.
+        version_id = (await _versions(db, package.id))["1.0"].id
+        await db.execute(delete(VersionSource).where(VersionSource.version_id == version_id))
+
+        await _write(db, _snapshot(name, pypi, [_version("1.0", [])]))
+        assert await _events(db, package.id) == [("tracking_started", None)]
+        assert await _sources(db, version_id) == {pypi: "active"}
+
+    _in_rolled_back_transaction(test)
+
+
+def test_source_coming_back_is_one_package_event() -> None:
+    async def test(db: AsyncSession, pypi: str, mirror: str) -> None:
+        name = _name()
+        versions = [_version(v, []) for v in ("1.0", "1.1", "1.2")]
+        package = await _write(db, _snapshot(name, pypi, versions), _snapshot(name, mirror, versions))
+        await _write(db, _snapshot(name, pypi, versions), missing=(mirror,))
+        await _write(db, _snapshot(name, pypi, versions), _snapshot(name, mirror, versions))
+
+        assert [e for e in await _events(db, package.id) if e[0] == "source_added"] == [("source_added", None)]
+
+    _in_rolled_back_transaction(test)
+
+
+def test_variant_becomes_canonical_when_the_metadata_source_drops_the_version() -> None:
+    async def test(db: AsyncSession, pypi: str, mirror: str) -> None:
+        name = _name()
+        package = await _write(
+            db,
+            _snapshot(name, pypi, [_version("2.0", [_dep("filelock"), _dep("nvidia-cudnn-cu12")])]),
+            _snapshot(name, mirror, [_version("2.0", [_dep("filelock")])]),
+        )
+        # pypi.org drops 2.0; the mirror still lists it but this time without its dependencies (lazy).
+        await _write(db, _snapshot(name, pypi, []), _snapshot(name, mirror, [_version("2.0", None)]))
+
+        version = (await _versions(db, package.id))["2.0"]
+        assert str(version.metadata_registry_id) == mirror
+        assert await _deps(db, version.id) == ["filelock"]
+        assert await _deps(db, version.id, variant=mirror) == []
+        assert version.dependencies_state == DependenciesState.hydrated
 
     _in_rolled_back_transaction(test)

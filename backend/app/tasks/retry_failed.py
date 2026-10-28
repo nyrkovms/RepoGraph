@@ -8,12 +8,15 @@ from app.config import get_settings
 from app.connectors.base import PackageNotFound
 from app.db import SessionLocal
 from app.fetcher.pipeline import pypi_ref, sync_package
-from app.models.enums import SyncType
+from app.models.enums import PackageOrigin, SyncType
 from app.services.metrics import observe_sync_duration
 from app.services.sync_failures import clear_sync_failure, list_due_sync_failures, upsert_sync_failure
 from app.services.sync_state import mark_sync_failed, mark_sync_progress, mark_sync_running, mark_sync_success
 
 logger = logging.getLogger(__name__)
+
+# A package that failed on its first fetch enters the catalog with the origin of that operation.
+_ORIGIN_BY_OPERATION = {"seed": PackageOrigin.seed, "fetch": PackageOrigin.manual}
 
 
 async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | str]:
@@ -42,20 +45,22 @@ async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | s
         await mark_sync_running(db, SyncType.incremental, packages_total=total)
         await db.commit()
 
-        for row in rows:
+        # Plain values: the rollback in the except branches expires the ORM rows.
+        failures = [(row.package_name, row.operation) for row in rows]
+        for package_name, operation in failures:
             try:
-                await sync_package(db, pypi_ref(row.package_name))
-                await clear_sync_failure(db, package_name=row.package_name)
+                await sync_package(db, pypi_ref(package_name), origin=_ORIGIN_BY_OPERATION.get(operation, PackageOrigin.dependency))
+                await clear_sync_failure(db, package_name=package_name)
                 recovered += 1
             except PackageNotFound as exc:
                 failed += 1
-                logger.warning("Retry failed package not found: package=%s operation=%s", row.package_name, row.operation)
+                logger.warning("Retry failed package not found: package=%s operation=%s", package_name, operation)
                 elapsed_ms = (perf_counter() - started) * 1000
                 await db.rollback()
                 await upsert_sync_failure(
                     db,
-                    operation=row.operation,
-                    package_name=row.package_name,
+                    operation=operation,
+                    package_name=package_name,
                     exc=exc,
                     retryable=False,
                 )
@@ -71,13 +76,13 @@ async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | s
                 continue
             except Exception as exc:  # noqa: BLE001
                 failed += 1
-                logger.exception("Retry failed: package=%s operation=%s", row.package_name, row.operation)
+                logger.exception("Retry failed: package=%s operation=%s", package_name, operation)
                 elapsed_ms = (perf_counter() - started) * 1000
                 await db.rollback()
                 await upsert_sync_failure(
                     db,
-                    operation=row.operation,
-                    package_name=row.package_name,
+                    operation=operation,
+                    package_name=package_name,
                     exc=exc,
                 )
                 await mark_sync_failed(

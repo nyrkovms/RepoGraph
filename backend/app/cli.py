@@ -20,7 +20,7 @@ async def _stats() -> dict[str, int]:
     async with SessionLocal() as db:
         packages = await db.scalar(select(func.count(Package.id)).where(Package.ecosystem == "pypi"))
         versions = await db.scalar(select(func.count(PackageVersion.id)))
-        dependencies = await db.scalar(select(func.count(Dependency.id)))
+        dependencies = await db.scalar(select(func.count(Dependency.id)).where(Dependency.variant_registry_id.is_(None)))
 
     return {
         "packages": int(packages or 0),
