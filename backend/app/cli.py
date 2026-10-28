@@ -11,7 +11,6 @@ from app.logging_config import setup_logging
 from app.models.enums import Ecosystem
 from app.services import registries as registries_service
 from app.tasks.fetch_deps import _fetch_package_async
-from app.tasks.refresh import _run_refresh_async
 from app.tasks.retry_failed import _run_retry_failed_async
 from app.tasks.seed import _run_seed_async
 from app.models.dependency import Dependency
@@ -85,15 +84,15 @@ def build_parser() -> argparse.ArgumentParser:
     seed_cmd.add_argument("--packages", nargs="*", default=None)
 
     fetch_cmd = sub.add_parser("fetch")
-    fetch_cmd.add_argument("name")
-
-    refresh_cmd = sub.add_parser("refresh")
-    refresh_cmd.add_argument("--limit", type=int, default=None)
+    fetch_cmd.add_argument("name", help="a purl (pkg:pypi/flask) or a bare PyPI name")
 
     retry_failed_cmd = sub.add_parser("retry-failed")
     retry_failed_cmd.add_argument("--limit", type=int, default=None)
 
     sub.add_parser("daily-update")
+
+    probe_cmd = sub.add_parser("presence-probe", help="find catalog packages in sources where they appeared later")
+    probe_cmd.add_argument("--ecosystem", choices=[e.value for e in Ecosystem], default="pypi")
 
     sub.add_parser("stats")
 
@@ -127,12 +126,6 @@ def main() -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 
-    if args.command == "refresh":
-        limit = args.limit if args.limit is not None else settings.sync_refresh_batch_limit
-        result = asyncio.run(_run_refresh_async(limit=limit))
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return
-
     if args.command == "retry-failed":
         result = asyncio.run(_run_retry_failed_async(limit=args.limit))
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -143,6 +136,13 @@ def main() -> None:
 
         result = asyncio.run(_run_daily_update_async())
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        return
+
+    if args.command == "presence-probe":
+        from app.tasks.presence_probe import _run_presence_probe_async
+
+        result = asyncio.run(_run_presence_probe_async(args.ecosystem))
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 
     if args.command == "stats":

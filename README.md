@@ -85,11 +85,11 @@ Removing the data is a deliberate manual step: `docker volume rm packagehub_stan
 ## Available CLI
 
 ```bash
-docker compose run --rm api python -m app.cli seed --packages flask django
-docker compose run --rm api python -m app.cli fetch requests
-docker compose run --rm api python -m app.cli refresh --limit 100
+docker compose run --rm api python -m app.cli seed --packages flask django pkg:pypi/requests
+docker compose run --rm api python -m app.cli fetch pkg:pypi/requests
 docker compose run --rm api python -m app.cli retry-failed --limit 100
 docker compose run --rm api python -m app.cli daily-update
+docker compose run --rm api python -m app.cli presence-probe
 docker compose run --rm api python -m app.cli stats
 ```
 

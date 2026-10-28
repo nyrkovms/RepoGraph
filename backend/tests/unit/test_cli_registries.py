@@ -38,7 +38,10 @@ def test_parser_rejects_incomplete_commands(argv: list[str]) -> None:
 def test_existing_commands_still_parse() -> None:
     parser = cli.build_parser()
     assert parser.parse_args(["fetch", "flask"]).name == "flask"
-    assert parser.parse_args(["refresh", "--limit", "5"]).limit == 5
+    assert parser.parse_args(["presence-probe"]).ecosystem == "pypi"
+    assert parser.parse_args(["presence-probe", "--ecosystem", "pypi"]).ecosystem == "pypi"
+    with pytest.raises(SystemExit):
+        parser.parse_args(["refresh"])
 
 
 def test_test_command_exit_code_follows_result(monkeypatch, capsys) -> None:
