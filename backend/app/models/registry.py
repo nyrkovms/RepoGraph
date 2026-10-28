@@ -38,9 +38,10 @@ class Registry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Added by 0006 (the columns above that 0007 removes are kept until then).
-    protocol: Mapped[RegistryProtocol] = mapped_column(
+    # Nullable until 0007: the 0005 code inserts registries without it.
+    protocol: Mapped[RegistryProtocol | None] = mapped_column(
         Enum(RegistryProtocol, name="registry_protocol_enum", values_callable=lambda e: [m.value for m in e]),
-        nullable=False,
+        nullable=True,
     )
     config: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     routing: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

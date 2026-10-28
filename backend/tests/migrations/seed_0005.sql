@@ -17,6 +17,10 @@ VALUES
   (md5('pkg:old')::uuid, 'pypi', NULL, 'old_pkg', 'old-pkg', md5('reg:pypi')::uuid, 'not-a-version', now(), now(), true, 'use new-pkg', '{}', NULL),
   (md5('pkg:jinja2')::uuid, 'pypi', NULL, 'Jinja2', 'jinja2', md5('reg:pypi')::uuid, '3.1.4', now(), now(), false, NULL, '{}', 50);
 
+INSERT INTO packages (id, ecosystem, namespace, name, normalized_name, primary_registry_id, latest_version,
+                      updated_at, synced_at, deprecated, raw_metadata, last_serial)
+VALUES (md5('pkg:torch')::uuid, 'pypi', NULL, 'torch', 'torch', md5('reg:pypi')::uuid, '2.5.1', now(), now(), false, '{}', 7);
+
 INSERT INTO package_registries (package_id, registry_id, first_seen_at, source_url, is_primary)
 SELECT id, md5('reg:pypi')::uuid, now(), 'https://pypi.org/project/' || name || '/', true FROM packages;
 
@@ -27,7 +31,14 @@ VALUES
   (md5('ver:flask@2.0.0')::uuid, md5('pkg:flask')::uuid, '2.0.0', now(), 'yanked', NULL, NULL, false, '{}'),              -- no key, no dependencies -> pending
   (md5('ver:flask@1.0.0')::uuid, md5('pkg:flask')::uuid, '1.0.0', now(), 'active', NULL, '{"dependencies_hydrated": false}', false, '{}'),
   (md5('ver:old@not-a-version')::uuid, md5('pkg:old')::uuid, 'not-a-version', now(), 'active', NULL, NULL, false, '{}'),
-  (md5('ver:jinja2@3.1.4')::uuid, md5('pkg:jinja2')::uuid, '3.1.4', now(), 'active', '>=3.7', '{"dependencies_hydrated": true}', false, '{}');
+  (md5('ver:jinja2@3.1.4')::uuid, md5('pkg:jinja2')::uuid, '3.1.4', now(), 'active', '>=3.7', '{"dependencies_hydrated": true}', false, '{}'),
+  -- PEP 440 ordering cases: pre, local, post, dev, epoch.
+  (md5('ver:torch@2.5.1rc1')::uuid, md5('pkg:torch')::uuid, '2.5.1rc1', now(), 'active', NULL, NULL, false, '{}'),
+  (md5('ver:torch@2.5.1')::uuid, md5('pkg:torch')::uuid, '2.5.1', now(), 'active', NULL, NULL, false, '{}'),
+  (md5('ver:torch@2.5.1+cpu')::uuid, md5('pkg:torch')::uuid, '2.5.1+cpu', now(), 'active', NULL, NULL, false, '{}'),
+  (md5('ver:torch@2.5.1.post1')::uuid, md5('pkg:torch')::uuid, '2.5.1.post1', now(), 'active', NULL, NULL, false, '{}'),
+  (md5('ver:torch@2.6.0.dev1')::uuid, md5('pkg:torch')::uuid, '2.6.0.dev1', now(), 'active', NULL, NULL, false, '{}'),
+  (md5('ver:torch@1!0.1')::uuid, md5('pkg:torch')::uuid, '1!0.1', now(), 'active', NULL, NULL, false, '{}');
 
 INSERT INTO dependencies (id, version_id, dependency_name, dependency_namespace, dependency_ecosystem, version_constraint,
                           dependency_type, extra_name, environment_markers, raw_spec, resolved_package_id, resolved_version_id)
@@ -38,7 +49,11 @@ VALUES
    '{"type": "python_environment", "expression": "python_version < \"3.10\"", "conditions": [{"marker": "python_version", "op": "<", "value": "3.10"}]}',
    'typing_extensions; python_version < "3.10"', NULL, NULL),
   (md5('dep:3')::uuid, md5('ver:flask@3.1.0')::uuid, 'asgiref', NULL, 'pypi', '>=3.2', 'optional', 'async', NULL, 'asgiref>=3.2; extra == "async"', NULL, NULL),
-  (md5('dep:4')::uuid, md5('ver:flask@3.0.0')::uuid, 'Werkzeug', NULL, 'pypi', '>=3.0.0', 'runtime', NULL, NULL, 'Werkzeug>=3.0.0', NULL, NULL);
+  (md5('dep:4')::uuid, md5('ver:flask@3.0.0')::uuid, 'Werkzeug', NULL, 'pypi', '>=3.0.0', 'runtime', NULL, NULL, 'Werkzeug>=3.0.0', NULL, NULL),
+  -- flag false but dependencies present: stays pending (T13).
+  (md5('dep:5')::uuid, md5('ver:flask@1.0.0')::uuid, 'Click', NULL, 'pypi', '*', 'runtime', NULL, NULL, 'Click', NULL, NULL),
+  -- names of other ecosystems are not normalized.
+  (md5('dep:6')::uuid, md5('ver:jinja2@3.1.4')::uuid, 'Left_Pad', NULL, 'npm', '^1.0', 'runtime', NULL, NULL, 'Left_Pad@^1.0', NULL, NULL);
 
 INSERT INTO artifacts (id, version_id, registry_id, filename, download_url, size_bytes, checksum_sha256, artifact_type, requires_dist_metadata)
 VALUES

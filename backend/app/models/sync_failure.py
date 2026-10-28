@@ -17,7 +17,8 @@ class SyncFailure(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     operation: Mapped[str] = mapped_column(String(32), nullable=False)
-    package_name: Mapped[str] = mapped_column(String(255), nullable=False, server_default=text("''"))
+    # Still the conflict key of uq_sync_failures_operation_package; every writer sets it until 0007 (IMPL §2).
+    package_name: Mapped[str] = mapped_column(String(255), nullable=False)
     error_class: Mapped[str] = mapped_column(String(255), nullable=False)
     error_message: Mapped[str] = mapped_column(Text, nullable=False)
     traceback: Mapped[str | None] = mapped_column(Text, nullable=True)
