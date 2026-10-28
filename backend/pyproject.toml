@@ -46,3 +46,6 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E9", "F"]
+
+[tool.mypy]
+python_version = "3.12"
