@@ -91,11 +91,13 @@ async def sync_package(
     origin: PackageOrigin = PackageOrigin.dependency,
     run_id=None,
     profile: SourceProfile | None = None,
+    extra_registries: Sequence[RegistryConfig] = (),
 ) -> Package:
     """Fetch `ref` from all its sources and write the merged result. Raises PackageNotFound if no source has it.
 
     A known package is re-read from the enabled registries where it lives (package_registries) that its routing
     still allows; a new one from the sources of `profile` (the ecosystem's default profile when not given).
+    `extra_registries` are asked on top for a known package: sources where `presence_probe` found it.
     Sources not asked are frozen: what only they publish stays as it was (SPEC §6.4). A source error, or a
     degraded source of a known package, propagates: the package is left as it was and the caller records a sync
     failure, so a flaky source never looks like a removal.
@@ -105,6 +107,8 @@ async def sync_package(
     registries = await sources.package_registries(db, existing.id) if existing else []
     # Routing applies to known packages too: a source that no longer matches is not asked, i.e. frozen.
     registries = list(plugin.sources_for(ref, SourceProfile(ecosystem=ref.ecosystem, slug="catalog", registries=registries)))
+    if existing and extra_registries:
+        registries = sources.by_priority([*registries, *(r for r in extra_registries if r.id not in {k.id for k in registries})])
     if registries:
         fetched = await discovery.fetch_known(db, plugin, ref, registries, _ProfileLookup(plugin, registries))
     else:
