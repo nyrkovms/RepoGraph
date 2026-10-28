@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
 from app.ecosystems.pypi.connector import PyPIConnector
-from app.db import SessionLocal
+from app.db import loop_local_session
 from app.fetcher.pipeline import run_sync_pipeline
 from app.resolver.cache import ResolveCache
 from app.resolver.errors import (
@@ -196,7 +196,7 @@ async def _lazy_fetch_async(name: str) -> str:
     except Exception:  # noqa: BLE001
         return "error"
 
-    async with SessionLocal() as db:
+    async with loop_local_session() as db:
         try:
             await run_sync_pipeline(metadata, db)
             return "fetched"
