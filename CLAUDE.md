@@ -45,6 +45,8 @@ scripts/record_fixtures.sh       # re-record upstream responses for offline CI (
   (`HTTP_REPLAY_DIR`); never add tests that need the live internet to the default suite.
 - The stand (`packagehub-stand`) holds long-lived data. Do not run `docker compose down -v` against it and do not
   drop its database. Take `scripts/stand.sh backup` before anything that changes its schema.
+  The stand runs `main` from its own worktree `.claude/worktrees/stand` (detached; its `backups/` live there). After a
+  stage merges: `git -C .claude/worktrees/stand checkout -q --detach origin/main` after a fetch, then `stand.sh up` from it.
 
 ## Rules
 
