@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
@@ -13,7 +14,7 @@ class ParsedRequirement:
     version_constraint: str
     dependency_type: str
     extra_name: str | None
-    environment_markers: dict | None
+    environment_markers: dict[str, Any] | None
     raw_spec: str
 
 
@@ -37,7 +38,7 @@ def parse_pep508(requirement_str: str) -> ParsedRequirement:
     except InvalidRequirement as exc:
         raise ValueError(f"Invalid PEP 508 requirement: {requirement_str}") from exc
 
-    marker_payload: dict | None = None
+    marker_payload: dict[str, Any] | None = None
     conditions: list[dict[str, str]] = []
     if req.marker is not None:
         marker_str = str(req.marker)

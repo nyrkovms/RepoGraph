@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 
@@ -128,7 +129,7 @@ class PyPIConnector(BaseConnector):
 
     def _normalize_versions(
         self,
-        releases: dict,
+        releases: dict[str, Any],
         latest_version: str,
         latest_dependencies: list[NormalizedDependency],
     ) -> list[NormalizedVersion]:
@@ -202,7 +203,7 @@ class PyPIConnector(BaseConnector):
 
         return versions
 
-    def _normalize_vulnerabilities(self, payload: list[dict]) -> list[NormalizedVulnerability]:
+    def _normalize_vulnerabilities(self, payload: list[dict[str, Any]]) -> list[NormalizedVulnerability]:
         vulnerabilities: list[NormalizedVulnerability] = []
         for item in payload:
             source_id = str(item.get("id") or "unknown")
@@ -224,12 +225,12 @@ class PyPIConnector(BaseConnector):
             )
         return vulnerabilities
 
-    def _normalize_authors(self, info: dict) -> list[NormalizedAuthor]:
+    def _normalize_authors(self, info: dict[str, Any]) -> list[NormalizedAuthor]:
         authors: list[NormalizedAuthor] = []
         if info.get("author"):
             authors.append(
                 NormalizedAuthor(
-                    name=info.get("author"),
+                    name=info["author"],
                     email=info.get("author_email"),
                     url=None,
                     role="author",
@@ -238,7 +239,7 @@ class PyPIConnector(BaseConnector):
         if info.get("maintainer"):
             authors.append(
                 NormalizedAuthor(
-                    name=info.get("maintainer"),
+                    name=info["maintainer"],
                     email=info.get("maintainer_email"),
                     url=None,
                     role="maintainer",
@@ -256,7 +257,7 @@ def _parse_last_serial(value: object) -> int | None:
     return value
 
 
-def _pick_latest_version(releases: dict) -> str:
+def _pick_latest_version(releases: dict[str, Any]) -> str:
     if not releases:
         return "0"
     return sorted(releases.keys())[-1]
