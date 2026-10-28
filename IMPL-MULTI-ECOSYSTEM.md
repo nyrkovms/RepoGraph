@@ -89,7 +89,13 @@
 | `package_events` | `version` → `text`; новые виды событий; FK `run_id` → `update_runs` снимается | Пишет `run_id` из `runs` | Докопировать строки `update_runs`, появившиеся после 0006; FK `run_id` → `runs` |
 | `ecosystem_enum` | `rpm` (ADD VALUE) | — | — |
 
-**Повторное заполнение в 0007.** Код до E0-B не пишет новые колонки, поэтому строки, появившиеся между 0006 и E0-B, остаются незаполненными. 0007 сначала снова вызывает `backfill()` из 0006 (загружает модуль 0006 по пути), затем ставит NOT NULL и делает VALIDATE.
+**Повторное заполнение в 0007.** Код до E0-B не пишет новые колонки, а старые меняет. Поэтому строки, **появившиеся или изменённые** между 0006 и E0-B, расходятся с производными колонками. 0007 сначала снова вызывает `backfill()` из 0006 (загружает модуль 0006 по пути) для пустых строк. Затем досинхронизирует расхождения:
+- `dependencies_state = 'hydrated'`, где `features.dependencies_hydrated = true`, а состояние ещё `pending`;
+- `engines` из `requires_python`, где они различаются;
+- `package_registries.upstream_revision` из `packages.last_serial`, где `upstream_revision IS DISTINCT FROM last_serial::text`;
+- `runs` из `update_runs` через `ON CONFLICT DO UPDATE` (прогон мог быть `running` в момент 0006).
+
+Только после этого ставятся NOT NULL и делается VALIDATE.
 
 **Механика.**
 - Три фазы:

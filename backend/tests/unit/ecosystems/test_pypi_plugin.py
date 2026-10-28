@@ -186,3 +186,41 @@ def test_markers_follow_the_tree_endpoint_semantics() -> None:
     # No environment given: markers are not evaluated.
     assert dependency_applies(old_python, parse_environment({}), include_optional=False)
     assert not dependency_applies(_dep("dev", None), py39, include_optional=True)
+
+
+# --- parity with the tree endpoint (api/v1/packages.py), which B1/C1 replace with the plugin ----------------------
+
+PARITY_ENVIRONMENTS = [
+    {},
+    {"python_version": None, "os": None},
+    {"python_version": "3.9"},
+    {"os": "windows"},
+    {"python_version": "3.13", "os": "linux"},
+    {"python_version": "3.11", "os": "darwin"},
+]
+PARITY_MARKERS = [
+    ('python_version < "3.10"', [{"marker": "python_version", "op": "<", "value": "3.10"}]),
+    ('sys_platform == "linux"', [{"marker": "sys_platform", "op": "==", "value": "linux"}]),
+    ('platform_system != "Windows"', [{"marker": "platform_system", "op": "!=", "value": "Windows"}]),
+    ('python_version >= "3.8" and extra == "test"',
+     [{"marker": "python_version", "op": ">=", "value": "3.8"}, {"marker": "extra", "op": "==", "value": "test"}]),
+    ('sys_platform in "linux darwin"', []),  # `in` is not split into conditions
+    ('extra == "docs"', [{"marker": "extra", "op": "==", "value": "docs"}]),
+]
+
+
+def test_marker_semantics_match_the_tree_endpoint() -> None:
+    import pytest
+
+    from app.api.v1.packages import _build_marker_environment, _tree_marker_applies
+
+    for raw_env in PARITY_ENVIRONMENTS:
+        old_env = _build_marker_environment(raw_env.get("python_version"), raw_env.get("os"))
+        new_env = parse_environment(raw_env)
+        for expression, conditions in PARITY_MARKERS:
+            markers = {"type": "python_environment", "expression": expression, "conditions": conditions}
+            for include_optional in (False, True):
+                expected = _tree_marker_applies(markers, old_env, include_optional)
+                dep = _dep("optional" if include_optional else "runtime", expression, conditions)
+                if dependency_applies(dep, new_env, include_optional) != expected:
+                    pytest.fail(f"{raw_env} {expression!r} include_optional={include_optional}: expected {expected}")

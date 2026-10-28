@@ -44,17 +44,21 @@ class PythonEnvironment:
 
 
 def parse_environment(raw: Mapping[str, object]) -> PythonEnvironment:
-    """Accepts the API's short form (`python_version`, `os`) and full PEP 508 names."""
-    if not raw:
+    """Accepts the API's short form (`python_version`, `os`) and full PEP 508 names.
+
+    Mirrors _build_marker_environment of the tree endpoint: nothing given -> markers are not evaluated;
+    the short form without `os` leaves the platform markers empty (so `sys_platform == "linux"` is false).
+    """
+    values = {key: str(value) for key, value in raw.items() if value not in (None, "") and key != "specified"}
+    if not values:
         return PythonEnvironment(specified=False)
-    values = {key: str(value) for key, value in raw.items() if value is not None and key != "specified"}
-    short_os = values.pop("os", None)
-    if short_os is not None:
-        platform, os_name, system = _OS_DEFAULTS.get(short_os.lower(), ("", "", ""))
+    if "os" in values or not any(name in values for name in ("sys_platform", "os_name", "platform_system")):
+        platform, os_name, system = _OS_DEFAULTS.get(values.pop("os", "").lower(), ("", "", ""))
         values.setdefault("sys_platform", platform)
         values.setdefault("os_name", os_name)
         values.setdefault("platform_system", system)
-    if "python_version" in values and "python_full_version" not in values:
+    values.setdefault("python_version", "3.12")
+    if "python_full_version" not in values:
         values["python_full_version"] = f"{values['python_version']}.0"
     known = {name: values[name] for name in PythonEnvironment.__dataclass_fields__ if name in values}
     return PythonEnvironment(**known)  # type: ignore[arg-type]
@@ -84,7 +88,8 @@ def dependency_applies(dep: NormalizedDependency, env: PythonEnvironment, includ
     if not include_optional:
         return _evaluate(expression, env)
     conditions = markers.get("conditions")
-    if not isinstance(conditions, list):
+    if not isinstance(conditions, list) or not conditions:
+        # Markers the condition parser does not split (`in`, `not in`): evaluate the whole expression.
         return _evaluate(expression, env)
     rest = [c for c in conditions if isinstance(c, Mapping) and c.get("marker") != "extra"]
     return all(_evaluate(f"{c.get('marker')} {c.get('op')} {str(c.get('value'))!r}", env) for c in rest)

@@ -80,6 +80,7 @@ def to_contract(package: legacy.NormalizedPackage, registry_id: str) -> Normaliz
         license_raw=package.license_raw,
         license_spdx=package.license_spdx,
         keywords=package.keywords,
+        dist_tags={"latest": package.latest_version} if package.latest_version else None,
         downloads_total=package.downloads_total,
         downloads_recent=package.downloads_recent,
         created_at=package.created_at,
@@ -112,10 +113,8 @@ class WarehouseAdapter:
         return to_contract(package, self.registry.id)
 
     async def fetch_version_dependencies(self, ref: PackageRef, version: str, lookup: SourceLookup) -> VersionDependencies:
-        try:
-            dependencies, requires_python = await self.connector.fetch_version_dependencies(ref.name, version)
-        except PackageNotFound:
-            return VersionDependencies(dependencies=[], available=False)
+        # PackageNotFound propagates as today: a missing version is not "metadata unavailable".
+        dependencies, requires_python = await self.connector.fetch_version_dependencies(ref.name, version)
         return VersionDependencies(
             dependencies=[_dependency(d) for d in dependencies],
             engines={"python": requires_python} if requires_python else None,

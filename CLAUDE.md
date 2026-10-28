@@ -16,8 +16,10 @@ FastAPI + SQLAlchemy async + Alembic + Celery + Postgres 16 + Redis; React/Vite 
 
 ```
 backend/app/            api/v1 (routes), models, schemas, fetcher (pipeline, events), tasks (celery), resolver, services
-backend/app/ecosystems/ plugin contract (base.py), registry, purl, one package per ecosystem (pypi/: plugin, adapters,
-                        change detector, versions, environment, connector); connectors/base.py = legacy types until B1
+backend/app/ecosystems/ plugin contract (base.py), registry, purl, schemas (jsonb), versions_common; one package per
+                        ecosystem — pypi/: plugin, coordinates, versions, environment, adapters (pypi-warehouse),
+                        changes (detector), connector + simple_index + pep508 (moved legacy code);
+                        connectors/base.py = legacy types until E0-B1
 backend/alembic/versions/
 backend/tests/unit, backend/tests/integration
 frontend/src/pages, frontend/src/lib/api.js

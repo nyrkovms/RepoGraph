@@ -15,7 +15,7 @@ class Run(Base):
     __tablename__ = "runs"
     __table_args__ = (Index("idx_runs_op_eco_started", "operation", "ecosystem", text("started_at DESC")),)
 
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     operation: Mapped[str] = mapped_column(String(32), nullable=False)
     ecosystem: Mapped[Ecosystem | None] = mapped_column(Enum(Ecosystem, name="ecosystem_enum"), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False)

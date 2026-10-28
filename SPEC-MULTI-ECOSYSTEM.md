@@ -137,8 +137,8 @@ backend/app/
 │   ├── base.py               — контракт (design/ecosystem_contract.py)
 │   ├── registry.py           — регистрация плагинов, get_plugin()
 │   ├── purl.py, routing.py, merge.py   — общие реализации, плагины их переопределяют
-│   ├── pypi/   plugin.py  versions.py  deps.py  resolver.py
-│   │           adapters/warehouse.py (pypi.org)  adapters/simple.py (PEP 503/691: PyTorch, NVIDIA)
+│   ├── pypi/   plugin.py  coordinates.py  versions.py  environment.py  changes.py  resolver.py
+│   │           adapters.py (pypi-warehouse; pypi-simple в E0.5 — модуль делится на adapters/, когда адаптеров станет два)
 │   ├── npm/    adapters/registry.py  changes.py (_changes, etag)
 │   ├── maven/  adapters/maven2.py  pom.py (effective model)  resolver.py (maven | gradle)
 │   ├── nuget/  adapters/v3.py  frameworks.py (TFM)

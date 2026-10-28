@@ -4,6 +4,7 @@ import asyncio
 import logging
 from collections.abc import Mapping, Sequence
 
+from app.config import get_settings
 from app.ecosystems.base import ChangeSet, TrackedPackage
 from app.ecosystems.pypi.simple_index import PyPISimpleIndex
 
@@ -28,9 +29,9 @@ def plan_changes(tracked: Sequence[TrackedPackage], serials: Mapping[str, int]) 
 
 
 class WarehouseChangeDetector:
-    def __init__(self, index: PyPISimpleIndex | None = None, concurrency: int = 8) -> None:
+    def __init__(self, index: PyPISimpleIndex | None = None, concurrency: int | None = None) -> None:
         self.index = index or PyPISimpleIndex()
-        self.concurrency = concurrency
+        self.concurrency = concurrency or get_settings().daily_update_concurrency
 
     async def detect(self, tracked: Sequence[TrackedPackage], cursor: Mapping[str, object]) -> ChangeSet:
         index_serial: int | None

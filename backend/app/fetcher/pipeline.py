@@ -275,7 +275,7 @@ async def _replace_dependencies(db: AsyncSession, version_id, dependencies: list
         db.add(
             Dependency(
                 version_id=version_id,
-                dependency_name=dep.dependency_name,
+                dependency_name=normalize_package_name(dep.dependency_name),  # T14: raw spelling stays in raw_spec
                 dependency_namespace="",
                 dependency_ecosystem=Ecosystem.pypi,
                 version_constraint=dep.version_constraint,

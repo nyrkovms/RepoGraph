@@ -3,6 +3,8 @@
 from collections.abc import Mapping, Sequence
 
 from app.ecosystems.base import (
+    Coordinates,
+    Ecosystem,
     Environment,
     MergedPackage,
     NormalizedDependency,
@@ -12,6 +14,7 @@ from app.ecosystems.base import (
     Resolver,
     SourceAdapter,
     SourceProfile,
+    VersionScheme,
 )
 from app.ecosystems.pypi.adapters import WarehouseAdapter
 from app.ecosystems.pypi.coordinates import PyPICoordinates
@@ -21,12 +24,12 @@ from app.ecosystems.registry import register
 
 
 class PyPIPlugin:
-    ecosystem = "pypi"
-    purl_type = "pypi"
+    ecosystem: Ecosystem = "pypi"
+    purl_type: str = "pypi"
 
     def __init__(self) -> None:
-        self.coordinates = PyPICoordinates()
-        self.versions = PyPIVersionScheme()
+        self.coordinates: Coordinates = PyPICoordinates()
+        self.versions: VersionScheme = PyPIVersionScheme()
 
     def adapter(self, registry: RegistryConfig) -> SourceAdapter:
         if registry.protocol == "pypi-warehouse":
@@ -57,4 +60,4 @@ class PyPIPlugin:
 
 
 PLUGIN = PyPIPlugin()
-register(PLUGIN)  # type: ignore[arg-type]
+register(PLUGIN)

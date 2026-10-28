@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -137,3 +138,14 @@ def test_dependencies_are_written_with_empty_namespace() -> None:
     asyncio.run(pipeline._replace_dependencies(session, "version", dependencies))
 
     assert [dep.dependency_namespace for dep in session.added] == [""]
+
+
+def test_dependency_names_are_written_normalized() -> None:
+    # IMPL T14: dependency_name is the PEP 503 name; the original spelling stays in raw_spec.
+    session = _RecordingSession()
+    dependency = replace(_make_package().versions[0].dependencies[0], dependency_name="Typing_Extensions",
+                         raw_spec="Typing_Extensions>=4")
+
+    asyncio.run(pipeline._replace_dependencies(session, "version", [dependency]))
+
+    assert [(dep.dependency_name, dep.raw_spec) for dep in session.added] == [("typing-extensions", "Typing_Extensions>=4")]

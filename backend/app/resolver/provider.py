@@ -182,7 +182,7 @@ class PyPIProvider(AbstractProvider):
                 session.add(
                     Dependency(
                         version_id=version_row.id,
-                        dependency_name=dep.dependency_name,
+                        dependency_name=normalize_package_name(dep.dependency_name),  # T14
                         dependency_namespace="",
                         dependency_ecosystem=Ecosystem.pypi,
                         version_constraint=dep.version_constraint,
