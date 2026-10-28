@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from app.celery_app import celery_app
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
-from app.db import SessionLocal
+from app.db import loop_local_session
 from app.fetcher.pipeline import pypi_ref, sync_package
 from app.models.dependency import Dependency
 from app.models.enums import DependencyType, PackageOrigin, SyncType
@@ -49,7 +49,7 @@ async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str,
     processed = 0
     failed = 0
 
-    async with SessionLocal() as db:
+    async with loop_local_session() as db:
         await mark_sync_running(db, SyncType.full, packages_total=len(queue))
         await db.commit()
 

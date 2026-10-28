@@ -6,7 +6,7 @@ from time import perf_counter
 from app.celery_app import celery_app
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
-from app.db import SessionLocal
+from app.db import loop_local_session
 from app.fetcher.pipeline import pypi_ref, sync_package
 from app.models.enums import PackageOrigin, SyncType
 from app.services.metrics import observe_sync_duration
@@ -28,7 +28,7 @@ async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | s
     failed = 0
     total = 0
 
-    async with SessionLocal() as db:
+    async with loop_local_session() as db:
         rows = await list_due_sync_failures(db, batch_limit)
         total = len(rows)
         if total == 0:
