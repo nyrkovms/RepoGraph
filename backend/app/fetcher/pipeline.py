@@ -12,7 +12,7 @@ from app.connectors.base import (
     NormalizedPackage,
     NormalizedVersion,
 )
-from app.connectors.pypi import PyPIConnector
+from app.ecosystems.pypi.connector import PyPIConnector
 from app.fetcher.events import EventDraft, PackageSnapshot, diff_package
 from app.models.artifact import Artifact, DistTag
 from app.models.author import Author, PackageAuthor

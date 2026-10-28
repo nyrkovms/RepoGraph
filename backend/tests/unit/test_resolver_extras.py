@@ -4,7 +4,7 @@ from packaging.version import Version
 
 from app.models.dependency import Dependency
 from app.models.enums import DependencyType, Ecosystem
-from app.normalizers.pep508 import parse_pep508
+from app.ecosystems.pypi.pep508 import parse_pep508
 from app.resolver.models import ResolverCandidate
 from app.resolver.provider import PyPIProvider
 

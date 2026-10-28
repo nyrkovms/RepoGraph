@@ -8,7 +8,7 @@ from packaging.markers import Marker
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.connectors.pypi import PyPIConnector
+from app.ecosystems.pypi.connector import PyPIConnector
 from app.db import get_db_session
 from app.fetcher.lazy import LazyFetcher
 from app.fetcher.pipeline import ensure_version_dependencies, resolve_dependency_links

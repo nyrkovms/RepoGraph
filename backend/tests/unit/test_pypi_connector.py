@@ -2,7 +2,7 @@ import asyncio
 from unittest.mock import AsyncMock
 
 from app.config import get_settings
-from app.connectors.pypi import PyPIConnector
+from app.ecosystems.pypi.connector import PyPIConnector
 
 
 def test_normalize_vulnerabilities_falls_back_from_null_summary() -> None:

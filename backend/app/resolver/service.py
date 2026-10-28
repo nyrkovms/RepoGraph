@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
-from app.connectors.pypi import PyPIConnector
+from app.ecosystems.pypi.connector import PyPIConnector
 from app.db import SessionLocal
 from app.fetcher.pipeline import run_sync_pipeline
 from app.resolver.cache import ResolveCache

@@ -9,7 +9,7 @@ from resolvelib import AbstractProvider
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.connectors.pypi import PyPIConnector
+from app.ecosystems.pypi.connector import PyPIConnector
 from app.fetcher.pipeline import _merge_version_features
 from app.models.dependency import Dependency
 from app.models.enums import DependencyType, Ecosystem, PackageVersionStatus

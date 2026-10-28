@@ -17,7 +17,7 @@ from app.connectors.base import (
 )
 from app.normalizers.license import normalize_license
 from app.normalizers.names import normalize_package_name
-from app.normalizers.pep508 import parse_pep508
+from app.ecosystems.pypi.pep508 import parse_pep508
 from app.services.retry_policy import compute_backoff_delay_seconds, is_retryable_upstream_error
 from app.services.http import make_client
 
