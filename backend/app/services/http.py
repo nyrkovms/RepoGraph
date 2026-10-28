@@ -17,6 +17,8 @@ from app.config import get_settings
 
 # Headers that change the representation and therefore take part in the recording key.
 _KEY_HEADERS = ("accept",)
+# The body handed back after aread() is already decoded; these headers describe the wire form and must go.
+_WIRE_HEADERS = ("content-encoding", "content-length", "transfer-encoding")
 _CONDITIONAL_HEADERS = ("if-none-match", "if-modified-since")
 _STORED_RESPONSE_HEADERS = ("content-type", "etag", "last-modified", "x-pypi-last-serial", "location")
 
@@ -62,7 +64,7 @@ class RecordingTransport(httpx.AsyncBaseTransport):
             meta_path.write_text(json.dumps(meta, indent=2, sort_keys=True))
         return httpx.Response(
             status_code=response.status_code,
-            headers=response.headers,
+            headers=[(k, v) for k, v in response.headers.multi_items() if k.lower() not in _WIRE_HEADERS],
             content=body,
             request=request,
             extensions=response.extensions,

@@ -1,4 +1,5 @@
 import asyncio
+import gzip
 
 import httpx
 import pytest
@@ -68,3 +69,25 @@ def test_make_client_uses_replay_dir_from_settings(tmp_path, monkeypatch) -> Non
         assert asyncio.run(scenario()).text == "<html>simple</html>"
     finally:
         get_settings.cache_clear()
+
+
+def test_recording_passes_through_a_gzip_encoded_upstream_response(tmp_path) -> None:
+    # pypi.org answers with Content-Encoding: gzip; the recorder must not make httpx decode the body twice.
+    def gzipped(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=gzip.compress(b'{"info": {"name": "flask"}}'),
+            headers={"content-encoding": "gzip", "content-type": "application/json", "etag": '"g1"'},
+        )
+
+    async def scenario() -> tuple[dict, dict]:
+        recorder = RecordingTransport(tmp_path, inner=httpx.MockTransport(gzipped))
+        async with httpx.AsyncClient(transport=recorder) as client:
+            live = (await client.get("https://pypi.org/pypi/flask/json")).json()
+        async with httpx.AsyncClient(transport=ReplayTransport(tmp_path)) as client:
+            replayed = (await client.get("https://pypi.org/pypi/flask/json")).json()
+        return live, replayed
+
+    live, replayed = asyncio.run(scenario())
+
+    assert live == replayed == {"info": {"name": "flask"}}
