@@ -18,6 +18,7 @@ from app.ecosystems.base import (
     NormalizedVersion,
     NormalizedVulnerability,
     PackageRef,
+    VersionDependencies,
 )
 from app.ecosystems.pypi.adapters import WarehouseAdapter
 from app.fetcher import discovery, pipeline
@@ -350,5 +351,32 @@ def test_known_package_is_not_asked_from_a_source_its_routing_excludes(monkeypat
         monkeypatch.setattr(pipeline.discovery, "fetch_known", fetch_known)
         await pipeline.sync_package(db, PackageRef(ecosystem="pypi", namespace="", name=name))
         assert asked == [pypi]
+
+    _in_rolled_back_transaction(test)
+
+
+def test_dependencies_are_not_loaded_from_a_disabled_source(monkeypatch) -> None:
+    async def test(db: AsyncSession, pypi: str, mirror: str) -> None:
+        name = _name()
+        package = await _write(db, _snapshot(name, pypi, [_version("1.0", None)]),
+                               _snapshot(name, mirror, [_version("1.0", None)]))
+        version = (await _versions(db, package.id))["1.0"]
+        asked: list[str] = []
+
+        class _Adapter:
+            def __init__(self, registry) -> None:
+                self.registry = registry
+
+            async def fetch_version_dependencies(self, ref, version, lookup):
+                asked.append(self.registry.id)
+                return VersionDependencies(dependencies=[_dep("idna")])
+
+        monkeypatch.setattr(PLUGIN, "adapter", _Adapter)
+        (await db.get(Registry, uuid.UUID(pypi))).enabled = False
+        await db.flush()
+
+        await pipeline.ensure_version_dependencies(db, package, version)
+        assert asked == [mirror] and str(version.metadata_registry_id) == mirror
+        assert version.dependencies_state == DependenciesState.hydrated and await _deps(db, version.id) == ["idna"]
 
     _in_rolled_back_transaction(test)

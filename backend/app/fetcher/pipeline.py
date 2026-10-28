@@ -733,8 +733,12 @@ async def ensure_version_dependencies(db: AsyncSession, package: Package, versio
 
     plugin = plugin_for(package.ecosystem.value)
     ref = PackageRef(ecosystem=package.ecosystem.value, namespace=package.namespace or "", name=package.normalized_name)
-    registry_id = version_row.metadata_registry_id or package.primary_registry_id
-    registry = await db.scalar(select(Registry).where(Registry.id == registry_id))
+    registry = await _dependencies_source(db, package, version_row)
+    if registry is None:
+        return   # only frozen (disabled) sources publish it: nothing to ask, the state stays pending
+    registry_id = registry.id
+    # A disabled metadata source hands the version over to the next enabled one, as the next merge would.
+    version_row.metadata_registry_id = registry_id
     adapter = plugin.adapter(sources.registry_config(registry))
     loaded = await adapter.fetch_version_dependencies(ref, version_row.version, _ProfileLookup(plugin, [adapter.registry]))
 
@@ -757,6 +761,22 @@ async def ensure_version_dependencies(db: AsyncSession, package: Package, versio
     )
     await db.flush()
     await resolve_dependency_links(db, [version_row.id])
+
+
+async def _dependencies_source(db: AsyncSession, package: Package, version_row: PackageVersion) -> Registry | None:
+    """The version's metadata source if enabled; otherwise the highest-priority enabled source that lists it."""
+    preferred = version_row.metadata_registry_id or package.primary_registry_id
+    registry = await db.get(Registry, preferred) if preferred else None
+    if registry is not None and registry.enabled:
+        return registry
+    return await db.scalar(
+        select(Registry)
+        .join(VersionSource, VersionSource.registry_id == Registry.id)
+        .where(VersionSource.version_id == version_row.id, VersionSource.status != PackageVersionStatus.removed,
+               Registry.enabled.is_(True))
+        .order_by(Registry.priority, Registry.slug)
+        .limit(1)
+    )
 
 
 # --- level-1 links ---------------------------------------------------------------------------------------
