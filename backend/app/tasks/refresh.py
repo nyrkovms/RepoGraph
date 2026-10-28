@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.celery_app import celery_app
 from app.connectors.base import PackageNotFound
 from app.ecosystems.pypi.connector import PyPIConnector
-from app.db import SessionLocal
+from app.db import loop_local_session
 from app.fetcher.pipeline import run_sync_pipeline
 from app.models.enums import SyncType
 from app.models.package import Package
@@ -23,7 +23,7 @@ async def _run_refresh_async(limit: int = 500) -> dict[str, int | str]:
     started = perf_counter()
     connector = PyPIConnector()
 
-    async with SessionLocal() as db:
+    async with loop_local_session() as db:
         rows = (
             await db.scalars(
                 select(Package)

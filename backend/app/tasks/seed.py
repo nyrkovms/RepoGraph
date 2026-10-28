@@ -10,7 +10,7 @@ from app.celery_app import celery_app
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
 from app.ecosystems.pypi.connector import PyPIConnector
-from app.db import SessionLocal
+from app.db import loop_local_session
 from app.fetcher.pipeline import run_sync_pipeline
 from app.models.dependency import Dependency
 from app.models.enums import DependencyType, SyncType
@@ -50,7 +50,7 @@ async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str,
     processed = 0
     failed = 0
 
-    async with SessionLocal() as db:
+    async with loop_local_session() as db:
         await mark_sync_running(db, SyncType.full, packages_total=len(queue))
         await db.commit()
 
