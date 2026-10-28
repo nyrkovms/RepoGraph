@@ -15,6 +15,10 @@ class RetryFailedRequest(BaseModel):
     limit: int = Field(default=100, ge=1, le=5000)
 
 
+class FetchPackagesRequest(BaseModel):
+    purls: list[str] = Field(min_length=1, max_length=500)
+
+
 class AdminTaskResponse(BaseModel):
     task_id: str
     status: str

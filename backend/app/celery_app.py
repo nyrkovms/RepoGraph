@@ -7,7 +7,11 @@ from app.logging_config import setup_logging
 setup_logging()
 settings = get_settings()
 
-celery_app = Celery("packagehub", broker=settings.redis_url, backend=settings.redis_url)
+# `autodiscover_tasks(["app.tasks"])` below looks for app.tasks.tasks, which does not exist, so a worker registers
+# only what `include` names.
+celery_app = Celery(
+    "packagehub", broker=settings.redis_url, backend=settings.redis_url, include=["app.tasks.fetch_packages"]
+)
 beat_schedule = {
     "retry-failed-sync": {
         "task": "app.tasks.retry_failed.run_retry_failed_sync",

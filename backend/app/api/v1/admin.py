@@ -1,12 +1,20 @@
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.updates import fetch_last_update_run
 from app.auth.tokens import require_admin
 from app.db import get_db_session
-from app.schemas.admin import AdminTaskResponse, RefreshRequest, RetryFailedRequest, SeedRequest, SyncStatusResponse
+from app.schemas.admin import (
+    AdminTaskResponse,
+    FetchPackagesRequest,
+    RefreshRequest,
+    RetryFailedRequest,
+    SeedRequest,
+    SyncStatusResponse,
+)
 from app.services.sync_state import get_or_create_pypi_sync_state
 from app.tasks.fetch_deps import fetch_missing_dependencies
+from app.tasks.fetch_packages import fetch_packages, invalid_purls
 from app.tasks.refresh import run_batch_refresh
 from app.tasks.retry_failed import run_retry_failed_sync
 from app.tasks.seed import run_seed
@@ -24,6 +32,16 @@ async def trigger_seed(payload: SeedRequest = Body(default_factory=SeedRequest))
 async def trigger_fetch(name: str) -> AdminTaskResponse:
     task = fetch_missing_dependencies.delay(name)
     return AdminTaskResponse(task_id=task.id, status="queued", operation="fetch")
+
+
+@router.post("/packages", response_model=AdminTaskResponse, dependencies=[Depends(require_admin)])
+async def trigger_fetch_packages(payload: FetchPackagesRequest) -> AdminTaskResponse:
+    errors = invalid_purls(payload.purls)
+    if errors:
+        detail = "; ".join(f"{purl}: {reason}" for purl, reason in errors.items())
+        raise HTTPException(status_code=422, detail=f"invalid purls, nothing queued: {detail}")
+    task = fetch_packages.delay(payload.purls)
+    return AdminTaskResponse(task_id=task.id, status="queued", operation="fetch_packages")
 
 
 @router.post("/refresh", response_model=AdminTaskResponse, dependencies=[Depends(require_admin)])
