@@ -7,9 +7,8 @@ from sqlalchemy import select
 
 from app.celery_app import celery_app
 from app.connectors.base import PackageNotFound
-from app.ecosystems.pypi.connector import PyPIConnector
 from app.db import SessionLocal
-from app.fetcher.pipeline import run_sync_pipeline
+from app.fetcher.pipeline import pypi_ref, sync_package
 from app.models.enums import SyncType
 from app.models.package import Package
 from app.services.metrics import observe_sync_duration
@@ -21,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 async def _run_refresh_async(limit: int = 500) -> dict[str, int | str]:
     started = perf_counter()
-    connector = PyPIConnector()
 
     async with SessionLocal() as db:
         rows = (
@@ -42,8 +40,7 @@ async def _run_refresh_async(limit: int = 500) -> dict[str, int | str]:
 
         for package in rows:
             try:
-                metadata = await connector.fetch_package_metadata(package.normalized_name)
-                await run_sync_pipeline(metadata, db)
+                await sync_package(db, pypi_ref(package.normalized_name))
                 await clear_sync_failure(db, package_name=package.normalized_name)
                 processed += 1
             except PackageNotFound as exc:

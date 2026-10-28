@@ -9,11 +9,10 @@ from sqlalchemy import func, select
 from app.celery_app import celery_app
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
-from app.ecosystems.pypi.connector import PyPIConnector
 from app.ecosystems.pypi.simple_index import PyPISimpleIndex
 from app.db import SessionLocal
-from app.fetcher.pipeline import run_sync_pipeline
-from app.models.enums import Ecosystem, PackageEventKind, UpdateRunStatus
+from app.fetcher.pipeline import mark_unavailable, pypi_ref, sync_package
+from app.models.enums import Ecosystem, UpdateRunStatus
 from app.models.package import Package
 from app.models.package_event import PackageEvent
 from app.models.update_run import UpdateRun
@@ -81,56 +80,46 @@ async def _fetch_serials_per_project(index: PyPISimpleIndex, tracked: list[Track
 
 async def _mark_unavailable(db, package_id, run_id) -> bool:
     package = await db.scalar(select(Package).where(Package.id == package_id))
-    if package is None or package.unavailable_at is not None:
+    if package is None:
         return False
-    now = datetime.now(UTC)
-    package.unavailable_at = now
-    db.add(PackageEvent(package_id=package.id, kind=PackageEventKind.project_unavailable, detected_at=now, run_id=run_id))
-    return True
+    return await mark_unavailable(db, package, run_id)
 
 
-async def _update_package(connector: PyPIConnector, package: TrackedPackage, expected_serial: int | None, run_id) -> str:
-    """Fetch one package and run the pipeline. Returns updated | stale | unavailable | failed."""
+async def _update_package(package: TrackedPackage, expected_serial: int | None, run_id) -> str:
+    """Fetch one package from its sources and write it. Returns updated | stale | unavailable | failed."""
     async with SessionLocal() as db:
         try:
-            metadata = await connector.fetch_package_metadata(package.name)
+            written = await sync_package(db, pypi_ref(package.name), run_id=run_id)
+            await clear_sync_failure(db, package_name=package.name, operation=OPERATION)
+            await db.commit()
         except PackageNotFound:
+            await db.rollback()
             newly = await _mark_unavailable(db, package.id, run_id)
             await clear_sync_failure(db, package_name=package.name, operation=OPERATION)
             await db.commit()
             return "unavailable" if newly else "updated"
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Daily update fetch failed: package=%s error=%s", package.name, exc.__class__.__name__)
-            await upsert_sync_failure(db, operation=OPERATION, package_name=package.name, exc=exc)
-            await db.commit()
-            return "failed"
-
-        try:
-            await run_sync_pipeline(metadata, db, run_id=run_id)
-            await clear_sync_failure(db, package_name=package.name, operation=OPERATION)
-            await db.commit()
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Daily update pipeline failed: package=%s", package.name)
+            logger.warning("Daily update failed: package=%s error=%s", package.name, exc.__class__.__name__)
             await db.rollback()
             await upsert_sync_failure(db, operation=OPERATION, package_name=package.name, exc=exc)
             await db.commit()
             return "failed"
 
     # PyPI JSON is served through a CDN and may lag behind the index right after a release.
-    if expected_serial is not None and metadata.last_serial is not None and metadata.last_serial < expected_serial:
+    if expected_serial is not None and written.last_serial is not None and written.last_serial < expected_serial:
         return "stale"
     return "updated"
 
 
 async def _update_many(
-    connector: PyPIConnector, items: list[tuple[TrackedPackage, int | None]], run_id, concurrency: int
+    items: list[tuple[TrackedPackage, int | None]], run_id, concurrency: int
 ) -> dict[str, list[tuple[TrackedPackage, int | None]]]:
     semaphore = asyncio.Semaphore(concurrency)
     results: dict[str, list[tuple[TrackedPackage, int | None]]] = {"updated": [], "stale": [], "unavailable": [], "failed": []}
 
     async def one(item: tuple[TrackedPackage, int | None]) -> None:
         async with semaphore:
-            outcome = await _update_package(connector, item[0], item[1], run_id)
+            outcome = await _update_package(item[0], item[1], run_id)
         results[outcome].append(item)
 
     await asyncio.gather(*(one(item) for item in items))
@@ -160,7 +149,6 @@ async def _run_daily_update_async() -> dict:
         tracked = await _load_tracked_packages(db)
 
     index = PyPISimpleIndex()
-    connector = PyPIConnector()
     index_serial: int | None = None
     try:
         try:
@@ -172,11 +160,11 @@ async def _run_daily_update_async() -> dict:
         changed, missing = plan_updates(tracked, index_serials)
         logger.info("Daily update: checked=%s changed=%s missing=%s", len(tracked), len(changed), len(missing))
 
-        results = await _update_many(connector, changed + [(package, None) for package in missing], run_id, concurrency)
+        results = await _update_many(changed + [(package, None) for package in missing], run_id, concurrency)
 
         if results["stale"]:
             await asyncio.sleep(settings.daily_update_stale_retry_seconds)
-            retry = await _update_many(connector, results["stale"], run_id, concurrency)
+            retry = await _update_many(results["stale"], run_id, concurrency)
             if retry["stale"]:
                 logger.warning("Daily update: %s packages still stale, next run will pick them up", len(retry["stale"]))
             results["stale"] = retry["stale"]

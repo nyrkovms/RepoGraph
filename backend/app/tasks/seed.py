@@ -9,11 +9,10 @@ from sqlalchemy import func, select
 from app.celery_app import celery_app
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
-from app.ecosystems.pypi.connector import PyPIConnector
 from app.db import SessionLocal
-from app.fetcher.pipeline import run_sync_pipeline
+from app.fetcher.pipeline import pypi_ref, sync_package
 from app.models.dependency import Dependency
-from app.models.enums import DependencyType, SyncType
+from app.models.enums import DependencyType, PackageOrigin, SyncType
 from app.models.package import Package
 from app.models.version import PackageVersion
 from app.normalizers.names import normalize_package_name
@@ -34,6 +33,7 @@ async def _unresolved_dependency_names(db, package_id) -> list[str]:
                 PackageVersion.package_id == package_id,
                 Dependency.dependency_ecosystem == "pypi",
                 Dependency.dependency_type == DependencyType.runtime,
+                Dependency.variant_registry_id.is_(None),
                 Dependency.resolved_package_id.is_(None),
             )
         )
@@ -43,7 +43,6 @@ async def _unresolved_dependency_names(db, package_id) -> list[str]:
 
 async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str, int | str]:
     started = perf_counter()
-    connector = PyPIConnector()
     queue: deque[tuple[str, int]] = deque((normalize_package_name(name), 0) for name in packages)
     visited: set[str] = set()
 
@@ -61,8 +60,8 @@ async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str,
             visited.add(name)
 
             try:
-                metadata = await connector.fetch_package_metadata(name)
-                package = await run_sync_pipeline(metadata, db)
+                origin = PackageOrigin.seed if depth == 0 else PackageOrigin.dependency
+                package = await sync_package(db, pypi_ref(name), origin=origin)
                 await clear_sync_failure(db, package_name=name)
                 processed += 1
 

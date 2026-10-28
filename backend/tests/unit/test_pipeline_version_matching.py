@@ -1,26 +1,23 @@
-from types import SimpleNamespace
+from app.fetcher.pipeline import plugin_for, select_best_version
 
-from app.fetcher.pipeline import _select_best_version_id
-
-
-def test_select_best_version_id_falls_back_to_prerelease_when_no_stable_match() -> None:
-    versions = [
-        SimpleNamespace(id="v1", version="0.49b0"),
-        SimpleNamespace(id="v2", version="0.50b0"),
-        SimpleNamespace(id="v3", version="0.60b1"),
-    ]
-
-    result = _select_best_version_id(versions, "==0.50b0")
-
-    assert result == "v2"
+PYPI = plugin_for("pypi")
 
 
-def test_select_best_version_id_matches_local_versions() -> None:
-    versions = [
-        SimpleNamespace(id="cpu", version="2.8.0+cpu"),
-        SimpleNamespace(id="base", version="2.8.0"),
-    ]
+def test_select_best_version_falls_back_to_prerelease_when_no_stable_match() -> None:
+    versions = [("0.49b0", "v1"), ("0.50b0", "v2"), ("0.60b1", "v3")]
 
-    result = _select_best_version_id(versions, "==2.8.0+cpu")
+    assert select_best_version(PYPI, versions, "==0.50b0") == "v2"
 
-    assert result == "cpu"
+
+def test_select_best_version_matches_local_versions() -> None:
+    versions = [("2.8.0+cpu", "cpu"), ("2.8.0", "base")]
+
+    assert select_best_version(PYPI, versions, "==2.8.0+cpu") == "cpu"
+
+
+def test_select_best_version_prefers_stable_and_skips_invalid() -> None:
+    versions = [("1.0", "a"), ("2.0rc1", "b"), ("1.5", "c"), ("not a version", "d")]
+
+    assert select_best_version(PYPI, versions, ">=1") == "c"
+    assert select_best_version(PYPI, versions, "not a specifier") == "c"
+    assert select_best_version(PYPI, versions, ">=3") is None

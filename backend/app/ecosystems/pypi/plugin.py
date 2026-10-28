@@ -16,6 +16,7 @@ from app.ecosystems.base import (
     SourceProfile,
     VersionScheme,
 )
+from app.ecosystems.merge import merge_by_priority
 from app.ecosystems.pypi.adapters import WarehouseAdapter
 from app.ecosystems.pypi.coordinates import PyPICoordinates
 from app.ecosystems.pypi.environment import PythonEnvironment, dependency_applies, parse_environment
@@ -41,7 +42,7 @@ class PyPIPlugin:
         return list(profile.registries)
 
     def merge(self, per_source: Sequence[NormalizedPackage]) -> MergedPackage:
-        raise NotImplementedError("merge of several sources lands with the generic pipeline (E0-B1)")
+        return merge_by_priority(per_source)
 
     def parse_environment(self, raw: Mapping[str, object]) -> Environment:
         return parse_environment(raw)

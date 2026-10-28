@@ -1,9 +1,11 @@
+"""Events from comparing the stored state of a package with its merged sources (SPEC-MULTI-ECOSYSTEM.md §8.3)."""
+
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from packaging.version import InvalidVersion, Version
-
-from app.connectors.base import NormalizedPackage
+from app.ecosystems.base import MergedPackage, VersionScheme
+from app.ecosystems.pypi.versions import PyPIVersionScheme
 from app.models.enums import PackageEventKind, PackageVersionStatus
 
 
@@ -13,6 +15,10 @@ class PackageSnapshot:
     version_statuses: dict[str, PackageVersionStatus]
     vulnerability_withdrawn: dict[str, datetime | None]
     unavailable: bool = False
+    # None = not loaded: no source_added events are derived.
+    registry_ids: set[str] | None = None                 # package_registries of the package
+    version_sources: dict[str, set[str]] | None = None   # version -> registries publishing it (version_sources)
+    deprecated_versions: set[str] = field(default_factory=set)
 
 
 @dataclass(slots=True)
@@ -23,61 +29,49 @@ class EventDraft:
     details: dict = field(default_factory=dict)
 
 
+_PYPI_VERSIONS = PyPIVersionScheme()
+
+
 def classify_bump(previous: str | None, current: str) -> str | None:
-    if previous is None:
-        return None
-    try:
-        prev_ver = Version(previous)
-        cur_ver = Version(current)
-    except InvalidVersion:
-        return "other"
-
-    if cur_ver.is_prerelease or cur_ver.is_devrelease:
-        return "pre"
-    if cur_ver <= prev_ver:
-        return "other"
-
-    prev_release = prev_ver.release + (0, 0, 0)
-    cur_release = cur_ver.release + (0, 0, 0)
-    if cur_ver.epoch != prev_ver.epoch or cur_release[0] != prev_release[0]:
-        return "major"
-    if cur_release[1] != prev_release[1]:
-        return "minor"
-    if cur_release == prev_release:
-        # Same release segment, only local/post label differs (e.g. 2.8.0 -> 2.8.0+cpu).
-        return "other"
-    return "patch"
+    return _PYPI_VERSIONS.bump(previous, current)
 
 
-def _version_sort_key(raw: str) -> tuple:
-    try:
-        return (0, Version(raw), raw)
-    except InvalidVersion:
-        return (1, Version("0"), raw)
-
-
-def diff_package(before: PackageSnapshot | None, after: NormalizedPackage) -> list[EventDraft]:
-    """Compare stored state with freshly fetched metadata and describe what changed."""
+def diff_package(
+    before: PackageSnapshot | None,
+    after: MergedPackage,
+    scheme: VersionScheme,
+    latest_version: str | None,
+    registry_slugs: Mapping[str, str] | None = None,
+) -> list[EventDraft]:
+    """Compare stored state with freshly merged metadata and describe what changed."""
     if before is None:
-        return [EventDraft(kind=PackageEventKind.tracking_started, details={"latest_version": after.latest_version})]
+        return [EventDraft(kind=PackageEventKind.tracking_started, details={"latest_version": latest_version})]
 
+    slugs = registry_slugs or {}
     events: list[EventDraft] = []
     if before.unavailable:
         events.append(EventDraft(kind=PackageEventKind.project_restored))
 
-    incoming = {version.version: version for version in after.versions}
+    # A source new to the package: one event for the package, not one per version it publishes.
+    new_registries: list[str] = []
+    if before.registry_ids is not None:
+        new_registries = [r for r in after.registry_revisions if r not in before.registry_ids]
+        for registry_id in new_registries:
+            events.append(EventDraft(kind=PackageEventKind.source_added, details={"registry": slugs.get(registry_id, registry_id)}))
+
+    incoming = {merged.version.version: merged for merged in after.versions}
 
     added = [
-        version
-        for name, version in incoming.items()
-        if name not in before.version_statuses and version.status != PackageVersionStatus.removed.value
+        merged for name, merged in incoming.items()
+        if name not in before.version_statuses and merged.version.status != PackageVersionStatus.removed.value
     ]
     # previous_version follows every new release; the bump is measured against the last stable one,
     # so 3.1.1 -> 3.2.0rc1 -> 3.2.0 reports "pre" and then "minor".
     previous = before.latest_version
     previous_stable = before.latest_version
-    for version in sorted(added, key=lambda item: _version_sort_key(item.version)):
-        prerelease = _is_prerelease(version.version)
+    for merged in sorted(added, key=lambda item: scheme.sort_key(item.version.version)):
+        version = merged.version
+        prerelease = scheme.is_prerelease(version.version)
         events.append(
             EventDraft(
                 kind=PackageEventKind.release_added,
@@ -85,36 +79,53 @@ def diff_package(before: PackageSnapshot | None, after: NormalizedPackage) -> li
                 occurred_at=version.release_date,
                 details={
                     "previous_version": previous,
-                    "bump": classify_bump(previous_stable, version.version),
+                    "bump": scheme.bump(previous_stable, version.version),
                     "prerelease": prerelease,
                 },
             )
         )
         if version.status == PackageVersionStatus.yanked.value:
-            events.append(_yanked_event(version.version, version.yanked_reason))
+            events.append(_yanked_event(version.version, version.status_reason))
         previous = version.version
         if not prerelease:
             previous_stable = version.version
 
-    for name in sorted(before.version_statuses, key=_version_sort_key):
+    # The same version appearing in one more source is not a new release (§8.3).
+    if before.version_sources is not None:
+        for name in sorted(incoming, key=scheme.sort_key):
+            known = before.version_sources.get(name)
+            if known is None:
+                continue
+            for registry_id in incoming[name].sources:
+                if registry_id not in known and registry_id not in new_registries:
+                    events.append(EventDraft(kind=PackageEventKind.source_added, version=name,
+                                             details={"registry": slugs.get(registry_id, registry_id)}))
+
+    for name in sorted(before.version_statuses, key=scheme.sort_key):
         old_status = before.version_statuses[name]
-        new_version = incoming.get(name)
-        new_status = PackageVersionStatus(new_version.status) if new_version else PackageVersionStatus.removed
+        new_merged = incoming.get(name)
+        new_status = PackageVersionStatus(new_merged.version.status) if new_merged else PackageVersionStatus.removed
         if old_status == new_status:
             continue
+        reason = new_merged.version.status_reason if new_merged else None
 
         if new_status == PackageVersionStatus.removed:
             events.append(EventDraft(kind=PackageEventKind.release_removed, version=name))
         elif old_status == PackageVersionStatus.removed:
             events.append(EventDraft(kind=PackageEventKind.release_restored, version=name))
             if new_status == PackageVersionStatus.yanked:
-                events.append(_yanked_event(name, new_version.yanked_reason))
+                events.append(_yanked_event(name, reason))
         elif new_status == PackageVersionStatus.yanked:
-            events.append(_yanked_event(name, new_version.yanked_reason))
+            events.append(_yanked_event(name, reason))
         elif old_status == PackageVersionStatus.yanked:
             events.append(EventDraft(kind=PackageEventKind.release_unyanked, version=name))
 
-    for vuln in after.vulnerabilities:
+    for name in sorted(incoming, key=scheme.sort_key):
+        deprecation = incoming[name].version.deprecation
+        if deprecation is not None and name not in before.deprecated_versions:
+            events.append(EventDraft(kind=PackageEventKind.release_deprecated, version=name, details=dict(deprecation)))
+
+    for vuln in after.package.vulnerabilities or []:
         if vuln.source_id not in before.vulnerability_withdrawn:
             events.append(
                 EventDraft(
@@ -153,11 +164,3 @@ def _short_summary(text: str | None, limit: int = 300) -> str | None:
         if line:
             return line if len(line) <= limit else line[: limit - 1] + "…"
     return None
-
-
-def _is_prerelease(raw: str) -> bool:
-    try:
-        parsed = Version(raw)
-    except InvalidVersion:
-        return False
-    return parsed.is_prerelease or parsed.is_devrelease

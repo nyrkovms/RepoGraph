@@ -5,9 +5,9 @@ from time import perf_counter
 
 from app.celery_app import celery_app
 from app.connectors.base import PackageNotFound
-from app.ecosystems.pypi.connector import PyPIConnector
 from app.db import SessionLocal
-from app.fetcher.pipeline import run_sync_pipeline
+from app.fetcher.pipeline import pypi_ref, sync_package
+from app.models.enums import PackageOrigin
 from app.models.enums import SyncType
 from app.normalizers.names import normalize_package_name
 from app.services.metrics import observe_sync_duration
@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 async def _fetch_package_async(name: str) -> dict[str, str]:
     started = perf_counter()
-    connector = PyPIConnector()
     normalized = normalize_package_name(name)
 
     async with SessionLocal() as db:
@@ -27,8 +26,7 @@ async def _fetch_package_async(name: str) -> dict[str, str]:
         await db.commit()
 
         try:
-            metadata = await connector.fetch_package_metadata(normalized)
-            await run_sync_pipeline(metadata, db)
+            await sync_package(db, pypi_ref(normalized), origin=PackageOrigin.manual)
             await clear_sync_failure(db, package_name=normalized)
             await mark_sync_progress(db, processed=1)
             elapsed_ms = (perf_counter() - started) * 1000

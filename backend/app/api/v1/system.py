@@ -23,7 +23,7 @@ async def health() -> HealthResponse:
 async def stats(db: AsyncSession = Depends(get_db_session)) -> StatsResponse:
     package_count = await db.scalar(select(func.count(Package.id)).where(Package.ecosystem == "pypi"))
     version_count = await db.scalar(select(func.count(PackageVersion.id)))
-    dependency_count = await db.scalar(select(func.count(Dependency.id)))
+    dependency_count = await db.scalar(select(func.count(Dependency.id)).where(Dependency.variant_registry_id.is_(None)))
     last_sync_at = await db.scalar(select(func.max(SyncState.last_success_at)))
 
     return StatsResponse(

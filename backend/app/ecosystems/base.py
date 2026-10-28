@@ -351,7 +351,8 @@ class EcosystemPlugin(Protocol):
 
     def merge(self, per_source: Sequence[NormalizedPackage]) -> MergedPackage:
         """Several sources -> one catalog row: package fields from the highest-priority source that has them,
-        a version's metadata from the highest-priority source publishing it, per-source statuses kept."""
+        a version's metadata from the highest-priority source publishing it, per-source statuses kept.
+        `per_source` is ordered by global source priority, highest first (the first one is the primary source)."""
         ...
 
     def parse_environment(self, raw: Mapping[str, object]) -> Environment: ...

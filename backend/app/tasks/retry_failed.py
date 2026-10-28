@@ -6,9 +6,8 @@ from time import perf_counter
 from app.celery_app import celery_app
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
-from app.ecosystems.pypi.connector import PyPIConnector
 from app.db import SessionLocal
-from app.fetcher.pipeline import run_sync_pipeline
+from app.fetcher.pipeline import pypi_ref, sync_package
 from app.models.enums import SyncType
 from app.services.metrics import observe_sync_duration
 from app.services.sync_failures import clear_sync_failure, list_due_sync_failures, upsert_sync_failure
@@ -20,7 +19,6 @@ logger = logging.getLogger(__name__)
 async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | str]:
     settings = get_settings()
     started = perf_counter()
-    connector = PyPIConnector()
     batch_limit = limit if limit is not None else settings.sync_failed_retry_batch_limit
 
     recovered = 0
@@ -46,8 +44,7 @@ async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | s
 
         for row in rows:
             try:
-                metadata = await connector.fetch_package_metadata(row.package_name)
-                await run_sync_pipeline(metadata, db)
+                await sync_package(db, pypi_ref(row.package_name))
                 await clear_sync_failure(db, package_name=row.package_name)
                 recovered += 1
             except PackageNotFound as exc:

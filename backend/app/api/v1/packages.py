@@ -8,7 +8,7 @@ from packaging.markers import Marker
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ecosystems.pypi.connector import PyPIConnector
+from app.ecosystems.base import PackageRef
 from app.db import get_db_session
 from app.fetcher.lazy import LazyFetcher
 from app.fetcher.pipeline import ensure_version_dependencies, resolve_dependency_links
@@ -186,9 +186,8 @@ async def get_dependencies_tree(
         raise HTTPException(status_code=404, detail=f"Version '{ver}' not found")
 
     env = _build_marker_environment(python_version=python_version, os_name=os)
-    connector = PyPIConnector()
-    fetcher = LazyFetcher(connector=connector, db=db)
-    await ensure_version_dependencies(db, package, version_row, connector)
+    fetcher = LazyFetcher(db=db)
+    await ensure_version_dependencies(db, package, version_row)
     max_depth = depth or FULL_TREE_MAX_DEPTH
     nodes = await _build_tree_for_version(
         db=db,
@@ -200,7 +199,6 @@ async def get_dependencies_tree(
         expand_optional_at_current_level=True,
         env=env,
         visited={str(version_row.id)},
-        connector=connector,
         fetcher=fetcher,
     )
     await db.commit()
@@ -419,8 +417,7 @@ async def _find_or_fetch_package(db: AsyncSession, name: str) -> Package | None:
     if package:
         return package
 
-    fetcher = LazyFetcher(connector=PyPIConnector(), db=db)
-    await fetcher.ensure_package(normalized)
+    await LazyFetcher(db=db).ensure_package(PackageRef(ecosystem="pypi", namespace="", name=normalized))
 
     return await db.scalar(
         select(Package).where(Package.ecosystem == Ecosystem.pypi, Package.normalized_name == normalized)
@@ -544,14 +541,14 @@ async def _build_tree_for_version(
     expand_optional_at_current_level: bool,
     env: dict | None,
     visited: set[str],
-    connector: PyPIConnector,
     fetcher: LazyFetcher,
 ) -> list[DependencyNode]:
-    await ensure_version_dependencies(db, package, version_row, connector)
+    await ensure_version_dependencies(db, package, version_row)
     deps = (
         await db.scalars(
             select(Dependency)
-            .where(Dependency.version_id == version_row.id)
+            # Canonical set only; per-source variants are chosen by profile with the graph format (E0-C).
+            .where(Dependency.version_id == version_row.id, Dependency.variant_registry_id.is_(None))
             .order_by(Dependency.dependency_type.asc(), Dependency.dependency_name.asc())
         )
     ).all()
@@ -588,7 +585,7 @@ async def _build_tree_for_version(
                     else:
                         child_package = await db.scalar(select(Package).where(Package.id == resolved.package_id))
                         if child_package:
-                            await ensure_version_dependencies(db, child_package, resolved, connector)
+                            await ensure_version_dependencies(db, child_package, resolved)
                             children = await _build_tree_for_version(
                                 db=db,
                                 package=child_package,
@@ -599,7 +596,6 @@ async def _build_tree_for_version(
                                 expand_optional_at_current_level=False,
                                 env=env,
                                 visited=visited | {resolved_key},
-                                connector=connector,
                                 fetcher=fetcher,
                             )
 
@@ -620,7 +616,9 @@ async def _build_tree_for_version(
 
 
 async def _ensure_dependency_resolved(db: AsyncSession, dep: Dependency, fetcher: LazyFetcher) -> str | None:
-    package = await fetcher.ensure_package(dep.dependency_name)
+    package = await fetcher.ensure_package(
+        PackageRef(ecosystem=dep.dependency_ecosystem.value, namespace=dep.dependency_namespace or "", name=dep.dependency_name)
+    )
     if not package:
         return None
 
