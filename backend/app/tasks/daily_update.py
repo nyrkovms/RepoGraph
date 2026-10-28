@@ -9,8 +9,8 @@ from sqlalchemy import func, select
 from app.celery_app import celery_app
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
-from app.connectors.pypi import PyPIConnector
-from app.connectors.pypi_index import PyPISimpleIndex
+from app.ecosystems.pypi.connector import PyPIConnector
+from app.ecosystems.pypi.simple_index import PyPISimpleIndex
 from app.db import SessionLocal
 from app.fetcher.pipeline import run_sync_pipeline
 from app.models.enums import Ecosystem, PackageEventKind, UpdateRunStatus

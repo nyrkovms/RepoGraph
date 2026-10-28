@@ -3,7 +3,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.connectors.pypi import PyPIConnector
+from app.ecosystems.pypi.connector import PyPIConnector
 from app.fetcher.pipeline import find_package, run_sync_pipeline
 from app.normalizers.names import normalize_package_name
 

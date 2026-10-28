@@ -137,8 +137,8 @@ backend/app/
 │   ├── base.py               — контракт (design/ecosystem_contract.py)
 │   ├── registry.py           — регистрация плагинов, get_plugin()
 │   ├── purl.py, routing.py, merge.py   — общие реализации, плагины их переопределяют
-│   ├── pypi/   plugin.py  versions.py  deps.py  resolver.py
-│   │           adapters/warehouse.py (pypi.org)  adapters/simple.py (PEP 503/691: PyTorch, NVIDIA)
+│   ├── pypi/   plugin.py  coordinates.py  versions.py  environment.py  changes.py  resolver.py
+│   │           adapters.py (pypi-warehouse; pypi-simple в E0.5 — модуль делится на adapters/, когда адаптеров станет два)
 │   ├── npm/    adapters/registry.py  changes.py (_changes, etag)
 │   ├── maven/  adapters/maven2.py  pom.py (effective model)  resolver.py (maven | gradle)
 │   ├── nuget/  adapters/v3.py  frameworks.py (TFM)
@@ -166,7 +166,7 @@ rpm_worker/                   — Dockerfile, worker.py, modules.py, solver.py
 | crates | — | crate | lowercase, `-` и `_` эквивалентны | `pkg:cargo/serde` |
 | rpm | дистрибутив и мажорный релиз: `rhel-9`, `rocky-9`, `epel-9`, `fedora-41` | имя бинарного пакета | Без изменений | `pkg:rpm/redhat/openssl?distro=rhel-9` |
 
-- Источник, из которого взята версия, в purl можно указать qualifier'ом `repository_url`. Например, `pkg:pypi/torch@2.5.1%2Bcu121?repository_url=https://download.pytorch.org/whl/cu121`.
+- Источник, из которого взята версия, в purl можно указать qualifier'ом `repository_url`. Например, `pkg:pypi/torch@2.5.1%2Bcu121?repository_url=https:%2F%2Fdownload.pytorch.org%2Fwhl%2Fcu121` (каноническая форма purl кодирует `/` в значениях qualifiers; на входе принимается и некодированная).
 - **RPM.** `openssl` в RHEL 9, Rocky 9 и Fedora 41 — разные пакеты с разной историей сборок, поэтому дистрибутив входит в идентичность. Каталог стенда разработки (Rocky, Alma, Fedora) и целевой среды (RHEL) различается именно namespace. Namespace задаёт конфигурация источника (`config.namespace`). EPEL получает свой namespace `epel-9`. Архитектура — свойство артефакта, поток модуля (`nodejs:18`) — свойство версии.
 
 ---

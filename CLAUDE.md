@@ -15,8 +15,11 @@ FastAPI + SQLAlchemy async + Alembic + Celery + Postgres 16 + Redis; React/Vite 
 ## Layout
 
 ```
-backend/app/            api/v1 (routes), models, schemas, fetcher (pipeline, events), tasks (celery),
-                        connectors (PyPI today; moves to ecosystems/ in E0), resolver, services
+backend/app/            api/v1 (routes), models, schemas, fetcher (pipeline, events), tasks (celery), resolver, services
+backend/app/ecosystems/ plugin contract (base.py), registry, purl, schemas (jsonb), versions_common; one package per
+                        ecosystem — pypi/: plugin, coordinates, versions, environment, adapters (pypi-warehouse),
+                        changes (detector), connector + simple_index + pep508 (moved legacy code);
+                        connectors/base.py = legacy types until E0-B1
 backend/alembic/versions/
 backend/tests/unit, backend/tests/integration
 frontend/src/pages, frontend/src/lib/api.js
@@ -67,3 +70,5 @@ scripts/record_fixtures.sh       # re-record upstream responses for offline CI (
   agent stops, so implementers create their own instead:
   `git worktree add -b wp/<id> .claude/worktrees/wp-<id> <stage-branch-head-sha>` and keep it until Opus removes it.
 - A reviewer subagent checks every stage PR against the spec before it is marked ready.
+- When the stage review is addressed and checks are green, Opus updates the PR description, marks it ready and
+  enables auto-merge (merge commit) without asking, then starts the next stage from the updated `main`.

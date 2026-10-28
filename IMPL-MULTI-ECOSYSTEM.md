@@ -15,7 +15,7 @@
 
 ## 0. Правила процесса
 
-1. **Ветка и draft PR на этап с первого коммита.** Ветки `claude/me-e0a-schema`, `claude/me-e0b-pipeline`, `claude/me-e0c-api`, `claude/me-e05-pypi-indexes`, `claude/me-e1-npm` и т. д. Draft PR открывается сразу, чтобы CI проверял каждый коммит WP (§5, P0.9). В ready-for-review PR переводится после ревью этапа. Слияние — через обязательные проверки CI.
+1. **Ветка и draft PR на этап с первого коммита.** Ветки `claude/me-e0a-schema`, `claude/me-e0b-pipeline`, `claude/me-e0c-api`, `claude/me-e05-pypi-indexes`, `claude/me-e1-npm` и т. д. Draft PR открывается сразу, чтобы CI проверял каждый коммит WP (§5, P0.9). В ready-for-review PR переводится после ревью этапа, сразу с auto-merge (merge commit), без отдельного подтверждения. Слияние — через обязательные проверки CI.
 2. **Расхождение → вопрос.** Если при реализации спека расходится с кодом, данными или поведением источника, WP останавливается, вопрос уходит владельцу продукта с вариантами и рекомендацией. Независимые WP продолжаются. Решение записывается в спеку тем же PR.
 3. **Делегирование Sonnet.** Механические задачи: перенос без изменения поведения, Pydantic-схемы, маршруты по образцу, фикстуры, тесты по списку случаев, Dockerfile, CLI. Opus делает контракты, алгоритмы (merge, резолверы, детекторы с курсорами, модульность RPM), миграции данных и ревью. Задание Sonnet — по шаблону (P0.11): файлы, образец, запреты, критерий готовности, команда проверки. Результат Sonnet Opus проверяет до коммита.
 4. **Защищённые пути.** `backend/app/ecosystems/base.py` (контракт), `backend/alembic/versions/`, `design/` меняет только Opus. Исполнитель-Sonnet о них предупреждён в определении агента, ревьюер проверяет diff.
@@ -80,24 +80,39 @@
 | `dependencies` | `dependency_namespace` → `''`, нормализация имён (T14), `alias`, `scope`, `details`, `variant_registry_id`; новый индекс | Пишет нормализованное | NOT NULL namespace |
 | `artifacts` | `arch`, контрольные суммы, `has_metadata_file` (копия T7), `metadata_blob`; новый уникальный ключ `(version_id, registry_id, filename)` рядом со старым | Удаляет и вставляет файлы **только своего источника** | Удалить старый ключ и `requires_dist_metadata` |
 | `dist_tags` | — | — | PK `(package_id, tag)`, удалить `id` |
-| `registries` | `protocol` (pypi → `pypi-warehouse`), `config`, `routing`, `priority`, `enabled` (копия), `auth_type`, `credentials_ref`; у `tier`, `registry_type` — DEFAULT | Читает новые | Удалить старые (T5) |
+| `registries` | `protocol` (pypi → `pypi-warehouse`, nullable до 0007), `config`, `routing`, `priority`, `enabled` (копия), `auth_type`, `credentials_ref`; у `tier`, `registry_type` — DEFAULT. Источник с `auth_required` останавливает миграцию: секреты из `auth_config` в БД не переносятся | Читает и пишет новые | NOT NULL на `protocol`; удалить старые (T5) |
 | `source_profiles` (+ члены) | Профиль `default` экосистемы `pypi` с источником `pypi` | — | — |
 | `source_documents` (новая) | Создать | Пишет | — |
 | `sync_states` | `degraded_until`, `consecutive_failures`; у `sync_type` — DEFAULT | Пишет курсор и здоровье | Удалить `sync_type`, `packages_synced/total` (по R1) |
 | `runs` (по R1) | Создать; перенести `update_runs` с `operation='daily_update'`, `ecosystem='pypi'` | Пишет `runs` | Удалить `update_runs` |
-| `sync_failures` | `ecosystem`, `registry_id`, `package_ref` (`pkg:pypi/<name>`); у `package_name` — DEFAULT; новый ключ рядом со старым | Пишет новые | Удалить `package_name`, старый ключ |
-| `package_events` | `version` → `text`; новые виды событий | — | — |
+| `sync_failures` | `ecosystem`, `registry_id`, `package_ref` (`pkg:pypi/<name>`). `package_name` без DEFAULT: старый ключ `(operation, package_name)` жив, поэтому новый код **тоже пишет `package_name`** до 0007 | Пишет новые поля и `package_name` | Новый ключ `NULLS NOT DISTINCT (operation, ecosystem, registry_id, package_ref)`, удалить `package_name` и старый ключ |
+| `package_events` | `version` → `text`; новые виды событий; FK `run_id` → `update_runs` снимается | Пишет `run_id` из `runs` | Докопировать строки `update_runs`, появившиеся после 0006; FK `run_id` → `runs` |
 | `ecosystem_enum` | `rpm` (ADD VALUE) | — | — |
 
+**Повторное заполнение в 0007.** Код до E0-B не пишет новые колонки, а старые меняет. Поэтому строки, **появившиеся или изменённые** между 0006 и E0-B, расходятся с производными колонками. 0007 сначала снова вызывает `backfill()` из 0006 (загружает модуль 0006 по пути) для пустых строк. Затем досинхронизирует расхождения:
+- `dependencies_state = 'hydrated'`, где `features.dependencies_hydrated = true`, а состояние ещё `pending`;
+- `engines` из `requires_python`, где они различаются;
+- `package_registries.upstream_revision` из `packages.last_serial`, где `upstream_revision IS DISTINCT FROM last_serial::text`;
+- `runs` из `update_runs` через `ON CONFLICT DO UPDATE` (прогон мог быть `running` в момент 0006).
+
+Только после этого ставятся NOT NULL и делается VALIDATE.
+
 **Механика.**
-- Батчевые обновления идут через `op.get_context().autocommit_block()` с коммитом каждого батча, поэтому прерванную миграцию можно возобновить: каждый шаг отбирает только ещё не заполненные строки.
-- Составные FK создаются `NOT VALID` и проверяются в 0007.
+- Три фазы:
+  1. **Быстрый DDL** в одной транзакции под `lock_timeout = 5s`: колонки без перезаписи таблиц, пустые новые таблицы.
+  2. **`backfill()`** в `autocommit_block`. Пакеты по 5000 строк, выборка по возрастанию первичного ключа (keyset), один оператор на пакет. Каждая строка `package_versions` переписывается один раз.
+  3. **Индексы** `CREATE INDEX CONCURRENTLY` после данных. Невалидный индекс от прерванного прогона удаляется. Уникальные ограничения подключаются через `USING INDEX`, FK создаются `NOT VALID`.
+- **Возобновление.** Каждый шаг выбирает только незаполненные строки. При падении в фазе 2 или 3 `alembic_version` остаётся 0005 при уже применённом DDL фазы 1. Выход — повторить upgrade (DDL идемпотентен); downgrade в этом состоянии не делать.
 - Миграция не импортирует код `app`: кодировщик `sort_key` и нормализация вкопированы, чтобы историческая миграция не менялась вместе с кодом.
 - Downgrade 0006 удаляет только добавленное.
 - 0007 объявлена **необратимой**, бэкап перед ней обязателен (`stand.sh migrate` его делает и останавливает worker и beat, P0.10).
 
 **Проверка.**
-- 0006: отдельные проверки на дампе стенда — счётчики до и после, все версии получили `sort_key`, у каждой версии есть `version_sources`, дубликатов нет, приложение старой версии работает на схеме после 0006.
+- `scripts/check_migrations.sh` (в CI):
+  - синтетический каталог 0005 → head → проверки `check_head.sql` (все преобразования, порядок PEP 440, T13, нормализация только PyPI, индексы валидны) → `alembic check`;
+  - downgrade: схема совпадает со схемой 0005 с точностью до разрешённых остатков;
+  - негативный случай T16: миграция останавливается, `alembic_version` не меняется.
+- На копии стенда: счётчики до и после, у всех версий `sort_key` и `version_sources`. Приложение старой версии на схеме после 0006: seed, интеграционные тесты, smoke.
 - После 0007: сценарии `design/schema-check` во временной БД из дампа (slug сценариев отличаются от существующих).
 
 ---

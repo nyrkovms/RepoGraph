@@ -1,6 +1,6 @@
 import pytest
 
-from app.normalizers.pep508 import parse_pep508
+from app.ecosystems.pypi.pep508 import parse_pep508
 
 
 @pytest.mark.parametrize(

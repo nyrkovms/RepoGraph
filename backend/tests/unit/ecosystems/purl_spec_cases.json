@@ -1,0 +1,944 @@
+{
+  "note": "Cases that need only the generic grammar. Left out: pypi name normalization, Canonical output percent-encodes '/' in qualifier values, as the official suite expects.",
+  "source": "https://github.com/package-url/purl-spec tests/spec/specification-test.json and tests/types/*-test.json (cases that need only the generic grammar)",
+  "tests": [
+    {
+      "description": "a scheme is always required",
+      "test_type": "parse",
+      "input": "EnterpriseLibrary.Common@6.0.1304",
+      "expected_failure": true,
+      "expected_output": null
+    },
+    {
+      "description": "a type is always required",
+      "test_type": "parse",
+      "input": "pkg:EnterpriseLibrary.Common@6.0.1304",
+      "expected_failure": true,
+      "expected_output": null
+    },
+    {
+      "description": "check for invalid character in type",
+      "test_type": "parse",
+      "input": "pkg:n&g?inx/nginx@0.8.9",
+      "expected_failure": true,
+      "expected_output": null
+    },
+    {
+      "description": "check for type that starts with number",
+      "test_type": "parse",
+      "input": "pkg:3nginx/nginx@0.8.9",
+      "expected_failure": true,
+      "expected_output": null
+    },
+    {
+      "description": "check for colon in type",
+      "test_type": "parse",
+      "input": "pkg:nginx:a/nginx@0.8.9",
+      "expected_failure": true,
+      "expected_output": null
+    },
+    {
+      "description": "checks for invalid qualifier keys",
+      "test_type": "parse",
+      "input": "pkg:npm/myartifact@1.0.0?in%20production=true",
+      "expected_failure": true,
+      "expected_output": null
+    },
+    {
+      "description": "a name is required",
+      "test_type": "parse",
+      "input": "pkg:maven/@1.3.4",
+      "expected_failure": true,
+      "expected_output": null
+    },
+    {
+      "description": "invalid encoded colon : between scheme and type",
+      "test_type": "parse",
+      "input": "pkg%3Amaven/org.apache.commons/io",
+      "expected_failure": true,
+      "expected_output": null
+    },
+    {
+      "description": "Build with multiple checksum",
+      "test_type": "build",
+      "input": {
+        "type": "generic",
+        "namespace": null,
+        "name": "openssl",
+        "version": "1.1.10g",
+        "qualifiers": {
+          "checksum": "sha1:ad9503c3e994a4f,sha256:41bf9088b3a1e6c1ef1d"
+        },
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:generic/openssl@1.1.10g?checksum=sha1:ad9503c3e994a4f%2Csha256:41bf9088b3a1e6c1ef1d"
+    },
+    {
+      "description": "pypi names have special rules and not case sensitive",
+      "test_type": "build",
+      "input": {
+        "type": "pypi",
+        "namespace": null,
+        "name": "django-package",
+        "version": "1.11.1.dev1",
+        "qualifiers": null,
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:pypi/django-package@1.11.1.dev1"
+    },
+    {
+      "description": "Parse test for PURL type: pypi",
+      "test_type": "parse",
+      "input": "pkg:pypi/django@1.11.1",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "pypi",
+        "namespace": null,
+        "name": "django",
+        "version": "1.11.1",
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: pypi",
+      "test_type": "build",
+      "input": {
+        "type": "pypi",
+        "namespace": null,
+        "name": "django",
+        "version": "1.11.1",
+        "qualifiers": null,
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:pypi/django@1.11.1"
+    },
+    {
+      "description": "Parse test for PURL type: pypi",
+      "test_type": "parse",
+      "input": "pkg:pypi/django@1.11.1?file_name=Django-1.11.1.tar.gz",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "pypi",
+        "namespace": null,
+        "name": "django",
+        "version": "1.11.1",
+        "qualifiers": {
+          "file_name": "Django-1.11.1.tar.gz"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: pypi",
+      "test_type": "build",
+      "input": {
+        "type": "pypi",
+        "namespace": null,
+        "name": "django",
+        "version": "1.11.1",
+        "qualifiers": {
+          "file_name": "Django-1.11.1.tar.gz"
+        },
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:pypi/django@1.11.1?file_name=Django-1.11.1.tar.gz"
+    },
+    {
+      "description": "Parse test for PURL type: pypi",
+      "test_type": "parse",
+      "input": "pkg:pypi/django@1.11.1?file_name=Django-1.11.1-py2.py3-none-any.whl",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "pypi",
+        "namespace": null,
+        "name": "django",
+        "version": "1.11.1",
+        "qualifiers": {
+          "file_name": "Django-1.11.1-py2.py3-none-any.whl"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: pypi",
+      "test_type": "build",
+      "input": {
+        "type": "pypi",
+        "namespace": null,
+        "name": "django",
+        "version": "1.11.1",
+        "qualifiers": {
+          "file_name": "Django-1.11.1-py2.py3-none-any.whl"
+        },
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:pypi/django@1.11.1?file_name=Django-1.11.1-py2.py3-none-any.whl"
+    },
+    {
+      "description": "Parse test for PURL type: pypi",
+      "test_type": "parse",
+      "input": "pkg:pypi/django-allauth@12.23",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "pypi",
+        "namespace": null,
+        "name": "django-allauth",
+        "version": "12.23",
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: pypi",
+      "test_type": "build",
+      "input": {
+        "type": "pypi",
+        "namespace": null,
+        "name": "django-allauth",
+        "version": "12.23",
+        "qualifiers": null,
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:pypi/django-allauth@12.23"
+    },
+    {
+      "description": "npm can be scoped",
+      "test_type": "parse",
+      "input": "pkg:npm/%40angular/animation@12.3.1",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "npm",
+        "namespace": "@angular",
+        "name": "animation",
+        "version": "12.3.1",
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "npm can be scoped",
+      "test_type": "build",
+      "input": {
+        "type": "npm",
+        "namespace": "@angular",
+        "name": "animation",
+        "version": "12.3.1",
+        "qualifiers": null,
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:npm/%40angular/animation@12.3.1"
+    },
+    {
+      "description": "Parse test for PURL type: npm",
+      "test_type": "parse",
+      "input": "pkg:npm/foobar@12.3.1",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "npm",
+        "namespace": null,
+        "name": "foobar",
+        "version": "12.3.1",
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: npm",
+      "test_type": "build",
+      "input": {
+        "type": "npm",
+        "namespace": null,
+        "name": "foobar",
+        "version": "12.3.1",
+        "qualifiers": null,
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:npm/foobar@12.3.1"
+    },
+    {
+      "description": "Parse test for PURL type: npm",
+      "test_type": "parse",
+      "input": "pkg:npm/mypackage@12.4.5?vcs_url=git://host.com/path/to/repo.git%404345abcd34343",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "npm",
+        "namespace": null,
+        "name": "mypackage",
+        "version": "12.4.5",
+        "qualifiers": {
+          "vcs_url": "git://host.com/path/to/repo.git@4345abcd34343"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "valid npm purl without version and with subpath, scope unencoded",
+      "test_type": "parse",
+      "input": "pkg:npm/@babel/core#/googleapis/api/annotations/",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "npm",
+        "namespace": "@babel",
+        "name": "core",
+        "version": null,
+        "qualifiers": null,
+        "subpath": "googleapis/api/annotations"
+      }
+    },
+    {
+      "description": "valid npm purl without version and with subpath, scope unencoded",
+      "test_type": "parse",
+      "input": "pkg:npm/%40babel/core#/googleapis/api/annotations/",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "npm",
+        "namespace": "@babel",
+        "name": "core",
+        "version": null,
+        "qualifiers": null,
+        "subpath": "googleapis/api/annotations"
+      }
+    },
+    {
+      "description": "valid maven purl",
+      "test_type": "parse",
+      "input": "pkg:maven/org.apache.commons/io@1.3.4",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "org.apache.commons",
+        "name": "io",
+        "version": "1.3.4",
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "valid maven purl",
+      "test_type": "build",
+      "input": {
+        "type": "maven",
+        "namespace": "org.apache.commons",
+        "name": "io",
+        "version": "1.3.4",
+        "qualifiers": null,
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:maven/org.apache.commons/io@1.3.4"
+    },
+    {
+      "description": "basic valid maven purl without version",
+      "test_type": "parse",
+      "input": "pkg:maven/org.apache.commons/io",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "org.apache.commons",
+        "name": "io",
+        "version": null,
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "basic valid maven purl without version",
+      "test_type": "build",
+      "input": {
+        "type": "maven",
+        "namespace": "org.apache.commons",
+        "name": "io",
+        "version": null,
+        "qualifiers": null,
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:maven/org.apache.commons/io"
+    },
+    {
+      "description": "maven often uses qualifiers here mixedcase type",
+      "test_type": "parse",
+      "input": "pkg:Maven/org.apache.xmlgraphics/batik-anim@1.9.1?classifier=sources&repositorY_url=https://repo.spring.io/release",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "org.apache.xmlgraphics",
+        "name": "batik-anim",
+        "version": "1.9.1",
+        "qualifiers": {
+          "classifier": "sources",
+          "repository_url": "https://repo.spring.io/release"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "maven pom reference",
+      "test_type": "parse",
+      "input": "pkg:Maven/org.apache.xmlgraphics/batik-anim@1.9.1?type=pom&repositorY_url=repo.spring.io/release",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "org.apache.xmlgraphics",
+        "name": "batik-anim",
+        "version": "1.9.1",
+        "qualifiers": {
+          "type": "pom",
+          "repository_url": "repo.spring.io/release"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "maven can come with a type qualifier",
+      "test_type": "parse",
+      "input": "pkg:Maven/net.sf.jacob-project/jacob@1.14.3?classifier=x86&type=dll",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "net.sf.jacob-project",
+        "name": "jacob",
+        "version": "1.14.3",
+        "qualifiers": {
+          "classifier": "x86",
+          "type": "dll"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "maven can come with a type qualifier",
+      "test_type": "build",
+      "input": {
+        "type": "maven",
+        "namespace": "net.sf.jacob-project",
+        "name": "jacob",
+        "version": "1.14.3",
+        "qualifiers": {
+          "classifier": "x86",
+          "type": "dll"
+        },
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:maven/net.sf.jacob-project/jacob@1.14.3?classifier=x86&type=dll"
+    },
+    {
+      "description": "slash / after type is not significant",
+      "test_type": "parse",
+      "input": "pkg:/maven/org.apache.commons/io",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "org.apache.commons",
+        "name": "io",
+        "version": null,
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "double slash // after type is not significant",
+      "test_type": "parse",
+      "input": "pkg://maven/org.apache.commons/io",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "org.apache.commons",
+        "name": "io",
+        "version": null,
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "slash /// after type is not significant",
+      "test_type": "parse",
+      "input": "pkg:///maven/org.apache.commons/io",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "org.apache.commons",
+        "name": "io",
+        "version": null,
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "valid maven purl with case sensitive namespace and name",
+      "test_type": "parse",
+      "input": "pkg:maven/HTTPClient/HTTPClient@0.3-3",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "HTTPClient",
+        "name": "HTTPClient",
+        "version": "0.3-3",
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "valid maven purl with case sensitive namespace and name",
+      "test_type": "build",
+      "input": {
+        "type": "maven",
+        "namespace": "HTTPClient",
+        "name": "HTTPClient",
+        "version": "0.3-3",
+        "qualifiers": null,
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:maven/HTTPClient/HTTPClient@0.3-3"
+    },
+    {
+      "description": "valid maven purl containing a space in the version and qualifier",
+      "test_type": "parse",
+      "input": "pkg:maven/mygroup/myartifact@1.0.0%20Final?mykey=my%20value",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "mygroup",
+        "name": "myartifact",
+        "version": "1.0.0 Final",
+        "qualifiers": {
+          "mykey": "my value"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "valid maven purl containing a space in the version and qualifier",
+      "test_type": "build",
+      "input": {
+        "type": "maven",
+        "namespace": "mygroup",
+        "name": "myartifact",
+        "version": "1.0.0 Final",
+        "qualifiers": {
+          "mykey": "my value"
+        },
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:maven/mygroup/myartifact@1.0.0%20Final?mykey=my%20value"
+    },
+    {
+      "description": "Parse test for PURL type: maven",
+      "test_type": "parse",
+      "input": "pkg:maven/org.apache.xmlgraphics/batik-anim@1.9.1",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "org.apache.xmlgraphics",
+        "name": "batik-anim",
+        "version": "1.9.1",
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: maven",
+      "test_type": "build",
+      "input": {
+        "type": "maven",
+        "namespace": "org.apache.xmlgraphics",
+        "name": "batik-anim",
+        "version": "1.9.1",
+        "qualifiers": null,
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:maven/org.apache.xmlgraphics/batik-anim@1.9.1"
+    },
+    {
+      "description": "Parse test for PURL type: maven",
+      "test_type": "parse",
+      "input": "pkg:maven/org.apache.xmlgraphics/batik-anim@1.9.1?type=pom",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "org.apache.xmlgraphics",
+        "name": "batik-anim",
+        "version": "1.9.1",
+        "qualifiers": {
+          "type": "pom"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: maven",
+      "test_type": "build",
+      "input": {
+        "type": "maven",
+        "namespace": "org.apache.xmlgraphics",
+        "name": "batik-anim",
+        "version": "1.9.1",
+        "qualifiers": {
+          "type": "pom"
+        },
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:maven/org.apache.xmlgraphics/batik-anim@1.9.1?type=pom"
+    },
+    {
+      "description": "Parse test for PURL type: maven",
+      "test_type": "parse",
+      "input": "pkg:maven/org.apache.xmlgraphics/batik-anim@1.9.1?classifier=sources",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "org.apache.xmlgraphics",
+        "name": "batik-anim",
+        "version": "1.9.1",
+        "qualifiers": {
+          "classifier": "sources"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: maven",
+      "test_type": "build",
+      "input": {
+        "type": "maven",
+        "namespace": "org.apache.xmlgraphics",
+        "name": "batik-anim",
+        "version": "1.9.1",
+        "qualifiers": {
+          "classifier": "sources"
+        },
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:maven/org.apache.xmlgraphics/batik-anim@1.9.1?classifier=sources"
+    },
+    {
+      "description": "Parse test for PURL type: maven",
+      "test_type": "parse",
+      "input": "pkg:maven/org.apache.xmlgraphics/batik-anim@1.9.1?type=zip&classifier=dist",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "org.apache.xmlgraphics",
+        "name": "batik-anim",
+        "version": "1.9.1",
+        "qualifiers": {
+          "classifier": "dist",
+          "type": "zip"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: maven",
+      "test_type": "build",
+      "input": {
+        "type": "maven",
+        "namespace": "org.apache.xmlgraphics",
+        "name": "batik-anim",
+        "version": "1.9.1",
+        "qualifiers": {
+          "classifier": "dist",
+          "type": "zip"
+        },
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:maven/org.apache.xmlgraphics/batik-anim@1.9.1?classifier=dist&type=zip"
+    },
+    {
+      "description": "Parse test for PURL type: maven",
+      "test_type": "parse",
+      "input": "pkg:maven/net.sf.jacob-projec/jacob@1.14.3?classifier=x86&type=dll",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "net.sf.jacob-projec",
+        "name": "jacob",
+        "version": "1.14.3",
+        "qualifiers": {
+          "classifier": "x86",
+          "type": "dll"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: maven",
+      "test_type": "build",
+      "input": {
+        "type": "maven",
+        "namespace": "net.sf.jacob-projec",
+        "name": "jacob",
+        "version": "1.14.3",
+        "qualifiers": {
+          "classifier": "x86",
+          "type": "dll"
+        },
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:maven/net.sf.jacob-projec/jacob@1.14.3?classifier=x86&type=dll"
+    },
+    {
+      "description": "Parse test for PURL type: maven",
+      "test_type": "parse",
+      "input": "pkg:maven/net.sf.jacob-projec/jacob@1.14.3?classifier=x64&type=dll",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "net.sf.jacob-projec",
+        "name": "jacob",
+        "version": "1.14.3",
+        "qualifiers": {
+          "classifier": "x64",
+          "type": "dll"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: maven",
+      "test_type": "build",
+      "input": {
+        "type": "maven",
+        "namespace": "net.sf.jacob-projec",
+        "name": "jacob",
+        "version": "1.14.3",
+        "qualifiers": {
+          "classifier": "x64",
+          "type": "dll"
+        },
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:maven/net.sf.jacob-projec/jacob@1.14.3?classifier=x64&type=dll"
+    },
+    {
+      "description": "Parse test for PURL type: maven",
+      "test_type": "parse",
+      "input": "pkg:maven/groovy/groovy@1.0?repository_url=https://maven.google.com",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "maven",
+        "namespace": "groovy",
+        "name": "groovy",
+        "version": "1.0",
+        "qualifiers": {
+          "repository_url": "https://maven.google.com"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "nuget names are case sensitive",
+      "test_type": "parse",
+      "input": "pkg:Nuget/EnterpriseLibrary.Common@6.0.1304",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "nuget",
+        "namespace": null,
+        "name": "EnterpriseLibrary.Common",
+        "version": "6.0.1304",
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "nuget names are case sensitive",
+      "test_type": "build",
+      "input": {
+        "type": "nuget",
+        "namespace": null,
+        "name": "EnterpriseLibrary.Common",
+        "version": "6.0.1304",
+        "qualifiers": null,
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:nuget/EnterpriseLibrary.Common@6.0.1304"
+    },
+    {
+      "description": "Parse test for PURL type: nuget",
+      "test_type": "parse",
+      "input": "pkg:nuget/EnterpriseLibrary.Common@6.0.1304",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "nuget",
+        "namespace": null,
+        "name": "EnterpriseLibrary.Common",
+        "version": "6.0.1304",
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "Parse test for PURL type: cargo",
+      "test_type": "parse",
+      "input": "pkg:cargo/rand@0.7.2",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "cargo",
+        "namespace": null,
+        "name": "rand",
+        "version": "0.7.2",
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: cargo",
+      "test_type": "build",
+      "input": {
+        "type": "cargo",
+        "namespace": null,
+        "name": "rand",
+        "version": "0.7.2",
+        "qualifiers": null,
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:cargo/rand@0.7.2"
+    },
+    {
+      "description": "Parse test for PURL type: cargo",
+      "test_type": "parse",
+      "input": "pkg:cargo/clap@2.33.0",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "cargo",
+        "namespace": null,
+        "name": "clap",
+        "version": "2.33.0",
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: cargo",
+      "test_type": "build",
+      "input": {
+        "type": "cargo",
+        "namespace": null,
+        "name": "clap",
+        "version": "2.33.0",
+        "qualifiers": null,
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:cargo/clap@2.33.0"
+    },
+    {
+      "description": "Parse test for PURL type: cargo",
+      "test_type": "parse",
+      "input": "pkg:cargo/structopt@0.3.11",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "cargo",
+        "namespace": null,
+        "name": "structopt",
+        "version": "0.3.11",
+        "qualifiers": null,
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: cargo",
+      "test_type": "build",
+      "input": {
+        "type": "cargo",
+        "namespace": null,
+        "name": "structopt",
+        "version": "0.3.11",
+        "qualifiers": null,
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:cargo/structopt@0.3.11"
+    },
+    {
+      "description": "rpm often use qualifiers",
+      "test_type": "build",
+      "input": {
+        "type": "rpm",
+        "namespace": "fedora",
+        "name": "curl",
+        "version": "7.50.3-1.fc25",
+        "qualifiers": {
+          "arch": "i386",
+          "distro": "fedora-25"
+        },
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:rpm/fedora/curl@7.50.3-1.fc25?arch=i386&distro=fedora-25"
+    },
+    {
+      "description": "Parse test for PURL type: rpm",
+      "test_type": "parse",
+      "input": "pkg:rpm/fedora/curl@7.50.3-1.fc25?arch=i386&distro=fedora-25",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "rpm",
+        "namespace": "fedora",
+        "name": "curl",
+        "version": "7.50.3-1.fc25",
+        "qualifiers": {
+          "arch": "i386",
+          "distro": "fedora-25"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "Parse test for PURL type: rpm",
+      "test_type": "parse",
+      "input": "pkg:rpm/fedora/centerim@4.22.10-1.el6?arch=i686&epoch=1&distro=fedora-25",
+      "expected_failure": false,
+      "expected_output": {
+        "type": "rpm",
+        "namespace": "fedora",
+        "name": "centerim",
+        "version": "4.22.10-1.el6",
+        "qualifiers": {
+          "arch": "i686",
+          "distro": "fedora-25",
+          "epoch": "1"
+        },
+        "subpath": null
+      }
+    },
+    {
+      "description": "Build test  for PURL type: rpm",
+      "test_type": "build",
+      "input": {
+        "type": "rpm",
+        "namespace": "fedora",
+        "name": "centerim",
+        "version": "4.22.10-1.el6",
+        "qualifiers": {
+          "arch": "i686",
+          "distro": "fedora-25",
+          "epoch": "1"
+        },
+        "subpath": null
+      },
+      "expected_failure": false,
+      "expected_output": "pkg:rpm/fedora/centerim@4.22.10-1.el6?arch=i686&distro=fedora-25&epoch=1"
+    }
+  ]
+}

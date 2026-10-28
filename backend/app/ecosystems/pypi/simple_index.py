@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import Any
 
 import httpx
 
@@ -46,7 +47,7 @@ class PyPISimpleIndex:
             raise
         return _meta_serial(payload)
 
-    async def _get_json(self, url: str) -> dict:
+    async def _get_json(self, url: str) -> dict[str, Any]:
         attempt = 0
         while True:
             attempt += 1
@@ -54,7 +55,8 @@ class PyPISimpleIndex:
                 async with make_client(timeout=self.timeout_seconds) as client:
                     response = await client.get(url, headers={"Accept": SIMPLE_JSON_ACCEPT})
                 response.raise_for_status()
-                return response.json()
+                payload: dict[str, Any] = response.json()
+                return payload
             except Exception as exc:  # noqa: BLE001
                 not_found = isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 404
                 if not_found or not is_retryable_upstream_error(exc) or attempt > self.max_retries:
@@ -69,6 +71,6 @@ class PyPISimpleIndex:
                 await asyncio.sleep(delay)
 
 
-def _meta_serial(payload: dict) -> int | None:
+def _meta_serial(payload: dict[str, Any]) -> int | None:
     serial = (payload.get("meta") or {}).get("_last-serial")
     return serial if isinstance(serial, int) else None

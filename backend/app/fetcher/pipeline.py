@@ -12,7 +12,7 @@ from app.connectors.base import (
     NormalizedPackage,
     NormalizedVersion,
 )
-from app.connectors.pypi import PyPIConnector
+from app.ecosystems.pypi.connector import PyPIConnector
 from app.fetcher.events import EventDraft, PackageSnapshot, diff_package
 from app.models.artifact import Artifact, DistTag
 from app.models.author import Author, PackageAuthor
@@ -21,6 +21,7 @@ from app.models.enums import (
     DependencyType,
     Ecosystem,
     PackageVersionStatus,
+    RegistryProtocol,
     RegistryType,
     SyncStatus,
     SyncType,
@@ -157,6 +158,9 @@ async def _get_or_create_pypi_registry(db: AsyncSession) -> Registry:
         tier=Tier.tier1,
         sync_enabled=True,
         sync_priority=0,
+        protocol=RegistryProtocol.pypi_warehouse,
+        priority=0,
+        enabled=True,
     )
     db.add(registry)
     await db.flush()
@@ -187,7 +191,7 @@ async def _upsert_package(db: AsyncSession, registry_id, package_data: Normalize
 
     package = Package(
         ecosystem=Ecosystem.pypi,
-        namespace=None,
+        namespace="",
         name=package_data.name,
         normalized_name=package_data.normalized_name,
         primary_registry_id=registry_id,
@@ -271,8 +275,8 @@ async def _replace_dependencies(db: AsyncSession, version_id, dependencies: list
         db.add(
             Dependency(
                 version_id=version_id,
-                dependency_name=dep.dependency_name,
-                dependency_namespace=None,
+                dependency_name=normalize_package_name(dep.dependency_name),  # T14: raw spelling stays in raw_spec
+                dependency_namespace="",
                 dependency_ecosystem=Ecosystem.pypi,
                 version_constraint=dep.version_constraint,
                 dependency_type=DependencyType(dep.dependency_type),

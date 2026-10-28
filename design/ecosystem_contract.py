@@ -1,6 +1,6 @@
 """PackageHub: ecosystem plugin contract (SPEC-MULTI-ECOSYSTEM.md §3).
 
-Design artifact, checked with `mypy --strict`. The implementation lands in backend/app/ecosystems/base.py at E0.
+Design artifact, checked with `mypy --strict`. Implemented as backend/app/ecosystems/base.py (E0-A1); keep both in sync.
 
 Layers:
   EcosystemPlugin  — semantics of an ecosystem: names, versions, environment, routing, merge policy, resolver.

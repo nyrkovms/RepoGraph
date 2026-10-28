@@ -1,4 +1,4 @@
-from sqlalchemy import Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUIDPrimaryKeyMixin
@@ -18,5 +18,3 @@ class PackageAuthor(Base):
     package_id: Mapped[str] = mapped_column(ForeignKey("packages.id"), primary_key=True)
     author_id: Mapped[str] = mapped_column(ForeignKey("authors.id"), primary_key=True)
     role: Mapped[str] = mapped_column(Enum("author", "maintainer", name="author_role_enum"), primary_key=True)
-
-    __table_args__ = (UniqueConstraint("package_id", "author_id", "role", name="uq_package_author_role"),)

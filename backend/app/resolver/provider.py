@@ -9,7 +9,7 @@ from resolvelib import AbstractProvider
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.connectors.pypi import PyPIConnector
+from app.ecosystems.pypi.connector import PyPIConnector
 from app.fetcher.pipeline import _merge_version_features
 from app.models.dependency import Dependency
 from app.models.enums import DependencyType, Ecosystem, PackageVersionStatus
@@ -182,8 +182,8 @@ class PyPIProvider(AbstractProvider):
                 session.add(
                     Dependency(
                         version_id=version_row.id,
-                        dependency_name=dep.dependency_name,
-                        dependency_namespace=None,
+                        dependency_name=normalize_package_name(dep.dependency_name),  # T14
+                        dependency_namespace="",
                         dependency_ecosystem=Ecosystem.pypi,
                         version_constraint=dep.version_constraint,
                         dependency_type=DependencyType(dep.dependency_type),
