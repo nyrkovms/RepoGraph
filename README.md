@@ -188,6 +188,20 @@ GitHub Actions workflow: [`.github/workflows/ci.yml`](/Users/mikhail/Documents/W
 - `backend-integration-tests`: миграции + seed + `pytest tests/integration`
 - `acceptance-smoke`: Docker Compose stack + migrations + seed + `scripts/acceptance_smoke.sh`
 
+### Offline fixtures
+
+CI does not use the live internet: `backend-integration-tests` and `acceptance-smoke` run with
+`HTTP_REPLAY_DIR=/app/tests/fixtures/http` and read upstream responses recorded in `backend/tests/fixtures/http/`
+(a request that was not recorded fails with `ReplayMiss`). To re-record them (needs the live network, uses its own
+compose project `packagehub-record`, does not touch the stand):
+
+```bash
+scripts/record_fixtures.sh
+```
+
+The nightly workflow [`.github/workflows/nightly.yml`](/Users/mikhail/Documents/Work/repograph/.github/workflows/nightly.yml)
+runs the same flow against the live sources (02:30 UTC, or manually via `workflow_dispatch`).
+
 ## Implemented MVP slices
 
 - `S00-S04`: infra, app scaffold, DB models, Alembic migration, PyPI registry seed

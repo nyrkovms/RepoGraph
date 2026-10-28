@@ -7,6 +7,8 @@ cd "$ROOT"
 
 VOLUME="packagehub_stand_pg_data"
 export COMPOSE_FILE="docker-compose.yml:docker-compose.stand.yml"
+# The stand always talks to live sources: a replay/record setting left in the shell must not leak into it.
+unset HTTP_REPLAY_DIR HTTP_RECORD_DIR
 COMPOSE=(docker compose)
 
 usage() {
@@ -14,7 +16,7 @@ usage() {
 Usage: $0 <command> [args]
 
   up                 create the DB volume if missing, build, start, apply migrations
-  migrate            apply Alembic migrations
+  migrate            backup, stop worker/beat, apply Alembic migrations, start them again
   seed [pkg ...]     seed packages (default: SEED_PACKAGES)
   daily-update       run the daily update now
   status             containers, migration revision, catalog size
@@ -33,8 +35,28 @@ ensure_volume() {
   fi
 }
 
+# Back up first (a failed backup aborts), keep worker/beat off the database while the schema changes,
+# and bring them back even when the migration fails. Only services that were running are restarted,
+# so the first `up` (nothing created yet) does not start them ahead of its own build step.
 migrate() {
-  "${COMPOSE[@]}" run --rm --no-deps api alembic upgrade head
+  scripts/db_backup.sh
+  local running rc=0
+  running="$("${COMPOSE[@]}" ps --services --status running worker beat | tr '\n' ' ')"
+  if [[ -n "${running// /}" ]]; then
+    # shellcheck disable=SC2086
+    "${COMPOSE[@]}" stop $running
+    # Ctrl-C or kill during the migration must not leave worker/beat stopped.
+    # shellcheck disable=SC2064,SC2086
+    trap "${COMPOSE[*]} start $running >/dev/null 2>&1; exit 130" INT TERM
+  fi
+  # The api keeps serving during the migration: requests wait on the migration's locks, nothing writes around it.
+  "${COMPOSE[@]}" run --rm --no-deps api alembic upgrade head || rc=$?
+  if [[ -n "${running// /}" ]]; then
+    trap - INT TERM
+    # shellcheck disable=SC2086
+    "${COMPOSE[@]}" start $running || echo "WARNING: could not restart: $running" >&2
+  fi
+  return "$rc"
 }
 
 cmd="${1:-}"

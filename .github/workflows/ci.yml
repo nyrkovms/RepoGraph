@@ -2,9 +2,29 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Run mypy
+        run: make mypy
+
   backend-lint:
     runs-on: ubuntu-latest
     steps:
@@ -69,6 +89,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend-lint, backend-unit-tests]
     timeout-minutes: 25
+    env:
+      # Upstream sources come from recorded responses (scripts/record_fixtures.sh); live runs are in nightly.yml.
+      HTTP_REPLAY_DIR: /app/tests/fixtures/http
+    defaults:
+      run:
+        shell: bash  # -eo pipefail, so `| tee` keeps the step's exit code
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -80,10 +106,19 @@ jobs:
         run: docker compose run --rm api alembic upgrade head
 
       - name: Seed baseline packages
-        run: docker compose run --rm api python -m app.cli seed --packages flask django requests
+        run: docker compose run --rm api python -m app.cli seed --packages flask django requests 2>&1 | tee -a "$RUNNER_TEMP/run.log"
 
       - name: Run backend integration tests
-        run: docker compose run --rm api pytest tests/integration
+        run: docker compose run --rm api pytest tests/integration 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+
+      - name: Fail on replay misses
+        # A request missing from the fixtures is swallowed by callers (seed counts it as a sync failure),
+        # so look for the transport's log line instead of trusting green steps.
+        run: |
+          if docker compose logs --no-color | cat - "$RUNNER_TEMP/run.log" | grep REPLAY_MISS; then
+            echo "Requests without recorded responses; re-record with scripts/record_fixtures.sh" >&2
+            exit 1
+          fi
 
       - name: Dump logs on failure
         if: failure()
@@ -106,10 +141,28 @@ jobs:
       - name: Run backend unit tests
         run: docker compose run --rm --no-deps api pytest tests/unit
 
+  migrations:
+    runs-on: ubuntu-latest
+    needs: [backend-lint]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Migrations on synthetic data (base -> head -> downgrade -> head)
+        # The script runs and removes its own compose project.
+        run: ./scripts/check_migrations.sh
+
   acceptance-smoke:
     runs-on: ubuntu-latest
     needs: [frontend-tests, backend-integration-tests]
     timeout-minutes: 25
+    env:
+      # Upstream sources come from recorded responses (scripts/record_fixtures.sh); live runs are in nightly.yml.
+      HTTP_REPLAY_DIR: /app/tests/fixtures/http
+    defaults:
+      run:
+        shell: bash  # -eo pipefail, so `| tee` keeps the step's exit code
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -121,10 +174,19 @@ jobs:
         run: docker compose run --rm api alembic upgrade head
 
       - name: Seed baseline packages
-        run: docker compose run --rm api python -m app.cli seed --packages flask django requests
+        run: docker compose run --rm api python -m app.cli seed --packages flask django requests 2>&1 | tee -a "$RUNNER_TEMP/run.log"
 
       - name: Run acceptance smoke
-        run: ./scripts/acceptance_smoke.sh
+        run: ./scripts/acceptance_smoke.sh 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+
+      - name: Fail on replay misses
+        # A request missing from the fixtures is swallowed by callers (seed counts it as a sync failure),
+        # so look for the transport's log line instead of trusting green steps.
+        run: |
+          if docker compose logs --no-color | cat - "$RUNNER_TEMP/run.log" | grep REPLAY_MISS; then
+            echo "Requests without recorded responses; re-record with scripts/record_fixtures.sh" >&2
+            exit 1
+          fi
 
       - name: Dump logs on failure
         if: failure()

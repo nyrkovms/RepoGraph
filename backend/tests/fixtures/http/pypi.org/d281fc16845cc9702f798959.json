@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"PIda7csZtWyaGzro3RbDQA\"",
+    "x-pypi-last-serial": "37059094"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/requests/json"
+  },
+  "status": 200
+}

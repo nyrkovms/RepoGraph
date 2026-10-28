@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"bowIJcKjne+Pjy6eZ1tlQg\"",
+    "x-pypi-last-serial": "25894302"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/blinker/json"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"GSVc9Es3eszbSNluwNaDhQ\"",
+    "x-pypi-last-serial": "41170495"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/idna/json"
+  },
+  "status": 200
+}

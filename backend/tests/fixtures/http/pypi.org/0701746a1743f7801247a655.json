@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"4iHH14fOqSk5YVIedQNezA\"",
+    "x-pypi-last-serial": "42664658"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/importlib-metadata/json"
+  },
+  "status": 200
+}

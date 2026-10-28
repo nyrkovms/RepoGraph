@@ -1,0 +1,12 @@
+# Throwaway stack next to the stand: only host ports move. Used by scripts/check_migrations.sh with its own
+# project name, so neither the stand's images nor its volume are touched.
+services:
+  postgres:
+    ports: !override
+      - "${ISOLATED_POSTGRES_PORT:-25432}:5432"
+  redis:
+    ports: !override
+      - "${ISOLATED_REDIS_PORT:-26379}:6379"
+  api:
+    ports: !override
+      - "${ISOLATED_API_PORT:-28000}:8000"

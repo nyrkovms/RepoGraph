@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"6VSbg9j8UQGxitgpBra0sA\"",
+    "x-pypi-last-serial": "27788726"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/jinja2/json"
+  },
+  "status": 200
+}

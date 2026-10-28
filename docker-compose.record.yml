@@ -1,0 +1,22 @@
+# Recording of upstream responses for offline CI: scripts/record_fixtures.sh (uses it with its own project name).
+# Every upstream response that api/worker (and tests run through them) receive is saved into
+# backend/tests/fixtures/http. Host ports are moved so that this stack can run next to the stand.
+services:
+  postgres:
+    ports: !override
+      - "${RECORD_POSTGRES_PORT:-15432}:5432"
+  redis:
+    ports: !override
+      - "${RECORD_REDIS_PORT:-16379}:6379"
+  api:
+    ports: !override
+      - "${RECORD_API_PORT:-18000}:8000"
+    environment:
+      HTTP_RECORD_DIR: /app/tests/fixtures/http
+    volumes:
+      - ./backend/tests/fixtures/http:/app/tests/fixtures/http
+  worker:
+    environment:
+      HTTP_RECORD_DIR: /app/tests/fixtures/http
+    volumes:
+      - ./backend/tests/fixtures/http:/app/tests/fixtures/http

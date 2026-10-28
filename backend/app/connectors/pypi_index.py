@@ -6,6 +6,7 @@ import httpx
 from app.config import get_settings
 from app.normalizers.names import normalize_package_name
 from app.services.retry_policy import compute_backoff_delay_seconds, is_retryable_upstream_error
+from app.services.http import make_client
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ class PyPISimpleIndex:
         while True:
             attempt += 1
             try:
-                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                async with make_client(timeout=self.timeout_seconds) as client:
                     response = await client.get(url, headers={"Accept": SIMPLE_JSON_ACCEPT})
                 response.raise_for_status()
                 return response.json()
