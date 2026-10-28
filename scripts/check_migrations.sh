@@ -35,6 +35,8 @@ alembic upgrade "$BASE_REV"
 psql_db < "$SEED"
 alembic upgrade head
 psql_db < "$CHECKS"
+# The models must describe exactly the schema the migrations produce (fails on any difference).
+alembic check
 
 HEAD="$(alembic heads | awk '{print $1}')"
 if [[ "$HEAD" != "$BASE_REV" ]]; then

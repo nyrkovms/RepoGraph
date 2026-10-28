@@ -8,6 +8,7 @@ class Ecosystem(str, Enum):
     go = "go"
     crates = "crates"
     nuget = "nuget"
+    rpm = "rpm"
 
 
 class RegistryType(str, Enum):
@@ -28,6 +29,7 @@ class PackageVersionStatus(str, Enum):
     deprecated = "deprecated"
     unlisted = "unlisted"
     removed = "removed"
+    superseded = "superseded"
 
 
 class DependencyType(str, Enum):
@@ -74,6 +76,8 @@ class PackageEventKind(str, Enum):
     vulnerability_withdrawn = "vulnerability_withdrawn"
     project_unavailable = "project_unavailable"
     project_restored = "project_restored"
+    release_deprecated = "release_deprecated"
+    source_added = "source_added"
 
 
 class UpdateRunStatus(str, Enum):
@@ -81,3 +85,28 @@ class UpdateRunStatus(str, Enum):
     success = "success"
     partial = "partial"
     failed = "failed"
+
+
+# Values contain hyphens, so the database enum is built from the values (see `Registry.protocol`), not member names.
+class RegistryProtocol(str, Enum):
+    pypi_warehouse = "pypi-warehouse"
+    pypi_simple = "pypi-simple"
+    npm_registry = "npm-registry"
+    maven2 = "maven2"
+    nuget_v3 = "nuget-v3"
+    goproxy = "goproxy"
+    cargo_sparse = "cargo-sparse"
+    rpm_repodata = "rpm-repodata"
+
+
+class PackageOrigin(str, Enum):
+    seed = "seed"
+    manual = "manual"
+    dependency = "dependency"
+    discovered = "discovered"
+
+
+class DependenciesState(str, Enum):
+    pending = "pending"
+    hydrated = "hydrated"
+    unavailable = "unavailable"
