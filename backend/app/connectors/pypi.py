@@ -19,6 +19,7 @@ from app.normalizers.license import normalize_license
 from app.normalizers.names import normalize_package_name
 from app.normalizers.pep508 import parse_pep508
 from app.services.retry_policy import compute_backoff_delay_seconds, is_retryable_upstream_error
+from app.services.http import make_client
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +98,7 @@ class PyPIConnector(BaseConnector):
         while True:
             attempt += 1
             try:
-                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                async with make_client(timeout=self.timeout_seconds) as client:
                     response = await client.get(url)
                 if response.status_code == 404:
                     raise PackageNotFound(package_name)
