@@ -70,3 +70,5 @@ scripts/record_fixtures.sh       # re-record upstream responses for offline CI (
   agent stops, so implementers create their own instead:
   `git worktree add -b wp/<id> .claude/worktrees/wp-<id> <stage-branch-head-sha>` and keep it until Opus removes it.
 - A reviewer subagent checks every stage PR against the spec before it is marked ready.
+- When the stage review is addressed and checks are green, Opus updates the PR description, marks it ready and
+  enables auto-merge (merge commit) without asking, then starts the next stage from the updated `main`.
