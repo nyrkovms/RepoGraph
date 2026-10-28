@@ -2,6 +2,8 @@
 
 **Stage / branch:** <e.g. E0-A / claude/me-e0a-schema>
 **Spec:** <sections of SPEC-MULTI-ECOSYSTEM.md / IMPL-MULTI-ECOSYSTEM.md that define the behaviour>
+**Start:** `git worktree add -b wp/<id> /Users/mikhail/Documents/Work/repograph/.claude/worktrees/wp-<id> <stage-head-sha>`,
+work only there, check `git log --oneline -1` shows `<stage-head-sha>`, `cd frontend && npm ci` if you run frontend checks.
 
 ## Goal
 <One paragraph: what exists after this WP and why.>

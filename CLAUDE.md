@@ -32,6 +32,7 @@ make backend-unit               # backend unit tests only
 make frontend                   # frontend lint + tests
 scripts/stand.sh status         # test stand: containers, migration, catalog size
 scripts/stand.sh migrate        # backup, stop worker/beat, alembic upgrade head, start them again
+scripts/check_migrations.sh     # migrations on synthetic data: base -> head -> downgrade -> head (needs postgres from compose)
 ```
 
 - Backend tools run through `uv` (the local `.venv` is not complete): see the Makefile targets.
@@ -60,5 +61,8 @@ scripts/stand.sh migrate        # backup, stop worker/beat, alembic upgrade head
 
 - One branch and one draft PR per stage (`claude/me-<stage>`); WPs are commits inside it.
 - Implementer subagents (Sonnet) take self-contained WP tasks (`.claude/templates/wp-task.md`) and work in their own
-  worktree; Opus checks the result before it lands on the stage branch.
+  worktree; Opus checks the result before it lands on the stage branch (cherry-pick), then removes the worktree.
+- Worktree for a WP: the harness `isolation: worktree` forks from `main` and deletes an unchanged worktree when the
+  agent stops, so implementers create their own instead:
+  `git worktree add -b wp/<id> .claude/worktrees/wp-<id> <stage-branch-head-sha>` and keep it until Opus removes it.
 - A reviewer subagent checks every stage PR against the spec before it is marked ready.
