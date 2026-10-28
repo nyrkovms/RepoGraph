@@ -78,3 +78,7 @@ scripts/record_fixtures.sh       # re-record upstream responses for offline CI (
 - A reviewer subagent checks every stage PR against the spec before it is marked ready.
 - When the stage review is addressed and checks are green, Opus updates the PR description, marks it ready and
   enables auto-merge (merge commit) without asking, then starts the next stage from the updated `main`.
+- Opus runs WPs and stages back to back in one turn: WP, checks, stage review, auto-merge, stand, next stage. The
+  turn ends only for a question that is the owner's to answer (rule 1), a failure Opus cannot fix, or the end of the
+  plan; progress notes go out along the way without ending the turn. CI failures, conflicts and review comments on
+  the stage PR wake the session through the app's PR monitor (auto-fix), so nobody restarts it by hand.
