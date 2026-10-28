@@ -82,6 +82,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend-lint, backend-unit-tests]
     timeout-minutes: 25
+    env:
+      # Upstream sources come from recorded responses (scripts/record_fixtures.sh); live runs are in nightly.yml.
+      HTTP_REPLAY_DIR: /app/tests/fixtures/http
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -141,6 +144,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [frontend-tests, backend-integration-tests]
     timeout-minutes: 25
+    env:
+      # Upstream sources come from recorded responses (scripts/record_fixtures.sh); live runs are in nightly.yml.
+      HTTP_REPLAY_DIR: /app/tests/fixtures/http
     steps:
       - name: Checkout
         uses: actions/checkout@v4

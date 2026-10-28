@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"K/Hn02CEAvccVQLUx+c89Q\"",
+    "x-pypi-last-serial": "42639290"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/certifi/json"
+  },
+  "status": 200
+}

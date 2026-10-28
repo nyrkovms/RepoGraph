@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"KEzSqWFWqZ3sGuJLsfvgTQ\"",
+    "x-pypi-last-serial": "41624470"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/charset-normalizer/json"
+  },
+  "status": 200
+}

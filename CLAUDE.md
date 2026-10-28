@@ -33,6 +33,7 @@ make frontend                   # frontend lint + tests
 scripts/stand.sh status         # test stand: containers, migration, catalog size
 scripts/stand.sh migrate        # backup, stop worker/beat, alembic upgrade head, start them again
 scripts/check_migrations.sh     # migrations on synthetic data: base -> head -> downgrade -> head (needs postgres from compose)
+scripts/record_fixtures.sh       # re-record upstream responses for offline CI (live network)
 ```
 
 - Backend tools run through `uv` (the local `.venv` is not complete): see the Makefile targets.
