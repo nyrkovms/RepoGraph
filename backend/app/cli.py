@@ -89,7 +89,8 @@ def build_parser() -> argparse.ArgumentParser:
     retry_failed_cmd = sub.add_parser("retry-failed")
     retry_failed_cmd.add_argument("--limit", type=int, default=None)
 
-    sub.add_parser("daily-update")
+    daily_cmd = sub.add_parser("daily-update", help="detect and apply upstream changes (all ecosystems by default)")
+    daily_cmd.add_argument("--ecosystem", choices=[e.value for e in Ecosystem], default=None)
 
     probe_cmd = sub.add_parser("presence-probe", help="find catalog packages in sources where they appeared later")
     probe_cmd.add_argument("--ecosystem", choices=[e.value for e in Ecosystem], default="pypi")
@@ -134,7 +135,7 @@ def main() -> None:
     if args.command == "daily-update":
         from app.tasks.daily_update import _run_daily_update_async
 
-        result = asyncio.run(_run_daily_update_async())
+        result = asyncio.run(_run_daily_update_async(args.ecosystem))
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
         return
 
