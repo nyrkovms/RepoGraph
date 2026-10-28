@@ -60,6 +60,10 @@ scripts/record_fixtures.sh       # re-record upstream responses for offline CI (
 6. **Commits.** Imperative subject line in English, body says what and why. Do not push, open PRs or merge unless
    the task says so.
 7. **Report.** Finish with the report template from `.claude/templates/wp-report.md`.
+8. **Bugs.** A bug not fixed in the change that found it gets a GitHub issue labelled `bug`: what happens, why,
+   where. The fixing commit says `Fixes #N`, and every fix comes with a regression test that fails on the old code.
+   A bug already in `main` that breaks the running app or the stand is fixed right away in a small PR from `main`
+   (`claude/hotfix-<topic>`) that goes to auto-merge when checks are green, without waiting for the stage.
 
 ## Process (IMPL-MULTI-ECOSYSTEM.md §0)
 
