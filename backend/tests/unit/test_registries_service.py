@@ -128,7 +128,7 @@ def test_parse_import_rejects_bad_files() -> None:
 
 
 def test_example_file_is_importable_and_valid() -> None:
-    path = Path(__file__).resolve().parents[3] / "registries.example.yaml"
+    path = Path(__file__).resolve().parents[2] / "registries.example.yaml"
     document = parse_import(path.read_text(encoding="utf-8"))
     assert [(r.slug, r.protocol) for r in document.registries] == [("pypi-mirror", "pypi-warehouse")]
     for registry in document.registries:
