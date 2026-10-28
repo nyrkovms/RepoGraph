@@ -189,8 +189,9 @@ rpm_worker/                   — Dockerfile, worker.py, modules.py, solver.py
 | `source_documents` | Вспомогательные документы, у которых нет версии в каталоге: parent POM, BOM, `go.mod` транзитивных модулей для MVS, PEP 658 `.metadata` | Ключ `(registry_id, path)` + `etag`. Без этой таблицы parent POM было бы некуда положить (§5.2, п. 5) |
 | `dependencies` | Зависимость версии | `dependency_namespace NOT NULL DEFAULT ''`, `alias`, `scope` (исходный тип), `details jsonb` (exclusions, features, подсказка источника), `environment_markers` с типом. `variant_registry_id`: NULL — канонический набор, иначе вариант источника, чьи метаданные этой версии отличаются (§6.5). Индекс по `(ecosystem, namespace, name)` для связей уровня 1 |
 | `dist_tags` | npm dist-tags | Ключ `(package_id, tag)` вместо суррогатного id |
+| `package_events` | Журнал событий | `version` → `text`, новые виды `release_deprecated` и `source_added` |
 | `sync_states` | Курсор ленты **по источнику**: serial, `seq`, commit timestamp, `since`, ревизия `repomd` | Одна строка на источник |
-| `update_runs` | Прогон ежедневного обновления **по экосистеме** | `per_registry jsonb` со статистикой по источникам |
+| `runs` | Журнал операций (IMPL R1): `operation` (daily_update, seed, presence_probe, retry), `ecosystem` | Заменяет `update_runs` и поля прогресса в `sync_states`; `per_registry jsonb` со статистикой по источникам |
 | `sync_failures` | Ошибки синхронизации | Ключ `UNIQUE NULLS NOT DISTINCT (operation, ecosystem, registry_id, package_ref)`; `package_ref` — purl без версии |
 
 ### 5.2 Дефекты текущей схемы, найденные при проверке
@@ -315,7 +316,7 @@ rpm_worker/                   — Dockerfile, worker.py, modules.py, solver.py
 
 **Источники добавляем вручную (Q16).** Автоматического обнаружения источников нет. Администратор заводит источник через admin API или CLI: протокол, URL, приоритет, routing, авторизация. Перед включением выполняется проверка подключения (`test`): адаптер запрашивает служебный документ протокола (`repomd.xml`, `index.json` NuGet, корень Simple, `maven-metadata.xml` известного GA) и проверяет авторизацию. Новый источник включается выключенным (`enabled=false`). После включения `presence_probe` находит в нём пакеты каталога, подходящие по routing.
 
-Стартовый набор (pypi.org, npmjs, Maven Central, nuget.org, proxy.golang.org, crates.io) создаёт миграция 0006. Остальное, включая PyTorch-индексы, Google Maven, Gradle Plugin Portal и RPM-репозитории, — через admin API или конфигурационный файл для CLI (`registries.yaml`, импорт идемпотентен по `slug`).
+Стартовый источник экосистемы (pypi.org, npmjs, Maven Central, nuget.org, proxy.golang.org, crates.io) создаёт миграция её этапа, вместе с плагином (IMPL R4). Остальное, включая PyTorch-индексы, Google Maven, Gradle Plugin Portal и RPM-репозитории, — через admin API или конфигурационный файл для CLI (`registries.yaml`, импорт идемпотентен по `slug`).
 
 ### 6.4 RPM: дистрибутивы и репозитории
 
@@ -508,7 +509,8 @@ POST /api/v1/resolve
 - **Где выполняется.** pypi, npm, crates, go, nuget и maven — в процессе API (asyncio, lazy fetch через адаптеры). RPM — в `rpm-worker` через Celery, API ждёт до `timeout_s`.
 - **Лимиты.** Не больше 2000 узлов и 500 lazy fetch за запрос, общий таймаут. При превышении — `resolve_limit_exceeded` с частичной статистикой.
 - **Кэш** в Redis по хэшу запроса и ревизиям каталога, TTL 1 час.
-- Старый формат PyPI (`input_mode=requirements`) остаётся до переделки UI.
+- **Режимы ввода** (IMPL R2): `input_mode: requirements | lock` для всех экосистем; `freeze` — алиас `lock`. В режиме `lock` корни, достижимые из других корней, помечаются `hidden`. У корней есть `latest_compatible` — самая новая совместимая версия.
+- Старый формат ответа PyPI остаётся алиасом до переделки UI (E7).
 
 **Какой нативный инструмент эмулирует каждый резолвер.** Поведение пакетных менеджеров меняется между версиями. Например, npm 7 начал ставить peer-зависимости автоматически. Поэтому резолвер фиксирует, какую версию инструмента он повторяет (`Resolver.emulates`), и эталоны генерируются ею же. deps.dev делает так же: Maven 3.6.3, npm 6.14.12.
 
@@ -633,7 +635,7 @@ GET /api/v1/packages/{ecosystem}/{coordinates}/-/vulnerabilities          — п
 ```
 
 - `{coordinates}` — родное написание экосистемы, может содержать `/`: `@angular/core`, `github.com/gin-gonic/gin`, `org.springframework:spring-core`, `rhel-9/openssl`. Разделитель `/-/` однозначно отделяет координаты от подресурса.
-- Текущие маршруты `/packages/pypi/{name}/...` остаются алиасами на один релиз и помечаются deprecated в OpenAPI.
+- Текущие маршруты `/packages/pypi/{name}/...` остаются алиасами, пока UI не переедет на новые (конец E7), и помечаются deprecated в OpenAPI.
 
 ### 11.2 Остальное
 

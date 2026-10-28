@@ -146,6 +146,28 @@ class NormalizedVersion:
 
 
 @dataclass(slots=True)
+class NormalizedAuthor:
+    name: str
+    email: str | None
+    url: str | None
+    role: str
+
+
+@dataclass(slots=True)
+class NormalizedVulnerability:
+    source: str
+    source_id: str
+    aliases: list[str]
+    summary: str
+    details: str | None
+    severity: str | None
+    fixed_in: list[str] | None
+    published_at: datetime | None
+    withdrawn_at: datetime | None
+    link: str
+
+
+@dataclass(slots=True)
 class NormalizedPackage:
     """What ONE source says. Package-level fields are optional: a PEP 503 index knows only files."""
 
@@ -157,11 +179,19 @@ class NormalizedPackage:
     description: str | None = None
     homepage_url: str | None = None
     repository_url: str | None = None
+    documentation_url: str | None = None
     license_raw: str | None = None
     license_spdx: str | None = None
     keywords: list[str] | None = None
     deprecation: Mapping[str, object] | None = None
     dist_tags: Mapping[str, str] | None = None
+    downloads_total: int | None = None
+    downloads_recent: int | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    # None = this source does not provide the field; merge must not wipe what another source gave.
+    authors: list[NormalizedAuthor] | None = None
+    vulnerabilities: list[NormalizedVulnerability] | None = None   # kept for PyPI only (D6)
     raw_metadata: Mapping[str, object] = field(default_factory=dict)
 
 

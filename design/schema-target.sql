@@ -21,8 +21,9 @@ CREATE TYPE registry_protocol_enum AS ENUM (
 
 CREATE TYPE package_origin_enum AS ENUM ('seed', 'manual', 'dependency', 'discovered');
 
--- 'deprecated' is gone from the lifecycle: deprecation is orthogonal (a version can be yanked and deprecated).
-CREATE TYPE version_status_enum AS ENUM ('active', 'yanked', 'unlisted', 'removed', 'superseded');
+-- Existing type, extended in place: 'superseded' is added; 'deprecated' stays in the type but is never written
+-- (deprecation is orthogonal and lives in package_versions.deprecation). Avoids rewriting package_versions.
+CREATE TYPE package_version_status_enum AS ENUM ('active', 'yanked', 'deprecated', 'unlisted', 'removed', 'superseded');
 
 CREATE TYPE dependency_type_enum AS ENUM ('runtime', 'dev', 'optional', 'build', 'peer', 'provided');
 
@@ -44,6 +45,7 @@ CREATE TABLE registries (
     enabled         boolean NOT NULL DEFAULT true,
     auth_type       varchar(32) NOT NULL DEFAULT 'none' CHECK (auth_type IN ('none', 'basic', 'bearer', 'tls_client_cert')),
     credentials_ref text,                                 -- name of a secret, never the secret itself
+    last_synced_at  timestamptz,
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz NOT NULL DEFAULT now(),
     UNIQUE (id, ecosystem),                               -- target for composite FKs: a source of the same ecosystem
@@ -94,6 +96,8 @@ CREATE TABLE packages (
     license_spdx            varchar(255),
     keywords                text[],
     latest_version          text,                               -- NULL: a project without releases
+    downloads_total         bigint,                             -- npm, crates.io, NuGet report downloads
+    downloads_recent        bigint,
     deprecation             jsonb,                              -- {"message", "alternative"}: npm, NuGet, Maven relocation
     created_at              timestamptz NOT NULL DEFAULT now(),
     updated_at              timestamptz NOT NULL,
@@ -132,11 +136,12 @@ CREATE TABLE package_versions (
     sort_key             bytea NOT NULL,                 -- VersionScheme.sort_key: byte order == ecosystem order (§5.3)
     is_prerelease        boolean NOT NULL,
     release_date         timestamptz,
-    status               version_status_enum NOT NULL DEFAULT 'active',  -- aggregate over sources, primary wins
+    status               package_version_status_enum NOT NULL DEFAULT 'active',  -- aggregate over sources, primary wins
     status_reason        text,                           -- yank reason, Go retract rationale
     deprecation          jsonb,
     engines              jsonb,                          -- {"python": ">=3.9"}, {"node": ">=18"}, {"rust": "1.70"}, {"go": "1.22"}
     features             jsonb,                          -- crates features map, PyPI extras
+    download_count       bigint,
     metadata_registry_id uuid REFERENCES registries (id),-- source the dependencies were read from
     dependencies_state   dependencies_state_enum NOT NULL DEFAULT 'pending',
     raw_metadata         jsonb NOT NULL DEFAULT '{}'::jsonb,  -- RPM: module, sourcerpm; Maven: managed deps
@@ -150,7 +155,7 @@ CREATE TABLE version_sources (
     version_id       uuid NOT NULL REFERENCES package_versions (id) ON DELETE CASCADE,
     registry_id      uuid NOT NULL REFERENCES registries (id),
     first_seen_at    timestamptz NOT NULL,
-    status           version_status_enum NOT NULL DEFAULT 'active',
+    status           package_version_status_enum NOT NULL DEFAULT 'active',
     metadata_digest  bytea,                              -- hash of normalized dependencies; differs from canonical => variant rows in dependencies
     PRIMARY KEY (version_id, registry_id)
 );
@@ -225,27 +230,37 @@ CREATE TABLE dist_tags (
 
 -- Operations --------------------------------------------------------------------------------------
 
-CREATE TABLE sync_states (                                -- one row per source: feed cursors
+CREATE TABLE sync_states (                                -- one row per source: feed cursor and health
     registry_id     uuid PRIMARY KEY REFERENCES registries (id),
-    cursor_data     jsonb NOT NULL DEFAULT '{}'::jsonb,   -- {"last_serial"}, {"last_seq"}, {"commit_ts"}, {"since"}, {"repomd_revision"}
-    status          varchar(16) NOT NULL DEFAULT 'idle',
+    cursor_data     jsonb NOT NULL DEFAULT '{}'::jsonb,   -- {"last_serial"}, {"last_seq"}, {"commit_ts"}, {"since"}, {"repomd_revision", "config_hash"}
+    status          varchar(16) NOT NULL DEFAULT 'idle',  -- idle | running | failed | degraded (circuit breaker)
+    degraded_until  timestamptz,
+    consecutive_failures integer NOT NULL DEFAULT 0,
     last_success_at timestamptz,
     last_error      text
 );
 
-CREATE TABLE update_runs (
-    id                uuid PRIMARY KEY,
-    ecosystem         ecosystem_enum NOT NULL,
-    status            varchar(16) NOT NULL,
-    started_at        timestamptz NOT NULL,
-    finished_at       timestamptz,
-    packages_checked  integer NOT NULL DEFAULT 0,
-    packages_changed  integer NOT NULL DEFAULT 0,
-    packages_failed   integer NOT NULL DEFAULT 0,
-    per_registry      jsonb NOT NULL DEFAULT '{}'::jsonb, -- {"pypi": {...}, "pytorch-cu121": {...}}
-    events_by_kind    jsonb NOT NULL DEFAULT '{}'::jsonb
+-- Journal of operations (IMPL R1, option A): daily_update, seed, presence_probe, retry. Replaces update_runs and the
+-- progress fields that lived in sync_states.
+CREATE TABLE runs (
+    id                   uuid PRIMARY KEY,
+    operation            varchar(32) NOT NULL,
+    ecosystem            ecosystem_enum,                  -- NULL: operation over several ecosystems (seed by purls)
+    status               varchar(16) NOT NULL,            -- running | success | partial | failed
+    started_at           timestamptz NOT NULL,
+    finished_at          timestamptz,
+    packages_total       integer NOT NULL DEFAULT 0,
+    packages_checked     integer NOT NULL DEFAULT 0,
+    packages_changed     integer NOT NULL DEFAULT 0,
+    packages_updated     integer NOT NULL DEFAULT 0,
+    packages_failed      integer NOT NULL DEFAULT 0,
+    packages_unavailable integer NOT NULL DEFAULT 0,
+    events_created       integer NOT NULL DEFAULT 0,
+    per_registry         jsonb NOT NULL DEFAULT '{}'::jsonb, -- {"pypi": {"index_serial": ...}, "pytorch-cu121": {...}}
+    events_by_kind       jsonb NOT NULL DEFAULT '{}'::jsonb,
+    error                text
 );
-CREATE INDEX idx_update_runs_eco_started ON update_runs (ecosystem, started_at DESC);
+CREATE INDEX idx_runs_op_eco_started ON runs (operation, ecosystem, started_at DESC);
 
 CREATE TABLE sync_failures (
     id             uuid PRIMARY KEY,
@@ -255,12 +270,14 @@ CREATE TABLE sync_failures (
     package_ref    text NOT NULL,                         -- purl without version
     error_class    text NOT NULL,
     error_message  text NOT NULL,
+    traceback      text,
     retryable      boolean NOT NULL DEFAULT true,
     attempts       integer NOT NULL DEFAULT 1,
     next_retry_at  timestamptz,
+    created_at     timestamptz NOT NULL DEFAULT now(),
     last_seen_at   timestamptz NOT NULL DEFAULT now(),
     UNIQUE NULLS NOT DISTINCT (operation, ecosystem, registry_id, package_ref)
 );
 
--- package_events keeps its shape (SPEC-DAILY-UPDATE §3.3); new kinds: release_deprecated.
+-- package_events: version becomes text, run_id points to runs; new kinds release_deprecated, source_added.
 -- The ecosystem filter of the digest joins packages.
