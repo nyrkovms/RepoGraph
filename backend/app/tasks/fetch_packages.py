@@ -9,7 +9,7 @@ from app.db import loop_local_session
 from app.ecosystems.base import PackageRef
 from app.ecosystems.purl import parse as parse_purl
 from app.ecosystems.registry import registered
-from app.fetcher.pipeline import load_builtin_plugins, sync_package
+from app.fetcher.pipeline import load_builtin_plugins, plugin_for, sync_package
 from app.models.enums import PackageOrigin
 from app.services.sync_failures import clear_sync_failure, upsert_sync_failure
 
@@ -24,6 +24,14 @@ def ref_from_purl(purl: str) -> PackageRef:
         if plugin.purl_type == parsed.type:
             return plugin.coordinates.from_purl(purl)[0]
     raise ValueError(f"no plugin for purl type {parsed.type!r}")
+
+
+def ref_from_target(raw: str) -> PackageRef:
+    """A purl, or a bare name, which is a PyPI project name (IMPL T9). Raises ValueError with a readable reason."""
+    raw = raw.strip()
+    if raw.startswith("pkg:"):
+        return ref_from_purl(raw)
+    return plugin_for("pypi").coordinates.parse(raw)
 
 
 def invalid_purls(purls: list[str]) -> dict[str, str]:
@@ -48,13 +56,9 @@ async def _fetch_packages_async(purls: list[str]) -> dict[str, object]:
                 counts["failed"] += 1
                 logger.warning("Fetch skipped, bad purl: %s", purl)
                 continue
-            # sync_failures is keyed by bare PyPI names until B4 moves it to purls (IMPL T9), so only PyPI
-            # failures can be recorded there without being retried as the wrong ecosystem.
-            records_failures = ref.ecosystem == "pypi"
             try:
                 await sync_package(db, ref, origin=PackageOrigin.manual)
-                if records_failures:
-                    await clear_sync_failure(db, package_name=ref.name)
+                await clear_sync_failure(db, ref=ref)
                 await db.commit()
                 counts["fetched"] += 1
             except Exception as exc:  # noqa: BLE001 - one bad package must not stop the batch
@@ -65,10 +69,8 @@ async def _fetch_packages_async(purls: list[str]) -> dict[str, object]:
                 else:
                     logger.exception("Fetch failed: %s", purl)
                 await db.rollback()
-                if records_failures:
-                    await upsert_sync_failure(db, operation="fetch", package_name=ref.name, exc=exc,
-                                              retryable=False if not_found else None)
-                    await db.commit()
+                await upsert_sync_failure(db, operation="fetch", ref=ref, exc=exc, retryable=False if not_found else None)
+                await db.commit()
 
     return {
         "status": "completed",
