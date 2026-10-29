@@ -226,7 +226,7 @@ def test_markers_follow_the_tree_endpoint_semantics() -> None:
     assert not dependency_applies(_dep("dev", None), py39, include_optional=True)
 
 
-# --- parity with the tree endpoint (api/v1/packages.py), which B1/C1 replace with the plugin ----------------------
+# --- parity with the tree endpoint (api/v1/package_detail.py), which B1/C1 replace with the plugin ----------------------
 
 PARITY_ENVIRONMENTS = [
     {},
@@ -250,7 +250,7 @@ PARITY_MARKERS = [
 def test_marker_semantics_match_the_tree_endpoint() -> None:
     import pytest
 
-    from app.api.v1.packages import _build_marker_environment, _tree_marker_applies
+    from app.api.v1.package_detail import _build_marker_environment, _tree_marker_applies
 
     for raw_env in PARITY_ENVIRONMENTS:
         old_env = _build_marker_environment(raw_env.get("python_version"), raw_env.get("os"))

@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from app.api.v1.packages import _build_marker_environment, _dependency_sort_key, _tree_marker_applies
+from app.api.v1.package_detail import _build_marker_environment, _dependency_sort_key, _tree_marker_applies
 from app.models.enums import DependencyType
 
 
