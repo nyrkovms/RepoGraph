@@ -223,3 +223,13 @@ def test_cached_answer_is_dropped_when_the_profile_sources_change() -> None:
         assert [n.version for n in (await resolve_graph(db, request)).nodes] == ["1.0"]
 
     _in_rolled_back_transaction(check)
+
+
+def test_nested_format_rejects_unsupported_options(client: TestClient) -> None:
+    for body in (
+        {"ecosystem": "npm", "dependencies": [{"name": "left-pad"}]},
+        {"input_mode": "lock", "dependencies": [{"name": "flask"}]},
+    ):
+        response = client.post("/api/v1/resolve", json=body)
+        assert response.status_code == 422, body
+        assert response.json()["error"]["code"] == "invalid_request"

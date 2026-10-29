@@ -404,7 +404,7 @@ GET /api/v1/packages/{ecosystem}/{coordinates}/-/vulnerabilities
 | `input_mode` | `requirements` (по умолчанию) или `lock`; `freeze` — алиас `lock` |
 | `roots` | 1..500 корней: `purl`, `constraint` (по умолчанию `*`, синтаксис экосистемы), `extras`. Версия в purl без `constraint` закрепляет её (`==версия`) |
 | `environment` | окружение в терминах экосистемы; PyPI: имена PEP 508 (`python_version`, `sys_platform`, `os_name`, `platform_machine`, `platform_system`, `implementation_name`) или короткая форма `python_version` + `os`. Пустое окружение — как у pip по умолчанию (Python 3.12, linux) |
-| `options.include_dev` / `include_optional` | включать dev- и optional-зависимости |
+| `options.include_dev` / `include_optional` | включать dev- и optional-зависимости; для PyPI `include_optional` не действует: extras задаются в корне явно |
 | `options.timeout_s` | срок resolve, `0 < timeout_s <= 120`, по умолчанию 30 |
 | `managed` | корни `dependencyManagement` (Maven); для PyPI не используется |
 
@@ -555,7 +555,8 @@ GET /api/v1/packages/{ecosystem}/{coordinates}/-/vulnerabilities
   - `422` (`invalid_request`, `resolve_limit_exceeded`): неверный запрос, превышен лимит;
   - `502` (`upstream_error`): источник или БД не ответили при lazy fetch;
   - `504` (`resolve_timeout`): resolve не завершился в срок;
-  - `500` (`internal_error`): неподдерживаемые `ecosystem` или `input_mode`, прочие сбои.
+  - `422` (`invalid_request`): неподдерживаемые `ecosystem` или `input_mode`.
+  - `500` (`internal_error`): прочие сбои.
 
 `Decisions fixed`
 - В формате графа сбой всего графа — поле `error` в ответе `200`; во вложенном формате — HTTP-ошибка, partial resolve response запрещён.

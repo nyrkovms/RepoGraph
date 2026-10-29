@@ -107,9 +107,9 @@ async def resolve_graph(db: AsyncSession, payload: GraphResolveRequest) -> Graph
 async def resolve_dependencies(db: AsyncSession, payload: ResolveRequest) -> ResolveSuccessResponse:
     """The MVP format: nested trees per root, errors as exceptions (mapped to 404/409/422/504 by the route)."""
     if payload.ecosystem != "pypi":
-        raise ResolveInternalError("Only ecosystem='pypi' is supported in the nested format")
+        raise ResolveInvalidRequest("Only ecosystem='pypi' is supported in the nested format")
     if payload.input_mode not in {"requirements", "freeze"}:
-        raise ResolveInternalError("Only input_mode='requirements' or 'freeze' is supported in the nested format")
+        raise ResolveInvalidRequest("Only input_mode='requirements' or 'freeze' is supported in the nested format")
 
     start = time.perf_counter()
     plugin = _plugin("pypi")
