@@ -19,6 +19,7 @@ fi
 
 BASE_REV="20261027_0005"
 EXPAND_REV="20261028_0006"
+CONTRACT_REV="20261029_0007"
 SEED="backend/tests/migrations/seed_${BASE_REV##*_}.sql"
 CHECKS="backend/tests/migrations/check_head.sql"
 SEED_AFTER_EXPAND="backend/tests/migrations/seed_after_0006.sql"
@@ -56,18 +57,22 @@ alembic migration_check upgrade head
 psql_db migration_check < "$CHECKS"
 alembic migration_check check
 HEAD="$(alembic migration_check heads | awk '{print $1}')"
-# The contract migration is irreversible and must say so by raising in downgrade(), leaving the revision.
+# Migrations after the contract one downgrade to it; the contract migration itself is irreversible and must say so by
+# raising in downgrade(), leaving the revision.
+alembic migration_check downgrade "$CONTRACT_REV"
 DOWN_LOG="$(mktemp)"
 if alembic migration_check downgrade -1 > "$DOWN_LOG" 2>&1; then
-  echo "downgrade from $HEAD should refuse (irreversible contract migration)" >&2
+  echo "downgrade from $CONTRACT_REV should refuse (irreversible contract migration)" >&2
   exit 1
 fi
 grep -q "irreversible" "$DOWN_LOG" || { cat "$DOWN_LOG" >&2; exit 1; }
 rm -f "$DOWN_LOG"
-if [[ "$(psql_db migration_check <<< 'SELECT version_num FROM alembic_version')" != "$HEAD" ]]; then
+if [[ "$(psql_db migration_check <<< 'SELECT version_num FROM alembic_version')" != "$CONTRACT_REV" ]]; then
   echo "refused downgrade moved alembic_version" >&2
   exit 1
 fi
+alembic migration_check upgrade head
+psql_db migration_check < "$CHECKS"
 
 # 2. writes between expand and contract
 alembic migration_resync upgrade "$BASE_REV"
