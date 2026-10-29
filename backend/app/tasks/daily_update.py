@@ -18,7 +18,7 @@ from app.celery_app import celery_app
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
 from app.db import loop_local_session, loop_local_sessionmaker
-from app.ecosystems.base import PackageRef, RegistryConfig, TrackedPackage
+from app.ecosystems.base import CHANGED_SINCE, PackageRef, RegistryConfig, TrackedPackage
 from app.ecosystems.registry import registered
 from app.fetcher import discovery, sources
 from app.fetcher.pipeline import load_builtin_plugins, mark_unavailable, plugin_for, sync_package
@@ -65,9 +65,14 @@ async def _tracked(db: AsyncSession, registry: RegistryConfig) -> list[TrackedPa
 
 
 def is_stale(expected: str | None, stored: str | None) -> bool:
-    """A source answered with an older revision than its change feed announced: PyPI JSON is served through a CDN
-    and may lag behind the index right after a release. Only numeric revisions (serials) are comparable."""
-    if expected is None or stored is None or not (expected.isdigit() and stored.isdigit()):
+    """A source answered with an older revision than its change feed announced: PyPI JSON and npm packuments are
+    served through a CDN and may lag behind the feed right after a release. Numeric revisions (serials) compare by
+    value; "not:<revision>" (a feed that only knows the package changed) is stale while the answer is still that."""
+    if expected is None or stored is None:
+        return False
+    if expected.startswith(CHANGED_SINCE):
+        return stored == expected[len(CHANGED_SINCE):]
+    if not (expected.isdigit() and stored.isdigit()):
         return False
     return int(stored) < int(expected)
 

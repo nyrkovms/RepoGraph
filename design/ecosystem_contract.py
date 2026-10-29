@@ -258,9 +258,14 @@ class TrackedPackage:
     unavailable: bool
 
 
+CHANGED_SINCE = "not:"   # ChangeSet.changed revision prefix
+
+
 @dataclass(slots=True)
 class ChangeSet:
-    changed: list[tuple[TrackedPackage, str | None]]   # with the revision the source reports
+    # With the revision the source reports, or "not:<revision>" when a feed only says the package changed since the
+    # stored revision (npm `_changes` gives CouchDB revs, not ETags): an answer still at <revision> is a lagging CDN.
+    changed: list[tuple[TrackedPackage, str | None]]
     missing: list[TrackedPackage]
     cursor: Mapping[str, object]                       # new sync_states.cursor_data
     reconcile_all: bool = False                        # feed lost (npm seq reset): check every package conditionally

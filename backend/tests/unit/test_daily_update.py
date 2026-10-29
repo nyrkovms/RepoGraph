@@ -13,3 +13,9 @@ from app.tasks.daily_update import is_stale
 ])
 def test_is_stale(expected: str | None, stored: str | None, stale: bool) -> None:
     assert is_stale(expected, stored) is stale
+
+
+def test_changed_since_revision_is_stale_while_the_answer_is_unchanged() -> None:
+    # npm: the feed only knows the package changed; an answer with the stored ETag is a lagging CDN.
+    assert is_stale('not:"e1"', '"e1"') is True
+    assert is_stale('not:"e1"', '"e2"') is False
