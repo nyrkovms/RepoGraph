@@ -11,7 +11,7 @@ export default function App() {
       <header className="app-header">
         <div>
           <h1>PackageHub MVP</h1>
-          <p className="muted">PyPI catalog + sync + resolve</p>
+          <p className="muted">PyPI and npm catalog + sync + resolve</p>
         </div>
         <nav>
           <Link to="/">Search</Link>
@@ -24,6 +24,7 @@ export default function App() {
       <main>
         <Routes>
           <Route path="/" element={<SearchPage />} />
+          <Route path="/package/:ecosystem/*" element={<PackagePage />} />
           <Route path="/package/:name" element={<PackagePage />} />
           <Route path="/resolve" element={<ResolvePage />} />
           <Route path="/updates" element={<UpdatesPage />} />

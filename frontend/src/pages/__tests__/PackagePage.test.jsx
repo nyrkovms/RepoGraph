@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
+import App from "../../App";
 import PackagePage from "../PackagePage";
 import * as api from "../../lib/api";
 
@@ -101,7 +102,7 @@ describe("PackagePage", () => {
     expect(screen.getByText("None")).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(api.fetchDependencies).toHaveBeenCalledWith("flask", "3.1.3", {
+      expect(api.fetchDependencies).toHaveBeenCalledWith("pypi", "flask", "3.1.3", {
         include_optional: false,
         python_version: "3.12",
         os: "linux",
@@ -185,7 +186,7 @@ describe("PackagePage", () => {
     await user.selectOptions(versionSelect, "3.1.2");
 
     await waitFor(() => {
-      expect(api.fetchDependencies).toHaveBeenCalledWith("flask", "3.1.2", {
+      expect(api.fetchDependencies).toHaveBeenCalledWith("pypi", "flask", "3.1.2", {
         include_optional: false,
         python_version: "3.12",
         os: "linux",
@@ -214,7 +215,8 @@ describe("PackagePage", () => {
     await waitFor(() => {
       expect(
         api.fetchDependencies.mock.calls.some(
-          ([packageName, version, params]) =>
+          ([ecosystem, packageName, version, params]) =>
+            ecosystem === "pypi" &&
             packageName === "flask" &&
             version === "3.1.3" &&
             params?.include_optional === false &&
@@ -290,7 +292,7 @@ describe("PackagePage", () => {
     await screen.findByText("A lightweight WSGI framework");
 
     await waitFor(() => {
-      expect(api.fetchDependencies).toHaveBeenCalledWith("flask", "3.1.2", {
+      expect(api.fetchDependencies).toHaveBeenCalledWith("pypi", "flask", "3.1.2", {
         include_optional: true,
         python_version: "3.11",
         os: "windows",
@@ -473,7 +475,7 @@ describe("PackagePage", () => {
     expect(await screen.findByText("pypi: active")).toBeInTheDocument();
     expect(screen.getByText("pytorch-cpu: yanked")).toBeInTheDocument();
     expect(screen.getByText("dependencies unknown")).toBeInTheDocument();
-    expect(api.fetchVersion).toHaveBeenCalledWith("flask", "3.1.3");
+    expect(api.fetchVersion).toHaveBeenCalledWith("pypi", "flask", "3.1.3");
   });
 
   it("shows no unknown mark for a version with hydrated dependencies", async () => {
@@ -481,5 +483,94 @@ describe("PackagePage", () => {
     await screen.findByText("werkzeug");
     await waitFor(() => expect(api.fetchVersion).toHaveBeenCalled());
     expect(screen.queryByText("dependencies unknown")).not.toBeInTheDocument();
+  });
+
+  describe("by ecosystem", () => {
+    function renderApp(path) {
+      render(
+        <MemoryRouter initialEntries={[path]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <App />
+        </MemoryRouter>
+      );
+    }
+
+    function mockAngularCore() {
+      api.fetchPackage.mockResolvedValue({
+        ecosystem: "npm",
+        name: "core",
+        normalized_name: "core",
+        namespace: "angular",
+        purl: "pkg:npm/%40angular/core",
+        description: "Angular - the core framework",
+        license_spdx: "MIT",
+        latest_version: "19.0.0",
+        sources: [],
+      });
+      api.fetchVersions.mockResolvedValue({
+        data: [{ version: "19.0.0", status: "active", release_date: "2026-01-01T00:00:00Z" }],
+        cursor: null,
+        has_more: false,
+      });
+      api.fetchDependencies.mockResolvedValue({ package: "core", version: "19.0.0", depth: 0, dependencies: [] });
+    }
+
+    it("opens a scoped npm package by its purl route and shows its purl", async () => {
+      mockAngularCore();
+      renderApp("/package/npm/@angular/core");
+
+      expect(await screen.findByText("Angular - the core framework")).toBeInTheDocument();
+      expect(screen.getByText("pkg:npm/%40angular/core")).toBeInTheDocument();
+      expect(api.fetchPackage).toHaveBeenCalledWith("npm", "@angular/core");
+      expect(api.fetchVersions).toHaveBeenCalledWith("npm", "@angular/core", { limit: 30 });
+      expect(api.fetchVulnerabilities).toHaveBeenCalledWith("npm", "@angular/core");
+      await waitFor(() => {
+        expect(api.fetchVersion).toHaveBeenCalledWith("npm", "@angular/core", "19.0.0");
+      });
+    });
+
+    it("shows the npm environment fields and sends the OS the tree endpoint accepts", async () => {
+      const user = userEvent.setup();
+      mockAngularCore();
+      renderApp("/package/npm/@angular/core");
+
+      await screen.findByText("Angular - the core framework");
+      expect(screen.getByLabelText("Node.js version")).toBeInTheDocument();
+      expect(screen.getByLabelText("CPU")).toBeInTheDocument();
+      expect(screen.getByLabelText("OS")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Python version")).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(api.fetchDependencies).toHaveBeenCalledWith("npm", "@angular/core", "19.0.0", {
+          include_optional: false,
+          os: "linux",
+        });
+      });
+
+      await user.selectOptions(screen.getByLabelText("OS"), "win32");
+      await waitFor(() => {
+        expect(api.fetchDependencies).toHaveBeenLastCalledWith("npm", "@angular/core", "19.0.0", {
+          include_optional: false,
+          os: "win32",
+        });
+      });
+    });
+
+    it("keeps the Python fields and the old route for PyPI", async () => {
+      renderApp("/package/flask");
+
+      expect(await screen.findByText("A lightweight WSGI framework")).toBeInTheDocument();
+      expect(api.fetchPackage).toHaveBeenCalledWith("pypi", "flask");
+      expect(screen.getByLabelText("Python version")).toBeInTheDocument();
+      expect(screen.getByLabelText("OS")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Node.js version")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("CPU")).not.toBeInTheDocument();
+    });
+
+    it("opens PyPI by the ecosystem route too", async () => {
+      renderApp("/package/pypi/flask");
+
+      expect(await screen.findByText("A lightweight WSGI framework")).toBeInTheDocument();
+      expect(api.fetchPackage).toHaveBeenCalledWith("pypi", "flask");
+      expect(screen.getByLabelText("Python version")).toBeInTheDocument();
+    });
   });
 });

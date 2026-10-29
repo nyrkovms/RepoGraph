@@ -5,6 +5,37 @@ import { fetchDependencies, fetchPackage, fetchVersion, fetchVersions, fetchVuln
 import { getPackageDescriptionParagraphs } from "../lib/packageDescription";
 import { OS_OPTIONS, PYTHON_VERSIONS } from "../lib/runtimeEnv";
 
+const ECOSYSTEM_LABELS = { pypi: "PyPI", npm: "npm" };
+
+// npm environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): Node.js version, os and cpu as npm names them.
+const NPM_NODE_VERSIONS = ["22.0.0", "20.0.0", "18.0.0"];
+const NPM_OS_OPTIONS = [
+  { value: "linux", label: "Linux" },
+  { value: "darwin", label: "macOS" },
+  { value: "win32", label: "Windows" },
+];
+const NPM_CPU_OPTIONS = [
+  { value: "x64", label: "x64" },
+  { value: "arm64", label: "arm64" },
+];
+const DEFAULTS = {
+  pypi: { python: "3.12", os: "linux" },
+  npm: { node: "20.0.0", os: "linux", cpu: "x64" },
+};
+
+function pickOption(value, allowed, fallback) {
+  return allowed.includes(value) ? value : fallback;
+}
+
+// Query of the dependency tree request. The tree endpoint takes `python_version` and `os`; it has no `node_version`
+// or `cpu` yet, so for npm only `os` is sent (the other two stay in the form and the page URL).
+function treeParams(ecosystem, env, includeOptional) {
+  if (ecosystem === "npm") {
+    return { include_optional: includeOptional, os: env.os };
+  }
+  return { include_optional: includeOptional, python_version: env.python, os: env.os };
+}
+
 function formatMarkerLabel(condition) {
   const marker = condition?.marker;
   const op = condition?.op;
@@ -175,14 +206,20 @@ function DependencyTree({ nodes, packageName, parentId = "root", collapsedNodes,
 }
 
 export default function PackagePage() {
-  const { name } = useParams();
+  // `/package/:ecosystem/*` carries native coordinates (`@angular/core`); `/package/:name` is the old PyPI route.
+  const params = useParams();
+  const ecosystem = params.ecosystem || "pypi";
+  const name = params.ecosystem ? params["*"] : params.name;
+  const isNpm = ecosystem === "npm";
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [pkg, setPkg] = useState(null);
   const [versions, setVersions] = useState([]);
   const [selectedVersion, setSelectedVersion] = useState(() => searchParams.get("version") || "");
-  const [pythonVersion, setPythonVersion] = useState(() => searchParams.get("python") || "3.12");
-  const [os, setOs] = useState(() => searchParams.get("os") || "linux");
+  const [pythonVersion, setPythonVersion] = useState(() => searchParams.get("python") || DEFAULTS.pypi.python);
+  const [nodeVersion, setNodeVersion] = useState(() => searchParams.get("node") || DEFAULTS.npm.node);
+  const [cpu, setCpu] = useState(() => searchParams.get("cpu") || DEFAULTS.npm.cpu);
+  const [os, setOs] = useState(() => searchParams.get("os") || DEFAULTS.pypi.os);
   const [vulns, setVulns] = useState([]);
   const [deps, setDeps] = useState([]);
   const [depsUnknown, setDepsUnknown] = useState(false);
@@ -193,6 +230,8 @@ export default function PackagePage() {
   const [error, setError] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState(() => new Set());
 
+  // `os` is one URL parameter for both ecosystems, but PyPI calls Windows "windows" and npm "win32".
+  const treeOs = isNpm ? pickOption(os, NPM_OS_OPTIONS.map((item) => item.value), DEFAULTS.npm.os) : os;
   const latestVersion = useMemo(() => selectedVersion || pkg?.latest_version || versions?.[0]?.version, [selectedVersion, pkg, versions]);
   const descriptionParagraphs = useMemo(() => getPackageDescriptionParagraphs(pkg?.description), [pkg?.description]);
   const allNodeIds = useMemo(() => collectNodeIds(deps), [deps]);
@@ -206,8 +245,10 @@ export default function PackagePage() {
       return;
     }
     setSelectedVersion(searchParams.get("version") || "");
-    setPythonVersion(searchParams.get("python") || "3.12");
-    setOs(searchParams.get("os") || "linux");
+    setPythonVersion(searchParams.get("python") || DEFAULTS.pypi.python);
+    setNodeVersion(searchParams.get("node") || DEFAULTS.npm.node);
+    setCpu(searchParams.get("cpu") || DEFAULTS.npm.cpu);
+    setOs(searchParams.get("os") || DEFAULTS.pypi.os);
     setIncludeOptional(searchParams.get("include_optional") === "1");
     setDeps([]);
     setDepsUnknown(false);
@@ -215,24 +256,31 @@ export default function PackagePage() {
     setCollapsedNodes(new Set());
     loadPackage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name]);
+  }, [ecosystem, name]);
 
   useEffect(() => {
     const next = new URLSearchParams();
     if (selectedVersion) {
       next.set("version", selectedVersion);
     }
-    if (pythonVersion && pythonVersion !== "3.12") {
+    if (isNpm) {
+      if (nodeVersion && nodeVersion !== DEFAULTS.npm.node) {
+        next.set("node", nodeVersion);
+      }
+      if (cpu && cpu !== DEFAULTS.npm.cpu) {
+        next.set("cpu", cpu);
+      }
+    } else if (pythonVersion && pythonVersion !== DEFAULTS.pypi.python) {
       next.set("python", pythonVersion);
     }
-    if (os && os !== "linux") {
+    if (os && os !== DEFAULTS.pypi.os) {
       next.set("os", os);
     }
     if (includeOptional) {
       next.set("include_optional", "1");
     }
     setSearchParams(next, { replace: true });
-  }, [selectedVersion, pythonVersion, os, includeOptional, setSearchParams]);
+  }, [isNpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, includeOptional, setSearchParams]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -240,7 +288,7 @@ export default function PackagePage() {
     }
     loadDependencies(name, selectedVersion);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, selectedVersion, pythonVersion, os, includeOptional]);
+  }, [ecosystem, name, selectedVersion, pythonVersion, nodeVersion, cpu, os, includeOptional]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -248,7 +296,7 @@ export default function PackagePage() {
       return undefined;
     }
     let cancelled = false;
-    fetchVersion(name, selectedVersion)
+    fetchVersion(ecosystem, name, selectedVersion)
       .then((payload) => {
         if (!cancelled) {
           setVersionDetail(payload);
@@ -263,20 +311,20 @@ export default function PackagePage() {
     return () => {
       cancelled = true;
     };
-  }, [name, selectedVersion]);
+  }, [ecosystem, name, selectedVersion]);
 
   async function loadPackage() {
     setLoading(true);
     setError("");
     try {
-      const packagePayload = await fetchPackage(name);
+      const packagePayload = await fetchPackage(ecosystem, name);
       setPkg(packagePayload);
 
-      const versionsPayload = await fetchVersions(name, { limit: 30 });
+      const versionsPayload = await fetchVersions(ecosystem, name, { limit: 30 });
       const loadedVersions = versionsPayload.data || [];
       setVersions(loadedVersions);
 
-      const vulnerabilitiesPayload = await fetchVulnerabilities(name);
+      const vulnerabilitiesPayload = await fetchVulnerabilities(ecosystem, name);
       setVulns(vulnerabilitiesPayload.data || []);
 
       const versionExists = loadedVersions.some((row) => row.version === selectedVersion);
@@ -299,11 +347,12 @@ export default function PackagePage() {
     setDepsLoading(true);
     setError("");
     try {
-      const depPayload = await fetchDependencies(packageName, version, {
-        include_optional: includeOptional,
-        python_version: pythonVersion,
-        os,
-      });
+      const depPayload = await fetchDependencies(
+        ecosystem,
+        packageName,
+        version,
+        treeParams(ecosystem, { python: pythonVersion, os: treeOs }, includeOptional)
+      );
       setDeps(depPayload.dependencies || []);
       setDepsUnknown(Boolean(depPayload.dependencies_unknown));
       setCollapsedNodes(new Set());
@@ -339,7 +388,10 @@ export default function PackagePage() {
 
   return (
     <section>
-      <h2>Package: {name}</h2>
+      <h2>
+        Package: {name}
+        <span className="tag eco-badge">{ECOSYSTEM_LABELS[ecosystem] || ecosystem}</span>
+      </h2>
       {error ? <p className="error">{error}</p> : null}
       {loading ? <p>Loading...</p> : null}
 
@@ -353,6 +405,11 @@ export default function PackagePage() {
             )}
           </div>
           <div className="meta-grid">
+            {pkg.purl ? (
+              <span>
+                <b>purl</b>: <code>{pkg.purl}</code>
+              </span>
+            ) : null}
             <span>
               <b>Latest</b>: {latestVersion}
             </span>
@@ -415,36 +472,88 @@ export default function PackagePage() {
                 ))}
               </select>
             </label>
-            <label>
-              Python version
-              <select
-                aria-label="Python version"
-                value={pythonVersion}
-                onChange={(e) => setPythonVersion(e.target.value)}
-                disabled={loading || depsLoading}
-              >
-                {PYTHON_VERSIONS.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              OS
-              <select
-                aria-label="OS"
-                value={os}
-                onChange={(e) => setOs(e.target.value)}
-                disabled={loading || depsLoading}
-              >
-                {OS_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {isNpm ? (
+              <>
+                <label>
+                  Node.js version
+                  <select
+                    aria-label="Node.js version"
+                    value={nodeVersion}
+                    onChange={(e) => setNodeVersion(e.target.value)}
+                    disabled={loading || depsLoading}
+                  >
+                    {NPM_NODE_VERSIONS.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  OS
+                  <select
+                    aria-label="OS"
+                    value={treeOs}
+                    onChange={(e) => setOs(e.target.value)}
+                    disabled={loading || depsLoading}
+                  >
+                    {NPM_OS_OPTIONS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  CPU
+                  <select
+                    aria-label="CPU"
+                    value={cpu}
+                    onChange={(e) => setCpu(e.target.value)}
+                    disabled={loading || depsLoading}
+                  >
+                    {NPM_CPU_OPTIONS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            ) : (
+              <>
+                <label>
+                  Python version
+                  <select
+                    aria-label="Python version"
+                    value={pythonVersion}
+                    onChange={(e) => setPythonVersion(e.target.value)}
+                    disabled={loading || depsLoading}
+                  >
+                    {PYTHON_VERSIONS.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  OS
+                  <select
+                    aria-label="OS"
+                    value={os}
+                    onChange={(e) => setOs(e.target.value)}
+                    disabled={loading || depsLoading}
+                  >
+                    {OS_OPTIONS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            )}
             <label>
               <input
                 type="checkbox"
@@ -468,6 +577,9 @@ export default function PackagePage() {
               Refresh tree
             </button>
           </div>
+          {isNpm ? (
+            <p className="muted">The dependency tree takes only the OS from this environment; Node.js version and CPU are not applied yet.</p>
+          ) : null}
           {versionDetail && versionDetail.version === selectedVersion ? (
             <div className="version-detail">
               <b>Sources of {versionDetail.version}</b>:

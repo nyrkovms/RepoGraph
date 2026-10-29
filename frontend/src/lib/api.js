@@ -53,40 +53,43 @@ export async function searchPackages(params = {}) {
   return request(`/api/v1/search${suffix}`);
 }
 
-export async function fetchPackage(name) {
-  return request(`/api/v1/packages/pypi/${encodeURIComponent(name)}`);
+// Package routes are addressed by ecosystem and native coordinates (`@angular/core`, `left-pad`, `flask`); each
+// path segment is encoded, the `/` between scope and name stays (SPEC-MVP-API.md section 3.3).
+export function packagePath(ecosystem, coordinates) {
+  const encoded = String(coordinates).split("/").map(encodeURIComponent).join("/");
+  return `/api/v1/packages/${encodeURIComponent(ecosystem)}/${encoded}/-`;
 }
 
-export async function fetchVersion(name, version) {
-  return request(`/api/v1/packages/pypi/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}`);
-}
-
-export async function fetchVersions(name, params = {}) {
+function withQuery(path, params = {}) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
       search.set(key, String(value));
     }
   });
-  const suffix = search.toString() ? `?${search.toString()}` : "";
-  return request(`/api/v1/packages/pypi/${encodeURIComponent(name)}/versions${suffix}`);
+  return search.toString() ? `${path}?${search.toString()}` : path;
 }
 
-export async function fetchDependencies(name, version, params = {}) {
-  const search = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
-      search.set(key, String(value));
-    }
-  });
-  const suffix = search.toString() ? `?${search.toString()}` : "";
+export async function fetchPackage(ecosystem, coordinates) {
+  return request(`${packagePath(ecosystem, coordinates)}/`);
+}
+
+export async function fetchVersion(ecosystem, coordinates, version) {
+  return request(`${packagePath(ecosystem, coordinates)}/versions/${encodeURIComponent(version)}`);
+}
+
+export async function fetchVersions(ecosystem, coordinates, params = {}) {
+  return request(withQuery(`${packagePath(ecosystem, coordinates)}/versions`, params));
+}
+
+export async function fetchDependencies(ecosystem, coordinates, version, params = {}) {
   return request(
-    `/api/v1/packages/pypi/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}/dependencies${suffix}`
+    withQuery(`${packagePath(ecosystem, coordinates)}/versions/${encodeURIComponent(version)}/dependencies`, params)
   );
 }
 
-export async function fetchVulnerabilities(name) {
-  return request(`/api/v1/packages/pypi/${encodeURIComponent(name)}/vulnerabilities`);
+export async function fetchVulnerabilities(ecosystem, coordinates) {
+  return request(`${packagePath(ecosystem, coordinates)}/vulnerabilities`);
 }
 
 export async function resolveDependencies(body) {
