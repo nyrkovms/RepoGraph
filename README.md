@@ -51,8 +51,28 @@ curl -X POST http://localhost:8000/api/v1/admin/seed \
 
 - Frontend: `http://localhost:5173`
 - API health: `http://localhost:8000/api/v1/health`
-- API stats: `http://localhost:8000/api/v1/stats`
+- API stats: `http://localhost:8000/api/v1/stats` (счётчики по экосистемам и источникам)
 - API metrics (Prometheus): `http://localhost:8000/api/v1/metrics`
+
+## API: адресация по purl и resolve
+
+Полный контракт: [`SPEC-MVP-API.md`](./SPEC-MVP-API.md).
+
+Пакет адресуется экосистемой и координатами (`/packages/{ecosystem}/{coordinates}/-/…`) или purl; маршруты `/packages/pypi/{name}/…` остаются deprecated-алиасами до конца E7. Фильтры `ecosystem`, `registry`, `origin` есть у `/packages`, `/search` и (кроме `origin`) у `/updates`.
+
+```bash
+curl http://localhost:8000/api/v1/packages/pypi/flask/-/                # карточка: purl, origin, sources
+curl http://localhost:8000/api/v1/packages/pypi/flask/-/versions/3.1.3  # версия: engines, sources
+curl -i http://localhost:8000/api/v1/purl/pkg:pypi/flask                # 307 на канонический путь
+```
+
+`POST /resolve` отвечает графом: узлы с purl и источником версии, рёбра, конфликты. Сбой всего графа приходит в поле `error`
+ответа `200`. Старый вложенный формат (`dependencies` вместо `roots`) работает как алиас до конца E7.
+
+```bash
+curl -H 'Content-Type: application/json' http://localhost:8000/api/v1/resolve \
+  -d '{"roots": [{"purl": "pkg:pypi/flask", "constraint": ">=3.0"}], "options": {"timeout_s": 30}}'
+```
 
 ## Test stand
 
@@ -95,7 +115,7 @@ docker compose run --rm api python -m app.cli stats
 
 ## Daily update & digest
 
-- Раз в сутки `celery beat` запускает task `run_daily_update`: берёт индекс PyPI, обновляет изменившиеся пакеты каталога, пишет журнал изменений в `package_events` и прогон в `update_runs`.
+- Раз в сутки `celery beat` запускает task `run_daily_update`: для каждой экосистемы спрашивает источники, что изменилось, обновляет изменившиеся пакеты каталога, пишет журнал изменений в `package_events` и прогон в журнал `runs`.
 - Ручной запуск:
 
 ```bash
@@ -103,9 +123,9 @@ docker compose run --rm api python -m app.cli daily-update
 curl -X POST -H "Authorization: Bearer phub_admin_dev" http://localhost:8000/api/v1/admin/daily-update
 ```
 
-- `GET /api/v1/updates` — лента событий (`since`, `until`, `kind`, `package`, `cursor`, `limit`), окно по `detected_at`.
-- `GET /api/v1/updates/summary` — дайджест по пакетам (`period=day|week` или `since`/`until`, `tz` — IANA-зона для границы «сегодня»); содержит статус последнего прогона.
-- `GET /api/v1/admin/sync/status` дополнительно отдаёт `last_update_run`.
+- `GET /api/v1/updates` — лента событий (`since`, `until`, `kind`, `ecosystem`, `registry`, `package` — purl или имя PyPI, `cursor`, `limit`), окно по `detected_at`.
+- `GET /api/v1/updates/summary` — дайджест по пакетам (`period=day|week` или `since`/`until`, `tz` — IANA-зона для границы «сегодня», `ecosystem`, `registry`); `last_runs` — статус последнего прогона каждой экосистемы.
+- `GET /api/v1/admin/sync/status` собирается из журнала `runs`: кроме сводки отдаёт `last_update_run`, `recent_runs` и состояние источников (`registries`).
 - UI: страница `/updates` («Обновления»): Сегодня / Неделя / Период, фильтр по типу события.
 - Метрики: `packagehub_daily_update_*`, `packagehub_package_events_total{kind}`.
 
@@ -206,9 +226,9 @@ runs the same flow against the live sources (02:30 UTC, or manually via `workflo
 
 - `S00-S04`: infra, app scaffold, DB models, Alembic migration, PyPI registry seed
 - `S05-S07`: PEP 508 parser/normalizers, PyPI connector, transactional sync pipeline
-- `S08-S10`: recursive seed, lazy fetch task flow, batch refresh, DB-backed sync status
+- `S08-S10`: recursive seed, lazy fetch task flow, DB-backed sync status (batch refresh was removed in E0-B: packages are updated by the daily update)
 - `S11-S12`: catalog/search/package endpoints with filters/pagination/dependency tree
-- `S13-S15`: `POST /resolve` (`resolvelib`), lazy-fetch fail-fast, Redis resolve cache
+- `S13-S15`: `POST /resolve` (`resolvelib`; graph format, the nested one is an alias), lazy fetch, Redis resolve cache
 - `S16-S18`: frontend API integration + Prometheus metrics + runbook finalization
 
 ## Metrics exposed
