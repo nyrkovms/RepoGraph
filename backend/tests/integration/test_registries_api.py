@@ -231,7 +231,7 @@ def test_create_defaults(client: TestClient, auth: dict) -> None:
     ("overrides", "message"),
     [
         ({"protocol": "gopher"}, "unknown protocol"),
-        ({"protocol": "pypi-simple"}, "no adapter for protocol"),
+        ({"protocol": "npm-registry"}, "no adapter for protocol"),
         ({"ecosystem": "npm", "protocol": "npm-registry"}, "no plugin is registered"),
         ({"routing": {"mode": "sometimes", "packages": ["torch"]}}, "unknown routing mode"),
         ({"routing": {"mode": "exclusive"}}, "needs routing.packages"),
@@ -601,7 +601,7 @@ def test_import_reports_each_bad_object_and_goes_on(client: TestClient) -> None:
     good, bad, moved = new_slug(), new_slug(), new_slug()
     run_import({"registries": [body(moved)]})
     document = {"registries": [
-        body(bad, protocol="pypi-simple"),
+        body(bad, protocol="npm-registry"),
         body(good),
         body(moved, protocol="pypi-simple"),   # protocol of an existing source cannot change
     ], "profiles": [{"slug": new_slug(), "name": "P", "ecosystem": "pypi", "registries": [{"slug": bad}]}]}

@@ -284,6 +284,14 @@ button:disabled {
   margin-bottom: 12px;
 }
 
+.package-sources li {
+  margin-bottom: 4px;
+}
+
+.version-detail {
+  margin: 8px 0;
+}
+
 .package-description {
   margin-bottom: 12px;
 }

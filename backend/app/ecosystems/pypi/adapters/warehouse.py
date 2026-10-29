@@ -1,5 +1,5 @@
-"""Source adapters of the PyPI plugin. `pypi-warehouse` (pypi.org) wraps the existing connector and converts its
-output into the contract types; `pypi-simple` (PEP 503/691 indexes) comes in E0.5.
+"""Source adapter `pypi-warehouse` (pypi.org): wraps the existing connector and converts its output into the
+contract types. `pypi-simple` (PEP 503/691 indexes) is in `simple`.
 """
 
 from collections.abc import Sequence
@@ -27,7 +27,7 @@ from app.ecosystems.base import (
     VersionStatus,
 )
 from app.ecosystems.pypi.changes import WarehouseChangeDetector
-from app.ecosystems.pypi.connector import PyPIConnector
+from app.ecosystems.pypi.connector import PyPIConnector, _parse_dependencies
 from app.ecosystems.pypi.simple_index import PyPISimpleIndex
 from app.services.http import make_client
 
@@ -41,6 +41,12 @@ def _dependency(dep: legacy.NormalizedDependency) -> NormalizedDependency:
         extra_name=dep.extra_name,
         environment_markers=dep.environment_markers,
     )
+
+
+def dependencies_from_requires_dist(requirements: list[str]) -> list[NormalizedDependency]:
+    """`Requires-Dist` lines in contract form. The warehouse JSON (`info.requires_dist`) and a PEP 658 `.metadata`
+    carry the same lines, so both adapters go through here and agree on the result."""
+    return [_dependency(d) for d in _parse_dependencies(requirements)]
 
 
 def _artifact(artifact: legacy.NormalizedArtifact) -> NormalizedArtifact:

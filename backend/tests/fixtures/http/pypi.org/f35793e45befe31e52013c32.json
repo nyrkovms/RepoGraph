@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"OVDdfeUUOhsfo3Pu/eEdMA\"",
+    "x-pypi-last-serial": "35976143"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/nvidia-cublas-cu12/12.8.4.1/json"
+  },
+  "status": 200
+}

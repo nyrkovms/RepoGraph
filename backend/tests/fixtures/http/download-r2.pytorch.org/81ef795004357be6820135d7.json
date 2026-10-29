@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "binary/octet-stream",
+    "etag": "\"d0bc2ed3ab36e2f3bdc84b951c68a370\"",
+    "last-modified": "Mon, 19 Jan 2026 15:12:22 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://download-r2.pytorch.org/whl/cu128/torch-2.9.1%2Bcu128-cp314-cp314-manylinux_2_28_x86_64.whl.metadata"
+  },
+  "status": 200
+}

@@ -1,0 +1,57 @@
+# PyTorch wheel indexes (SPEC-MULTI-ECOSYSTEM.md §6.3) for `python -m app.cli registries import registries.pytorch.yaml`.
+#
+# Each index serves only the PyTorch packages (`allow`): everything else, including the nvidia-* libraries the CUDA
+# builds require, comes from pypi.org, as with `pip --index-url <index> --extra-index-url https://pypi.org/simple`, and
+# download.pytorch.org (which answers 403, not 404, for a project it does not carry) is never asked about other projects.
+# `exclusive` is set in the profiles, not on the sources: inside `cuda121` torch comes only from the CUDA index, while
+# the catalog keeps reading torch from pypi.org too (the default profile and the daily update see its releases).
+# Sources are created disabled and enabled after a passing connection test.
+
+registries:
+  - slug: pytorch-cpu
+    name: PyTorch CPU
+    ecosystem: pypi
+    protocol: pypi-simple
+    base_url: https://download.pytorch.org/whl/cpu/
+    priority: 50
+    routing: {mode: allow, packages: [torch, torchvision, torchaudio]}
+    enabled: true
+  - slug: pytorch-cu121
+    name: PyTorch CUDA 12.1
+    ecosystem: pypi
+    protocol: pypi-simple
+    base_url: https://download.pytorch.org/whl/cu121/
+    priority: 50
+    routing: {mode: allow, packages: [torch, torchvision, torchaudio]}
+    enabled: true
+  - slug: pytorch-cu128
+    name: PyTorch CUDA 12.8
+    ecosystem: pypi
+    protocol: pypi-simple
+    base_url: https://download.pytorch.org/whl/cu128/
+    priority: 50
+    routing: {mode: allow, packages: [torch, torchvision, torchaudio]}
+    enabled: true
+
+profiles:
+  - slug: cpu
+    name: PyTorch CPU
+    ecosystem: pypi
+    is_default: false
+    registries:
+      - {slug: pytorch-cpu, routing_override: {mode: exclusive, packages: [torch, torchvision, torchaudio]}}
+      - {slug: pypi}
+  - slug: cuda121
+    name: PyTorch CUDA 12.1
+    ecosystem: pypi
+    is_default: false
+    registries:
+      - {slug: pytorch-cu121, routing_override: {mode: exclusive, packages: [torch, torchvision, torchaudio]}}
+      - {slug: pypi}
+  - slug: cuda128
+    name: PyTorch CUDA 12.8
+    ecosystem: pypi
+    is_default: false
+    registries:
+      - {slug: pytorch-cu128, routing_override: {mode: exclusive, packages: [torch, torchvision, torchaudio]}}
+      - {slug: pypi}

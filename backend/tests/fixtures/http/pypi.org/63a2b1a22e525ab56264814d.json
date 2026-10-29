@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"9YdVyAXY955rWqNiyf2Q9w\"",
+    "x-pypi-last-serial": "41342720"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/nvidia-nvshmem-cu12/json"
+  },
+  "status": 200
+}

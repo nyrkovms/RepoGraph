@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"pgsjzdVq33kFQgOz5hJbwA\"",
+    "x-pypi-last-serial": "40230991"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/mpmath/1.3.0/json"
+  },
+  "status": 200
+}

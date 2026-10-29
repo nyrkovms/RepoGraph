@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
-import { fetchDependencies, fetchPackage, fetchVersions, fetchVulnerabilities } from "../lib/api";
+import { fetchDependencies, fetchPackage, fetchVersion, fetchVersions, fetchVulnerabilities } from "../lib/api";
 import { getPackageDescriptionParagraphs } from "../lib/packageDescription";
 import { OS_OPTIONS, PYTHON_VERSIONS } from "../lib/runtimeEnv";
 
@@ -38,6 +38,11 @@ function formatMarkerLabel(condition) {
   }
 
   return null;
+}
+
+function formatDateTime(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
 }
 
 function collectDependencyConditions(node) {
@@ -118,6 +123,7 @@ function DependencyTreeNode({ node, nodeId, packageName, collapsedNodes, onToggl
           {node.constraint && node.constraint !== "*" ? <span className="muted dep-constraint">{node.constraint}</span> : null}
           {node.resolved_version ? <span className="tag dep-version-tag">{node.resolved_version}</span> : <span className="tag muted-tag dep-version-tag">unresolved</span>}
           {node.cycle ? <span className="tag warn">cycle</span> : null}
+          {node.dependencies_unknown ? <span className="tag warn">dependencies unknown</span> : null}
         </div>
         {conditions.labels.length ? (
           <div className="dep-node-meta">
@@ -179,6 +185,8 @@ export default function PackagePage() {
   const [os, setOs] = useState(() => searchParams.get("os") || "linux");
   const [vulns, setVulns] = useState([]);
   const [deps, setDeps] = useState([]);
+  const [depsUnknown, setDepsUnknown] = useState(false);
+  const [versionDetail, setVersionDetail] = useState(null);
   const [includeOptional, setIncludeOptional] = useState(() => searchParams.get("include_optional") === "1");
   const [loading, setLoading] = useState(false);
   const [depsLoading, setDepsLoading] = useState(false);
@@ -202,6 +210,8 @@ export default function PackagePage() {
     setOs(searchParams.get("os") || "linux");
     setIncludeOptional(searchParams.get("include_optional") === "1");
     setDeps([]);
+    setDepsUnknown(false);
+    setVersionDetail(null);
     setCollapsedNodes(new Set());
     loadPackage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -232,6 +242,29 @@ export default function PackagePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, selectedVersion, pythonVersion, os, includeOptional]);
 
+  useEffect(() => {
+    if (!name || !selectedVersion) {
+      setVersionDetail(null);
+      return undefined;
+    }
+    let cancelled = false;
+    fetchVersion(name, selectedVersion)
+      .then((payload) => {
+        if (!cancelled) {
+          setVersionDetail(payload);
+        }
+      })
+      .catch(() => {
+        // The sources block is auxiliary: the page stays usable without it.
+        if (!cancelled) {
+          setVersionDetail(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [name, selectedVersion]);
+
   async function loadPackage() {
     setLoading(true);
     setError("");
@@ -255,6 +288,7 @@ export default function PackagePage() {
       setVersions([]);
       setVulns([]);
       setDeps([]);
+      setDepsUnknown(false);
       setSelectedVersion("");
     } finally {
       setLoading(false);
@@ -271,10 +305,12 @@ export default function PackagePage() {
         os,
       });
       setDeps(depPayload.dependencies || []);
+      setDepsUnknown(Boolean(depPayload.dependencies_unknown));
       setCollapsedNodes(new Set());
     } catch (err) {
       setError(err?.message || "Dependency tree request failed");
       setDeps([]);
+      setDepsUnknown(false);
     } finally {
       setDepsLoading(false);
     }
@@ -330,6 +366,27 @@ export default function PackagePage() {
               <b>Repo</b>: {pkg.repository_url || "n/a"}
             </span>
           </div>
+
+          {pkg.sources?.length ? (
+            <>
+              <h3>Sources</h3>
+              <ul className="result-list package-sources">
+                {pkg.sources.map((source) => (
+                  <li key={source.registry}>
+                    <code>{source.registry}</code>
+                    {source.primary ? <span className="tag">primary</span> : null}
+                    {!source.enabled ? <span className="tag muted-tag">disabled</span> : null}
+                    {source.missing_since ? (
+                      <span className="tag warn">missing since {formatDateTime(source.missing_since)}</span>
+                    ) : null}
+                    {source.checked_at ? (
+                      <span className="muted"> checked {formatDateTime(source.checked_at)}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
 
           <h3>Versions</h3>
           <ul className="inline-list">
@@ -411,8 +468,29 @@ export default function PackagePage() {
               Refresh tree
             </button>
           </div>
+          {versionDetail && versionDetail.version === selectedVersion ? (
+            <div className="version-detail">
+              <b>Sources of {versionDetail.version}</b>:
+              {versionDetail.sources?.length ? (
+                <ul className="inline-list">
+                  {versionDetail.sources.map((source) => (
+                    <li key={source.registry}>
+                      {source.registry}: {source.status}
+                      {!source.enabled ? <span className="tag muted-tag">disabled</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {versionDetail.dependencies_state === "unavailable" ? (
+                <span className="tag warn">dependencies unknown</span>
+              ) : null}
+            </div>
+          ) : null}
           {depsLoading ? <p>Loading dependency tree...</p> : null}
-          {!depsLoading && deps.length === 0 ? <p>No runtime dependencies for this environment.</p> : null}
+          {!depsLoading && depsUnknown ? (
+            <p>Dependencies unknown: the source has no metadata for this version</p>
+          ) : null}
+          {!depsLoading && !depsUnknown && deps.length === 0 ? <p>No runtime dependencies for this environment.</p> : null}
           <DependencyTree
             nodes={deps}
             packageName={pkg.normalized_name}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"ClqpTctT/87qc89EFqYrng\"",
+    "x-pypi-last-serial": "41997038"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/nvidia-nvjitlink-cu12/json"
+  },
+  "status": 200
+}

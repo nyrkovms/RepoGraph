@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"j35VgsfdNDDXnKMRtSgWLg\"",
+    "x-pypi-last-serial": "41992969"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/nvidia-cuda-nvrtc-cu12/12.8.93/json"
+  },
+  "status": 200
+}

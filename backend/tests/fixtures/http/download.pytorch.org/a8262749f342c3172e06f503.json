@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/html",
+    "etag": "\"c7c82eb4bcc238b30293a0146f76c670\"",
+    "last-modified": "Thu, 29 Oct 2026 06:13:09 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.pypi.simple.v1+json, application/vnd.pypi.simple.v1+html;q=0.2, text/html;q=0.01"
+    },
+    "method": "GET",
+    "url": "https://download.pytorch.org/whl/cpu/mpmath/"
+  },
+  "status": 200
+}

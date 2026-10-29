@@ -57,6 +57,10 @@ export async function fetchPackage(name) {
   return request(`/api/v1/packages/pypi/${encodeURIComponent(name)}`);
 }
 
+export async function fetchVersion(name, version) {
+  return request(`/api/v1/packages/pypi/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}`);
+}
+
 export async function fetchVersions(name, params = {}) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {

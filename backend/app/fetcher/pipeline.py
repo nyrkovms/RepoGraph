@@ -5,18 +5,22 @@ Seed, daily update, retries and lazy fetch call `sync_package`: fetch the packag
 Callers commit; nothing here does.
 """
 
+import hashlib
 import logging
 import uuid
+from typing import cast
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.connectors.base import PackageNotFound
+from app.ecosystems.base import DependencyType as DependencyType_
 from app.ecosystems.base import (
     EcosystemPlugin,
+    FetchedDocument,
     InvalidVersion,
     MergedPackage,
     MergedVersion,
@@ -54,6 +58,7 @@ from app.models.package import Package
 from app.models.package_event import PackageEvent
 from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
+from app.models.source_document import SourceDocument
 from app.models.sync_state import SyncState
 from app.models.version import PackageVersion
 from app.models.version import VersionSource
@@ -219,6 +224,7 @@ async def write_package(
         await _write_dependencies(db, row, merged_version, source_versions, merged_version.version.version in metadata_moved)
     for registry_id, versions in source_versions.items():
         await _replace_artifacts(db, registry_id, {version_ids[v]: sv.artifacts for v, sv in versions.items()})
+    await _recheck_unavailable(db, version_ids, source_versions)
 
     if merged.package.dist_tags is not None:
         await _replace_dist_tags(db, package.id, merged.package.dist_tags, now)
@@ -775,6 +781,7 @@ async def ensure_version_dependencies(db: AsyncSession, package: Package, versio
     version_row.metadata_registry_id = registry_id
     adapter = plugin.adapter(sources.registry_config(registry))
     loaded = await adapter.fetch_version_dependencies(ref, version_row.version, _ProfileLookup(plugin, [adapter.registry]))
+    await store_documents(db, registry_id, loaded.documents)
 
     features = dict(version_row.features or {})
     if not loaded.available:
@@ -794,6 +801,165 @@ async def ensure_version_dependencies(db: AsyncSession, package: Package, versio
     )
     await db.flush()
     await resolve_dependency_links(db, [version_row.id])
+
+
+# version_sources.metadata_digest of a source that has no metadata for the version (PEP 503 without PEP 658): its
+# dependencies are unknown, whatever other sources say (Q14). Not a sha256, so it never equals a real digest.
+UNAVAILABLE_DIGEST = b"unavailable"
+EMPTY_DIGEST = dependencies_digest([])
+
+
+def dependency_from_row(dep: Dependency) -> NormalizedDependency:
+    return NormalizedDependency(
+        target=PackageRef(ecosystem=dep.dependency_ecosystem.value, namespace=dep.dependency_namespace or "",
+                          name=dep.dependency_name),
+        constraint=dep.version_constraint,
+        dependency_type=cast(DependencyType_, dep.dependency_type.value),
+        raw_spec=dep.raw_spec,
+        scope=dep.scope,
+        alias=dep.alias,
+        extra_name=dep.extra_name,
+        environment_markers=dep.environment_markers,
+        details=dep.details,
+    )
+
+
+async def source_dependencies(
+    db: AsyncSession, package: Package, version_row: PackageVersion, registry_id: str
+) -> tuple[list[Dependency] | None, bool]:
+    """The version's dependencies as `registry_id` publishes them (SPEC §6.5, §9.1), and whether anything was loaded.
+
+    The metadata source gives the canonical set. Another source is read lazily the first time a reader takes the
+    version from it: its digest is kept in version_sources, and where it differs from the canonical digest its own
+    set is stored as a variant (torch 2.9.1 on the PyTorch CPU index has no nvidia-* requirements); no metadata
+    makes them unknown. The source row is locked only while the source is read, so two readers do not both write
+    the variant and plain reads do not queue behind each other.
+    None = unknown.
+    """
+    version_id, before = version_row.id, version_row.dependencies_state
+    await ensure_version_dependencies(db, package, version_row)
+    changed = version_row.dependencies_state != before
+    if registry_id != str(version_row.metadata_registry_id):
+        source_key = (VersionSource.version_id == version_id, VersionSource.registry_id == uuid.UUID(registry_id))
+        source = await db.scalar(select(VersionSource).where(*source_key))
+        if source is not None and source.status != PackageVersionStatus.removed:
+            canonical_digest = await _canonical_digest(db, version_row)
+            variant = await _variant_rows(db, version_id, registry_id)
+            if _needs_reading(source.metadata_digest, canonical_digest, variant):
+                # Lock the row only to read the source, and look again: another reader may have just done it.
+                source = await db.scalar(select(VersionSource).where(*source_key).with_for_update())
+                variant = await _variant_rows(db, version_id, registry_id)
+                if source is not None and _needs_reading(source.metadata_digest, canonical_digest, variant):
+                    if not await _load_source_dependencies(db, package, version_row, source, canonical_digest):
+                        return None, changed   # the source could not be asked (degraded): unknown for now
+                    changed = True
+                    variant = await _variant_rows(db, version_id, registry_id)
+            digest = source.metadata_digest if source is not None else None
+            if digest == UNAVAILABLE_DIGEST:
+                return None, changed
+            if digest is not None and digest != canonical_digest:
+                return variant, changed   # its own set, possibly empty
+    if version_row.dependencies_state != DependenciesState.hydrated:
+        return None, changed
+    rows = (await db.scalars(
+        select(Dependency).where(Dependency.version_id == version_id, Dependency.variant_registry_id.is_(None))
+    )).all()
+    return list(rows), changed
+
+
+def _needs_reading(digest: bytes | None, canonical_digest: bytes | None, variant: list[Dependency]) -> bool:
+    """Never read; or read while it matched a canonical set that has moved since (no variant rows to fall back on)."""
+    return digest is None or (digest not in (UNAVAILABLE_DIGEST, canonical_digest, EMPTY_DIGEST) and not variant)
+
+
+async def _variant_rows(db: AsyncSession, version_id: object, registry_id: str) -> list[Dependency]:
+    return list((await db.scalars(
+        select(Dependency).where(Dependency.version_id == version_id,
+                                 Dependency.variant_registry_id == uuid.UUID(registry_id))
+    )).all())
+
+
+async def _canonical_digest(db: AsyncSession, version_row: PackageVersion) -> bytes | None:
+    """Digest of the canonical set, from the metadata source's row; computed and kept there when 0006 left it empty."""
+    if version_row.dependencies_state != DependenciesState.hydrated:
+        return None
+    row = await db.scalar(
+        select(VersionSource).where(VersionSource.version_id == version_row.id,
+                                    VersionSource.registry_id == version_row.metadata_registry_id)
+    )
+    if row is not None and row.metadata_digest not in (None, UNAVAILABLE_DIGEST):
+        return row.metadata_digest
+    canonical = (await db.scalars(
+        select(Dependency).where(Dependency.version_id == version_row.id, Dependency.variant_registry_id.is_(None))
+    )).all()
+    digest = dependencies_digest([dependency_from_row(d) for d in canonical])
+    if row is not None:
+        row.metadata_digest = digest
+    return digest
+
+
+async def _load_source_dependencies(
+    db: AsyncSession, package: Package, version_row: PackageVersion, source: VersionSource, canonical_digest: bytes | None
+) -> bool:
+    """Read the version's metadata from `source`; False if the source cannot be asked now (disabled, degraded)."""
+    registry = await db.get(Registry, source.registry_id)
+    if registry is None or not registry.enabled or str(registry.id) in await discovery.degraded_registry_ids(db):
+        return False
+    plugin = plugin_for(package.ecosystem.value)
+    ref = PackageRef(ecosystem=package.ecosystem.value, namespace=package.namespace or "", name=package.normalized_name)
+    adapter = plugin.adapter(sources.registry_config(registry))
+    loaded = await adapter.fetch_version_dependencies(ref, version_row.version, _ProfileLookup(plugin, [adapter.registry]))
+    await store_documents(db, registry.id, loaded.documents)
+    await _replace_dependency_rows(db, version_row.id, str(registry.id), [])
+    if not loaded.available:
+        source.metadata_digest = UNAVAILABLE_DIGEST
+        await db.flush()
+        return True
+    digest = dependencies_digest(loaded.dependencies)
+    if digest != canonical_digest:
+        await _replace_dependency_rows(db, version_row.id, str(registry.id), loaded.dependencies)
+    source.metadata_digest = digest
+    await db.flush()
+    await resolve_dependency_links(db, [version_row.id])
+    return True
+
+
+async def _recheck_unavailable(
+    db: AsyncSession, version_ids: Mapping[str, object], source_versions: Mapping[str, Mapping[str, NormalizedVersion]]
+) -> None:
+    """A source that now has metadata files for a version it had none for (an index adds PEP 658 later) is read again:
+    its "no metadata" mark and, for the metadata source, `dependencies_state=unavailable` go back to unknown-yet."""
+    pairs = [
+        (version_ids[version], uuid.UUID(registry_id))
+        for registry_id, versions in source_versions.items()
+        for version, source_version in versions.items()
+        if any(artifact.has_metadata_file for artifact in source_version.artifacts)
+    ]
+    for chunk in _chunks(pairs):
+        await db.execute(
+            update(VersionSource)
+            .where(tuple_(VersionSource.version_id, VersionSource.registry_id).in_(chunk),
+                   VersionSource.metadata_digest == UNAVAILABLE_DIGEST)
+            .values(metadata_digest=None)
+        )
+        await db.execute(
+            update(PackageVersion)
+            .where(tuple_(PackageVersion.id, PackageVersion.metadata_registry_id).in_(chunk),
+                   PackageVersion.dependencies_state == DependenciesState.unavailable)
+            .values(dependencies_state=DependenciesState.pending)
+        )
+
+
+async def store_documents(db: AsyncSession, registry_id: object, documents: Sequence[FetchedDocument]) -> None:
+    """Upstream documents the metadata came from (source_documents), replaced when fetched again."""
+    now = datetime.now(UTC)
+    for document in documents:
+        values = {
+            "content": document.content, "content_type": document.content_type[:64],
+            "sha256": hashlib.sha256(document.content).hexdigest(), "etag": document.etag, "fetched_at": now,
+        }
+        stmt = insert(SourceDocument).values(registry_id=registry_id, path=document.path, **values)
+        await db.execute(stmt.on_conflict_do_update(index_elements=["registry_id", "path"], set_=values))
 
 
 async def _dependencies_source(db: AsyncSession, package: Package, version_row: PackageVersion) -> Registry | None:

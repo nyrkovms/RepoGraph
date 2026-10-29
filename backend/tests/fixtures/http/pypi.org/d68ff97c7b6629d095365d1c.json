@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"aHO9KntXO3HO5AFaaM3qMw\"",
+    "x-pypi-last-serial": "42774405"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/nvidia-cudnn-cu12/9.10.2.21/json"
+  },
+  "status": 200
+}

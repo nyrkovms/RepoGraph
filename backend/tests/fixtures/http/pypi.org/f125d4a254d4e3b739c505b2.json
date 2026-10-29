@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"9V8leVXjfJ1grfLzgjgJfA\"",
+    "x-pypi-last-serial": "42832057"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/triton/json"
+  },
+  "status": 200
+}

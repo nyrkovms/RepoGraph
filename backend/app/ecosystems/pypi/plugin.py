@@ -19,7 +19,7 @@ from app.ecosystems.base import (
     VersionScheme,
 )
 from app.ecosystems.merge import merge_by_priority
-from app.ecosystems.pypi.adapters import WarehouseAdapter
+from app.ecosystems.pypi.adapters import PyPISimpleAdapter, WarehouseAdapter
 from app.ecosystems.pypi.coordinates import PyPICoordinates
 from app.ecosystems.pypi.environment import PythonEnvironment, dependency_applies, parse_environment
 from app.ecosystems.pypi.resolver import RESOLVER
@@ -39,6 +39,8 @@ class PyPIPlugin:
     def adapter(self, registry: RegistryConfig) -> SourceAdapter:
         if registry.protocol == "pypi-warehouse":
             return WarehouseAdapter(registry)
+        if registry.protocol == "pypi-simple":
+            return PyPISimpleAdapter(registry)
         raise ValueError(f"PyPI plugin has no adapter for protocol {registry.protocol!r} (registry {registry.slug})")
 
     def sources_for(self, ref: PackageRef, profile: SourceProfile) -> Sequence[RegistryConfig]:

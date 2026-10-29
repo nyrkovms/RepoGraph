@@ -1,0 +1,46 @@
+Metadata-Version: 2.1
+Name: torch
+Version: 2.9.1+cpu
+Summary: Tensors and Dynamic neural networks in Python with strong GPU acceleration
+Author-email: PyTorch Team <packages@pytorch.org>
+License: BSD-3-Clause
+Project-URL: Homepage, https://pytorch.org
+Project-URL: Repository, https://github.com/pytorch/pytorch
+Project-URL: Documentation, https://pytorch.org/docs
+Project-URL: Issue Tracker, https://github.com/pytorch/pytorch/issues
+Project-URL: Forum, https://discuss.pytorch.org
+Keywords: pytorch,machine learning
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Education
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering
+Classifier: Topic :: Scientific/Engineering :: Mathematics
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Software Development
+Classifier: Topic :: Software Development :: Libraries
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Programming Language :: C++
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+License-File: NOTICE
+Requires-Dist: filelock
+Requires-Dist: typing-extensions>=4.10.0
+Requires-Dist: sympy>=1.13.3
+Requires-Dist: networkx>=2.5.1
+Requires-Dist: jinja2
+Requires-Dist: fsspec>=0.8.5
+Requires-Dist: setuptools; python_version >= "3.12"
+Provides-Extra: opt-einsum
+Requires-Dist: opt-einsum>=3.3; extra == "opt-einsum"
+Provides-Extra: optree
+Requires-Dist: optree>=0.13.0; extra == "optree"
+Provides-Extra: pyyaml
+Requires-Dist: pyyaml; extra == "pyyaml"

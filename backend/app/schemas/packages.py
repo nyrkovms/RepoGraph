@@ -94,6 +94,7 @@ class DependencyNode(BaseModel):
     environment_markers: dict | None = None
     resolved_version: str | None
     cycle: bool = False
+    dependencies_unknown: bool = False   # the resolved version's source has no metadata for it (Q14)
     children: list[DependencyNode] = Field(default_factory=list)
 
 
@@ -105,6 +106,7 @@ class DependencyTreeResponse(BaseModel):
     version: str
     profile: str
     depth: int
+    dependencies_unknown: bool = False
     dependencies: list[DependencyNode]
 
 

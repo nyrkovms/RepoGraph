@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"N4znXIIVWPSxgQFD6suTzQ\"",
+    "x-pypi-last-serial": "41997880"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/nvidia-nvtx-cu12/json"
+  },
+  "status": 200
+}

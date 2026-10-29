@@ -40,7 +40,6 @@ def test_valid_registry_passes() -> None:
         ({"ecosystem": "npm"}, "no plugin is registered for ecosystem 'npm'"),
         ({"ecosystem": "nope"}, "no plugin is registered"),
         ({"protocol": "gopher"}, "unknown protocol 'gopher'"),
-        ({"protocol": "pypi-simple"}, "no adapter for protocol 'pypi-simple'"),
         ({"protocol": "npm-registry"}, "no adapter for protocol 'npm-registry'"),
         ({"routing": {"mode": "sometimes", "packages": ["a"]}}, "unknown routing mode"),
         ({"routing": {"mode": "exclusive"}}, "needs routing.packages"),
@@ -143,11 +142,10 @@ def test_example_file_is_importable_and_valid() -> None:
     ]
 
 
-def test_example_pytorch_index_is_rejected_until_the_adapter_exists() -> None:
+def test_example_pytorch_index_is_accepted() -> None:
     cuda = _fields(slug="pytorch-cu121", protocol="pypi-simple", base_url="https://download.pytorch.org/whl/cu121/",
                    routing={"mode": "exclusive", "packages": ["torch", "torchvision", "torchaudio"]})
-    with pytest.raises(RegistryInvalid, match="no adapter for protocol 'pypi-simple'"):
-        validate_registry(cuda)
+    validate_registry(cuda)
 
 
 # --- connection test ---------------------------------------------------------------------------------
@@ -201,3 +199,19 @@ def test_connection_timeout(monkeypatch) -> None:
     result = _check(monkeypatch, hangs, timeout=0.05)
     assert result.ok is False
     assert result.error is not None and result.error.startswith("TimeoutError")
+
+
+def test_pytorch_file_is_importable_and_valid() -> None:
+    path = Path(__file__).resolve().parents[2] / "registries.pytorch.yaml"
+    document = parse_import(path.read_text(encoding="utf-8"))
+    assert [(r.slug, r.protocol, r.routing["mode"]) for r in document.registries] == [
+        ("pytorch-cpu", "pypi-simple", "allow"), ("pytorch-cu121", "pypi-simple", "allow"),
+        ("pytorch-cu128", "pypi-simple", "allow")]
+    for registry in document.registries:
+        validate_registry(RegistryFields.from_body(registry))
+    assert {p.slug: [m.slug for m in p.registries] for p in document.profiles} == {
+        "cpu": ["pytorch-cpu", "pypi"], "cuda121": ["pytorch-cu121", "pypi"], "cuda128": ["pytorch-cu128", "pypi"]}
+    assert not any(p.is_default for p in document.profiles)
+    # exclusive inside the profile only: the catalog keeps reading torch from pypi.org as well
+    assert {p.slug: p.registries[0].routing_override["mode"] for p in document.profiles} == {
+        "cpu": "exclusive", "cuda121": "exclusive", "cuda128": "exclusive"}

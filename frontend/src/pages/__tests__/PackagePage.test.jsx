@@ -8,6 +8,7 @@ import * as api from "../../lib/api";
 vi.mock("../../lib/api", () => ({
   fetchDependencies: vi.fn(),
   fetchPackage: vi.fn(),
+  fetchVersion: vi.fn(),
   fetchVersions: vi.fn(),
   fetchVulnerabilities: vi.fn(),
 }));
@@ -53,6 +54,13 @@ describe("PackagePage", () => {
     api.fetchVulnerabilities.mockResolvedValue({
       package: "flask",
       data: [],
+    });
+    api.fetchVersion.mockResolvedValue({
+      name: "flask",
+      version: "3.1.3",
+      status: "active",
+      dependencies_state: "hydrated",
+      sources: [],
     });
     api.fetchDependencies.mockResolvedValue({
       package: "flask",
@@ -343,5 +351,135 @@ describe("PackagePage", () => {
 
     await user.click(screen.getByRole("button", { name: "Expand tree" }));
     expect(await screen.findByText("markupsafe")).toBeInTheDocument();
+  });
+
+  function renderPackagePage() {
+    render(
+      <MemoryRouter
+        initialEntries={["/package/flask"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route path="/package/:name" element={<PackagePage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+  }
+
+  it("renders package sources with primary, disabled and missing marks", async () => {
+    const base = await api.fetchPackage();
+    api.fetchPackage.mockResolvedValueOnce({
+      ...base,
+      sources: [
+        {
+          registry: "pypi",
+          enabled: true,
+          primary: true,
+          first_seen_at: "2026-01-01T00:00:00Z",
+          checked_at: "2026-03-01T00:00:00Z",
+          missing_since: null,
+        },
+        {
+          registry: "pytorch-cpu",
+          enabled: false,
+          primary: false,
+          first_seen_at: "2026-01-02T00:00:00Z",
+          checked_at: null,
+          missing_since: "2026-02-01T00:00:00Z",
+        },
+      ],
+    });
+    renderPackagePage();
+
+    expect(await screen.findByRole("heading", { name: "Sources" })).toBeInTheDocument();
+    const rows = screen.getAllByRole("listitem").filter((li) => li.classList.length === 0 && li.querySelector("code"));
+    const pypi = rows.find((li) => li.textContent.startsWith("pypi"));
+    const torch = rows.find((li) => li.textContent.startsWith("pytorch-cpu"));
+    expect(pypi).toHaveTextContent("primary");
+    expect(pypi).toHaveTextContent("checked");
+    expect(pypi).not.toHaveTextContent("disabled");
+    expect(torch).toHaveTextContent("disabled");
+    expect(torch).toHaveTextContent("missing since");
+    expect(torch).not.toHaveTextContent("primary");
+    expect(torch).not.toHaveTextContent("checked");
+  });
+
+  it.each([["absent", undefined], ["empty", []]])("renders no sources block when sources are %s", async (_label, sources) => {
+    const base = await api.fetchPackage();
+    api.fetchPackage.mockResolvedValueOnce({ ...base, sources });
+    renderPackagePage();
+    await screen.findByText("A lightweight WSGI framework");
+    expect(screen.queryByRole("heading", { name: "Sources" })).not.toBeInTheDocument();
+  });
+
+  it("shows the unknown-dependencies message when the tree root has no metadata", async () => {
+    api.fetchDependencies.mockResolvedValueOnce({
+      package: "flask",
+      version: "3.1.3",
+      profile: "default",
+      depth: 0,
+      dependencies_unknown: true,
+      dependencies: [],
+    });
+    renderPackagePage();
+
+    expect(
+      await screen.findByText("Dependencies unknown: the source has no metadata for this version")
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No runtime dependencies for this environment.")).not.toBeInTheDocument();
+  });
+
+  it("marks a tree node whose version has unknown dependencies", async () => {
+    api.fetchDependencies.mockResolvedValueOnce({
+      package: "flask",
+      version: "3.1.3",
+      profile: "default",
+      depth: 1,
+      dependencies_unknown: false,
+      dependencies: [
+        {
+          name: "werkzeug",
+          constraint: ">=3.1.0",
+          dependency_type: "runtime",
+          extra_name: null,
+          environment_markers: null,
+          resolved_version: "3.1.0",
+          cycle: false,
+          dependencies_unknown: true,
+          children: [],
+        },
+      ],
+    });
+    renderPackagePage();
+
+    expect(await screen.findByText("werkzeug")).toBeInTheDocument();
+    expect(screen.getByText("dependencies unknown")).toHaveClass("tag", "warn");
+    expect(screen.queryByText(/^Dependencies unknown:/)).not.toBeInTheDocument();
+  });
+
+  it("shows version sources and the unknown mark when dependencies are unavailable", async () => {
+    api.fetchVersion.mockResolvedValue({
+      name: "flask",
+      version: "3.1.3",
+      status: "active",
+      dependencies_state: "unavailable",
+      sources: [
+        { registry: "pypi", enabled: true, status: "active", first_seen_at: "2026-01-01T00:00:00Z" },
+        { registry: "pytorch-cpu", enabled: true, status: "yanked", first_seen_at: "2026-01-02T00:00:00Z" },
+      ],
+    });
+    renderPackagePage();
+
+    expect(await screen.findByText("pypi: active")).toBeInTheDocument();
+    expect(screen.getByText("pytorch-cpu: yanked")).toBeInTheDocument();
+    expect(screen.getByText("dependencies unknown")).toBeInTheDocument();
+    expect(api.fetchVersion).toHaveBeenCalledWith("flask", "3.1.3");
+  });
+
+  it("shows no unknown mark for a version with hydrated dependencies", async () => {
+    renderPackagePage();
+    await screen.findByText("werkzeug");
+    await waitFor(() => expect(api.fetchVersion).toHaveBeenCalled());
+    expect(screen.queryByText("dependencies unknown")).not.toBeInTheDocument();
   });
 });

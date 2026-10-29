@@ -15,7 +15,7 @@ COPY app ./app
 COPY tests ./tests
 COPY alembic.ini ./alembic.ini
 COPY alembic ./alembic
-COPY registries.example.yaml ./registries.example.yaml
+COPY registries.example.yaml registries.pytorch.yaml ./
 
 RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir ".[test,lint]"
 

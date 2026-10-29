@@ -195,11 +195,24 @@ class NormalizedPackage:
     raw_metadata: Mapping[str, object] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class FetchedDocument:
+    """An upstream document the metadata was read from (PEP 658 `.metadata`, POM, `go.mod`), kept in
+    source_documents for re-parsing. `path` is relative to the source's base_url, or the absolute URL of a document
+    served from elsewhere (PyTorch files live on download-r2.pytorch.org, PyPI files on files.pythonhosted.org)."""
+
+    path: str
+    content: bytes
+    content_type: str
+    etag: str | None = None
+
+
 @dataclass(slots=True)
 class VersionDependencies:
     dependencies: list[NormalizedDependency]
     engines: Mapping[str, str] | None = None
     available: bool = True                 # False: the source has no metadata for it (PEP 503 without PEP 658)
+    documents: Sequence[FetchedDocument] = ()
 
 
 class SourceLookup(Protocol):
