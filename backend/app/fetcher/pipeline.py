@@ -127,6 +127,11 @@ async def sync_package(
 
     if not fetched.snapshots:
         raise PackageNotFound(plugin.coordinates.display(ref))
+    wrong = next((s.ref for s in fetched.snapshots if s.ref != ref), None)
+    if wrong is not None:
+        # A source answered for another package (an URL that meant something else upstream): writing it under
+        # `ref` would replace that package's data, or empty it.
+        raise PackageNotFound(f"{plugin.coordinates.display(ref)}: the source answered for {plugin.coordinates.display(wrong)}")
     return await write_package(db, plugin, fetched.snapshots, missing_registry_ids=fetched.missing, origin=origin, run_id=run_id)
 
 

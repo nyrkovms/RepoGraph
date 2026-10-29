@@ -5,11 +5,13 @@ import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
 
+import pytest
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import get_settings
+from app.connectors.base import PackageNotFound
 from app.ecosystems.base import (
     NormalizedArtifact,
     NormalizedAuthor,
@@ -245,6 +247,26 @@ def test_lazy_fetch_writes_through_the_pipeline(monkeypatch) -> None:
         assert package.description == "lazy"
         versions = await _versions(db, package.id)
         assert await _deps(db, versions["1.0"].id) == ["filelock"]
+
+    _in_rolled_back_transaction(test)
+
+
+def test_source_answering_for_another_package_is_not_written(monkeypatch) -> None:
+    """A request that upstream understood as another package (e.g. /pypi/<name>/<version>/json) must not land under
+    the requested name, nor touch the package it answered for."""
+    victim = _name()
+
+    async def wrong_package(self, ref, lookup):
+        return _snapshot(victim, self.registry.id, [], description="from the wrong endpoint")
+
+    async def test(db: AsyncSession, pypi: str, _mirror: str) -> None:
+        await _write(db, _snapshot(victim, pypi, [_version("1.0", [])]))
+        monkeypatch.setattr(WarehouseAdapter, "fetch_package", wrong_package)
+        with pytest.raises(PackageNotFound, match="answered for"):
+            await pipeline.sync_package(db, PackageRef(ecosystem="pypi", namespace="", name=_name()))
+        package = await pipeline.find_package(db, PackageRef(ecosystem="pypi", namespace="", name=victim))
+        assert (await _versions(db, package.id))["1.0"].status.value == "active"
+        assert package.description != "from the wrong endpoint"
 
     _in_rolled_back_transaction(test)
 

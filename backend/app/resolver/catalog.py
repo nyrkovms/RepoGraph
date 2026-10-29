@@ -36,6 +36,7 @@ class DbCatalog:
         self.db = db
         self.plugin = plugin
         self.synced_at: dict[uuid.UUID, datetime] = {}   # package id -> synced_at when read
+        self.failed = False   # a load failed and was reported as "dependencies unknown": the answer is not cached
 
     @property
     def revision(self) -> datetime | None:
@@ -56,11 +57,8 @@ class DbCatalog:
         ).all()
         statuses = await visibility.source_statuses(self.db, registries, [row.id for row in rows])
         by_slug = {r.slug: r for r in registries}
-        chosen = {}
-        for version_id, found in statuses.items():
-            # The first visible source with the version in its best status: the node names where it is active.
-            best = visibility.effective_status(found)
-            chosen[version_id] = by_slug[next(s.registry for s in found if s.status == best)]
+        chosen = {version_id: by_slug[slug] for version_id, found in statuses.items()
+                  if (slug := visibility.chosen_source(found)) is not None}
         files: dict[tuple[uuid.UUID, str], list[str]] = {}
         if rows:
             for version_id, registry_id, filename in (
@@ -101,6 +99,7 @@ class DbCatalog:
             await ensure_version_dependencies(self.db, package, version_row)
         except Exception:  # noqa: BLE001 - a partial graph with "dependencies unknown" beats failing the resolve
             logger.warning("Dependencies of %s %s could not be loaded", ref.name, version, exc_info=True)
+            self.failed = True
             await self.db.rollback()
             return None
         state = version_row.dependencies_state

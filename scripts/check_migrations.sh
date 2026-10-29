@@ -74,6 +74,20 @@ alembic migration_resync upgrade "$BASE_REV"
 psql_db migration_resync < "$SEED"
 alembic migration_resync upgrade "$EXPAND_REV"
 psql_db migration_resync < "$SEED_AFTER_EXPAND"
+# A source without protocol stops 0007 in phase 1 after the backfill; fixed, the upgrade is run again and resumes.
+psql_db migration_resync <<< "INSERT INTO registries (id, ecosystem, name, slug, base_url) VALUES (md5('reg:noproto')::uuid, 'npm', 'No protocol', 'no-protocol', 'https://x.invalid/')"
+RESUME_LOG="$(mktemp)"
+if alembic migration_resync upgrade head > "$RESUME_LOG" 2>&1; then
+  echo "0007 should stop on a registry without protocol" >&2
+  exit 1
+fi
+grep -q "registries without protocol: no-protocol" "$RESUME_LOG" || { cat "$RESUME_LOG" >&2; exit 1; }
+rm -f "$RESUME_LOG"
+if [[ "$(psql_db migration_resync <<< 'SELECT version_num FROM alembic_version')" != "$EXPAND_REV" ]]; then
+  echo "failed 0007 moved alembic_version" >&2
+  exit 1
+fi
+psql_db migration_resync <<< "UPDATE registries SET protocol = 'npm-registry' WHERE slug = 'no-protocol'"
 alembic migration_resync upgrade head
 psql_db migration_resync < "$CHECKS_AFTER_EXPAND"
 

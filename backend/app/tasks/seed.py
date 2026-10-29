@@ -114,7 +114,6 @@ async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str,
                         exc=exc,
                     )
                     await db.commit()
-                    continue
 
                 await progress_run(db, run_id, packages_total=processed + failed + len(queue),
                                    packages_checked=processed + failed, packages_updated=processed, packages_failed=failed)
@@ -148,7 +147,8 @@ async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str,
 async def _finish(db, run_id, status: str, processed: int, failed: int, error: str | None = None) -> None:
     # The run object was expired by a rollback; load it again before closing.
     run = await db.get(Run, run_id)
-    await finish_run(db, run, status, error=error, packages_total=processed + failed, packages_updated=processed,
+    await finish_run(db, run, status, error=error, packages_total=processed + failed,
+                     packages_checked=processed + failed, packages_updated=processed,
                      packages_failed=failed)
     await db.commit()
 

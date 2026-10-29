@@ -106,8 +106,8 @@ def test_seed_takes_purls_and_names_and_writes_one_run(monkeypatch: pytest.Monke
         (ok, "seed"), (missing, "seed"), (boom, "seed"), (by_name, "seed")]
 
     (run,) = _runs(since, "seed")
-    assert (run.ecosystem, run.status, run.packages_total, run.packages_updated, run.packages_failed) == (
-        None, runs.PARTIAL, 5, 2, 3)
+    assert (run.ecosystem, run.status, run.packages_total, run.packages_checked, run.packages_updated,
+            run.packages_failed) == (None, runs.PARTIAL, 5, 5, 2, 3)
     assert run.finished_at is not None and {run_id for *_, run_id in seen} == {run.id}
 
     failures = _failures()

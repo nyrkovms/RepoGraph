@@ -213,6 +213,7 @@ export default function UpdatesPage() {
       });
   }, [period, customSince, customUntil, waitingForRange]);
 
+  // `name` is the row key: the purl (the API takes it as `package`), or the bare name of an older API.
   async function loadEvents(name, cursor = null) {
     const current = (eventsRequestIds.current[name] || 0) + 1;
     eventsRequestIds.current[name] = current;
@@ -360,7 +361,7 @@ export default function UpdatesPage() {
                   <CompactList label="Removed" items={item.removed} warn />
                   <CompactList label="Vulnerabilities" items={item.vulnerabilities} warn />
                   {isOpen ? (
-                    <EventTimeline state={events[item.name]} onLoadMore={() => loadEvents(item.name, events[item.name]?.cursor)} />
+                    <EventTimeline state={events[rowKey]} onLoadMore={() => loadEvents(rowKey, events[rowKey]?.cursor)} />
                   ) : null}
                 </li>
               );

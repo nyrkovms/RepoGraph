@@ -84,7 +84,8 @@ def _in_rolled_back_transaction(test: Callable[[AsyncSession, Registry, Registry
         engine = create_async_engine(get_settings().async_db_url, poolclass=NullPool)
         async with engine.connect() as conn:
             transaction = await conn.begin()
-            db = AsyncSession(bind=conn, expire_on_commit=False)
+            # Savepoints: the catalog commits and rolls back inside a resolve; the test transaction must survive both.
+            db = AsyncSession(bind=conn, expire_on_commit=False, join_transaction_mode="create_savepoint")
             try:
                 pypi = await pipeline.get_or_create_pypi_registry(db)
                 mirror = Registry(
@@ -136,14 +137,18 @@ def test_versions_are_chosen_through_the_profile() -> None:
         default = await resolve_graph(db, GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}]))
         assert [(n.version, n.registry) for n in default.nodes] == [("1.0", "pypi")]
         assert default.nodes[0].latest_compatible == "1.0"
+        mirror_only = await _profile(db, mirror)
+        both = await _profile(db, mirror, pypi)
         through_mirror = await resolve_graph(db, GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}],
-                                                                     profile=await _profile(db, mirror)))
+                                                                     profile=mirror_only))
         assert [(n.version, n.registry) for n in through_mirror.nodes] == [("2.0", mirror.slug)]
 
         mirror.enabled = False   # frozen: out of every profile
         await db.flush()
-        both = await resolve_graph(db, GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}], profile="default"))
-        assert [n.version for n in both.nodes] == ["1.0"]
+        frozen = await resolve_graph(db, GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}], profile=mirror_only))
+        assert frozen.error["code"] == "not_found" and frozen.nodes == []
+        rest = await resolve_graph(db, GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}], profile=both))
+        assert [(n.version, n.registry) for n in rest.nodes] == [("1.0", "pypi")]
 
     _in_rolled_back_transaction(check)
 
@@ -233,3 +238,27 @@ def test_nested_format_rejects_unsupported_options(client: TestClient) -> None:
         response = client.post("/api/v1/resolve", json=body)
         assert response.status_code == 422, body
         assert response.json()["error"]["code"] == "invalid_request"
+
+
+def test_answer_with_a_failed_dependency_load_is_not_cached(monkeypatch) -> None:
+    from app.resolver import catalog as catalog_module
+
+    async def failing(db, package, version_row):
+        raise ConnectionError("upstream timed out")
+
+    async def check(db: AsyncSession, pypi: Registry, mirror: Registry) -> None:
+        name = f"c2-test-{uuid.uuid4().hex[:10]}"
+        snapshot = NormalizedPackage(ref=PackageRef(ecosystem="pypi", namespace="", name=name), registry_id=str(pypi.id),
+                                     display_name=name, revision="1",
+                                     versions=[NormalizedVersion(version="1.0", status="active", dependencies=None)])
+        await pipeline.write_package(db, PLUGIN, [snapshot], missing_registry_ids=(), origin=PackageOrigin.seed)
+        await db.commit()   # into the test transaction: the catalog's rollback must not take the package with it
+        monkeypatch.setattr(catalog_module, "ensure_version_dependencies", failing)
+        request = GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}])
+        first = await resolve_graph(db, request)
+        assert first.nodes[0].errors == ["dependencies unknown"]
+        again = await resolve_graph(db, request)
+        assert again.nodes[0].errors == ["dependencies unknown"]
+        assert again.resolved_at != first.resolved_at   # a transient failure is not kept for an hour
+
+    _in_rolled_back_transaction(check)

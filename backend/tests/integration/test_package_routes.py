@@ -258,7 +258,7 @@ def test_tree_follows_the_profile() -> None:
         root, child, other = _name(), _name(), _name()
         await _write(db, child, {pypi: [_version("1.0")], mirror: [_version("1.0"), _version("2.0")]})
         await _write(db, other, {pypi: [_version("1.0")], mirror: [_version("1.0")]})
-        # The sources disagree on the root's dependencies: the mirror (higher priority) gives the canonical set.
+        # The sources disagree on the root's dependencies: pypi (priority 0) gives the canonical set, the mirror a variant.
         await _write(db, root, {pypi: [_version("1.0", deps=[child])], mirror: [_version("1.0", deps=[other])]})
 
         async def tree(profile: str | None) -> list[tuple[str, str | None]]:
@@ -274,5 +274,19 @@ def test_tree_follows_the_profile() -> None:
                                                       profile=await _profile(db, (mirror, None)), depth=1,
                                                       include_optional=False, python_version=None, os=None)
         assert [(n.name, n.resolved_version) for n in response.dependencies] == [(child, "2.0")]
+
+    _in_rolled_back_transaction(check)
+
+
+def test_tree_takes_the_variant_of_the_source_where_the_version_is_active() -> None:
+    async def check(db: AsyncSession, pypi: Registry, mirror: Registry) -> None:
+        root, child, other = _name(), _name(), _name()
+        await _write(db, child, {pypi: [_version("1.0")]})
+        await _write(db, other, {pypi: [_version("1.0")]})
+        # The mirror comes first in the profile but has removed 1.0; resolve takes pypi's copy, so does the tree.
+        await _write(db, root, {pypi: [_version("1.0", deps=[child])], mirror: [_version("1.0", "removed", deps=[other])]})
+        response = await routes.get_dependencies_tree("pypi", root, "1.0", db, profile=await _profile(db, (mirror, None), (pypi, None)),
+                                                      depth=1, include_optional=False, python_version=None, os=None)
+        assert [n.name for n in response.dependencies] == [child]
 
     _in_rolled_back_transaction(check)

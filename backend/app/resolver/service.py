@@ -99,7 +99,7 @@ async def resolve_graph(db: AsyncSession, payload: GraphResolveRequest) -> Graph
         resolve_time_ms=elapsed_ms,
     )
     observe_resolve_latency(elapsed_ms / 1000.0)
-    if graph.error is None:
+    if graph.error is None and not catalog.failed:
         await cache.set_checked(key, response.model_dump(mode="json", by_alias=True), catalog.synced_at)
     return response
 
@@ -177,7 +177,8 @@ async def resolve_dependencies(db: AsyncSession, payload: ResolveRequest) -> Res
         resolve_strategy="resolvelib",
         resolve_time_ms=elapsed_ms,
     )
-    await cache.set_checked(key, response.model_dump(mode="json"), catalog.synced_at)
+    if not catalog.failed:
+        await cache.set_checked(key, response.model_dump(mode="json"), catalog.synced_at)
     return response
 
 

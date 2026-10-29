@@ -283,3 +283,20 @@ def test_warehouse_source_reads_from_its_own_urls(monkeypatch) -> None:
     adapter = WarehouseAdapter(custom)
     assert adapter.connector.json_base_url == "https://mirror.invalid/json"
     assert adapter.change_detector().index.base_url == "https://mirror.invalid/idx"  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("raw", ["flask/3", "flask/3.0", "../flask", "a b", "-flask", "flask-", "fl@sk"])
+def test_coordinates_reject_what_is_not_a_project_name(raw: str) -> None:
+    # A slash would reach the JSON API as another endpoint (/pypi/<project>/<version>/json).
+    with pytest.raises(ValueError, match="not a PyPI project name"):
+        _plugin().coordinates.parse(raw)
+
+
+@pytest.mark.parametrize(("raw", "name"), [("zope.interface", "zope-interface"), ("A_b-C", "a-b-c"), ("x", "x")])
+def test_coordinates_accept_project_names(raw: str, name: str) -> None:
+    assert _plugin().coordinates.parse(raw).name == name
+
+
+def _plugin():
+    load_builtin_plugins()
+    return get_plugin("pypi")

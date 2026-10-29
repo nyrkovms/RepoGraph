@@ -93,3 +93,10 @@ async def source_statuses(
 def effective_status(statuses: Sequence[SourceStatus]) -> PackageVersionStatus | None:
     found = {s.status for s in statuses}
     return next((status for status in _STATUS_ORDER if status in found), None)
+
+
+def chosen_source(statuses: Sequence[SourceStatus]) -> str | None:
+    """The source a reader takes the version from: the first visible one where it has its effective status (its
+    metadata, dependency variant and files are used). Tree and resolve agree on it."""
+    best = effective_status(statuses)
+    return next((s.registry for s in statuses if s.status == best), None)

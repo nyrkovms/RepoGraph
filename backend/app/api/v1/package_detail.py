@@ -552,11 +552,11 @@ class _ProfileView:
         return self._registries[package.id]
 
     async def dependencies(self, package: Package, version_row: PackageVersion) -> list[Dependency]:
-        """The canonical set, or the variant of the first visible source publishing the version if it has one."""
+        """The canonical set, or the variant of the source the version is taken from (visibility.chosen_source)."""
         registries = await self.registries(package)
         statuses = (await visibility.source_statuses(self.db, registries, [version_row.id])).get(version_row.id, [])
-        slugs = {s.registry for s in statuses}
-        chosen = next((r for r in registries if r.slug in slugs), None)
+        slug = visibility.chosen_source(statuses)
+        chosen = next((r for r in registries if r.slug == slug), None)
         rows = (
             await self.db.scalars(
                 select(Dependency)

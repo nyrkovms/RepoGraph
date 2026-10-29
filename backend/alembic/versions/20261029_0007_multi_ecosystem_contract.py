@@ -6,7 +6,7 @@ worker and beat).
 Two phases:
 1. Autocommit, resumable, nothing that blocks writers for long:
    - backfill() of 0006 again (loaded by path), for rows the pre-E0-B code wrote after 0006;
-   - re-sync of values that code could leave behind (only towards the new columns, never overwriting them);
+   - re-sync of values that code changed only in the old columns (copied where old and new differ);
    - sync_failures keyed by (operation, ecosystem, registry_id, package_ref), package_events.run_id against runs;
    - NOT NULL prepared as validated CHECK constraints and FKs validated (SHARE UPDATE EXCLUSIVE, writers continue),
      the new sync_failures key built CONCURRENTLY.
@@ -79,24 +79,35 @@ def _constraint(conn: sa.Connection, name: str) -> tuple[bool, bool]:
 
 
 def _resync(conn: sa.Connection, batches) -> None:
-    """IMPL §2: values the pre-E0-B code wrote only into the old columns. Each step fills a new column where it is
-    missing or behind; none overwrites what the current code wrote (it no longer keeps the old columns current)."""
+    """IMPL §2: values the 0005-era code changed only in the old columns after 0006. The code that ships with 0007
+    cannot run on the 0006 schema, and the E0-B code wrote the old and new columns together, so wherever they differ
+    the old column is the newer one."""
     for ids in batches(conn, "package_versions", "dependencies_state = 'pending' AND (features ->> 'dependencies_hydrated')::boolean IS TRUE"):
         conn.execute(sa.text("UPDATE package_versions SET dependencies_state = 'hydrated' WHERE id = ANY(:ids)"), {"ids": ids})
-    for ids in batches(conn, "package_versions", "requires_python IS NOT NULL AND NOT (coalesce(engines, '{}'::jsonb) ? 'python')"):
-        conn.execute(sa.text("""
-            UPDATE package_versions SET engines = coalesce(engines, '{}'::jsonb) || jsonb_build_object('python', requires_python)
-            WHERE id = ANY(:ids)
-        """), {"ids": ids})
+    if _column_exists(conn, "package_versions", "requires_python"):
+        for ids in batches(conn, "package_versions", "requires_python IS NOT NULL AND (engines ->> 'python') IS DISTINCT FROM requires_python"):
+            conn.execute(sa.text("""
+                UPDATE package_versions SET engines = coalesce(engines, '{}'::jsonb) || jsonb_build_object('python', requires_python)
+                WHERE id = ANY(:ids)
+            """), {"ids": ids})
     if _column_exists(conn, "packages", "last_serial"):
         for ids in batches(conn, "packages", "last_serial IS NOT NULL"):
             conn.execute(sa.text("""
                 UPDATE package_registries pr SET upstream_revision = p.last_serial::text
                 FROM packages p
                 WHERE p.id = pr.package_id AND pr.registry_id = p.primary_registry_id AND p.id = ANY(:ids)
-                  AND (pr.upstream_revision IS NULL
-                       OR (pr.upstream_revision ~ '^[0-9]+$' AND p.last_serial > pr.upstream_revision::bigint))
+                  AND pr.upstream_revision IS DISTINCT FROM p.last_serial::text
             """), {"ids": ids})
+    # A yank or removal by the 0005-era code changed package_versions.status only. Where the version has one source
+    # (every catalog before E0-B), that source's status is the version's; visibility and resolve read version_sources.
+    for ids in batches(conn, "package_versions", """
+            (SELECT count(*) FROM version_sources vs WHERE vs.version_id = package_versions.id) = 1
+            AND EXISTS (SELECT 1 FROM version_sources vs WHERE vs.version_id = package_versions.id
+                        AND vs.status IS DISTINCT FROM package_versions.status)"""):
+        conn.execute(sa.text("""
+            UPDATE version_sources vs SET status = v.status FROM package_versions v
+            WHERE v.id = vs.version_id AND v.id = ANY(:ids)
+        """), {"ids": ids})
 
     if conn.execute(sa.text("SELECT to_regclass('update_runs')")).scalar():
         # A run still `running` at 0006 was copied unfinished; runs written by the current code stay as they are.
@@ -145,7 +156,7 @@ def _preflight(conn: sa.Connection) -> None:
     if missing:
         raise RuntimeError(
             f"registries without protocol: {', '.join(missing)}. Set registries.protocol (or delete the unused source) "
-            "and run the upgrade again; nothing was dropped."
+            "and run the upgrade again; no column was dropped and no row deleted."
         )
 
 
@@ -243,9 +254,9 @@ def upgrade() -> None:
     migration_0006 = _load_0006()
     with op.get_context().autocommit_block():
         migration_0006.backfill(conn)
+        _preflight(conn)
         _resync(conn, migration_0006._batches)
         _sync_failures(conn)
-        _preflight(conn)
         _prepare_constraints(conn)
     _contract()
 
