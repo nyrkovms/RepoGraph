@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"fiw9suvexylmEHqWjWYnxw\"",
+    "x-pypi-last-serial": "41992074"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/nvidia-cuda-cupti-cu12/12.8.90/json"
+  },
+  "status": 200
+}

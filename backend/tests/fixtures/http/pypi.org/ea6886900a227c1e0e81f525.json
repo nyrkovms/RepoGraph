@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"G5tEloqZPgiY7+AHd4SO8Q\"",
+    "x-pypi-last-serial": "41995059"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/nvidia-cusolver-cu12/json"
+  },
+  "status": 200
+}

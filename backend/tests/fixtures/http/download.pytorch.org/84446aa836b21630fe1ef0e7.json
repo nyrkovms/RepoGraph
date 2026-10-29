@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/html",
+    "etag": "\"51a4855153fddfaae49c034cf1e551bf\"",
+    "last-modified": "Thu, 29 Oct 2026 12:12:56 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.pypi.simple.v1+json, application/vnd.pypi.simple.v1+html;q=0.2, text/html;q=0.01"
+    },
+    "method": "GET",
+    "url": "https://download.pytorch.org/whl/cpu/torch/"
+  },
+  "status": 200
+}

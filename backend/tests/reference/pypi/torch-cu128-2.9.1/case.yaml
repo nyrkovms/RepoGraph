@@ -1,0 +1,17 @@
+description: >
+  PyTorch CUDA 12.8 index for torch (exclusive routing), pypi.org for the rest: torch 2.9.1+cu128 pulls its nvidia-*
+  libraries from pypi.org through the index's PEP 658 metadata.
+roots:
+  - {purl: pkg:pypi/torch, constraint: "==2.9.1"}
+environment: {python_version: "3.12", python_full_version: "3.12.7", sys_platform: linux, os_name: posix,
+              platform_machine: x86_64, platform_system: Linux}
+sources:
+  - slug: ref-pytorch-cu128
+    protocol: pypi-simple
+    base_url: https://download.pytorch.org/whl/cu128/
+    routing: {mode: exclusive, packages: [torch]}
+  - slug: pypi
+native:
+  args: [--index-url, https://download.pytorch.org/whl/cu128, --extra-index-url, https://pypi.org/simple]
+  platform: linux/amd64       # docker platform of the python:3.12 image pip runs in
+allowed_differences: []

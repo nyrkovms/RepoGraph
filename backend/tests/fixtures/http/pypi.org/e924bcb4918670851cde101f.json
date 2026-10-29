@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"EngzhsArQfBiuhPeUPp8sg\"",
+    "x-pypi-last-serial": "41993255"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/nvidia-cuda-runtime-cu12/12.8.90/json"
+  },
+  "status": 200
+}

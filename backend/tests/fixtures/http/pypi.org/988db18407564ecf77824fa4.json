@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"70o5SDzrmoW7XApCPFZLEg\"",
+    "x-pypi-last-serial": "42418672"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/filelock/json"
+  },
+  "status": 200
+}

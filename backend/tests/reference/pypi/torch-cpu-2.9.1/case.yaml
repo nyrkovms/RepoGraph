@@ -1,0 +1,17 @@
+description: >
+  PyTorch CPU index for torch (exclusive routing), pypi.org for the rest. torch 2.9.1+cpu carries PEP 658 metadata
+  without nvidia-* requirements, while torch 2.9.1 on pypi.org has them: the index's own metadata must win.
+roots:
+  - {purl: pkg:pypi/torch, constraint: "==2.9.1"}
+environment: {python_version: "3.12", python_full_version: "3.12.7", sys_platform: linux, os_name: posix,
+              platform_machine: x86_64, platform_system: Linux}
+sources:
+  - slug: ref-pytorch-cpu
+    protocol: pypi-simple
+    base_url: https://download.pytorch.org/whl/cpu/
+    routing: {mode: exclusive, packages: [torch]}
+  - slug: pypi
+native:
+  args: [--index-url, https://download.pytorch.org/whl/cpu, --extra-index-url, https://pypi.org/simple]
+  platform: linux/amd64       # docker platform of the python:3.12 image pip runs in
+allowed_differences: []

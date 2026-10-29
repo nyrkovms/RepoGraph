@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "binary/octet-stream",
+    "etag": "\"2bd1d50f73ada0e71ef98d43eb5d7d66\"",
+    "last-modified": "Wed, 10 Dec 2025 17:32:28 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl.metadata"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"ItMHKKtv0FJs2fNqI2m4mw\"",
+    "x-pypi-last-serial": "41322436"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/nvidia-nccl-cu12/json"
+  },
+  "status": 200
+}

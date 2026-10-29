@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"Ki/AYPH64TzpgNwdjdehHA\"",
+    "x-pypi-last-serial": "41994178"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://pypi.org/pypi/nvidia-cufft-cu12/json"
+  },
+  "status": 200
+}
