@@ -65,7 +65,24 @@ async def default_profile(db: AsyncSession, ecosystem: str) -> SourceProfile:
     if profile is None:
         return SourceProfile(ecosystem=cast(Ecosystem, ecosystem), slug="default",
                              registries=await enabled_registries(db, ecosystem))
+    return await _profile(db, ecosystem, profile)
 
+
+async def profile_by_slug(db: AsyncSession, ecosystem: str, slug: str | None) -> SourceProfile | None:
+    """The named profile of the ecosystem, the default one without a name; None if there is no such profile."""
+    if slug is None:
+        return await default_profile(db, ecosystem)
+    profile = await db.scalar(
+        select(SourceProfileRow).where(SourceProfileRow.ecosystem == EcosystemEnum(ecosystem), SourceProfileRow.slug == slug)
+    )
+    if profile is None:
+        # Without a default profile row the implicit one is called "default" too.
+        fallback = await default_profile(db, ecosystem)
+        return fallback if fallback.slug == slug else None
+    return await _profile(db, ecosystem, profile)
+
+
+async def _profile(db: AsyncSession, ecosystem: str, profile: SourceProfileRow) -> SourceProfile:
     rows = (
         await db.execute(
             select(Registry, SourceProfileRegistry.routing_override)
