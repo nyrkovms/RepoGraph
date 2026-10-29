@@ -528,7 +528,7 @@ describe("PackagePage", () => {
       });
     });
 
-    it("shows the npm environment fields and sends the OS the tree endpoint accepts", async () => {
+    it("shows the npm environment fields and sends them to the tree", async () => {
       const user = userEvent.setup();
       mockAngularCore();
       renderApp("/package/npm/@angular/core");
@@ -541,7 +541,9 @@ describe("PackagePage", () => {
       await waitFor(() => {
         expect(api.fetchDependencies).toHaveBeenCalledWith("npm", "@angular/core", "19.0.0", {
           include_optional: false,
+          node_version: "20.0.0",
           os: "linux",
+          cpu: "x64",
         });
       });
 
@@ -549,7 +551,9 @@ describe("PackagePage", () => {
       await waitFor(() => {
         expect(api.fetchDependencies).toHaveBeenLastCalledWith("npm", "@angular/core", "19.0.0", {
           include_optional: false,
+          node_version: "20.0.0",
           os: "win32",
+          cpu: "x64",
         });
       });
     });

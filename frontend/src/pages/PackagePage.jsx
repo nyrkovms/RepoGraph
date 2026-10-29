@@ -27,11 +27,10 @@ function pickOption(value, allowed, fallback) {
   return allowed.includes(value) ? value : fallback;
 }
 
-// Query of the dependency tree request. The tree endpoint takes `python_version` and `os`; it has no `node_version`
-// or `cpu` yet, so for npm only `os` is sent (the other two stay in the form and the page URL).
+// Query of the dependency tree request: PyPI `python_version` and `os`, npm `node_version`, `os` and `cpu`.
 function treeParams(ecosystem, env, includeOptional) {
   if (ecosystem === "npm") {
-    return { include_optional: includeOptional, os: env.os };
+    return { include_optional: includeOptional, node_version: env.node, os: env.os, cpu: env.cpu };
   }
   return { include_optional: includeOptional, python_version: env.python, os: env.os };
 }
@@ -351,7 +350,7 @@ export default function PackagePage() {
         ecosystem,
         packageName,
         version,
-        treeParams(ecosystem, { python: pythonVersion, os: treeOs }, includeOptional)
+        treeParams(ecosystem, { python: pythonVersion, node: nodeVersion, cpu, os: treeOs }, includeOptional)
       );
       setDeps(depPayload.dependencies || []);
       setDepsUnknown(Boolean(depPayload.dependencies_unknown));
@@ -577,9 +576,6 @@ export default function PackagePage() {
               Refresh tree
             </button>
           </div>
-          {isNpm ? (
-            <p className="muted">The dependency tree takes only the OS from this environment; Node.js version and CPU are not applied yet.</p>
-          ) : null}
           {versionDetail && versionDetail.version === selectedVersion ? (
             <div className="version-detail">
               <b>Sources of {versionDetail.version}</b>:

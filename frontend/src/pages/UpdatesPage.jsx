@@ -9,6 +9,19 @@ const PERIODS = [
   { value: "custom", label: "Custom" },
 ];
 
+// The native name and package page of a digest entry: from its purl (`pkg:npm/%40angular/core` -> `@angular/core`),
+// so an npm package does not link to a PyPI page of the same name.
+function displayName(item) {
+  if (!item.purl) return item.name;
+  // The scope's `@` is encoded in a purl, so a literal `@` can only start a version.
+  return decodeURIComponent(item.purl.replace(/^pkg:[^/]+\//, "").replace(/@[^/]*$/, ""));
+}
+
+function packageLink(item) {
+  const ecosystem = item.ecosystem || "pypi";
+  return `/package/${ecosystem}/${displayName(item).split("/").map(encodeURIComponent).join("/")}`;
+}
+
 const TOTAL_LABELS = [
   ["packages", "Packages"],
   ["releases", "Releases"],
@@ -338,7 +351,7 @@ export default function UpdatesPage() {
                     >
                       {isOpen ? "-" : "+"}
                     </button>
-                    <Link to={`/package/${encodeURIComponent(item.name)}`}>{item.name}</Link>
+                    <Link to={packageLink(item)}>{displayName(item)}</Link>
                     {item.to_version ? (
                       <span className="update-versions">
                         {item.from_version ? <code>{item.from_version}</code> : <span className="muted">new</span>}
