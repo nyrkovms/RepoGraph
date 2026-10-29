@@ -800,6 +800,76 @@ async def ensure_version_dependencies(db: AsyncSession, package: Package, versio
     await resolve_dependency_links(db, [version_row.id])
 
 
+# version_sources.metadata_digest of a source that has no metadata for the version (PEP 503 without PEP 658): its
+# dependencies are unknown, whatever other sources say (Q14). Not a sha256, so it never equals a real digest.
+UNAVAILABLE_DIGEST = b"unavailable"
+
+
+async def source_dependencies(
+    db: AsyncSession, package: Package, version_row: PackageVersion, registry_id: str
+) -> tuple[list[Dependency] | None, bool]:
+    """The version's dependencies as `registry_id` publishes them (SPEC §6.5, §9.1), and whether anything was loaded.
+
+    The metadata source gives the canonical set. Another source is read lazily the first time a reader takes the
+    version from it: the same metadata leaves only its digest, different metadata becomes a variant (torch 2.9.1 on
+    the PyTorch CPU index has no nvidia-* requirements), none makes them unknown. None = unknown.
+    """
+    version_id, before = version_row.id, version_row.dependencies_state
+    await ensure_version_dependencies(db, package, version_row)
+    changed = version_row.dependencies_state != before
+    canonical = version_row.dependencies_state == DependenciesState.hydrated
+    if registry_id != str(version_row.metadata_registry_id):
+        source = await db.scalar(
+            select(VersionSource).where(VersionSource.version_id == version_id,
+                                        VersionSource.registry_id == uuid.UUID(registry_id))
+        )
+        if source is not None:
+            if source.metadata_digest is None:
+                await _load_source_dependencies(db, package, version_row, source)
+                changed = True
+            if source.metadata_digest == UNAVAILABLE_DIGEST:
+                return None, changed
+            variant = (await db.scalars(
+                select(Dependency).where(Dependency.version_id == version_id,
+                                         Dependency.variant_registry_id == uuid.UUID(registry_id))
+            )).all()
+            if variant:
+                return list(variant), changed
+    if not canonical:
+        return None, changed
+    rows = (await db.scalars(
+        select(Dependency).where(Dependency.version_id == version_id, Dependency.variant_registry_id.is_(None))
+    )).all()
+    return list(rows), changed
+
+
+async def _load_source_dependencies(
+    db: AsyncSession, package: Package, version_row: PackageVersion, source: VersionSource
+) -> None:
+    registry = await db.get(Registry, source.registry_id)
+    if registry is None or not registry.enabled:
+        return   # frozen: nothing to ask; readers never take a version from a disabled source anyway
+    plugin = plugin_for(package.ecosystem.value)
+    ref = PackageRef(ecosystem=package.ecosystem.value, namespace=package.namespace or "", name=package.normalized_name)
+    adapter = plugin.adapter(sources.registry_config(registry))
+    loaded = await adapter.fetch_version_dependencies(ref, version_row.version, _ProfileLookup(plugin, [adapter.registry]))
+    await store_documents(db, registry.id, loaded.documents)
+    if not loaded.available:
+        source.metadata_digest = UNAVAILABLE_DIGEST
+        await db.flush()
+        return
+    digest = dependencies_digest(loaded.dependencies)
+    canonical_digest = await db.scalar(
+        select(VersionSource.metadata_digest).where(VersionSource.version_id == version_row.id,
+                                                    VersionSource.registry_id == version_row.metadata_registry_id)
+    )
+    if digest != canonical_digest:
+        await _replace_dependency_rows(db, version_row.id, str(registry.id), loaded.dependencies)
+    source.metadata_digest = digest
+    await db.flush()
+    await resolve_dependency_links(db, [version_row.id])
+
+
 async def store_documents(db: AsyncSession, registry_id, documents: Sequence[FetchedDocument]) -> None:
     """Upstream documents the metadata came from (source_documents), replaced when fetched again."""
     now = datetime.now(UTC)

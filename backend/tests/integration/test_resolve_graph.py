@@ -241,8 +241,6 @@ def test_nested_format_rejects_unsupported_options(client: TestClient) -> None:
 
 
 def test_answer_with_a_failed_dependency_load_is_not_cached(monkeypatch) -> None:
-    from app.resolver import catalog as catalog_module
-
     async def failing(db, package, version_row):
         raise ConnectionError("upstream timed out")
 
@@ -253,7 +251,7 @@ def test_answer_with_a_failed_dependency_load_is_not_cached(monkeypatch) -> None
                                      versions=[NormalizedVersion(version="1.0", status="active", dependencies=None)])
         await pipeline.write_package(db, PLUGIN, [snapshot], missing_registry_ids=(), origin=PackageOrigin.seed)
         await db.commit()   # into the test transaction: the catalog's rollback must not take the package with it
-        monkeypatch.setattr(catalog_module, "ensure_version_dependencies", failing)
+        monkeypatch.setattr(pipeline, "ensure_version_dependencies", failing)
         request = GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}])
         first = await resolve_graph(db, request)
         assert first.nodes[0].errors == ["dependencies unknown"]

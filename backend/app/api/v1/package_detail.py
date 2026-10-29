@@ -25,6 +25,7 @@ from app.fetcher.pipeline import (
     find_package,
     resolve_dependency_links,
     select_best_version,
+    source_dependencies,
 )
 from app.models.artifact import Artifact
 from app.models.dependency import Dependency
@@ -270,6 +271,7 @@ async def get_dependencies_tree(
         version=version,
         profile=view.profile.slug,
         depth=_measure_tree_depth(nodes),
+        dependencies_unknown=version_row.id in view.unknown,
         dependencies=nodes,
     )
 
@@ -543,6 +545,7 @@ class _ProfileView:
     profile: SourceProfile
     _registries: dict[object, list[RegistryConfig]] = field(default_factory=dict)
     _active: dict[object, list[tuple[str, object]]] = field(default_factory=dict)
+    unknown: set[object] = field(default_factory=set)   # versions whose dependencies are unknown
 
     async def registries(self, package: Package) -> list[RegistryConfig]:
         if package.id not in self._registries:
@@ -552,20 +555,16 @@ class _ProfileView:
         return self._registries[package.id]
 
     async def dependencies(self, package: Package, version_row: PackageVersion) -> list[Dependency]:
-        """The canonical set, or the variant of the source the version is taken from (visibility.chosen_source)."""
+        """As published by the source the version is taken from (visibility.chosen_source); [] when unknown."""
         registries = await self.registries(package)
         statuses = (await visibility.source_statuses(self.db, registries, [version_row.id])).get(version_row.id, [])
         slug = visibility.chosen_source(statuses)
         chosen = next((r for r in registries if r.slug == slug), None)
-        rows = (
-            await self.db.scalars(
-                select(Dependency)
-                .where(Dependency.version_id == version_row.id)
-                .order_by(Dependency.dependency_type.asc(), Dependency.dependency_name.asc())
-            )
-        ).all()
-        variant = [d for d in rows if chosen is not None and str(d.variant_registry_id) == chosen.id]
-        return variant or [d for d in rows if d.variant_registry_id is None]
+        registry_id = chosen.id if chosen is not None else str(version_row.metadata_registry_id)
+        rows, _ = await source_dependencies(self.db, package, version_row, registry_id)
+        if rows is None:
+            self.unknown.add(version_row.id)
+        return list(rows or [])
 
     async def pick(self, package: Package, constraint: str | None, linked_id: object | None) -> object | None:
         if package.id not in self._active:
@@ -662,6 +661,7 @@ async def _build_tree_for_version(
                 environment_markers=dep.environment_markers,
                 resolved_version=resolved_version,
                 cycle=cycle,
+                dependencies_unknown=resolved_version_id in view.unknown if resolved_version_id else False,
                 children=children,
             )
         )

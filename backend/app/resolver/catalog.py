@@ -21,10 +21,10 @@ from app.ecosystems.base import (
     SourceProfile,
     VersionStatus,
 )
-from app.fetcher.pipeline import ensure_version_dependencies, find_package, sync_package
+from app.fetcher.pipeline import find_package, source_dependencies, sync_package
 from app.models.artifact import Artifact
 from app.models.dependency import Dependency
-from app.models.enums import DependenciesState, PackageOrigin
+from app.models.enums import PackageOrigin
 from app.models.version import PackageVersion
 from app.services import visibility
 
@@ -94,22 +94,17 @@ class DbCatalog:
         ) if package else None
         if package is None or version_row is None:
             return None
-        version_id, before = version_row.id, version_row.dependencies_state
         try:
-            await ensure_version_dependencies(self.db, package, version_row)
+            rows, changed = await source_dependencies(self.db, package, version_row, registry_id)
         except Exception:  # noqa: BLE001 - a partial graph with "dependencies unknown" beats failing the resolve
             logger.warning("Dependencies of %s %s could not be loaded", ref.name, version, exc_info=True)
             self.failed = True
             await self.db.rollback()
             return None
-        state = version_row.dependencies_state
-        if state != before:
+        deps = None if rows is None else [_normalized(d) for d in rows]
+        if changed:
             await self.db.commit()   # lazily loaded dependencies stay in the catalog whatever the resolve ends with
-        if state != DependenciesState.hydrated:
-            return None
-        deps = (await self.db.scalars(select(Dependency).where(Dependency.version_id == version_id))).all()
-        variant = [d for d in deps if str(d.variant_registry_id) == registry_id]
-        return [_normalized(d) for d in (variant or [d for d in deps if d.variant_registry_id is None])]
+        return deps
 
     async def ensure(self, ref: PackageRef, profile: SourceProfile) -> bool:
         """Lazy fetch of a package the catalog does not have, origin=discovered, committed at once so a later failure
