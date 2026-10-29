@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/octet-stream",
+    "etag": "\"e0659a77a2982882a10b9973b225f054\"",
+    "last-modified": "Sun, 15 Mar 2026 01:17:39 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://files.pythonhosted.org/packages/13/f2/abeec3db71d221ccd3cd89d206be1fabf5a3ee7178862f5fba23a59607e0/mpmath-1.4.1-py3-none-any.whl.metadata"
+  },
+  "status": 200
+}
