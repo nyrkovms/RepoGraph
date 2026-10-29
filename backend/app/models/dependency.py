@@ -21,7 +21,7 @@ class Dependency(UUIDPrimaryKeyMixin, Base):
     version_id: Mapped[str] = mapped_column(ForeignKey("package_versions.id"), nullable=False)
 
     dependency_name: Mapped[str] = mapped_column(Text, nullable=False)
-    dependency_namespace: Mapped[str | None] = mapped_column(String(255), nullable=True, server_default=text("''"))
+    dependency_namespace: Mapped[str] = mapped_column(String(255), nullable=False, server_default=text("''"))
     dependency_ecosystem: Mapped[Ecosystem] = mapped_column(Enum(Ecosystem, name="ecosystem_enum"), nullable=False)
     version_constraint: Mapped[str] = mapped_column(Text, nullable=False)
     dependency_type: Mapped[DependencyType] = mapped_column(

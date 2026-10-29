@@ -58,7 +58,7 @@ async def _cleanup(db: AsyncSession) -> None:
     await db.execute(delete(SourceProfileRegistry).where(SourceProfileRegistry.profile_id.in_(profile_ids)))
     await db.execute(delete(SourceProfile).where(SourceProfile.id.in_(profile_ids)))
     await db.execute(delete(SyncState).where(SyncState.registry_id.in_(ids)))
-    await db.execute(delete(SyncFailure).where(SyncFailure.package_name.like(f"{PREFIX}%")))
+    await db.execute(delete(SyncFailure).where(SyncFailure.package_ref.like(f"pkg:pypi/{PREFIX}%")))
     await db.execute(delete(Registry).where(Registry.id.in_(ids)))
 
 
@@ -534,8 +534,8 @@ def test_fetch_packages_task_counts_and_records_failures(monkeypatch: pytest.Mon
 
 
 async def _failures(db: AsyncSession) -> dict:
-    rows = await db.scalars(select(SyncFailure).where(SyncFailure.package_name.like(f"{PREFIX}%")))
-    return {row.package_name: (row.error_class, row.retryable) for row in rows}
+    rows = await db.scalars(select(SyncFailure).where(SyncFailure.package_ref.like(f"pkg:pypi/{PREFIX}%")))
+    return {row.package_ref.removeprefix("pkg:pypi/"): (row.error_class, row.retryable) for row in rows}
 
 
 # --- registries import ---------------------------------------------------------------------------------

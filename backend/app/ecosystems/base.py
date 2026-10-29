@@ -296,6 +296,7 @@ class ResolvedNode:
     registry_slug: str                     # which source the chosen version came from
     depth: int
     errors: list[str] = field(default_factory=list)   # node-level problems: unknown dependencies, unresolvable requirement
+    latest_compatible: str | None = None   # newest version usable in the environment, ignoring the constraint (R2)
 
 
 @dataclass(slots=True)
@@ -304,6 +305,7 @@ class ResolvedEdge:
     target: str
     constraint: str
     dependency_type: DependencyType
+    details: Mapping[str, object] = field(default_factory=dict)   # PyPI: extra_name, environment_markers
 
 
 @dataclass(slots=True)
@@ -315,12 +317,36 @@ class ResolveGraph:
     warnings: list[Mapping[str, object]]
     fetched: list[PackageRef]
     details: Mapping[str, object] = field(default_factory=dict)   # RPM: active module streams
+    error: Mapping[str, object] | None = None   # the whole graph failed: {"code", "message", ...}; nodes may be partial
+
+
+class ResolveLimitExceeded(Exception):
+    """More nodes or lazy fetches than the request allows (`max_nodes`, `max_lazy_fetches`)."""
+
+    def __init__(self, limit: Literal["nodes", "lazy_fetches"], value: int) -> None:
+        super().__init__(f"resolve exceeded {value} {limit.replace('_', ' ')}")
+        self.limit = limit
+        self.value = value
+
+
+@dataclass(slots=True)
+class CatalogVersion:
+    """A version as a resolver sees it through a profile (SPEC §9.1 "Видимость версий")."""
+
+    version: str
+    registry_id: str                       # the first visible source publishing it; its metadata and files are used
+    registry_slug: str
+    status: VersionStatus                  # the best status among the visible sources publishing it
+    engines: Mapping[str, str] | None = None
+    artifacts: Sequence[str] = ()          # file names in that source (PyPI wheel tags name the platforms)
 
 
 class CatalogAccess(Protocol):
-    """What resolvers and the tree need from the catalog: versions visible through given sources, lazy fetch."""
+    """What resolvers and the tree need from the catalog: versions visible through a profile, lazy fetch."""
 
-    async def versions(self, ref: PackageRef, registry_ids: Sequence[str]) -> Sequence[str]: ...
+    async def versions(self, ref: PackageRef, profile: SourceProfile) -> Sequence[CatalogVersion]:
+        """Every version the profile's sources publish for the package, in no particular order; [] if unknown."""
+        ...
 
     async def dependencies(self, ref: PackageRef, version: str, registry_id: str) -> Sequence[NormalizedDependency] | None:
         """Dependencies as published by `registry_id`: its variant if the source disagrees with the canonical set.

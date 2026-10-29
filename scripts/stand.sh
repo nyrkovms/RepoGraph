@@ -38,10 +38,18 @@ ensure_volume() {
 # Back up first (a failed backup aborts), keep worker/beat off the database while the schema changes,
 # and bring them back even when the migration fails. Only services that were running are restarted,
 # so the first `up` (nothing created yet) does not start them ahead of its own build step.
+# `migrate --replace` is for `up`: the new code comes with the migration, so the old api, worker and beat stay
+# stopped (a contract migration drops what they read) and `up` starts the new ones.
 migrate() {
+  local services="worker beat" replace=""
+  if [[ "${1:-}" == "--replace" ]]; then
+    services="api worker beat"
+    replace=1
+  fi
   scripts/db_backup.sh
   local running rc=0
-  running="$("${COMPOSE[@]}" ps --services --status running worker beat | tr '\n' ' ')"
+  # shellcheck disable=SC2086
+  running="$("${COMPOSE[@]}" ps --services --status running $services | tr '\n' ' ')"
   if [[ -n "${running// /}" ]]; then
     # shellcheck disable=SC2086
     "${COMPOSE[@]}" stop $running
@@ -49,10 +57,13 @@ migrate() {
     # shellcheck disable=SC2064,SC2086
     trap "${COMPOSE[*]} start $running >/dev/null 2>&1; exit 130" INT TERM
   fi
-  # The api keeps serving during the migration: requests wait on the migration's locks, nothing writes around it.
+  # Without --replace the api keeps serving: its code is the migration's own, requests wait on the locks.
   "${COMPOSE[@]}" run --rm --no-deps api alembic upgrade head || rc=$?
   if [[ -n "${running// /}" ]]; then
     trap - INT TERM
+    if [[ -n "$replace" && "$rc" -eq 0 ]]; then
+      return 0   # `up` starts the new containers
+    fi
     # shellcheck disable=SC2086
     "${COMPOSE[@]}" start $running || echo "WARNING: could not restart: $running" >&2
   fi
@@ -68,7 +79,7 @@ case "$cmd" in
     "${COMPOSE[@]}" up -d --build --wait postgres redis
     # The migration runs in the api image: build it from this checkout first, or the new migrations are not in it.
     "${COMPOSE[@]}" build
-    migrate
+    migrate --replace
     "${COMPOSE[@]}" up -d --build
     ;;
   migrate)
@@ -87,7 +98,7 @@ case "$cmd" in
   status)
     "${COMPOSE[@]}" ps
     "${COMPOSE[@]}" exec -T postgres sh -c \
-      'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select version_num from alembic_version" -c "select (select count(*) from packages) as packages, (select count(*) from package_versions) as versions, (select max(started_at) from update_runs) as last_update_run"'
+      'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select version_num from alembic_version" -c "select (select count(*) from packages) as packages, (select count(*) from package_versions) as versions, (select max(started_at) from runs where operation = '\''daily_update'\'') as last_update_run"'
     ;;
   logs)
     "${COMPOSE[@]}" logs -f --tail=100 "$@"

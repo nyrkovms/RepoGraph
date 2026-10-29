@@ -1,264 +1,299 @@
+"""POST /resolve (SPEC-MULTI-ECOSYSTEM.md §9.1, IMPL R2): the plugin's resolver over the catalog seen through a profile.
+
+The graph format is the answer; the PyPI nested format of the MVP is an alias built from the same graph until the UI
+moves (E7). Answers are cached by request and checked against the catalog revision of the packages they read.
+"""
+
 import asyncio
 import time
-from functools import lru_cache
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from typing import Any
 
-import httpx
 from packaging.version import InvalidVersion, Version
-from resolvelib import BaseReporter, Resolver
-from resolvelib.resolvers import ResolutionImpossible, ResolutionTooDeep
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
-from app.connectors.base import PackageNotFound
-from app.ecosystems.base import PackageRef
-from app.db import loop_local_session
-from app.fetcher.pipeline import sync_package
-from app.models.enums import PackageOrigin
+from app.ecosystems.base import EcosystemPlugin, ResolveGraph, ResolveRoot, SourceProfile
+from app.ecosystems.base import ResolveRequest as ContractRequest
+from app.ecosystems.pypi.resolver import NOT_FOUND_PREFIX
+from app.ecosystems.registry import UnknownEcosystem, get_plugin
+from app.fetcher import sources
 from app.resolver.cache import ResolveCache
+from app.resolver.catalog import DbCatalog
 from app.resolver.errors import (
     ResolveConflictError,
     ResolveInternalError,
+    ResolveInvalidRequest,
+    ResolveLimitError,
+    ResolveNotFoundError,
+    ResolveTimeoutError,
+    ResolveUpstreamError,
 )
-from app.resolver.models import ResolverRequirement
-from app.resolver.provider import PyPIProvider
-from app.schemas.resolve import ResolveRequest, ResolveSuccessResponse, ResolvedDependencyNode, ResolvedPackage
-from app.services.metrics import (
-    inc_resolve_cache_hit,
-    inc_resolve_cache_miss,
-    observe_resolve_latency,
+from app.schemas.resolve import (
+    GraphEdge,
+    GraphNode,
+    GraphResolveRequest,
+    GraphResolveResponse,
+    ResolveRequest,
+    ResolveSuccessResponse,
+    ResolvedDependencyNode,
+    ResolvedPackage,
 )
+from app.services.metrics import inc_resolve_cache_hit, inc_resolve_cache_miss, observe_resolve_latency
+
+# Beyond the request's own timeout (enforced inside the resolver) before the answer is given up.
+_TIMEOUT_MARGIN_S = 10.0
 
 
-@lru_cache(maxsize=1)
-def _sync_session_factory():
-    settings = get_settings()
-    engine = create_engine(settings.sync_db_url, pool_pre_ping=True)
-    return sessionmaker(bind=engine)
+async def resolve_graph(db: AsyncSession, payload: GraphResolveRequest) -> GraphResolveResponse:
+    start = time.perf_counter()
+    plugin = _plugin(payload.ecosystem)
+    profile = await _profile(db, payload.ecosystem, payload.profile)
+    roots = [_root(plugin, payload.ecosystem, root.purl, root.constraint, root.extras) for root in payload.roots]
+    cache = ResolveCache()
+    key = ResolveCache.build_key({"format": "graph", "sources": _fingerprint(profile), **payload.model_dump(mode="json")})
+    cached = await cache.get_valid(db, key)
+    if cached is not None:
+        inc_resolve_cache_hit()
+        observe_resolve_latency(time.perf_counter() - start)
+        return GraphResolveResponse.model_validate(cached)
+    inc_resolve_cache_miss()
+
+    request = ContractRequest(
+        roots=roots, environment=plugin.parse_environment(payload.environment), profile=profile,
+        include_dev=payload.options.include_dev, include_optional=payload.options.include_optional,
+        managed=[_root(plugin, payload.ecosystem, m.purl, m.constraint, m.extras) for m in payload.managed],
+        timeout_s=payload.options.timeout_s,
+    )
+    graph, catalog = await _run(db, plugin, request)
+    lock = payload.input_mode in ("lock", "freeze")
+    root_ids, hidden = _roots(graph, lock)
+    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+    response = GraphResolveResponse(
+        ecosystem=payload.ecosystem,
+        profile=profile.slug,
+        input_mode="lock" if lock else "requirements",
+        strategy=graph.strategy,
+        emulates=plugin.resolver().emulates,
+        nodes=[
+            GraphNode(
+                id=node.id, purl=plugin.coordinates.to_purl(node.ref, node.version),
+                name=plugin.coordinates.display(node.ref), version=node.version, registry=node.registry_slug,
+                depth=node.depth, root=node.id in root_ids, hidden=node.id in hidden,
+                latest_compatible=node.latest_compatible, errors=list(node.errors),
+            )
+            for node in graph.nodes
+        ],
+        edges=[
+            GraphEdge(source=edge.source, to=edge.target, constraint=edge.constraint, type=edge.dependency_type,
+                      details=dict(edge.details))
+            for edge in graph.edges
+        ],
+        conflicts=[dict(c) for c in graph.conflicts],
+        warnings=[dict(w) for w in graph.warnings],
+        fetched=[plugin.coordinates.to_purl(ref) for ref in graph.fetched],
+        details=dict(graph.details),
+        error=dict(graph.error) if graph.error else None,
+        resolved_at=datetime.now(UTC),
+        catalog_revision=catalog.revision,
+        resolve_time_ms=elapsed_ms,
+    )
+    observe_resolve_latency(elapsed_ms / 1000.0)
+    if graph.error is None and not catalog.failed:
+        await cache.set_checked(key, response.model_dump(mode="json", by_alias=True), catalog.synced_at)
+    return response
 
 
-async def resolve_dependencies(payload: ResolveRequest) -> ResolveSuccessResponse:
+async def resolve_dependencies(db: AsyncSession, payload: ResolveRequest) -> ResolveSuccessResponse:
+    """The MVP format: nested trees per root, errors as exceptions (mapped to 404/409/422/504 by the route)."""
     if payload.ecosystem != "pypi":
-        raise ResolveInternalError("Only ecosystem='pypi' is supported in MVP")
+        raise ResolveInvalidRequest("Only ecosystem='pypi' is supported in the nested format")
     if payload.input_mode not in {"requirements", "freeze"}:
-        raise ResolveInternalError("Only input_mode='requirements' or 'freeze' is supported in MVP")
+        raise ResolveInvalidRequest("Only input_mode='requirements' or 'freeze' is supported in the nested format")
 
     start = time.perf_counter()
+    plugin = _plugin("pypi")
+    try:
+        roots = [ResolveRoot(ref=plugin.coordinates.parse(dep.name), constraint=_constraint(plugin, dep.version_spec),
+                             extras=tuple(dep.extras))
+                 for dep in payload.dependencies]
+    except ValueError as exc:
+        raise ResolveInvalidRequest(str(exc)) from exc
+    profile = await sources.default_profile(db, "pypi")
     cache = ResolveCache()
-    cache_key = ResolveCache.build_key(payload.model_dump(mode="json"))
-    cached = await cache.get(cache_key)
-    if cached:
+    key = ResolveCache.build_key({"format": "nested", "sources": _fingerprint(profile), **payload.model_dump(mode="json")})
+    cached = await cache.get_valid(db, key)
+    if cached is not None:
         inc_resolve_cache_hit()
         observe_resolve_latency(time.perf_counter() - start)
         return ResolveSuccessResponse.model_validate(cached)
     inc_resolve_cache_miss()
 
-    result = await asyncio.to_thread(_resolve_sync, payload)
-    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-    observe_resolve_latency(elapsed_ms / 1000.0)
-    result.resolve_time_ms = elapsed_ms
-
-    await cache.set(cache_key, result.model_dump(mode="json"))
-    return result
-
-
-def _resolve_sync(payload: ResolveRequest) -> ResolveSuccessResponse:
-    session_factory = _sync_session_factory()
-
-    def lazy_fetch_sync(name: str) -> str:
-        return asyncio.run(_lazy_fetch_async(name))
-
-    provider = PyPIProvider(
-        session_factory=session_factory,
-        environment=_environment_dict(payload),
-        lazy_fetch=lazy_fetch_sync,
+    request = ContractRequest(
+        roots=roots,
+        environment=plugin.parse_environment(payload.environment.model_dump()),
+        profile=profile,
         include_dev=payload.options.include_dev,
     )
-    resolver = Resolver(provider, BaseReporter())
+    graph, catalog = await _run(db, plugin, request)
+    _raise_for_error(graph)
+    for node in graph.nodes:
+        # The nested format had no partial answers: a dependency no source has was a 404.
+        missing = next((e.removeprefix(NOT_FOUND_PREFIX) for e in node.errors if e.startswith(NOT_FOUND_PREFIX)), None)
+        if missing:
+            raise ResolveNotFoundError(missing)
 
-    requirements = [
-        ResolverRequirement.from_input(dep.name, dep.version_spec, dep.extras)
-        for dep in payload.dependencies
-    ]
+    nodes = {node.id: node for node in graph.nodes}
+    children: dict[str, list[Any]] = {}
+    for edge in graph.edges:
+        children.setdefault(edge.source, []).append(edge)
+    root_ids, hidden = _roots(graph, lock=payload.input_mode == "freeze")
 
-    try:
-        result = resolver.resolve(requirements, max_rounds=payload.options.max_rounds)
-    except ResolutionImpossible as exc:
-        raise ResolveConflictError("Dependency conflict", details=_extract_conflicts(exc)) from exc
-    except ResolutionTooDeep as exc:
-        raise ResolveConflictError("Resolution exceeded maximum rounds", details={"max_rounds": payload.options.max_rounds}) from exc
-
-    mapping = result.mapping
-    resolved_all_roots: dict[str, ResolvedPackage] = {}
-
-    for root in requirements:
-        candidate = mapping.get(root.name)
-        if not candidate:
-            raise ResolveConflictError(f"Unable to resolve root dependency '{root.name}'")
-
-        deps = _serialize_dependencies(
-            provider=provider,
-            mapping=mapping,
-            candidate=candidate,
-            max_depth=payload.options.max_depth,
-            depth=1,
-            seen={root.name},
-        )
-        latest_compatible_version = provider.get_latest_compatible_version(root.name)
-        resolved_all_roots[root.name] = ResolvedPackage(
-            version=candidate.version_str,
-            latest_compatible_version=latest_compatible_version,
-            has_newer_compatible_version=_is_newer_version(latest_compatible_version, candidate.version_str),
-            dependencies=deps,
-        )
-
+    resolved: dict[str, ResolvedPackage] = {}
     hidden_roots: list[str] = []
-    if payload.input_mode == "freeze":
-        visible_root_names, hidden_roots = _select_visible_roots(requirements, resolved_all_roots)
-    else:
-        visible_root_names = [root.name for root in requirements]
+    for root, edge in zip(roots, [e for e in graph.edges if e.source == "root"], strict=True):
+        node = nodes.get(edge.target)
+        if node is None:
+            raise ResolveConflictError(f"Unable to resolve root dependency '{root.ref.name}'")
+        if node.id in hidden:
+            hidden_roots.append(root.ref.name)
+            continue
+        resolved[root.ref.name] = ResolvedPackage(
+            version=node.version,
+            latest_compatible_version=node.latest_compatible,
+            has_newer_compatible_version=_is_newer_version(node.latest_compatible, node.version),
+            dependencies=_nested(nodes, children, node.id, payload.options.max_depth, 1, {node.ref.name}),
+        )
 
-    resolved = {
-        root_name: resolved_all_roots[root_name]
-        for root_name in visible_root_names
-        if root_name in resolved_all_roots
-    }
-
-    return ResolveSuccessResponse(
+    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+    observe_resolve_latency(elapsed_ms / 1000.0)
+    response = ResolveSuccessResponse(
         input_mode=payload.input_mode,
         resolved=resolved,
         hidden_roots=hidden_roots,
-        total_packages=len(mapping),
-        total_versions=len(mapping),
+        total_packages=len(graph.nodes),
+        total_versions=len(graph.nodes),
         conflicts=[],
         resolve_strategy="resolvelib",
-        resolve_time_ms=0.0,
+        resolve_time_ms=elapsed_ms,
     )
+    if not catalog.failed:
+        await cache.set_checked(key, response.model_dump(mode="json"), catalog.synced_at)
+    return response
 
 
-def _serialize_dependencies(provider, mapping, candidate, max_depth: int, depth: int, seen: set[str]) -> list[ResolvedDependencyNode]:
-    deps = provider.get_dependencies(candidate)
-    nodes: list[ResolvedDependencyNode] = []
+async def _run(db: AsyncSession, plugin: EcosystemPlugin, request: ContractRequest) -> tuple[ResolveGraph, DbCatalog]:
+    catalog = DbCatalog(db, plugin)
+    resolver = plugin.resolver()
+    try:
+        graph = await asyncio.wait_for(resolver.resolve(request, catalog), request.timeout_s + _TIMEOUT_MARGIN_S)
+    except TimeoutError:
+        graph = ResolveGraph(strategy=getattr(resolver, "strategy", ""), nodes=[], edges=[], conflicts=[], warnings=[],
+                             fetched=[], error={"code": "resolve_timeout",
+                                                "message": f"resolve took longer than {request.timeout_s:g} s"})
+    if graph.error and graph.error.get("code") in ("resolve_timeout", "upstream_error"):
+        await db.rollback()   # a catalog call was cut short: whatever it left in the session goes
+    return graph, catalog
 
+
+def _fingerprint(profile: SourceProfile) -> list[list[object]]:
+    """What the answer depends on besides the catalog: the profile's enabled sources, their order and routing."""
+    return [[r.id, r.priority, r.routing] for r in profile.registries]
+
+
+def _constraint(plugin: EcosystemPlugin, raw: str) -> str:
+    try:
+        plugin.versions.constraint(raw or "*")
+    except ValueError as exc:   # the contract's InvalidVersion
+        raise ResolveInvalidRequest(str(exc)) from exc
+    return raw or "*"
+
+
+def _roots(graph: ResolveGraph, lock: bool) -> tuple[set[str], set[str]]:
+    """Root node ids, and in lock mode those reachable from another root (R2: `hidden`)."""
+    root_ids = {edge.target for edge in graph.edges if edge.source == "root"}
+    if not lock:
+        return root_ids, set()
+    adjacency: dict[str, list[str]] = {}
+    for edge in graph.edges:
+        if edge.source != "root":
+            adjacency.setdefault(edge.source, []).append(edge.target)
+    hidden: set[str] = set()
+    for root in root_ids:
+        seen, stack = {root}, list(adjacency.get(root, []))
+        while stack:
+            current = stack.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            stack.extend(adjacency.get(current, []))
+        hidden |= (seen - {root}) & root_ids
+    return root_ids, hidden
+
+
+def _nested(nodes, children, node_id: str, max_depth: int, depth: int, seen: set[str]) -> list[ResolvedDependencyNode]:
     if depth > max_depth:
-        return nodes
-
-    for req in deps:
-        selected = mapping.get(req.name)
-        if not selected:
-            continue
-
-        if req.name in seen:
-            nodes.append(
-                ResolvedDependencyNode(
-                    name=req.name,
-                    version=selected.version_str,
-                    constraint=str(req.specifier),
-                    dependency_type=req.dependency_type,
-                    extra_name=req.extra_name,
-                    environment_markers=req.environment_markers,
-                    dependencies=[],
-                )
-            )
-            continue
-
-        children = _serialize_dependencies(
-            provider=provider,
-            mapping=mapping,
-            candidate=selected,
-            max_depth=max_depth,
-            depth=depth + 1,
-            seen=seen | {req.name},
-        )
-        nodes.append(
+        return []
+    result = []
+    for edge in children.get(node_id, []):
+        child = nodes[edge.target]
+        name = child.ref.name
+        result.append(
             ResolvedDependencyNode(
-                name=req.name,
-                version=selected.version_str,
-                constraint=str(req.specifier),
-                dependency_type=req.dependency_type,
-                extra_name=req.extra_name,
-                environment_markers=req.environment_markers,
-                dependencies=children,
+                name=name,
+                version=child.version,
+                constraint=edge.constraint if edge.constraint != "*" else "",
+                dependency_type=edge.dependency_type,
+                extra_name=edge.details.get("extra_name"),
+                environment_markers=edge.details.get("environment_markers"),
+                dependencies=[] if name in seen else _nested(nodes, children, child.id, max_depth, depth + 1, seen | {name}),
             )
         )
-
-    return nodes
-
-
-async def _lazy_fetch_async(name: str) -> str:
-    """Lazy fetch through the catalog write path (IMPL B1) with origin=discovered."""
-    ref = PackageRef(ecosystem="pypi", namespace="", name=name)
-    async with loop_local_session() as db:
-        try:
-            await sync_package(db, ref, origin=PackageOrigin.discovered)
-            await db.commit()
-            return "fetched"
-        except PackageNotFound:
-            return "not_found"
-        except httpx.TimeoutException:
-            return "timeout"
-        except Exception:  # noqa: BLE001
-            return "error"
+    return result
 
 
-def _environment_dict(payload: ResolveRequest) -> dict[str, str]:
-    env = payload.environment
-    python_version = env.python_version
-    python_full_version = env.python_full_version or f"{python_version}.0"
-
-    return {
-        "python_version": python_version,
-        "python_full_version": python_full_version,
-        "sys_platform": env.sys_platform,
-        "os_name": env.os_name,
-        "platform_machine": env.platform_machine,
-        "platform_system": env.platform_system,
-        "implementation_name": env.implementation_name,
-    }
-
-
-def _extract_conflicts(exc: ResolutionImpossible) -> dict:
-    causes = []
-    for cause in getattr(exc, "causes", []):
-        requirement = getattr(cause, "requirement", None)
-        parent = getattr(cause, "parent", None)
-        causes.append(
-            {
-                "requirement": str(requirement) if requirement else None,
-                "parent": str(parent) if parent else None,
-            }
-        )
-    return {"causes": causes}
+def _raise_for_error(graph: ResolveGraph) -> None:
+    if graph.error is None:
+        return
+    code, message = graph.error.get("code"), str(graph.error.get("message"))
+    if code == "not_found":
+        raise ResolveNotFoundError(str((graph.error.get("packages") or ["?"])[0]))
+    if code == "resolver_conflict":
+        raise ResolveConflictError(message, details={"causes": [dict(c) for c in graph.conflicts]})
+    if code == "resolve_timeout":
+        raise ResolveTimeoutError(message)
+    if code == "resolve_limit_exceeded":
+        raise ResolveLimitError(message, details=dict(graph.error))
+    if code == "upstream_error":
+        raise ResolveUpstreamError(message)
+    raise ResolveInternalError(message)
 
 
-def _collect_dependency_names(nodes: list[ResolvedDependencyNode]) -> set[str]:
-    names: set[str] = set()
-    stack = list(nodes)
-    while stack:
-        node = stack.pop()
-        names.add(node.name)
-        stack.extend(node.dependencies)
-    return names
+def _plugin(ecosystem: str) -> EcosystemPlugin:
+    try:
+        return get_plugin(ecosystem)
+    except UnknownEcosystem:
+        raise ResolveInvalidRequest(f"ecosystem {ecosystem!r} is not supported") from None
 
 
-def _select_visible_roots(
-    requirements: list[ResolverRequirement],
-    resolved_by_root: dict[str, ResolvedPackage],
-) -> tuple[list[str], list[str]]:
-    requested_order = [requirement.name for requirement in requirements]
-    requested_set = set(requested_order)
-    hidden_roots: set[str] = set()
+async def _profile(db: AsyncSession, ecosystem: str, slug: str | None) -> SourceProfile:
+    profile = await sources.profile_by_slug(db, ecosystem, slug)
+    if profile is None:
+        raise ResolveInvalidRequest(f"profile {slug!r} not found for ecosystem {ecosystem!r}")
+    return profile
 
-    for root_name in requested_order:
-        pkg = resolved_by_root.get(root_name)
-        if not pkg:
-            continue
-        reachable_requested = _collect_dependency_names(pkg.dependencies) & requested_set
-        reachable_requested.discard(root_name)
-        hidden_roots.update(reachable_requested)
 
-    visible_roots = [root_name for root_name in requested_order if root_name not in hidden_roots]
-    return visible_roots, [root_name for root_name in requested_order if root_name in hidden_roots]
+def _root(plugin: EcosystemPlugin, ecosystem: str, purl: str, constraint: str, extras: Sequence[str]) -> ResolveRoot:
+    """A root by purl; a version in the purl pins it when no constraint is given."""
+    try:
+        ref, version = plugin.coordinates.from_purl(purl)
+    except ValueError as exc:
+        raise ResolveInvalidRequest(f"invalid root {purl!r}: {exc}") from exc
+    if ref.ecosystem != ecosystem:
+        raise ResolveInvalidRequest(f"root {purl!r} is not in ecosystem {ecosystem!r}")
+    if version and constraint in ("", "*"):
+        constraint = f"=={version}"
+    return ResolveRoot(ref=ref, constraint=_constraint(plugin, constraint), extras=tuple(extras))
 
 
 def _is_newer_version(latest_compatible_version: str | None, selected_version: str) -> bool:

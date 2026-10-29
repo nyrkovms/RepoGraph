@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import Ecosystem
@@ -36,6 +36,11 @@ async def start_run(db: AsyncSession, operation: str, ecosystem: str | None, *, 
     db.add(run)
     await db.flush()
     return run
+
+
+async def progress_run(db: AsyncSession, run_id: object, **counts: int) -> None:
+    """Progress of a running run (`packages_*` counters), seen by /admin/sync/status while it goes."""
+    await db.execute(update(Run).where(Run.id == run_id).values(**counts))
 
 
 async def finish_run(db: AsyncSession, run: Run, status: str, *, error: str | None = None, **counts: object) -> dict[str, int]:

@@ -11,7 +11,6 @@ from app.models.source_document import SourceDocument
 from app.models.source_profile import SourceProfile, SourceProfileRegistry
 from app.models.sync_state import SyncState
 from app.models.sync_failure import SyncFailure
-from app.models.update_run import UpdateRun
 from app.models.version import PackageVersion, VersionSource
 from app.models.vulnerability import PackageVulnerability, Vulnerability
 
@@ -34,7 +33,6 @@ __all__ = [
     "SourceProfileRegistry",
     "SyncState",
     "SyncFailure",
-    "UpdateRun",
     "VersionSource",
     "Vulnerability",
 ]

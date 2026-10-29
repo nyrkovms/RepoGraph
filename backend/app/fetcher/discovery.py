@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.ecosystems.base import EcosystemPlugin, NormalizedPackage, PackageRef, RegistryConfig, SourceLookup
 from app.ecosystems.routing import is_priority
-from app.models.enums import SyncStatus, SyncType
+from app.models.enums import SyncStatus
 from app.models.sync_state import SyncState
 
 logger = logging.getLogger(__name__)
@@ -81,7 +81,7 @@ class NegativeCache:
         if ttl <= 0:
             return
         try:
-            await self.client.setex(self.key(registry, purl), ttl, "1")
+            await self.client.set(self.key(registry, purl), "1", ex=ttl)
         except Exception:  # noqa: BLE001
             logger.debug("Negative cache write failed for %s in %s", purl, registry.slug)
 
@@ -128,7 +128,6 @@ async def record_source_failure(db: AsyncSession, registry: RegistryConfig, erro
     failures = SyncState.consecutive_failures + 1
     stmt = insert(SyncState).values(
         registry_id=registry.id,
-        sync_type=SyncType.incremental,
         status=SyncStatus.idle,
         last_error=message,
         cursor_data={},

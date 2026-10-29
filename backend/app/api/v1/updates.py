@@ -8,16 +8,18 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db_session
-from app.models.enums import PackageEventKind
+from app.models.enums import Ecosystem, PackageEventKind
 from app.models.package import Package
 from app.models.package_event import PackageEvent
-from app.models.update_run import UpdateRun
-from app.normalizers.names import normalize_package_name
+from app.models.package_registry import PackageRegistry
+from app.models.registry import Registry
+from app.models.run import Run
 from app.schemas.updates import (
+    EcosystemRunInfo,
     UpdateEventItem,
     UpdateEventListResponse,
     UpdateRunInfo,
@@ -26,13 +28,16 @@ from app.schemas.updates import (
     UpdatesSummaryTotals,
 )
 from app.services.cursor import CursorError, decode_cursor, encode_cursor, parse_iso_datetime
+from app.services.purls import package_purl
+from app.tasks.fetch_packages import ref_from_target
 
 router = APIRouter()
 
 # Bump severity: higher index wins.
 BUMP_ORDER = ["other", "pre", "patch", "minor", "major"]
 # Flag severity: lower index is more severe (also the order flags are listed in).
-FLAG_ORDER = ["unavailable", "vulnerability_added", "removed", "yanked", "major"]
+FLAG_ORDER = ["unavailable", "vulnerability_added", "removed", "yanked", "deprecated", "major"]
+DAILY_UPDATE = "daily_update"
 
 
 class SummaryPeriod(str, Enum):
@@ -53,6 +58,8 @@ class SummaryEvent:
     version: str | None = None
     details: dict[str, Any] = field(default_factory=dict)
     id: int = 0
+    ecosystem: str = "pypi"
+    namespace: str = ""
 
 
 def _kind_value(kind: Any) -> str:
@@ -113,22 +120,26 @@ def compute_summary_window(
 
 
 def aggregate_summary(events: Iterable[Any]) -> list[UpdatesSummaryPackage]:
-    """Aggregate events (any objects with package/version/kind/detected_at/details[/id]) per package.
+    """Aggregate events (any objects with package/version/kind/detected_at/details[/id/ecosystem/namespace])
+    per package; `pkg:pypi/x` and `pkg:npm/x` are two packages.
 
     `tracking_started` events are ignored; packages with no other events are not listed.
     """
-    grouped: dict[str, list[Any]] = {}
+    grouped: dict[tuple[str, str, str], list[Any]] = {}
     for event in events:
         if _kind_value(event.kind) == PackageEventKind.tracking_started.value:
             continue
-        grouped.setdefault(event.package, []).append(event)
+        key = (getattr(event, "ecosystem", "pypi"), getattr(event, "namespace", ""), event.package)
+        grouped.setdefault(key, []).append(event)
 
     result: list[UpdatesSummaryPackage] = []
-    for name, items in grouped.items():
+    for (ecosystem, namespace, name), items in grouped.items():
         items.sort(key=lambda e: (e.detected_at, getattr(e, "id", 0) or 0))
         releases: list[Any] = []
         yanked: list[str] = []
         removed: list[str] = []
+        deprecated: list[str] = []
+        sources_added: list[str] = []
         vulnerabilities: list[str] = []
         has_unavailable = False
         for e in items:
@@ -141,6 +152,14 @@ def aggregate_summary(events: Iterable[Any]) -> list[UpdatesSummaryPackage]:
             elif kind == "release_removed":
                 if e.version is not None:
                     removed.append(e.version)
+            elif kind == "release_deprecated":
+                if e.version is not None:
+                    deprecated.append(e.version)
+            elif kind == "source_added":
+                # The pipeline always names the registry; a version stands in only for an event without one.
+                source = (e.details or {}).get("registry") or e.version
+                if source is not None and str(source) not in sources_added:
+                    sources_added.append(str(source))
             elif kind == "vulnerability_added":
                 vuln_id = (e.details or {}).get("id")
                 if vuln_id:
@@ -171,27 +190,33 @@ def aggregate_summary(events: Iterable[Any]) -> list[UpdatesSummaryPackage]:
             flags.append("removed")
         if yanked:
             flags.append("yanked")
+        if deprecated:
+            flags.append("deprecated")
         if max_bump == "major":
             flags.append("major")
 
         result.append(
             UpdatesSummaryPackage(
+                ecosystem=ecosystem,
                 name=name,
+                purl=package_purl(ecosystem, namespace, name),
                 from_version=from_version,
                 to_version=to_version,
                 max_bump=max_bump,
                 releases=[r.version for r in releases if r.version is not None],
                 yanked=yanked,
                 removed=removed,
+                deprecated=deprecated,
+                sources_added=sources_added,
                 vulnerabilities=vulnerabilities,
                 flags=flags,
                 last_detected_at=max(e.detected_at for e in items),
             )
         )
 
-    def sort_key(pkg: UpdatesSummaryPackage) -> tuple[int, float, str]:
+    def sort_key(pkg: UpdatesSummaryPackage) -> tuple[int, float, str, str, str]:
         rank = min((FLAG_ORDER.index(f) for f in pkg.flags), default=len(FLAG_ORDER))
-        return (rank, -pkg.last_detected_at.timestamp(), pkg.name)
+        return (rank, -pkg.last_detected_at.timestamp(), pkg.name, pkg.ecosystem, pkg.purl)
 
     result.sort(key=sort_key)
     return result
@@ -207,6 +232,10 @@ def compute_totals(events: Iterable[Any], packages: list[UpdatesSummaryPackage])
             totals.yanked += 1
         elif kind == "release_removed":
             totals.removed += 1
+        elif kind == "release_deprecated":
+            totals.deprecated += 1
+        elif kind == "source_added":
+            totals.sources_added += 1
         elif kind == "vulnerability_added":
             totals.vulnerabilities += 1
         elif kind == "project_unavailable":
@@ -217,25 +246,63 @@ def compute_totals(events: Iterable[Any], packages: list[UpdatesSummaryPackage])
 # --------------------------------------------------------------------------- helpers
 
 
-def serialize_update_run(run: UpdateRun | None) -> UpdateRunInfo | None:
-    if run is None:
-        return None
-    return UpdateRunInfo(
-        started_at=run.started_at,
-        finished_at=run.finished_at,
-        status=run.status.value,
-        packages_checked=run.packages_checked,
-        packages_changed=run.packages_changed,
-        packages_updated=run.packages_updated,
-        packages_failed=run.packages_failed,
-        packages_unavailable=run.packages_unavailable,
-        events_created=run.events_created,
-    )
+def _run_fields(run: Run) -> dict[str, Any]:
+    return {
+        "started_at": run.started_at,
+        "finished_at": run.finished_at,
+        "status": run.status,
+        "packages_checked": run.packages_checked,
+        "packages_changed": run.packages_changed,
+        "packages_updated": run.packages_updated,
+        "packages_failed": run.packages_failed,
+        "packages_unavailable": run.packages_unavailable,
+        "events_created": run.events_created,
+    }
+
+
+def serialize_run(run: Run | None) -> UpdateRunInfo | None:
+    return None if run is None else UpdateRunInfo(**_run_fields(run))
 
 
 async def fetch_last_update_run(db: AsyncSession) -> UpdateRunInfo | None:
-    run = await db.scalar(select(UpdateRun).order_by(UpdateRun.started_at.desc()).limit(1))
-    return serialize_update_run(run)
+    """The latest PyPI daily update, from the runs journal."""
+    run = await db.scalar(
+        select(Run)
+        .where(Run.operation == DAILY_UPDATE, Run.ecosystem == Ecosystem.pypi)
+        .order_by(Run.started_at.desc())
+        .limit(1)
+    )
+    return serialize_run(run)
+
+
+async def fetch_last_update_runs(db: AsyncSession) -> list[EcosystemRunInfo]:
+    """The latest daily update of each ecosystem, ordered by ecosystem."""
+    newest = (
+        select(Run.id, func.row_number().over(partition_by=Run.ecosystem, order_by=Run.started_at.desc()).label("rank"))
+        .where(Run.operation == DAILY_UPDATE, Run.ecosystem.is_not(None))
+        .subquery()
+    )
+    runs = (await db.scalars(select(Run).join(newest, newest.c.id == Run.id).where(newest.c.rank == 1))).all()
+    # The ecosystem filter above leaves no null ecosystems; the enum sorts by declaration, the API by name.
+    return [
+        EcosystemRunInfo(**_run_fields(run), ecosystem=run.ecosystem.value)
+        for run in sorted(runs, key=lambda run: run.ecosystem.value if run.ecosystem else "")
+    ]
+
+
+def _scope(stmt, ecosystems: list[Ecosystem] | None, registry: str | None):
+    """Events of packages in the given ecosystems / linked to the registry (events have no registry column)."""
+    if ecosystems:
+        stmt = stmt.where(Package.ecosystem.in_(ecosystems))
+    if registry:
+        stmt = stmt.where(
+            exists(
+                select(PackageRegistry.package_id)
+                .join(Registry, Registry.id == PackageRegistry.registry_id)
+                .where(PackageRegistry.package_id == Package.id, Registry.slug == registry)
+            )
+        )
+    return stmt
 
 
 def _decode_cursor_or_422(cursor: str | None) -> tuple[datetime, int] | None:
@@ -261,6 +328,8 @@ async def list_updates(
     since: datetime | None = Query(default=None),
     until: datetime | None = Query(default=None),
     kind: list[PackageEventKind] | None = Query(default=None),
+    ecosystem: list[Ecosystem] | None = Query(default=None),
+    registry: str | None = Query(default=None),
     package: str | None = Query(default=None),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
@@ -271,15 +340,26 @@ async def list_updates(
         raise HTTPException(status_code=422, detail="'since' must be earlier than 'until'")
     cursor_payload = _decode_cursor_or_422(cursor)
 
-    stmt = (
-        select(PackageEvent, Package.normalized_name)
+    stmt = _scope(
+        select(PackageEvent, Package.ecosystem, Package.namespace, Package.normalized_name)
         .join(Package, Package.id == PackageEvent.package_id)
-        .where(PackageEvent.detected_at >= since_utc, PackageEvent.detected_at < until_utc)
+        .where(PackageEvent.detected_at >= since_utc, PackageEvent.detected_at < until_utc),
+        ecosystem,
+        registry,
     )
     if kind:
         stmt = stmt.where(PackageEvent.kind.in_(kind))
     if package:
-        stmt = stmt.where(Package.normalized_name == normalize_package_name(package))
+        # A purl names one package; a bare name is a PyPI one.
+        try:
+            ref = ref_from_target(package)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=f"invalid package {package!r}: {exc}") from exc
+        stmt = stmt.where(
+            Package.ecosystem == Ecosystem(ref.ecosystem),
+            func.coalesce(Package.namespace, "") == ref.namespace,
+            Package.normalized_name == ref.name,
+        )
     if cursor_payload:
         c_detected, c_id = cursor_payload
         stmt = stmt.where(
@@ -302,14 +382,16 @@ async def list_updates(
     data = [
         UpdateEventItem(
             id=event.id,
+            ecosystem=package_ecosystem.value,
             package=name,
+            purl=package_purl(package_ecosystem.value, namespace, name),
             version=event.version,
             kind=event.kind.value,
             detected_at=event.detected_at,
             occurred_at=event.occurred_at,
             details=event.details or {},
         )
-        for event, name in page
+        for event, package_ecosystem, namespace, name in page
     ]
     return UpdateEventListResponse(data=data, cursor=next_cursor, has_more=has_more)
 
@@ -321,22 +403,25 @@ async def updates_summary(
     since: datetime | None = Query(default=None),
     until: datetime | None = Query(default=None),
     tz: str = Query(default="UTC"),
+    ecosystem: list[Ecosystem] | None = Query(default=None),
+    registry: str | None = Query(default=None),
 ) -> UpdatesSummaryResponse:
     try:
         since_utc, until_utc = compute_summary_window(period.value, tz, since, until)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    stmt = (
-        select(PackageEvent, Package.normalized_name)
+    stmt = _scope(
+        select(PackageEvent, Package.ecosystem, Package.namespace, Package.normalized_name)
         .join(Package, Package.id == PackageEvent.package_id)
         .where(
             PackageEvent.detected_at >= since_utc,
             PackageEvent.detected_at < until_utc,
             PackageEvent.kind != PackageEventKind.tracking_started,
-        )
-        .order_by(PackageEvent.detected_at.asc(), PackageEvent.id.asc())
-    )
+        ),
+        ecosystem,
+        registry,
+    ).order_by(PackageEvent.detected_at.asc(), PackageEvent.id.asc())
     rows = (await db.execute(stmt)).all()
     events = [
         SummaryEvent(
@@ -346,14 +431,17 @@ async def updates_summary(
             version=event.version,
             details=event.details or {},
             id=event.id,
+            ecosystem=package_ecosystem.value,
+            namespace=namespace or "",
         )
-        for event, name in rows
+        for event, package_ecosystem, namespace, name in rows
     ]
     packages = aggregate_summary(events)
     return UpdatesSummaryResponse(
         since=since_utc,
         until=until_utc,
         last_run=await fetch_last_update_run(db),
+        last_runs=await fetch_last_update_runs(db),
         totals=compute_totals(events, packages),
         packages=packages,
     )

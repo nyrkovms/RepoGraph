@@ -13,14 +13,13 @@ from app.db import loop_local_session
 from app.ecosystems.base import PackageRef
 from app.fetcher.pipeline import load_builtin_plugins, pypi_ref, sync_package
 from app.models.dependency import Dependency
-from app.models.enums import DependencyType, PackageOrigin, SyncType
+from app.models.enums import DependencyType, PackageOrigin
 from app.models.package import Package
 from app.models.run import Run
 from app.models.version import PackageVersion
 from app.services.metrics import observe_sync_duration
-from app.services.runs import FAILED, PARTIAL, SUCCESS, finish_run, start_run
+from app.services.runs import FAILED, PARTIAL, SUCCESS, finish_run, progress_run, start_run
 from app.services.sync_failures import clear_sync_failure, upsert_sync_failure
-from app.services.sync_state import mark_sync_failed, mark_sync_progress, mark_sync_running, mark_sync_success
 from app.tasks.fetch_packages import ref_from_target
 
 logger = logging.getLogger(__name__)
@@ -71,7 +70,7 @@ async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str,
         run = await start_run(db, "seed", None, exclusive=False)
         assert run is not None
         run_id = run.id
-        await mark_sync_running(db, SyncType.full, packages_total=len(queue))
+        await progress_run(db, run_id, packages_total=len(queue))
         await db.commit()
 
         try:
@@ -95,7 +94,6 @@ async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str,
                 except PackageNotFound as exc:
                     failed += 1
                     logger.warning("Seed package not found: package=%s depth=%s", ref.name, depth)
-                    elapsed_ms = (perf_counter() - started) * 1000
                     await db.rollback()
                     await upsert_sync_failure(
                         db,
@@ -104,19 +102,10 @@ async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str,
                         exc=exc,
                         retryable=False,
                     )
-                    await mark_sync_failed(
-                        db,
-                        str(exc),
-                        processed=processed,
-                        total=processed + len(queue),
-                        duration_ms=elapsed_ms,
-                        operation="seed",
-                    )
                     await db.commit()
                 except Exception as exc:  # noqa: BLE001
                     failed += 1
                     logger.exception("Seed processing failed: package=%s depth=%s", ref.name, depth)
-                    elapsed_ms = (perf_counter() - started) * 1000
                     await db.rollback()
                     await upsert_sync_failure(
                         db,
@@ -124,31 +113,13 @@ async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str,
                         ref=ref,
                         exc=exc,
                     )
-                    await mark_sync_failed(
-                        db,
-                        str(exc),
-                        processed=processed,
-                        total=processed + len(queue),
-                        duration_ms=elapsed_ms,
-                        operation="seed",
-                    )
                     await db.commit()
-                    continue
 
-                await mark_sync_progress(db, processed=processed)
-                sync_state = await mark_sync_running(db, SyncType.full, packages_total=processed + len(queue))
-                sync_state.packages_synced = processed
+                await progress_run(db, run_id, packages_total=processed + failed + len(queue),
+                                   packages_checked=processed + failed, packages_updated=processed, packages_failed=failed)
                 await db.commit()
 
             elapsed_ms = (perf_counter() - started) * 1000
-            await mark_sync_success(
-                db,
-                processed=processed,
-                total=processed,
-                duration_ms=elapsed_ms,
-                operation="seed",
-            )
-            await db.commit()
             observe_sync_duration("seed", elapsed_ms / 1000.0)
         except Exception as exc:
             await db.rollback()
@@ -176,7 +147,8 @@ async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str,
 async def _finish(db, run_id, status: str, processed: int, failed: int, error: str | None = None) -> None:
     # The run object was expired by a rollback; load it again before closing.
     run = await db.get(Run, run_id)
-    await finish_run(db, run, status, error=error, packages_total=processed + failed, packages_updated=processed,
+    await finish_run(db, run, status, error=error, packages_total=processed + failed,
+                     packages_checked=processed + failed, packages_updated=processed,
                      packages_failed=failed)
     await db.commit()
 

@@ -1,9 +1,15 @@
 """PyPI names and purls: PEP 503 normalization, no namespace (SPEC-MULTI-ECOSYSTEM.md §4)."""
 
+import re
+
 from packaging.utils import canonicalize_name
 
 from app.ecosystems.base import PackageRef
 from app.ecosystems.purl import Purl, parse
+
+
+# PEP 508 project names: letters, digits, `.`, `_`, `-`, starting and ending with a letter or digit.
+_NAME = re.compile(r"^([A-Z0-9]|[A-Z0-9][A-Z0-9._-]*[A-Z0-9])$", re.IGNORECASE)
 
 
 class PyPICoordinates:
@@ -11,6 +17,8 @@ class PyPICoordinates:
         name = raw.strip()
         if not name:
             raise ValueError("empty PyPI project name")
+        if not _NAME.match(name):
+            raise ValueError(f"not a PyPI project name: {raw!r}")
         return PackageRef(ecosystem="pypi", namespace="", name=canonicalize_name(name))
 
     def from_purl(self, purl: str) -> tuple[PackageRef, str | None]:

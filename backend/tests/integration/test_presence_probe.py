@@ -214,8 +214,8 @@ def test_a_package_that_cannot_be_read_is_recorded_per_purl(monkeypatch: pytest.
 
         assert (result.updated, result.failed) == (0, 1)
         failure = await db.scalar(select(SyncFailure).where(SyncFailure.package_ref == purl))
-        assert (failure.operation, failure.ecosystem, failure.package_name, failure.retryable) == (
-            "presence_probe", Ecosystem.pypi, ref.name, True)
+        assert (failure.operation, failure.ecosystem, failure.registry_id, failure.retryable) == (
+            "presence_probe", Ecosystem.pypi, None, True)
         assert await _registry_ids(db, ref) == {home.id}
 
         # The package recovers on the next probe and the record goes away.

@@ -15,7 +15,6 @@ from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
 from app.models.run import Run
 from app.models.sync_state import SyncState
-from app.models.update_run import UpdateRun
 from app.tasks import daily_update
 
 
@@ -41,7 +40,6 @@ class _Plugin:
 async def _cleanup(run_id: str) -> None:
     async with loop_local_session() as db:
         await db.execute(delete(Run).where(Run.id == uuid.UUID(run_id)))
-        await db.execute(delete(UpdateRun).where(UpdateRun.id == uuid.UUID(run_id)))
         await db.commit()
 
 
@@ -72,8 +70,7 @@ def test_changed_packages_are_reread_and_the_run_is_journaled(monkeypatch) -> No
                 run = await db.get(Run, uuid.UUID(summary["run_id"]))
                 assert (run.operation, run.ecosystem.value, run.status) == ("daily_update", "pypi", "success")
                 assert run.packages_changed == 2 and run.per_registry["pypi"]["changed"] == 2
-                legacy = await db.get(UpdateRun, uuid.UUID(summary["run_id"]))
-                assert legacy.status.value == "success" and legacy.packages_updated == 2
+                assert run.packages_updated == 2
 
         asyncio.run(check())
     finally:

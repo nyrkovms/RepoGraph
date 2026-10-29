@@ -7,7 +7,7 @@ from app.api.v1.updates import SummaryEvent, aggregate_summary, compute_summary_
 T0 = datetime(2026, 10, 27, 3, 0, tzinfo=timezone.utc)
 
 
-def ev(package, kind, minutes=0, version=None, details=None, id=0):
+def ev(package, kind, minutes=0, version=None, details=None, id=0, ecosystem="pypi", namespace=""):
     return SummaryEvent(
         package=package,
         kind=kind,
@@ -15,6 +15,8 @@ def ev(package, kind, minutes=0, version=None, details=None, id=0):
         version=version,
         details=details or {},
         id=id,
+        ecosystem=ecosystem,
+        namespace=namespace,
     )
 
 
@@ -154,9 +156,56 @@ def test_totals() -> None:
         "releases": 3,
         "yanked": 1,
         "removed": 1,
+        "deprecated": 0,
+        "sources_added": 0,
         "vulnerabilities": 1,
         "unavailable": 1,
     }
+
+
+def test_same_name_in_two_ecosystems_is_two_packages() -> None:
+    events = [
+        ev("x", "release_yanked", 1, "1.0"),
+        ev("x", "release_yanked", 2, "2.0", ecosystem="npm"),
+        ev("x", "release_yanked", 3, "3.0", ecosystem="npm", namespace="@corp"),
+    ]
+    packages = aggregate_summary(events)
+    assert {(p.ecosystem, p.purl): p.yanked for p in packages} == {
+        ("pypi", "pkg:pypi/x"): ["1.0"],
+        ("npm", "pkg:npm/x"): ["2.0"],
+        ("npm", "pkg:npm/%40corp/x"): ["3.0"],
+    }
+    assert compute_totals(events, packages).packages == 3
+
+
+def test_deprecated_and_sources_added() -> None:
+    events = [
+        release("pkg", "2.0.0", "1.9.0", "major", minutes=1, id=1),
+        ev("pkg", "release_yanked", 2, "1.8.0", id=2),
+        ev("pkg", "release_deprecated", 3, "1.7.0", {"message": "old"}, id=3),
+        ev("pkg", "source_added", 4, None, {"registry": "corp-pypi"}, id=4),
+        ev("pkg", "source_added", 5, "2.0.0", {"registry": "corp-pypi"}, id=5),
+        ev("pkg", "source_added", 6, "2.0.0", {"registry": "mirror"}, id=6),
+        ev("other", "source_added", 7, "3.1", id=7),
+    ]
+    packages = aggregate_summary(events)
+    pkg = next(p for p in packages if p.name == "pkg")
+    assert pkg.flags == ["yanked", "deprecated", "major"]
+    assert pkg.deprecated == ["1.7.0"]
+    assert pkg.sources_added == ["corp-pypi", "mirror"]
+    other = next(p for p in packages if p.name == "other")
+    assert other.flags == [] and other.sources_added == ["3.1"]      # no registry in details: the version
+    totals = compute_totals(events, packages)
+    assert (totals.deprecated, totals.sources_added) == (1, 4)
+
+
+def test_deprecated_ranks_between_yanked_and_major() -> None:
+    events = [
+        release("major-pkg", "2.0", "1.0", "major", minutes=5),
+        ev("deprecated-pkg", "release_deprecated", 1, "1.0"),
+        ev("yanked-pkg", "release_yanked", 1, "1.0"),
+    ]
+    assert [p.name for p in aggregate_summary(events)] == ["yanked-pkg", "deprecated-pkg", "major-pkg"]
 
 
 # --- window computation

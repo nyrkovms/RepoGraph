@@ -10,7 +10,7 @@ from app.models.enums import Ecosystem
 
 
 class Run(Base):
-    """Journal of operations (daily update, seed, ...); replaces update_runs, which 0007 removes."""
+    """Journal of operations (daily update, seed, presence probe, retry; IMPL R1)."""
 
     __tablename__ = "runs"
     __table_args__ = (Index("idx_runs_op_eco_started", "operation", "ecosystem", text("started_at DESC")),)

@@ -23,6 +23,7 @@ const FLAG_LABELS = {
   vulnerability_added: "new vulnerability",
   removed: "removed",
   yanked: "yanked",
+  deprecated: "deprecated",
   major: "major",
 };
 
@@ -37,6 +38,8 @@ const KIND_LABELS = {
   vulnerability_withdrawn: "Vulnerability withdrawn",
   project_unavailable: "Project unavailable",
   project_restored: "Project restored",
+  release_deprecated: "Release deprecated",
+  source_added: "Source added",
 };
 
 const WARN_KINDS = new Set(["release_yanked", "release_removed", "vulnerability_added", "project_unavailable"]);
@@ -210,6 +213,7 @@ export default function UpdatesPage() {
       });
   }, [period, customSince, customUntil, waitingForRange]);
 
+  // `name` is the row key: the purl (the API takes it as `package`), or the bare name of an older API.
   async function loadEvents(name, cursor = null) {
     const current = (eventsRequestIds.current[name] || 0) + 1;
     eventsRequestIds.current[name] = current;
@@ -317,18 +321,20 @@ export default function UpdatesPage() {
 
           <ul className="result-list">
             {packages.map((item) => {
-              const isOpen = Boolean(expanded[item.name]);
+              // purl: with several ecosystems two entries can share a name.
+              const rowKey = item.purl || item.name;
+              const isOpen = Boolean(expanded[rowKey]);
               const bump = bumpOf(item);
               const flags = flagsOf(item);
               return (
-                <li key={item.name}>
+                <li key={rowKey}>
                   <div className="update-row-head">
                     <button
                       type="button"
                       className="tree-toggle"
                       aria-expanded={isOpen}
                       aria-label={`${isOpen ? "Hide" : "Show"} events for ${item.name}`}
-                      onClick={() => toggleRow(item.name)}
+                      onClick={() => toggleRow(rowKey)}
                     >
                       {isOpen ? "-" : "+"}
                     </button>
@@ -355,7 +361,7 @@ export default function UpdatesPage() {
                   <CompactList label="Removed" items={item.removed} warn />
                   <CompactList label="Vulnerabilities" items={item.vulnerabilities} warn />
                   {isOpen ? (
-                    <EventTimeline state={events[item.name]} onLoadMore={() => loadEvents(item.name, events[item.name]?.cursor)} />
+                    <EventTimeline state={events[rowKey]} onLoadMore={() => loadEvents(rowKey, events[rowKey]?.cursor)} />
                   ) : null}
                 </li>
               );

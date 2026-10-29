@@ -7,11 +7,14 @@ from pydantic import BaseModel, Field
 
 class PackageListItem(BaseModel):
     ecosystem: str
+    namespace: str
     name: str
     normalized_name: str
+    purl: str
+    origin: str
     description: str | None
     license_spdx: str | None
-    latest_version: str
+    latest_version: str | None
     updated_at: datetime
     has_vulnerabilities: bool
 
@@ -22,18 +25,32 @@ class PackageListResponse(BaseModel):
     has_more: bool
 
 
+class PackageSourceItem(BaseModel):
+    registry: str
+    enabled: bool
+    primary: bool
+    first_seen_at: datetime
+    checked_at: datetime | None
+    missing_since: datetime | None
+
+
 class PackageDetailResponse(BaseModel):
     ecosystem: str
     name: str
     normalized_name: str
+    namespace: str = ""
+    purl: str
+    origin: str
     description: str | None
     homepage_url: str | None
     repository_url: str | None
     documentation_url: str | None
     license_raw: str | None
     license_spdx: str | None
-    latest_version: str
+    latest_version: str | None
     synced_at: datetime
+    unavailable_at: datetime | None = None
+    sources: list[PackageSourceItem] = Field(default_factory=list)
 
 
 class VersionItem(BaseModel):
@@ -49,13 +66,24 @@ class VersionListResponse(BaseModel):
     has_more: bool
 
 
+class VersionSourceItem(BaseModel):
+    registry: str
+    enabled: bool
+    status: str
+    first_seen_at: datetime
+
+
 class VersionDetailResponse(BaseModel):
     name: str
+    purl: str
     version: str
     release_date: datetime | None
     status: str
     requires_python: str | None
+    engines: dict | None = None
     features: dict | None
+    dependencies_state: str
+    sources: list[VersionSourceItem] = Field(default_factory=list)
 
 
 class DependencyNode(BaseModel):
@@ -75,6 +103,7 @@ DependencyNode.model_rebuild()
 class DependencyTreeResponse(BaseModel):
     package: str
     version: str
+    profile: str
     depth: int
     dependencies: list[DependencyNode]
 
@@ -82,10 +111,11 @@ class DependencyTreeResponse(BaseModel):
 class ArtifactItem(BaseModel):
     filename: str
     artifact_type: str
-    download_url: str
+    download_url: str | None
     size_bytes: int | None
     checksum_sha256: str | None
     checksum_md5: str | None
+    registry: str | None = None
 
 
 class ArtifactListResponse(BaseModel):

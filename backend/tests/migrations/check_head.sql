@@ -1,6 +1,6 @@
 -- Invariants that must hold after `alembic upgrade head` on seed_0005.sql (IMPL §2 "Проверка").
 -- Migration WPs extend this file with checks for their own transformations (0006: namespace, sort_key,
--- version_sources, dependencies_state...).
+-- version_sources, dependencies_state...; 0007: the contracted schema).
 DO $$
 BEGIN
   IF (SELECT count(*) FROM packages) <> 4 THEN RAISE EXCEPTION 'packages count changed'; END IF;
@@ -54,7 +54,7 @@ BEGIN
       JOIN package_versions v ON v.id = vs.version_id JOIN packages p ON p.id = v.package_id
       WHERE p.normalized_name = 'flask' AND v.version = '2.0.0') <> 'yanked/pypi' THEN RAISE EXCEPTION '0006: version_sources status'; END IF;
   IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'package_events'::regclass AND contype = 'f'
-             AND confrelid = 'update_runs'::regclass) THEN RAISE EXCEPTION '0006: run_id FK to update_runs left'; END IF;
+             AND confrelid = to_regclass('update_runs')) THEN RAISE EXCEPTION '0006: run_id FK to update_runs left'; END IF;
   IF (SELECT count(*) FROM pg_enum WHERE enumlabel IN ('rpm', 'superseded', 'release_deprecated', 'source_added')) <> 4 THEN
     RAISE EXCEPTION '0006: enum values'; END IF;
   IF (SELECT data_type FROM information_schema.columns WHERE table_name = 'package_versions' AND column_name = 'version') <> 'text'
@@ -68,4 +68,43 @@ BEGIN
   IF (SELECT count(*) FROM pg_constraint WHERE conname IN ('uq_packages_id_ecosystem', 'uq_registries_id_ecosystem',
       'fk_pkgreg_package_ecosystem', 'fk_pkgreg_registry_ecosystem')) <> 4 THEN RAISE EXCEPTION '0006: constraints'; END IF;
   RAISE NOTICE 'ok: 0006 transformations';
+END $$;
+
+-- 0007 (contract): IMPL §2.
+DO $$
+DECLARE
+  dropped text[] := ARRAY['packages.deprecated', 'packages.deprecation_message', 'packages.deprecation_alternative',
+    'packages.last_serial', 'package_registries.is_primary', 'package_versions.requires_python',
+    'package_versions.needed_in_index', 'artifacts.requires_dist_metadata', 'dist_tags.id', 'registries.tier',
+    'registries.registry_type', 'registries.api_url', 'registries.url_pattern', 'registries.auth_required',
+    'registries.auth_config', 'registries.sync_enabled', 'registries.sync_priority', 'sync_states.sync_type',
+    'sync_states.packages_synced', 'sync_states.packages_total', 'sync_failures.package_name'];
+  required text[] := ARRAY['packages.namespace', 'package_registries.ecosystem', 'package_versions.sort_key',
+    'package_versions.is_prerelease', 'dependencies.dependency_namespace', 'registries.protocol',
+    'sync_failures.ecosystem', 'sync_failures.package_ref'];
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public'
+             AND table_name || '.' || column_name = ANY(dropped)) THEN RAISE EXCEPTION '0007: a dropped column is left'; END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND is_nullable = 'YES'
+             AND table_name || '.' || column_name = ANY(required)) THEN RAISE EXCEPTION '0007: NOT NULL missing'; END IF;
+  IF to_regclass('update_runs') IS NOT NULL THEN RAISE EXCEPTION '0007: update_runs left'; END IF;
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname IN ('update_run_status_enum', 'sync_type_enum', 'registry_type_enum', 'tier_enum')) THEN
+    RAISE EXCEPTION '0007: old enum types left'; END IF;
+  IF EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_namespace n ON n.oid = c.connamespace
+             WHERE n.nspname = 'public' AND NOT c.convalidated) THEN RAISE EXCEPTION '0007: a constraint is not validated'; END IF;
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname LIKE 'ck_0007_%') THEN RAISE EXCEPTION '0007: helper checks left'; END IF;
+  IF (SELECT confrelid::regclass::text FROM pg_constraint WHERE conname = 'package_events_run_id_fkey') IS DISTINCT FROM 'runs' THEN
+    RAISE EXCEPTION '0007: run_id FK to runs'; END IF;
+  IF (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'dist_tags_pkey') <> 'PRIMARY KEY (package_id, tag)' THEN
+    RAISE EXCEPTION '0007: dist_tags key'; END IF;
+  IF (SELECT count(*) FROM dist_tags) <> 1 THEN RAISE EXCEPTION '0007: dist_tags rows lost'; END IF;
+  IF (SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_sync_failures_key') NOT LIKE
+     '%UNIQUE INDEX uq_sync_failures_key ON public.sync_failures USING btree (operation, ecosystem, registry_id, package_ref) NULLS NOT DISTINCT' THEN
+    RAISE EXCEPTION '0007: sync_failures key'; END IF;
+  IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname IN ('idx_ver_pkg_ver', 'idx_ver_needed', 'uq_artifact_version_filename',
+             'uq_sync_failures_operation_package')) THEN RAISE EXCEPTION '0007: old indexes left'; END IF;
+  IF EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE NOT i.indisvalid) THEN
+    RAISE EXCEPTION '0007: invalid index'; END IF;
+  IF (SELECT run_id FROM package_events WHERE kind = 'release_added') <> md5('run:1')::uuid THEN RAISE EXCEPTION '0007: event run_id'; END IF;
+  RAISE NOTICE 'ok: 0007 contract';
 END $$;

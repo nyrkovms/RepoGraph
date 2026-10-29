@@ -46,10 +46,7 @@ from app.models.enums import (
     PackageOrigin,
     PackageVersionStatus,
     RegistryProtocol,
-    RegistryType,
     SyncStatus,
-    SyncType,
-    Tier,
     VulnerabilitySeverity,
     VulnerabilitySource,
 )
@@ -130,6 +127,11 @@ async def sync_package(
 
     if not fetched.snapshots:
         raise PackageNotFound(plugin.coordinates.display(ref))
+    wrong = next((s.ref for s in fetched.snapshots if s.ref != ref), None)
+    if wrong is not None:
+        # A source answered for another package (an URL that meant something else upstream): writing it under
+        # `ref` would replace that package's data, or empty it.
+        raise PackageNotFound(f"{plugin.coordinates.display(ref)}: the source answered for {plugin.coordinates.display(wrong)}")
     return await write_package(db, plugin, fetched.snapshots, missing_registry_ids=fetched.missing, origin=origin, run_id=run_id)
 
 
@@ -170,7 +172,7 @@ async def _mark_registries_missing(db: AsyncSession, package_id, registry_ids: S
         await db.execute(
             update(PackageRegistry)
             .where(PackageRegistry.package_id == package_id, PackageRegistry.registry_id.in_(list(registry_ids)))
-            .values(is_primary=False, checked_at=now, missing_since=func.coalesce(PackageRegistry.missing_since, now))
+            .values(checked_at=now, missing_since=func.coalesce(PackageRegistry.missing_since, now))
         )
         await db.flush()
 
@@ -367,10 +369,6 @@ async def _upsert_package(
         "deprecation": dict(data.deprecation) if data.deprecation is not None else None,
         "unavailable_at": None,
     }
-    # packages.last_serial is read by the 0005-era daily update until 0007 drops it (upstream_revision replaces it).
-    primary_revision = merged.registry_revisions.get(merged.primary_registry_id)
-    if data.ref.ecosystem == "pypi" and primary_revision is not None and primary_revision.isdigit():
-        values["last_serial"] = int(primary_revision)
 
     if existing:
         for key, value in values.items():
@@ -401,7 +399,6 @@ async def _upsert_package_registries(
             registry_id=registry_id,
             ecosystem=package.ecosystem,
             first_seen_at=now,
-            is_primary=registry_id == merged.primary_registry_id,
             upstream_revision=revision,
             checked_at=now,
             missing_since=None,
@@ -410,7 +407,6 @@ async def _upsert_package_registries(
             index_elements=["package_id", "registry_id"],
             set_={
                 "ecosystem": stmt.excluded.ecosystem,
-                "is_primary": stmt.excluded.is_primary,
                 "upstream_revision": stmt.excluded.upstream_revision,
                 "checked_at": now,
                 "missing_since": None,
@@ -418,18 +414,11 @@ async def _upsert_package_registries(
         )
         await db.execute(stmt)
 
-    # Exactly one primary row, also when the previous primary source was not asked (disabled).
-    await db.execute(
-        update(PackageRegistry)
-        .where(PackageRegistry.package_id == package.id)
-        .values(is_primary=PackageRegistry.registry_id == merged.primary_registry_id)
-    )
     if missing_registry_ids:
         await db.execute(
             update(PackageRegistry)
             .where(PackageRegistry.package_id == package.id, PackageRegistry.registry_id.in_(list(missing_registry_ids)))
             .values(
-                is_primary=False,
                 checked_at=now,
                 missing_since=func.coalesce(PackageRegistry.missing_since, now),
             )
@@ -468,8 +457,6 @@ async def _upsert_versions(
             "status_reason": version.status_reason,
             "deprecation": dict(version.deprecation) if version.deprecation is not None else None,
             "engines": engines,
-            # requires_python is read by the API until E7 (IMPL T18); engines.python is the source.
-            "requires_python": (engines or {}).get("python"),
             "raw_metadata": raw_metadata,
             "sort_key": sort_key,
             "is_prerelease": is_prerelease,
@@ -699,14 +686,12 @@ async def _replace_artifacts(
             "arch": artifact.arch,
             "platform_tags": dict(artifact.platform_tags) if artifact.platform_tags is not None else None,
             "has_metadata_file": artifact.has_metadata_file,
-            "requires_dist_metadata": artifact.has_metadata_file,  # read by the 0005-era code until 0007
             **{column: artifact.checksums.get(kind) for kind, column in _CHECKSUM_COLUMNS.items()},
         }
         for version_id, artifacts in artifacts_by_version.items()
         for artifact in artifacts
     ]
     for chunk in _chunks(rows):
-        # Until 0007 drops uq_artifact_version_filename, the same file name in a second source is skipped.
         await db.execute(insert(Artifact).values(chunk).on_conflict_do_nothing())
 
 
@@ -800,7 +785,6 @@ async def ensure_version_dependencies(db: AsyncSession, package: Package, versio
     await _replace_dependency_rows(db, version_row.id, None, loaded.dependencies)
     if loaded.engines is not None:
         version_row.engines = {**(version_row.engines or {}), **loaded.engines}
-        version_row.requires_python = version_row.engines.get("python")
     version_row.features = {**features, "dependencies_hydrated": True}
     version_row.dependencies_state = DependenciesState.hydrated
     await db.execute(
@@ -951,7 +935,6 @@ async def _record_events(db: AsyncSession, package_id, events: list[EventDraft],
 async def _upsert_sync_state(db: AsyncSession, registry_id, now: datetime) -> None:
     row = await db.scalar(select(SyncState).where(SyncState.registry_id == registry_id))
     if row:
-        row.sync_type = SyncType.incremental
         row.status = SyncStatus.idle
         row.last_success_at = now
         row.last_error = None
@@ -963,13 +946,10 @@ async def _upsert_sync_state(db: AsyncSession, registry_id, now: datetime) -> No
     db.add(
         SyncState(
             registry_id=registry_id,
-            sync_type=SyncType.full,
             status=SyncStatus.idle,
             last_success_at=now,
             last_error=None,
             cursor_data={},
-            packages_synced=0,
-            packages_total=0,
         )
     )
 
@@ -984,12 +964,7 @@ async def get_or_create_pypi_registry(db: AsyncSession) -> Registry:
         ecosystem=Ecosystem.pypi,
         name="PyPI",
         slug="pypi",
-        registry_type=RegistryType.public,
         base_url="https://pypi.org/",
-        api_url="https://pypi.org/pypi/",
-        tier=Tier.tier1,
-        sync_enabled=True,
-        sync_priority=0,
         protocol=RegistryProtocol.pypi_warehouse,
         priority=0,
         enabled=True,

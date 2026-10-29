@@ -1,3 +1,4 @@
+import pytest
 import asyncio
 from unittest.mock import AsyncMock
 
@@ -186,3 +187,12 @@ def test_normalize_versions_propagates_yanked_reason() -> None:
     assert by_version["1.1.0"].status == "yanked"
     assert by_version["1.1.0"].yanked_reason == "broken build"
     assert by_version["1.0.0"].yanked_reason is None
+
+
+def test_connector_quotes_the_name_into_one_path_segment(monkeypatch) -> None:
+    # "flask/3" must not become /pypi/flask/3/json, which PyPI answers with the project flask at version 3.
+    connector = PyPIConnector(json_base_url="https://pypi.org/pypi")
+    monkeypatch.setattr(connector, "_fetch_with_retry", AsyncMock(side_effect=RuntimeError("stop")))
+    with pytest.raises(RuntimeError):
+        asyncio.run(connector.fetch_package_metadata("flask/3"))
+    connector._fetch_with_retry.assert_awaited_once_with("https://pypi.org/pypi/flask%2F3/json", "flask/3")

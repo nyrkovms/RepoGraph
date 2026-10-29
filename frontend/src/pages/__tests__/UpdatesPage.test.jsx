@@ -23,7 +23,9 @@ const SUMMARY = {
   totals: { packages: 412, releases: 655, yanked: 3, removed: 1, vulnerabilities: 2, unavailable: 0 },
   packages: [
     {
+      ecosystem: "pypi",
       name: "flask",
+      purl: "pkg:pypi/flask",
       from_version: "3.1.1",
       to_version: "3.2.0",
       max_bump: "major",
@@ -35,7 +37,9 @@ const SUMMARY = {
       last_detected_at: "2026-10-27T03:05:11Z",
     },
     {
+      ecosystem: "pypi",
       name: "requests",
+      purl: "pkg:pypi/requests",
       from_version: "2.32.4",
       to_version: "2.32.5",
       max_bump: "patch",
@@ -197,7 +201,7 @@ describe("UpdatesPage", () => {
     expect(screen.getByText("Release yanked")).toBeInTheDocument();
     expect(api.fetchUpdates).toHaveBeenCalledWith(
       expect.objectContaining({
-        package: "flask",
+        package: "pkg:pypi/flask",
         since: SUMMARY.since,
         until: SUMMARY.until,
       })

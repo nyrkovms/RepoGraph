@@ -1,6 +1,6 @@
 """PEP 508 environment for the dependency tree and resolve (SPEC-MULTI-ECOSYSTEM.md §7.3).
 
-Same semantics as the tree endpoint today (api/v1/packages.py): without an environment every marker applies;
+Same semantics as the tree endpoint today (api/v1/package_detail.py): without an environment every marker applies;
 with optional dependencies included, `extra == ...` conditions are ignored and the rest must hold.
 """
 

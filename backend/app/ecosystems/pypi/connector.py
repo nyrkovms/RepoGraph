@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -38,7 +39,7 @@ class PyPIConnector(BaseConnector):
         self.retry_jitter_seconds = settings.sync_http_retry_jitter_seconds
 
     async def fetch_package_metadata(self, name: str) -> NormalizedPackage:
-        url = f"{self.json_base_url}/{name}/json"
+        url = f"{self.json_base_url}/{quote(name, safe='')}/json"
         response = await self._fetch_with_retry(url, name)
 
         payload = response.json()
@@ -88,7 +89,7 @@ class PyPIConnector(BaseConnector):
         )
 
     async def fetch_version_dependencies(self, name: str, version: str) -> tuple[list[NormalizedDependency], str | None]:
-        url = f"{self.json_base_url}/{name}/{version}/json"
+        url = f"{self.json_base_url}/{quote(name, safe='')}/{quote(version, safe='')}/json"
         response = await self._fetch_with_retry(url, f"{name}=={version}")
         payload = response.json()
         info = payload.get("info", {})

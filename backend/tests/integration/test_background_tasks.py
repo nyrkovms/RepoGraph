@@ -49,7 +49,7 @@ def since():
     async def cleanup(db: AsyncSession) -> None:
         await db.execute(delete(Run).where(Run.operation.in_(["seed", "retry", "presence_probe", "b4-test"]),
                                            Run.started_at >= started))
-        await db.execute(delete(SyncFailure).where(SyncFailure.package_name.like(f"{PREFIX}%")))
+        await db.execute(delete(SyncFailure).where(SyncFailure.package_ref.like(f"pkg:pypi/{PREFIX}%")))
 
     yield started
     run_db(cleanup)
@@ -72,8 +72,8 @@ def _select_runs(since: datetime, operation: str):
 
 def _failures(prefix: str = PREFIX) -> dict[str, SyncFailure]:
     async def work(db: AsyncSession) -> dict[str, SyncFailure]:
-        rows = await db.scalars(select(SyncFailure).where(SyncFailure.package_name.like(f"{prefix}%")))
-        return {row.package_name: row for row in rows}
+        rows = await db.scalars(select(SyncFailure).where(SyncFailure.package_ref.like(f"pkg:pypi/{prefix}%")))
+        return {row.package_ref.removeprefix("pkg:pypi/").split("/")[0]: row for row in rows}
 
     return run_db(work)
 
@@ -106,8 +106,8 @@ def test_seed_takes_purls_and_names_and_writes_one_run(monkeypatch: pytest.Monke
         (ok, "seed"), (missing, "seed"), (boom, "seed"), (by_name, "seed")]
 
     (run,) = _runs(since, "seed")
-    assert (run.ecosystem, run.status, run.packages_total, run.packages_updated, run.packages_failed) == (
-        None, runs.PARTIAL, 5, 2, 3)
+    assert (run.ecosystem, run.status, run.packages_total, run.packages_checked, run.packages_updated,
+            run.packages_failed) == (None, runs.PARTIAL, 5, 5, 2, 3)
     assert run.finished_at is not None and {run_id for *_, run_id in seen} == {run.id}
 
     failures = _failures()
@@ -152,20 +152,20 @@ def test_retry_uses_package_ref_and_the_origin_of_the_operation(monkeypatch: pyt
         return SimpleNamespace(id=uuid.uuid4())
 
     async def due_mine(db, limit):
-        return list((await db.scalars(select(SyncFailure).where(SyncFailure.package_name.like(f"{PREFIX}%"))
+        return list((await db.scalars(select(SyncFailure).where(SyncFailure.package_ref.like(f"pkg:pypi/{PREFIX}%"))
                                       .where(SyncFailure.operation.not_in(["presence_probe"])))).all())
 
-    def failure(name: str, operation: str, package_ref: str | None, **extra) -> SyncFailure:
-        return SyncFailure(operation=operation, package_name=name, package_ref=package_ref, error_class="ReadTimeout",
-                           error_message="slow", retryable=True, **extra)
+    def failure(name: str, operation: str, package_ref: str) -> SyncFailure:
+        return SyncFailure(operation=operation, package_ref=package_ref, ecosystem=Ecosystem.pypi, error_class="ReadTimeout",
+                           error_message="slow", retryable=True)
 
     async def setup(db: AsyncSession) -> None:
         db.add_all([
-            failure(by_purl, "seed", f"pkg:pypi/{by_purl}", ecosystem=Ecosystem.pypi),
-            failure(legacy, "fetch", None),                                  # written before package_ref existed
-            failure(daily, "daily_update", f"pkg:pypi/{daily}", ecosystem=Ecosystem.pypi),
-            failure(missing, "seed", f"pkg:pypi/{missing}", ecosystem=Ecosystem.pypi),
-            failure(bad_ref, "seed", "pkg:cobol/whatever"),
+            failure(by_purl, "seed", f"pkg:pypi/{by_purl}"),
+            failure(legacy, "fetch", f"pkg:pypi/{legacy}"),
+            failure(daily, "daily_update", f"pkg:pypi/{daily}"),
+            failure(missing, "seed", f"pkg:pypi/{missing}"),
+            failure(bad_ref, "seed", f"pkg:pypi/{bad_ref}/x/y"),   # a purl the plugin cannot read
         ])
 
     run_db(setup)
@@ -194,10 +194,10 @@ def test_retry_leaves_probe_failures_to_the_probe(since: datetime) -> None:
     name = _name("probe")
 
     async def work(db: AsyncSession) -> list[str]:
-        db.add(SyncFailure(operation="presence_probe", package_name=name, package_ref=f"pkg:pypi/{name}",
+        db.add(SyncFailure(operation="presence_probe", package_ref=f"pkg:pypi/{name}",
                            ecosystem=Ecosystem.pypi, error_class="ReadTimeout", error_message="slow", retryable=True))
         await db.flush()
-        return [row.package_name for row in await list_due_sync_failures(db, 10_000)]
+        return [row.package_ref.removeprefix("pkg:pypi/") for row in await list_due_sync_failures(db, 10_000)]
 
     assert name not in run_db(work)
 

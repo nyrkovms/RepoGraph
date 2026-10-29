@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db_session
 from app.api.v1.packages import PackageSort, _query_packages
+from app.models.enums import Ecosystem, PackageOrigin
 from app.schemas.search import SearchResponse
 
 router = APIRouter()
@@ -14,6 +15,9 @@ router = APIRouter()
 async def search_packages(
     q: str = Query(..., min_length=1),
     db: AsyncSession = Depends(get_db_session),
+    ecosystem: list[Ecosystem] | None = Query(default=None),
+    registry: str | None = Query(default=None),
+    origin: list[PackageOrigin] | None = Query(default=None),
     license: str | None = Query(default=None),
     has_vulnerabilities: bool | None = Query(default=None),
     updated_after: datetime | None = Query(default=None),
@@ -24,6 +28,9 @@ async def search_packages(
     data, next_cursor, has_more = await _query_packages(
         db=db,
         q=q,
+        ecosystems=ecosystem,
+        registry=registry,
+        origins=origin,
         license=license,
         has_vulnerabilities=has_vulnerabilities,
         updated_after=updated_after,
