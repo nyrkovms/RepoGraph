@@ -5,6 +5,7 @@ Seed, daily update, retries and lazy fetch call `sync_package`: fetch the packag
 Callers commit; nothing here does.
 """
 
+import hashlib
 import logging
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
@@ -17,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.connectors.base import PackageNotFound
 from app.ecosystems.base import (
     EcosystemPlugin,
+    FetchedDocument,
     InvalidVersion,
     MergedPackage,
     MergedVersion,
@@ -54,6 +56,7 @@ from app.models.package import Package
 from app.models.package_event import PackageEvent
 from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
+from app.models.source_document import SourceDocument
 from app.models.sync_state import SyncState
 from app.models.version import PackageVersion
 from app.models.version import VersionSource
@@ -775,6 +778,7 @@ async def ensure_version_dependencies(db: AsyncSession, package: Package, versio
     version_row.metadata_registry_id = registry_id
     adapter = plugin.adapter(sources.registry_config(registry))
     loaded = await adapter.fetch_version_dependencies(ref, version_row.version, _ProfileLookup(plugin, [adapter.registry]))
+    await store_documents(db, registry_id, loaded.documents)
 
     features = dict(version_row.features or {})
     if not loaded.available:
@@ -794,6 +798,18 @@ async def ensure_version_dependencies(db: AsyncSession, package: Package, versio
     )
     await db.flush()
     await resolve_dependency_links(db, [version_row.id])
+
+
+async def store_documents(db: AsyncSession, registry_id, documents: Sequence[FetchedDocument]) -> None:
+    """Upstream documents the metadata came from (source_documents), replaced when fetched again."""
+    now = datetime.now(UTC)
+    for document in documents:
+        values = {
+            "content": document.content, "content_type": document.content_type[:64],
+            "sha256": hashlib.sha256(document.content).hexdigest(), "etag": document.etag, "fetched_at": now,
+        }
+        stmt = insert(SourceDocument).values(registry_id=registry_id, path=document.path, **values)
+        await db.execute(stmt.on_conflict_do_update(index_elements=["registry_id", "path"], set_=values))
 
 
 async def _dependencies_source(db: AsyncSession, package: Package, version_row: PackageVersion) -> Registry | None:
