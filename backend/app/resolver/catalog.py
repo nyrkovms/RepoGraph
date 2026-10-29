@@ -6,7 +6,7 @@ import logging
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
-from typing import cast
+from typing import Any, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,9 +20,11 @@ from app.ecosystems.base import (
     SourceProfile,
     VersionStatus,
 )
+from app.fetcher.discovery import NegativeCache
 from app.fetcher.pipeline import dependency_from_row, find_package, source_dependencies, sync_package
 from app.models.artifact import Artifact
 from app.models.enums import PackageOrigin
+from app.models.package_registry import PackageRegistry
 from app.models.version import PackageVersion
 from app.services import visibility
 
@@ -105,13 +107,36 @@ class DbCatalog:
         return deps
 
     async def ensure(self, ref: PackageRef, profile: SourceProfile) -> bool:
-        """Lazy fetch of a package the catalog does not have, origin=discovered, committed at once so a later failure
-        of the resolve keeps it. A catalog package the profile does not see is not fetched again: finding it in more
-        sources is the presence probe's job (SPEC §6.6), and a re-read per resolve would only move its revision."""
-        if await find_package(self.db, ref) is not None:
-            return False
+        """Lazy fetch, committed at once so a later failure of the resolve keeps it. A package the catalog does not
+        have is fetched from the profile's sources (origin=discovered). A catalog package the profile does not see is
+        looked for in the profile's sources it is not linked to yet (torch synced from pypi.org, resolved through the
+        CUDA index); a source that does not have it is remembered in the negative cache, so a resolve does not ask
+        again, and a source that has it joins the package's sources for everyone."""
+        package = await find_package(self.db, ref)
+        if package is None:
+            return await self._sync(ref, origin=PackageOrigin.discovered, profile=profile)
+        linked = {str(r) for r in (await self.db.scalars(
+            select(PackageRegistry.registry_id).where(PackageRegistry.package_id == package.id)
+        )).all()}
+        purl = self.plugin.coordinates.to_purl(ref)
+        async with NegativeCache.open() as cache:
+            unlinked = [r for r in self.plugin.sources_for(ref, profile)
+                        if r.id not in linked and not await cache.is_absent(r, purl)]
+            if not unlinked:
+                return False
+            found = await self._sync(ref, origin=package.origin, extra_registries=unlinked)
+            now_linked = {str(r) for r in (await self.db.scalars(
+                select(PackageRegistry.registry_id).where(PackageRegistry.package_id == package.id,
+                                                          PackageRegistry.missing_since.is_(None))
+            )).all()}
+            for registry in unlinked:
+                if registry.id not in now_linked:
+                    await cache.remember_absent(registry, purl)
+        return found and any(r.id in now_linked for r in unlinked)
+
+    async def _sync(self, ref: PackageRef, **kwargs: Any) -> bool:
         try:
-            await sync_package(self.db, ref, origin=PackageOrigin.discovered, profile=profile)
+            await sync_package(self.db, ref, **kwargs)
         except PackageNotFound:
             await self.db.rollback()
             return False

@@ -537,3 +537,35 @@ def test_detector_bounds_the_concurrency(monkeypatch) -> None:
     result = asyncio.run(detector.detect([_tracked(f"p{i}", '"a"') for i in range(8)], {}))
 
     assert result.changed == [] and result.missing == [] and peak == 3
+
+
+def test_versions_are_grouped_by_their_pep440_normal_form() -> None:
+    files = parse_html_page(
+        _anchor("demo-1.0.0.RC1.tar.gz") + _anchor("demo-1.0.0rc1-py3-none-any.whl"), PAGE)
+    assert {version: len(parsed) for version, parsed in group_versions(_ref("demo"), files).items()} == {"1.0.0rc1": 2}
+
+
+def test_pep691_empty_yank_reason_is_still_yanked() -> None:
+    page = {"name": "demo", "files": [
+        {"filename": "demo-1.0.tar.gz", "url": "demo-1.0.tar.gz", "hashes": {}, "yanked": ""}]}
+    (file,) = simple.parse_json_page(page, PAGE)
+    assert (file.yanked, file.yanked_reason) == (True, None)
+
+
+def test_metadata_url_goes_before_a_query_string(serve) -> None:
+    signed = "https://files.example/demo-1.0-py3-none-any.whl?token=abc"
+    page = _anchor("demo-1.0-py3-none-any.whl", 'data-core-metadata="true"', href=signed)
+    index = serve({PAGE: _html(page),
+                   "https://files.example/demo-1.0-py3-none-any.whl.metadata?token=abc":
+                       httpx.Response(200, content=b"Metadata-Version: 2.1\nName: demo\nVersion: 1.0\nRequires-Dist: idna\n")})
+    result = _deps(_adapter(_registry("https://idx.example/simple/")), "demo", "1.0")
+    assert [d.target.name for d in result.dependencies] == ["idna"]
+    assert index.urls[-1] == "https://files.example/demo-1.0-py3-none-any.whl.metadata?token=abc"
+
+
+def test_detector_survives_one_failing_page(serve) -> None:
+    serve({f"{CPU}changed/": _conditional('"old"', new_etag='"new"'), f"{CPU}broken/": httpx.Response(503)})
+    detector = _adapter().change_detector()
+    result = asyncio.run(detector.detect([_tracked("changed", '"old"'), _tracked("broken", '"b"')], {}))
+    assert [(p.ref.name, revision) for p, revision in result.changed] == [("changed", '"new"')]
+    assert result.missing == []

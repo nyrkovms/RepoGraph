@@ -205,10 +205,13 @@ def test_pytorch_file_is_importable_and_valid() -> None:
     path = Path(__file__).resolve().parents[2] / "registries.pytorch.yaml"
     document = parse_import(path.read_text(encoding="utf-8"))
     assert [(r.slug, r.protocol, r.routing["mode"]) for r in document.registries] == [
-        ("pytorch-cpu", "pypi-simple", "exclusive"), ("pytorch-cu121", "pypi-simple", "exclusive"),
-        ("pytorch-cu128", "pypi-simple", "exclusive")]
+        ("pytorch-cpu", "pypi-simple", "allow"), ("pytorch-cu121", "pypi-simple", "allow"),
+        ("pytorch-cu128", "pypi-simple", "allow")]
     for registry in document.registries:
         validate_registry(RegistryFields.from_body(registry))
     assert {p.slug: [m.slug for m in p.registries] for p in document.profiles} == {
         "cpu": ["pytorch-cpu", "pypi"], "cuda121": ["pytorch-cu121", "pypi"], "cuda128": ["pytorch-cu128", "pypi"]}
     assert not any(p.is_default for p in document.profiles)
+    # exclusive inside the profile only: the catalog keeps reading torch from pypi.org as well
+    assert {p.slug: p.registries[0].routing_override["mode"] for p in document.profiles} == {
+        "cpu": "exclusive", "cuda121": "exclusive", "cuda128": "exclusive"}

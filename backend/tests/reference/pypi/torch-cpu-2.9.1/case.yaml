@@ -1,6 +1,8 @@
 description: >
-  PyTorch CPU index for torch (exclusive routing), pypi.org for the rest. torch 2.9.1+cpu carries PEP 658 metadata
-  without nvidia-* requirements, while torch 2.9.1 on pypi.org has them: the index's own metadata must win.
+  PyTorch CPU index for torch (exclusive routing), pypi.org for the rest. torch==2.9.1 picks the local build
+  2.9.1+cpu, a version only the index publishes, and its PEP 658 metadata has no nvidia-* requirements (the Linux
+  wheel of torch 2.9.1 on pypi.org has them). Per-source variants of one version string are covered by
+  tests/integration/test_source_dependencies.py: on the real index the plain 2.9.1 is macOS-only.
 roots:
   - {purl: pkg:pypi/torch, constraint: "==2.9.1"}
 environment: {python_version: "3.12", python_full_version: "3.12.7", sys_platform: linux, os_name: posix,

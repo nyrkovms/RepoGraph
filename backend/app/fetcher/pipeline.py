@@ -832,40 +832,32 @@ async def source_dependencies(
     The metadata source gives the canonical set. Another source is read lazily the first time a reader takes the
     version from it: its digest is kept in version_sources, and where it differs from the canonical digest its own
     set is stored as a variant (torch 2.9.1 on the PyTorch CPU index has no nvidia-* requirements); no metadata
-    makes them unknown. The source row is locked while it is read, so two readers do not both write the variant.
+    makes them unknown. The source row is locked only while the source is read, so two readers do not both write
+    the variant and plain reads do not queue behind each other.
     None = unknown.
     """
     version_id, before = version_row.id, version_row.dependencies_state
     await ensure_version_dependencies(db, package, version_row)
     changed = version_row.dependencies_state != before
     if registry_id != str(version_row.metadata_registry_id):
-        source = await db.scalar(
-            select(VersionSource).where(VersionSource.version_id == version_id,
-                                        VersionSource.registry_id == uuid.UUID(registry_id))
-            .with_for_update()
-        )
+        source_key = (VersionSource.version_id == version_id, VersionSource.registry_id == uuid.UUID(registry_id))
+        source = await db.scalar(select(VersionSource).where(*source_key))
         if source is not None and source.status != PackageVersionStatus.removed:
             canonical_digest = await _canonical_digest(db, version_row)
-            variant = list((await db.scalars(
-                select(Dependency).where(Dependency.version_id == version_id,
-                                         Dependency.variant_registry_id == uuid.UUID(registry_id))
-            )).all())
-            digest = source.metadata_digest
-            # The canonical set moved since this source was read (another metadata source, a re-read of it): a
-            # source that matched it then has no variant rows to fall back on, so it is read again.
-            stale = digest not in (None, UNAVAILABLE_DIGEST, canonical_digest, EMPTY_DIGEST) and not variant
-            if digest is None or stale:
-                if not await _load_source_dependencies(db, package, version_row, source, canonical_digest):
-                    return None, changed   # the source could not be asked (degraded): unknown for now
-                changed = True
-                digest = source.metadata_digest
-                variant = list((await db.scalars(
-                    select(Dependency).where(Dependency.version_id == version_id,
-                                             Dependency.variant_registry_id == uuid.UUID(registry_id))
-                )).all())
+            variant = await _variant_rows(db, version_id, registry_id)
+            if _needs_reading(source.metadata_digest, canonical_digest, variant):
+                # Lock the row only to read the source, and look again: another reader may have just done it.
+                source = await db.scalar(select(VersionSource).where(*source_key).with_for_update())
+                variant = await _variant_rows(db, version_id, registry_id)
+                if source is not None and _needs_reading(source.metadata_digest, canonical_digest, variant):
+                    if not await _load_source_dependencies(db, package, version_row, source, canonical_digest):
+                        return None, changed   # the source could not be asked (degraded): unknown for now
+                    changed = True
+                    variant = await _variant_rows(db, version_id, registry_id)
+            digest = source.metadata_digest if source is not None else None
             if digest == UNAVAILABLE_DIGEST:
                 return None, changed
-            if digest != canonical_digest:
+            if digest is not None and digest != canonical_digest:
                 return variant, changed   # its own set, possibly empty
     if version_row.dependencies_state != DependenciesState.hydrated:
         return None, changed
@@ -873,6 +865,18 @@ async def source_dependencies(
         select(Dependency).where(Dependency.version_id == version_id, Dependency.variant_registry_id.is_(None))
     )).all()
     return list(rows), changed
+
+
+def _needs_reading(digest: bytes | None, canonical_digest: bytes | None, variant: list[Dependency]) -> bool:
+    """Never read; or read while it matched a canonical set that has moved since (no variant rows to fall back on)."""
+    return digest is None or (digest not in (UNAVAILABLE_DIGEST, canonical_digest, EMPTY_DIGEST) and not variant)
+
+
+async def _variant_rows(db: AsyncSession, version_id: object, registry_id: str) -> list[Dependency]:
+    return list((await db.scalars(
+        select(Dependency).where(Dependency.version_id == version_id,
+                                 Dependency.variant_registry_id == uuid.UUID(registry_id))
+    )).all())
 
 
 async def _canonical_digest(db: AsyncSession, version_row: PackageVersion) -> bytes | None:

@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
-from sqlalchemy import select, update
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -203,15 +203,26 @@ def test_priority_source_with_the_package_is_its_only_source() -> None:
     _in_rolled_back_transaction(check)
 
 
-def test_package_the_profile_does_not_see_is_not_fetched_again() -> None:
+def test_package_the_profile_does_not_see_is_looked_for_once_in_its_sources(monkeypatch) -> None:
+    from app.resolver import catalog as catalog_module
+
+    asked: list[list[str]] = []
+
+    async def absent_everywhere(db, ref, *, extra_registries=(), **_):
+        asked.append([r.slug for r in extra_registries])   # the source answered 404: nothing gets linked
+        return await pipeline.find_package(db, ref)
+
+    monkeypatch.setattr(catalog_module, "sync_package", absent_everywhere)
+
     async def check(db: AsyncSession, pypi: Registry, mirror: Registry) -> None:
         name = f"c2-test-{uuid.uuid4().hex[:10]}"
         await _write(db, name, {pypi: ["1.0"]})
-        synced = await db.scalar(select(Package.synced_at).where(Package.normalized_name == name))
-        graph = await resolve_graph(db, GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}],
-                                                            profile=await _profile(db, mirror)))
-        assert graph.error["code"] == "not_found" and graph.fetched == []
-        assert await db.scalar(select(Package.synced_at).where(Package.normalized_name == name)) == synced
+        profile = await _profile(db, mirror)
+        graph = await resolve_graph(db, GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}], profile=profile))
+        assert graph.error["code"] == "not_found" and asked == [[mirror.slug]]
+        await resolve_graph(db, GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}], profile=profile,
+                                                    options={"timeout_s": 29}))   # not the cached answer
+        assert asked == [[mirror.slug]]   # the negative cache remembers the 404
 
     _in_rolled_back_transaction(check)
 

@@ -198,7 +198,8 @@ class NormalizedPackage:
 @dataclass(frozen=True, slots=True)
 class FetchedDocument:
     """An upstream document the metadata was read from (PEP 658 `.metadata`, POM, `go.mod`), kept in
-    source_documents for re-parsing. `path` is relative to the source's base_url."""
+    source_documents for re-parsing. `path` is relative to the source's base_url, or the absolute URL of a document
+    served from elsewhere (PyTorch files live on download-r2.pytorch.org, PyPI files on files.pythonhosted.org)."""
 
     path: str
     content: bytes

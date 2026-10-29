@@ -5,6 +5,7 @@ recorded upstream responses; see tests/reference/README.md for the format."""
 
 import asyncio
 import json
+import os
 import uuid
 from pathlib import Path
 
@@ -37,11 +38,12 @@ async def _profile(db: AsyncSession, ecosystem: str, sources: list[dict]) -> str
             continue
         registry = await db.scalar(select(Registry).where(Registry.slug == source["slug"]))
         if registry is None:
-            registry = Registry(ecosystem=Ecosystem(ecosystem), slug=source["slug"], name=source["slug"],
-                                base_url=source["base_url"], protocol=RegistryProtocol(source["protocol"]),
-                                priority=source.get("priority", 50), routing=source.get("routing"), enabled=True)
+            registry = Registry(ecosystem=Ecosystem(ecosystem), slug=source["slug"], name=source["slug"])
             db.add(registry)
-            await db.flush()
+        # The case's own configuration, also over a source of that slug left in the database.
+        registry.base_url, registry.protocol = source["base_url"], RegistryProtocol(source["protocol"])
+        registry.priority, registry.routing, registry.enabled = source.get("priority", 50), source.get("routing"), True
+        await db.flush()
         members.append(registry)
     slug = f"ref-{uuid.uuid4().hex[:8]}"
     profile = SourceProfile(ecosystem=Ecosystem(ecosystem), slug=slug, name=slug, is_default=False)
@@ -62,6 +64,7 @@ def test_reference_case(case_dir: Path) -> None:
     case = yaml.safe_load((case_dir / "case.yaml").read_text())
     expected = json.loads(expected_file.read_text())
     ecosystem = case_dir.parent.name
+    allowed = {canonicalize_name(d["package"]) for d in case.get("allowed_differences") or []}
 
     async def run() -> set[tuple[str, str]]:
         engine = create_async_engine(get_settings().async_db_url, poolclass=NullPool)
@@ -75,6 +78,8 @@ def test_reference_case(case_dir: Path) -> None:
                     options={"timeout_s": 120},
                 ))
                 assert graph.error is None, graph.error
+                errors = {node.name: node.errors for node in graph.nodes if node.errors}
+                assert not {name for name in errors if canonicalize_name(name) not in allowed}, errors
                 return {(canonicalize_name(node.name), node.version) for node in graph.nodes}
             finally:
                 await db.close()
@@ -82,8 +87,10 @@ def test_reference_case(case_dir: Path) -> None:
                 await engine.dispose()
 
     ours = asyncio.run(run())
+    if os.environ.get("HTTP_RECORD_DIR"):
+        # scripts/record_fixtures.sh: the upstream answers are recorded now and expected.json is generated right after.
+        pytest.skip("recording upstream responses; the expectation is regenerated afterwards")
     native = {(canonicalize_name(item["name"]), item["version"]) for item in expected["install"]}
-    allowed = {canonicalize_name(d["package"]) for d in case.get("allowed_differences") or []}
     ours_cmp = {pair for pair in ours if pair[0] not in allowed}
     native_cmp = {pair for pair in native if pair[0] not in allowed}
     matched = len(ours_cmp & native_cmp) / max(len(native_cmp), 1)

@@ -30,6 +30,9 @@ mkdir -p "$FIXTURES"
 "${COMPOSE[@]}" run --rm api python -m app.cli seed --packages flask django requests
 "${COMPOSE[@]}" run --rm api pytest tests/integration
 BASE_URL="http://localhost:${API_PORT}/api/v1" ./scripts/acceptance_smoke.sh
+# The resolver reference cases recorded their upstream answers above without comparing; their expectations come
+# from the native tool against the same live sources (a new release of any dependency changes both).
+./scripts/generate_resolver_references.sh
 
 # The worker writes as root inside the container; make the files ours before counting.
 "${COMPOSE[@]}" exec -T api chmod -R a+rwX /app/tests/fixtures/http || true

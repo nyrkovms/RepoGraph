@@ -48,6 +48,14 @@ class _Stub:
         self.answers = answers
         self.calls = calls
 
+    async def fetch_package(self, ref, lookup):
+        self.calls.append(f"fetch {ref.name}")
+        versions = self.answers.get(f"package:{ref.name}")
+        if versions is None:
+            return None
+        return NormalizedPackage(ref=ref, registry_id=self.registry.id, display_name=ref.name, revision="e1",
+                                 versions=versions)
+
     async def fetch_version_dependencies(self, ref, version, lookup):
         self.calls.append(f"{ref.name}@{version}")
         return self.answers[ref.name]
@@ -61,6 +69,8 @@ def _run(monkeypatch, answers: dict[str, VersionDependencies],
     def adapter(self, registry):
         if registry.slug.startswith("d3-mirror-"):
             return _Stub(registry, answers, calls)
+        if registry.slug == "pypi" and "pypi" in answers:
+            return _Stub(registry, answers["pypi"], calls)   # pypi.org answers too (a re-read of a known package)
         return real_adapter(self, registry)
 
     monkeypatch.setattr(PyPIPlugin, "adapter", adapter)
@@ -257,5 +267,49 @@ def test_tree_reads_lazily_and_survives_a_failing_source(monkeypatch) -> None:
         tree = await routes.get_dependencies_tree("pypi", broken, "1.0", db, profile=profile, depth=1,
                                                   include_optional=False, python_version=None, os=None)
         assert (tree.dependencies_unknown, tree.dependencies) == (True, [])
+
+    _run(monkeypatch, answers, check)
+
+
+def test_package_known_from_pypi_is_linked_to_the_index_of_the_profile(monkeypatch) -> None:
+    """The stage's done criterion on a catalog that already has torch from pypi.org: resolving through the index
+    profile finds torch in the index, links it for everyone, picks the index build; pypi.org stays a source."""
+    name = f"d3-{uuid.uuid4().hex[:10]}"
+    answers = {f"package:{name}": [NormalizedVersion(version="1.0+cpu", status="active", dependencies=None)],
+               name: VersionDependencies([_dep("filelock")]),
+               "pypi": {f"package:{name}": [NormalizedVersion(version="1.0", status="active",
+                                                              dependencies=[_dep("filelock")])]}}
+
+    async def check(db: AsyncSession, pypi: Registry, mirror: Registry, calls: list[str]) -> None:
+        ref = PackageRef(ecosystem="pypi", namespace="", name=name)
+        await pipeline.write_package(db, PLUGIN, [NormalizedPackage(
+            ref=ref, registry_id=str(pypi.id), display_name=name, revision="1",
+            versions=[NormalizedVersion(version="1.0", status="active", dependencies=[_dep("filelock")])])],
+            missing_registry_ids=(), origin=PackageOrigin.seed)
+        await pipeline.write_package(db, PLUGIN, [NormalizedPackage(
+            ref=PackageRef(ecosystem="pypi", namespace="", name="filelock"), registry_id=str(pypi.id),
+            display_name="filelock", revision="1",
+            versions=[NormalizedVersion(version="1.0", status="active", dependencies=[])])],
+            missing_registry_ids=(), origin=PackageOrigin.dependency)
+        await db.commit()
+        exclusive = {"mode": "exclusive", "packages": [name]}
+        slug = f"d3-{uuid.uuid4().hex[:8]}"
+        profile = SourceProfile(ecosystem=Ecosystem.pypi, slug=slug, name=slug, is_default=False)
+        db.add(profile)
+        await db.flush()
+        db.add_all([SourceProfileRegistry(profile_id=profile.id, registry_id=mirror.id, ecosystem=Ecosystem.pypi,
+                                          position=0, routing_override=exclusive),
+                    SourceProfileRegistry(profile_id=profile.id, registry_id=pypi.id, ecosystem=Ecosystem.pypi,
+                                          position=1)])
+        await db.commit()
+
+        graph = await resolve_graph(db, GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}], profile=slug))
+        assert graph.error is None, graph.error
+        root = next(n for n in graph.nodes if n.name == name)
+        assert (root.version, root.registry) == ("1.0+cpu", mirror.slug)
+        card = await routes.get_package("pypi", name, db)
+        assert {s.registry for s in card.sources} == {"pypi", mirror.slug}   # visible from two sources
+        default = await resolve_graph(db, GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}]))
+        assert [(n.version, n.registry) for n in default.nodes if n.name == name] == [("1.0", "pypi")]
 
     _run(monkeypatch, answers, check)

@@ -16,7 +16,7 @@ from email import policy
 from email.parser import BytesParser
 from html.parser import HTMLParser
 from typing import Any, Literal
-from urllib.parse import quote, unquote, urljoin, urlsplit
+from urllib.parse import quote, unquote, urljoin, urlsplit, urlunsplit
 
 import httpx
 from packaging.tags import Tag
@@ -181,7 +181,9 @@ def parse_json_page(payload: Mapping[str, Any], page_url: str) -> list[IndexFile
             filename=str(filename), url=url,
             hashes={str(k).lower(): str(v).lower() for k, v in (item.get("hashes") or {}).items()},
             requires_python=item.get("requires-python") or None,
-            yanked=bool(yanked), yanked_reason=yanked if isinstance(yanked, str) and yanked.strip() else None,
+            # PEP 691: true or a reason string; an empty reason still means yanked.
+            yanked=yanked is True or isinstance(yanked, str),
+            yanked_reason=yanked if isinstance(yanked, str) and yanked.strip() else None,
             has_metadata=has_metadata, metadata_hashes=metadata_hashes,
             upload_time=_parse_time(item.get("upload-time")),
             size=size if isinstance(size, int) and not isinstance(size, bool) else None,
@@ -203,13 +205,13 @@ def parse_file_name(file: IndexFile) -> tuple[str, ParsedFile] | None:
     """(canonical project name, parsed file), or None for what is not a wheel or an sdist (eggs, .exe, ...)."""
     name = file.filename
     try:
+        # The PEP 440 normal form, as pip compares them: `1.0.0.RC1.tar.gz` and `1.0.0rc1-….whl` are one version,
+        # and `2.9.1` from an index and from pypi.org stay one version.
         if name.endswith(".whl"):
-            project, _, _, tags = parse_wheel_filename(name)
-            # The version as written in the file name: `2.9.1` from an index and from pypi.org stay one version.
-            return project, ParsedFile(file, name[:-4].split("-")[1], "wheel", tags)
-        project, _ = parse_sdist_filename(name)
-        stem = name[: -len(".tar.gz")] if name.endswith(".tar.gz") else name[: -len(".zip")]
-        return project, ParsedFile(file, stem.rpartition("-")[2], "sdist", frozenset())
+            project, version, _, tags = parse_wheel_filename(name)
+            return project, ParsedFile(file, str(version), "wheel", tags)
+        project, version = parse_sdist_filename(name)
+        return project, ParsedFile(file, str(version), "sdist", frozenset())
     except (InvalidWheelFilename, InvalidSdistFilename):
         return None
 
@@ -343,7 +345,8 @@ class PyPISimpleAdapter:
         if chosen is None:
             return VersionDependencies([], available=False)
 
-        url = chosen.file.url + ".metadata"
+        parts = urlsplit(chosen.file.url)
+        url = urlunsplit(parts._replace(path=parts.path + ".metadata"))   # before any query string (signed URLs)
         document = await self.get(url, {})
         document.raise_for_status()   # the page promised this file; a 404 here is a source error
         _check_hash(url, document.content, chosen.file.metadata_hashes)
@@ -405,10 +408,15 @@ class SimpleChangeDetector:
             known = package.revision or package.etag
             if known is None:
                 return package, "changed", None
-            async with semaphore:
-                response = await self.adapter.get(
-                    self.adapter.page_url(package.ref), {"Accept": ACCEPT, "If-None-Match": known}
-                )
+            try:
+                async with semaphore:
+                    response = await self.adapter.get(
+                        self.adapter.page_url(package.ref), {"Accept": ACCEPT, "If-None-Match": known}
+                    )
+            except Exception:  # noqa: BLE001 - one page failing must not fail the whole source for the day
+                logger.warning("Change check of %s in %s failed", package.ref.name, self.adapter.registry.slug,
+                               exc_info=True)
+                return package, "same", None
             if _is_missing(response):
                 # Already known to be unavailable: nothing new to report until it comes back.
                 return package, "same" if package.unavailable else "missing", None
