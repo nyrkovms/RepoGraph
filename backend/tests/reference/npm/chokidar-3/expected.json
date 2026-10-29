@@ -1,0 +1,67 @@
+{
+  "tool": "npm 10.8.2",
+  "command": [
+    "npm",
+    "install",
+    "--package-lock-only"
+  ],
+  "generated_at": "2026-10-29T17:30:58.901Z",
+  "install": [
+    {
+      "name": "anymatch",
+      "version": "3.1.3"
+    },
+    {
+      "name": "binary-extensions",
+      "version": "2.3.0"
+    },
+    {
+      "name": "braces",
+      "version": "3.0.3"
+    },
+    {
+      "name": "chokidar",
+      "version": "3.6.0"
+    },
+    {
+      "name": "fill-range",
+      "version": "7.1.1"
+    },
+    {
+      "name": "glob-parent",
+      "version": "5.1.2"
+    },
+    {
+      "name": "is-binary-path",
+      "version": "2.1.0"
+    },
+    {
+      "name": "is-extglob",
+      "version": "2.1.1"
+    },
+    {
+      "name": "is-glob",
+      "version": "4.0.3"
+    },
+    {
+      "name": "is-number",
+      "version": "7.0.0"
+    },
+    {
+      "name": "normalize-path",
+      "version": "3.0.0"
+    },
+    {
+      "name": "picomatch",
+      "version": "2.3.2"
+    },
+    {
+      "name": "readdirp",
+      "version": "3.6.0"
+    },
+    {
+      "name": "to-regex-range",
+      "version": "5.0.1"
+    }
+  ]
+}

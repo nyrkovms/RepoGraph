@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"8cca70ebe3eac322e44fb79dd5e0d127\"",
+    "last-modified": "Fri, 09 Oct 2026 12:57:26 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/express"
+  },
+  "status": 200
+}

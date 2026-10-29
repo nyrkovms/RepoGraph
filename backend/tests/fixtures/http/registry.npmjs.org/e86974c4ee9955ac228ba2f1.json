@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"cb88113394b664cd41157087fd59efd5\"",
+    "last-modified": "Thu, 20 Nov 2025 11:12:31 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/mime-types"
+  },
+  "status": 200
+}

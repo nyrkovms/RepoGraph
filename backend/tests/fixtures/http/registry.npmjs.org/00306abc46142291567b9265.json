@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"3d64b5e56b75fe6613fc9a28c4a9707b\"",
+    "last-modified": "Thu, 29 Oct 2026 16:26:16 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/react-dom"
+  },
+  "status": 200
+}

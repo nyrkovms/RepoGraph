@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"68b54b3d8efc29464fe68f7fd6919419\"",
+    "last-modified": "Fri, 09 Jun 2023 21:33:14 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/inherits"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"8912b0f2f91bca593ac446a6515f659f\"",
+    "last-modified": "Tue, 15 Sep 2026 06:12:47 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/proxy-addr"
+  },
+  "status": 200
+}

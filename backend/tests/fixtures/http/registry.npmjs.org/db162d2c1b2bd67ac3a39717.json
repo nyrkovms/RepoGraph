@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"39dac06618461b85f5c029c5859e4905\"",
+    "last-modified": "Thu, 22 Oct 2026 18:22:18 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/path-to-regexp"
+  },
+  "status": 200
+}

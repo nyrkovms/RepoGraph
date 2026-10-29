@@ -1,0 +1,11 @@
+description: >
+  react-dom 18 with react: a peer dependency (react-dom peers react@^18.3.1) satisfied by a root.
+roots:
+  - {purl: pkg:npm/react-dom, constraint: "^18.3.0"}
+  - {purl: pkg:npm/react, constraint: "^18.3.0"}
+environment: {node_version: "20.18.0", os: linux, cpu: x64}
+sources:
+  - {slug: npmjs, protocol: npm-registry, base_url: "https://registry.npmjs.org/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

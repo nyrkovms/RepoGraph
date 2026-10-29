@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"013a61dba0aea8572bead0b3acf120b6\"",
+    "last-modified": "Wed, 12 Feb 2025 19:24:58 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/call-bind-apply-helpers"
+  },
+  "status": 200
+}

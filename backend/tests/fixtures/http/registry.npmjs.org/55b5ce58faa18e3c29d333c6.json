@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"34d2e49903dfbcae7d15d827d1ddf3fa\"",
+    "last-modified": "Sat, 04 Mar 2023 04:01:47 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/normalize-path"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"02aeb72ee63cbfe65e0e1aabaa2dad62\"",
+    "last-modified": "Wed, 08 Apr 2026 16:55:15 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/side-channel-list"
+  },
+  "status": 200
+}

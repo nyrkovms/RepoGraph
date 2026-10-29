@@ -1,0 +1,14 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "last-modified": "Thu, 29 Oct 2026 17:30:13 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/mime/1.6.0"
+  },
+  "status": 200
+}

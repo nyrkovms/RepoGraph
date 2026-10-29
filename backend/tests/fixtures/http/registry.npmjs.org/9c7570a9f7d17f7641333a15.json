@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"b704fb359dd65fa71bb505a85e07070f\"",
+    "last-modified": "Wed, 11 Dec 2024 05:39:13 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/side-channel-weakmap"
+  },
+  "status": 200
+}

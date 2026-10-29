@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"ba80b3db1217e211288df7d05b667eba\"",
+    "last-modified": "Mon, 08 Dec 2025 21:09:56 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/js-tokens"
+  },
+  "status": 200
+}

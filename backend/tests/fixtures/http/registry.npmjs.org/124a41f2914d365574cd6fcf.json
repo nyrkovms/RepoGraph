@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"e427dbb4d99aa65f8708b289fa2bf6c7\"",
+    "last-modified": "Thu, 23 Jul 2026 20:20:27 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/media-typer"
+  },
+  "status": 200
+}

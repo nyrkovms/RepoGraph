@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"f0279b3718b7bec6f2c25eae17c9892d\"",
+    "last-modified": "Tue, 30 Apr 2024 16:50:27 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/is-binary-path"
+  },
+  "status": 200
+}

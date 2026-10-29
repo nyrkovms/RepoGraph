@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"ea52cf07b7b0be60aa190c7dde94ed42\"",
+    "last-modified": "Wed, 12 Jul 2023 21:25:01 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/array-flatten"
+  },
+  "status": 200
+}

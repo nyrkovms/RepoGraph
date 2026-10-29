@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"3e3a946123da28af93b8e5b9c695b678\"",
+    "last-modified": "Wed, 18 Sep 2024 05:27:13 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/braces"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"1f2bf4fae6f0bef45d6ea1b82f6f959c\"",
+    "last-modified": "Fri, 17 Nov 2023 16:22:02 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/merge-descriptors"
+  },
+  "status": 200
+}

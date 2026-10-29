@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"eb4ed2376cc0b28dbf2c6ed55308ad2d\"",
+    "last-modified": "Thu, 29 Oct 2026 16:28:57 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/scheduler"
+  },
+  "status": 200
+}

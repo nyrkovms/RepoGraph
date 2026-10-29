@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"48057d8b1d987956de98c1be04927ce3\"",
+    "last-modified": "Sun, 25 Oct 2026 23:42:40 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/iconv-lite"
+  },
+  "status": 200
+}

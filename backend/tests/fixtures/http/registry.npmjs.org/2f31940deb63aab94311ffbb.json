@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"cfe44a9efcffffffd560781d9f268ab3\"",
+    "last-modified": "Mon, 02 Dec 2024 16:34:19 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/has-symbols"
+  },
+  "status": 200
+}

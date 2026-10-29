@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"586299f9f240af2b9a9ace8e45d20404\"",
+    "last-modified": "Tue, 17 Dec 2024 02:12:48 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/dunder-proto"
+  },
+  "status": 200
+}

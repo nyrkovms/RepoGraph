@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"c91263d80749661bcb59b5dc48d6f981\"",
+    "last-modified": "Tue, 27 Oct 2026 16:26:33 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/glob-parent"
+  },
+  "status": 200
+}

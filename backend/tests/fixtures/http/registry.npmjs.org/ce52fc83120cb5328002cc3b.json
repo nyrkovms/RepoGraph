@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"c3199910ac9343709ee4d7723501e14a\"",
+    "last-modified": "Thu, 19 Dec 2024 05:58:11 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/math-intrinsics"
+  },
+  "status": 200
+}

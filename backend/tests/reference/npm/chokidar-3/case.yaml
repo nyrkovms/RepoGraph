@@ -1,0 +1,11 @@
+description: >
+  chokidar 3: fsevents is an optionalDependency limited to darwin, so on linux it is not installed (the lockfile keeps
+  it, the generator filters platform-skipped optional packages out).
+roots:
+  - {purl: pkg:npm/chokidar, constraint: "^3.6.0"}
+environment: {node_version: "20.18.0", os: linux, cpu: x64}
+sources:
+  - {slug: npmjs, protocol: npm-registry, base_url: "https://registry.npmjs.org/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

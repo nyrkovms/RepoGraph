@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/vnd.npm.install-v1+json",
+    "etag": "W/\"f52ebab80bc95845e09b9357669b9edf\"",
+    "last-modified": "Mon, 19 Oct 2026 20:52:43 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/chokidar"
+  },
+  "status": 200
+}
