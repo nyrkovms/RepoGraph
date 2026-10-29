@@ -6,7 +6,7 @@ from app.resolver.errors import (
     ResolveConflictError,
     ResolveInternalError,
     ResolveNotFoundError,
-    ResolveUpstreamTimeoutError,
+    ResolveTimeoutError,
 )
 
 
@@ -82,7 +82,7 @@ def test_resolve_endpoint_returns_result(client: TestClient) -> None:
 
 
 def test_resolve_not_found_error_mapping(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _fake_resolve(_payload):
+    async def _fake_resolve(_db, _payload):
         raise ResolveNotFoundError("missing-pkg")
 
     monkeypatch.setattr(resolve_api, "resolve_dependencies", _fake_resolve)
@@ -95,7 +95,7 @@ def test_resolve_not_found_error_mapping(client: TestClient, monkeypatch: pytest
 
 
 def test_resolve_conflict_error_mapping(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _fake_resolve(_payload):
+    async def _fake_resolve(_db, _payload):
         raise ResolveConflictError("dependency conflict", details={"root": "flask"})
 
     monkeypatch.setattr(resolve_api, "resolve_dependencies", _fake_resolve)
@@ -108,20 +108,19 @@ def test_resolve_conflict_error_mapping(client: TestClient, monkeypatch: pytest.
 
 
 def test_resolve_timeout_error_mapping(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _fake_resolve(_payload):
-        raise ResolveUpstreamTimeoutError("slow-pkg")
+    async def _fake_resolve(_db, _payload):
+        raise ResolveTimeoutError("resolve took longer than 30 s")
 
     monkeypatch.setattr(resolve_api, "resolve_dependencies", _fake_resolve)
     response = client.post("/api/v1/resolve", json=_resolve_request_payload())
     payload = response.json()
 
     assert response.status_code == 504
-    assert payload["error"]["code"] == "upstream_timeout"
-    assert payload["error"]["details"]["package"] == "slow-pkg"
+    assert payload["error"]["code"] == "resolve_timeout"
 
 
 def test_resolve_internal_error_mapping(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _fake_resolve(_payload):
+    async def _fake_resolve(_db, _payload):
         raise ResolveInternalError("internal blowup")
 
     monkeypatch.setattr(resolve_api, "resolve_dependencies", _fake_resolve)

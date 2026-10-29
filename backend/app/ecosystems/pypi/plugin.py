@@ -22,6 +22,7 @@ from app.ecosystems.merge import merge_by_priority
 from app.ecosystems.pypi.adapters import WarehouseAdapter
 from app.ecosystems.pypi.coordinates import PyPICoordinates
 from app.ecosystems.pypi.environment import PythonEnvironment, dependency_applies, parse_environment
+from app.ecosystems.pypi.resolver import RESOLVER
 from app.ecosystems.pypi.versions import PyPIVersionScheme
 from app.ecosystems.registry import register
 from app.ecosystems.routing import route
@@ -60,7 +61,7 @@ class PyPIPlugin:
         return dep.target
 
     def resolver(self) -> Resolver:
-        raise NotImplementedError("the PyPI resolver moves behind the contract with the graph format (E0-C2)")
+        return RESOLVER
 
 
 def _same_project(ref: PackageRef, pattern: str) -> bool:

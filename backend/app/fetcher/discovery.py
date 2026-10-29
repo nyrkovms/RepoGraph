@@ -81,7 +81,7 @@ class NegativeCache:
         if ttl <= 0:
             return
         try:
-            await self.client.setex(self.key(registry, purl), ttl, "1")
+            await self.client.set(self.key(registry, purl), "1", ex=ttl)
         except Exception:  # noqa: BLE001
             logger.debug("Negative cache write failed for %s in %s", purl, registry.slug)
 

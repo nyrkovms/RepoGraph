@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from datetime import datetime
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ResolveDependencyInput(BaseModel):
@@ -74,3 +77,69 @@ class ErrorPayload(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: ErrorPayload
+
+
+# --- graph format (SPEC-MULTI-ECOSYSTEM.md §9.1, IMPL R2) ----------------------------------------------------
+
+
+class GraphRoot(BaseModel):
+    purl: str
+    constraint: str = "*"
+    extras: list[str] = Field(default_factory=list)
+
+
+class GraphOptions(BaseModel):
+    include_dev: bool = False
+    include_optional: bool = False
+    timeout_s: float = Field(default=30.0, gt=0, le=120)
+
+
+class GraphResolveRequest(BaseModel):
+    ecosystem: str = "pypi"
+    profile: str | None = None
+    input_mode: Literal["requirements", "lock", "freeze"] = "requirements"   # freeze = lock
+    roots: list[GraphRoot] = Field(min_length=1, max_length=500)
+    environment: dict[str, Any] = Field(default_factory=dict)
+    options: GraphOptions = Field(default_factory=GraphOptions)
+    managed: list[GraphRoot] = Field(default_factory=list)
+
+
+class GraphNode(BaseModel):
+    id: str
+    purl: str
+    name: str
+    version: str
+    registry: str
+    depth: int
+    root: bool = False
+    hidden: bool = False
+    latest_compatible: str | None = None
+    errors: list[str] = Field(default_factory=list)
+
+
+class GraphEdge(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    source: str = Field(alias="from")
+    to: str
+    constraint: str
+    type: str
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class GraphResolveResponse(BaseModel):
+    ecosystem: str
+    profile: str
+    input_mode: str
+    strategy: str
+    emulates: str
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+    conflicts: list[dict[str, Any]] = Field(default_factory=list)
+    warnings: list[dict[str, Any]] = Field(default_factory=list)
+    fetched: list[str] = Field(default_factory=list)
+    details: dict[str, Any] = Field(default_factory=dict)
+    error: dict[str, Any] | None = None
+    resolved_at: datetime
+    catalog_revision: datetime | None
+    resolve_time_ms: float
