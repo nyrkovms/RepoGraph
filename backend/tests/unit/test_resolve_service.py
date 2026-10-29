@@ -5,7 +5,7 @@ import pytest
 from app.ecosystems.base import PackageRef, ResolvedEdge, ResolvedNode, ResolveGraph
 from app.ecosystems.registry import get_plugin, load_builtin_plugins
 from app.resolver.errors import ResolveInvalidRequest
-from app.resolver.service import _nested, _root, _roots
+from app.resolver.service import _is_newer_version, _nested, _root, _roots
 
 load_builtin_plugins()
 PLUGIN = get_plugin("pypi")
@@ -54,3 +54,11 @@ def test_root_by_purl() -> None:
     assert (pinned.ref.name, pinned.constraint) == ("torch", "==2.5.1+cu121")
     with pytest.raises(ResolveInvalidRequest):
         _root(PLUGIN, "pypi", "pkg:npm/left-pad", "*", [])
+    with pytest.raises(ResolveInvalidRequest):
+        _root(PLUGIN, "pypi", "pkg:pypi/flask", "latest", [])
+
+
+def test_is_newer_version() -> None:
+    assert _is_newer_version("3.1.3", "3.0.0") is True
+    assert _is_newer_version("3.0.0", "3.0.0") is False
+    assert _is_newer_version(None, "3.0.0") is False

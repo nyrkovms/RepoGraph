@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -103,22 +103,28 @@ def _in_rolled_back_transaction(test: Callable[[AsyncSession, Registry, Registry
 
 
 async def _write(db: AsyncSession, name: str, per_registry: dict[Registry, list[str]]) -> None:
+    """Versions per source; "1.0:removed" gives the version that status in that source."""
     snapshots = [
         NormalizedPackage(ref=PackageRef(ecosystem="pypi", namespace="", name=name), registry_id=str(registry.id),
                           display_name=name, revision="1",
-                          versions=[NormalizedVersion(version=v, status="active", dependencies=[]) for v in versions])
+                          versions=[NormalizedVersion(version=v.split(":")[0], status=(v.split(":") + ["active"])[1],
+                                                      dependencies=[]) for v in versions])
         for registry, versions in sorted(per_registry.items(), key=lambda item: item[0].priority)
     ]
     await pipeline.write_package(db, PLUGIN, snapshots, missing_registry_ids=(), origin=PackageOrigin.seed)
     await db.flush()
 
 
-async def _profile(db: AsyncSession, registry: Registry) -> str:
+async def _profile(db: AsyncSession, *registries: Registry, routing: dict | None = None) -> str:
+    """A profile of `registries` in this order; `routing` overrides the routing of the last one."""
     slug = f"c2-{uuid.uuid4().hex[:8]}"
     profile = SourceProfile(ecosystem=Ecosystem.pypi, slug=slug, name=slug, is_default=False)
     db.add(profile)
     await db.flush()
-    db.add(SourceProfileRegistry(profile_id=profile.id, registry_id=registry.id, ecosystem=Ecosystem.pypi, position=0))
+    for position, registry in enumerate(registries):
+        db.add(SourceProfileRegistry(profile_id=profile.id, registry_id=registry.id, ecosystem=Ecosystem.pypi,
+                                     position=position,
+                                     routing_override=routing if position == len(registries) - 1 else None))
     await db.flush()
     return slug
 
@@ -158,5 +164,62 @@ def test_cached_answer_is_dropped_when_the_catalog_changes() -> None:
         changed = await resolve_graph(db, request)
         assert changed.resolved_at != first.resolved_at
         assert [n.version for n in changed.nodes] == ["1.1"]
+
+    _in_rolled_back_transaction(check)
+
+
+def test_node_names_the_source_where_the_version_is_active() -> None:
+    async def check(db: AsyncSession, pypi: Registry, mirror: Registry) -> None:
+        name = f"c2-test-{uuid.uuid4().hex[:10]}"
+        await _write(db, name, {pypi: ["1.0"], mirror: ["1.0:removed"]})
+        graph = await resolve_graph(db, GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}],
+                                                            profile=await _profile(db, mirror, pypi)))
+        assert [(n.version, n.registry) for n in graph.nodes] == [("1.0", "pypi")]
+
+        yanked = f"c2-test-{uuid.uuid4().hex[:10]}"
+        await _write(db, yanked, {pypi: ["1.0", "1.1:yanked"]})
+        assert [n.version for n in (await resolve_graph(db, GraphResolveRequest(
+            roots=[{"purl": f"pkg:pypi/{yanked}"}]))).nodes] == ["1.0"]
+        assert [n.version for n in (await resolve_graph(db, GraphResolveRequest(
+            roots=[{"purl": f"pkg:pypi/{yanked}", "constraint": "==1.1"}]))).nodes] == ["1.1"]
+
+    _in_rolled_back_transaction(check)
+
+
+def test_priority_source_with_the_package_is_its_only_source() -> None:
+    async def check(db: AsyncSession, pypi: Registry, mirror: Registry) -> None:
+        name = f"c2-test-{uuid.uuid4().hex[:10]}"
+        await _write(db, name, {pypi: ["9.0"], mirror: ["1.0"]})
+        graph = await resolve_graph(db, GraphResolveRequest(
+            roots=[{"purl": f"pkg:pypi/{name}"}],
+            profile=await _profile(db, pypi, mirror, routing={"mode": "priority"})))
+        assert [(n.version, n.registry) for n in graph.nodes] == [("1.0", mirror.slug)]
+
+    _in_rolled_back_transaction(check)
+
+
+def test_package_the_profile_does_not_see_is_not_fetched_again() -> None:
+    async def check(db: AsyncSession, pypi: Registry, mirror: Registry) -> None:
+        name = f"c2-test-{uuid.uuid4().hex[:10]}"
+        await _write(db, name, {pypi: ["1.0"]})
+        synced = await db.scalar(select(Package.synced_at).where(Package.normalized_name == name))
+        graph = await resolve_graph(db, GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}],
+                                                            profile=await _profile(db, mirror)))
+        assert graph.error["code"] == "not_found" and graph.fetched == []
+        assert await db.scalar(select(Package.synced_at).where(Package.normalized_name == name)) == synced
+
+    _in_rolled_back_transaction(check)
+
+
+def test_cached_answer_is_dropped_when_the_profile_sources_change() -> None:
+    async def check(db: AsyncSession, pypi: Registry, mirror: Registry) -> None:
+        name = f"c2-test-{uuid.uuid4().hex[:10]}"
+        await _write(db, name, {pypi: ["1.0"], mirror: ["2.0"]})
+        profile = await _profile(db, pypi, mirror)
+        request = GraphResolveRequest(roots=[{"purl": f"pkg:pypi/{name}"}], profile=profile)
+        assert [n.version for n in (await resolve_graph(db, request)).nodes] == ["2.0"]
+        mirror.enabled = False   # frozen: the cached answer with 2.0 must not be served
+        await db.flush()
+        assert [n.version for n in (await resolve_graph(db, request)).nodes] == ["1.0"]
 
     _in_rolled_back_transaction(check)

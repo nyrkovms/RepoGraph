@@ -56,7 +56,11 @@ class DbCatalog:
         ).all()
         statuses = await visibility.source_statuses(self.db, registries, [row.id for row in rows])
         by_slug = {r.slug: r for r in registries}
-        chosen = {version_id: by_slug[found[0].registry] for version_id, found in statuses.items() if found}
+        chosen = {}
+        for version_id, found in statuses.items():
+            # The first visible source with the version in its best status: the node names where it is active.
+            best = visibility.effective_status(found)
+            chosen[version_id] = by_slug[next(s.registry for s in found if s.status == best)]
         files: dict[tuple[uuid.UUID, str], list[str]] = {}
         if rows:
             for version_id, registry_id, filename in (
@@ -109,12 +113,19 @@ class DbCatalog:
         return [_normalized(d) for d in (variant or [d for d in deps if d.variant_registry_id is None])]
 
     async def ensure(self, ref: PackageRef, profile: SourceProfile) -> bool:
-        """Lazy fetch with origin=discovered, committed at once so a later failure of the resolve keeps it."""
+        """Lazy fetch of a package the catalog does not have, origin=discovered, committed at once so a later failure
+        of the resolve keeps it. A catalog package the profile does not see is not fetched again: finding it in more
+        sources is the presence probe's job (SPEC §6.6), and a re-read per resolve would only move its revision."""
+        if await find_package(self.db, ref) is not None:
+            return False
         try:
             await sync_package(self.db, ref, origin=PackageOrigin.discovered, profile=profile)
         except PackageNotFound:
             await self.db.rollback()
             return False
+        except BaseException:
+            await self.db.rollback()
+            raise
         await self.db.commit()
         return True
 

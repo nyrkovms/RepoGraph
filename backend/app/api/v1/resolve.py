@@ -10,6 +10,7 @@ from app.resolver.errors import (
     ResolveLimitError,
     ResolveNotFoundError,
     ResolveTimeoutError,
+    ResolveUpstreamError,
 )
 from app.resolver.service import resolve_dependencies, resolve_graph
 from app.schemas.resolve import (
@@ -31,6 +32,7 @@ router = APIRouter()
         409: {"model": ErrorResponse},
         422: {"model": ErrorResponse},
         500: {"model": ErrorResponse},
+        502: {"model": ErrorResponse},
         504: {"model": ErrorResponse},
     },
 )
@@ -54,6 +56,8 @@ async def resolve_endpoint(
         return _error(422, "resolve_limit_exceeded", str(exc), details=exc.details)
     except ResolveTimeoutError as exc:
         return _error(504, "resolve_timeout", str(exc))
+    except ResolveUpstreamError as exc:
+        return _error(502, "upstream_error", str(exc))
     except ResolveInternalError as exc:
         return _error(500, "internal_error", str(exc))
     except Exception as exc:  # noqa: BLE001

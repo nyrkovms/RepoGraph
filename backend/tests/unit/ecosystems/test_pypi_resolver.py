@@ -16,7 +16,7 @@ from app.ecosystems.base import (
 )
 from app.ecosystems.pypi.environment import PythonEnvironment, parse_environment
 from app.ecosystems.pypi.pep508 import parse_pep508
-from app.ecosystems.pypi.resolver import RESOLVER, UNKNOWN_DEPENDENCIES
+from app.ecosystems.pypi.resolver import NOT_FOUND_PREFIX, RESOLVER, UNKNOWN_DEPENDENCIES
 
 PROFILE = SourceProfile(ecosystem="pypi", slug="default", registries=[])
 ANY_WHEEL = ("x-py3-none-any.whl",)
@@ -105,6 +105,9 @@ def test_yanked_only_when_pinned() -> None:
     assert _chosen(_resolve(catalog, ("a", ">=1"))) == {"a": "1.0"}
     assert _chosen(_resolve(catalog, ("a", "==1.1"))) == {"a": "1.1"}
     assert _resolve(catalog, ("a", "==1.2")).error["code"] == "resolver_conflict"
+    # PEP 592: an exact pin anywhere allows the yanked version, other specifiers may join it.
+    pinned = Catalog({"a": [_v("1.0"), _v("1.1", status="yanked")], "b": [_v("1.0")]}, {("b", "1.0"): ["a>=1"]})
+    assert _chosen(_resolve(pinned, ("a", "==1.1"), ("b", "*"))) == {"a": "1.1", "b": "1.0"}
 
 
 def test_requires_python_and_platform_filter_candidates() -> None:
@@ -116,6 +119,15 @@ def test_requires_python_and_platform_filter_candidates() -> None:
     assert _chosen(_resolve(catalog, ("w", "*"))) == {"w": "1.0"}
     windows = parse_environment({"python_version": "3.12", "os": "windows"})
     assert _chosen(_resolve(catalog, ("w", "*"), env=windows)) == {"w": "2.0"}
+
+
+def test_requires_python_uses_the_full_version_and_python_only_means_linux() -> None:
+    catalog = Catalog({"a": [_v("1.0"), _v("2.0", python=">=3.12.1")],
+                       "w": [_v("1.0", files=("w-1.0-cp312-cp312-manylinux_2_17_x86_64.whl",))]})
+    assert _chosen(_resolve(catalog, ("a", "*"), env=parse_environment({"python_version": "3.12"}))) == {"a": "1.0"}
+    newer = parse_environment({"python_version": "3.12", "python_full_version": "3.12.4"})
+    assert _chosen(_resolve(catalog, ("a", "*"), env=newer)) == {"a": "2.0"}
+    assert _chosen(_resolve(catalog, ("w", "*"), env=parse_environment({"python_version": "3.12"}))) == {"w": "1.0"}
 
 
 def test_local_version_matches_its_public_pin() -> None:
@@ -181,11 +193,30 @@ def test_unknown_package_is_fetched_lazily() -> None:
     assert [ref.name for ref in graph.fetched] == ["new-pkg"]
 
 
-def test_package_no_source_has_is_not_found() -> None:
-    catalog = Catalog({"a": [_v("1.0")]}, {("a", "1.0"): ["ghost"]})
+def test_dependency_no_source_has_gives_a_partial_graph() -> None:
+    catalog = Catalog({"a": [_v("1.0")], "b": [_v("1.0")]}, {("a", "1.0"): ["ghost", "b"]})
     graph = _resolve(catalog, ("a", "*"))
-    assert graph.error == {"code": "not_found", "message": "no source has ghost", "packages": ["ghost"]}
+    assert _chosen(graph) == {"a": "1.0", "b": "1.0"}
+    assert graph.nodes[0].errors == [NOT_FOUND_PREFIX + "ghost"]
+    assert graph.warnings[0]["code"] == "dependency_not_found" and graph.warnings[0]["package"] == "ghost"
+
+
+def test_root_no_source_has_is_not_found() -> None:
+    graph = _resolve(Catalog({}), ("ghost", "*"))
+    assert graph.error == {"code": "not_found", "message": "no source of the profile has ghost", "packages": ["ghost"]}
     assert graph.nodes == []
+
+
+def test_extras_asked_after_the_package_is_pinned_still_count() -> None:
+    # `requests` is pinned through the root before `a` asks for `requests[socks]`: pip keeps the extra.
+    catalog = Catalog({"a": [_v("1.0")], "requests": [_v("2.0")], "pysocks": [_v("1.7")]},
+                      {("a", "1.0"): ["requests[socks]"], ("requests", "2.0"): ['pysocks; extra == "socks"']})
+    for roots in ((("requests", "*"), ("a", "*")), (("a", "*"), ("requests", "*"))):
+        graph = _resolve(catalog, *roots)
+        assert _chosen(graph) == {"a": "1.0", "requests": "2.0", "pysocks": "1.7"}
+        ids = {n.ref.name: n.id for n in graph.nodes}
+        assert (ids["requests"], ids["pysocks"]) in {(e.source, e.target) for e in graph.edges}
+        assert len(graph.nodes) == 3   # requests[socks] is the requests node
 
 
 def test_conflict_reports_its_causes() -> None:
@@ -210,3 +241,29 @@ def test_timeout_gives_an_error_not_an_exception() -> None:
     slow = Catalog({"a": [_v("1.0")]}, delay=0.5)
     graph = _resolve(slow, ("a", "*"), timeout_s=0.1)
     assert graph.error["code"] == "resolve_timeout"
+
+
+def test_catalog_failure_is_a_graph_error() -> None:
+    class Broken(Catalog):
+        async def versions(self, ref: PackageRef, profile: SourceProfile) -> Sequence[CatalogVersion]:
+            raise ConnectionError("database went away")
+
+    graph = _resolve(Broken({}), ("a", "*"))
+    assert graph.error["code"] == "upstream_error" and "database went away" in graph.error["message"]
+
+
+def test_timeout_waits_for_the_catalog_call_it_cut_short() -> None:
+    finished: list[str] = []
+
+    class Slow(Catalog):
+        async def versions(self, ref: PackageRef, profile: SourceProfile) -> Sequence[CatalogVersion]:
+            try:
+                await asyncio.sleep(0.3)
+            finally:
+                await asyncio.sleep(0.05)   # cleanup that must end before the session is used again
+                finished.append(ref.name)
+            return []
+
+    graph = _resolve(Slow({}), ("a", "*"), timeout_s=0.05)
+    assert graph.error["code"] == "resolve_timeout"
+    assert finished == ["a"]

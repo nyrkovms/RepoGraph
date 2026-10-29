@@ -26,3 +26,7 @@ class ResolveLimitError(Exception):
 
 class ResolveTimeoutError(Exception):
     pass
+
+
+class ResolveUpstreamError(Exception):
+    """A source or the database failed during lazy fetch: 502."""

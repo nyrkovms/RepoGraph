@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ecosystems.base import EcosystemPlugin, ResolveGraph, ResolveRoot, SourceProfile
 from app.ecosystems.base import ResolveRequest as ContractRequest
+from app.ecosystems.pypi.resolver import NOT_FOUND_PREFIX
 from app.ecosystems.registry import UnknownEcosystem, get_plugin
 from app.fetcher import sources
 from app.resolver.cache import ResolveCache
@@ -26,6 +27,7 @@ from app.resolver.errors import (
     ResolveLimitError,
     ResolveNotFoundError,
     ResolveTimeoutError,
+    ResolveUpstreamError,
 )
 from app.schemas.resolve import (
     GraphEdge,
@@ -45,8 +47,11 @@ _TIMEOUT_MARGIN_S = 10.0
 
 async def resolve_graph(db: AsyncSession, payload: GraphResolveRequest) -> GraphResolveResponse:
     start = time.perf_counter()
+    plugin = _plugin(payload.ecosystem)
+    profile = await _profile(db, payload.ecosystem, payload.profile)
+    roots = [_root(plugin, payload.ecosystem, root.purl, root.constraint, root.extras) for root in payload.roots]
     cache = ResolveCache()
-    key = ResolveCache.build_key({"format": "graph", **payload.model_dump(mode="json")})
+    key = ResolveCache.build_key({"format": "graph", "sources": _fingerprint(profile), **payload.model_dump(mode="json")})
     cached = await cache.get_valid(db, key)
     if cached is not None:
         inc_resolve_cache_hit()
@@ -54,9 +59,6 @@ async def resolve_graph(db: AsyncSession, payload: GraphResolveRequest) -> Graph
         return GraphResolveResponse.model_validate(cached)
     inc_resolve_cache_miss()
 
-    plugin = _plugin(payload.ecosystem)
-    profile = await _profile(db, payload.ecosystem, payload.profile)
-    roots = [_root(plugin, payload.ecosystem, root.purl, root.constraint, root.extras) for root in payload.roots]
     request = ContractRequest(
         roots=roots, environment=plugin.parse_environment(payload.environment), profile=profile,
         include_dev=payload.options.include_dev, include_optional=payload.options.include_optional,
@@ -110,8 +112,16 @@ async def resolve_dependencies(db: AsyncSession, payload: ResolveRequest) -> Res
         raise ResolveInternalError("Only input_mode='requirements' or 'freeze' is supported in the nested format")
 
     start = time.perf_counter()
+    plugin = _plugin("pypi")
+    try:
+        roots = [ResolveRoot(ref=plugin.coordinates.parse(dep.name), constraint=_constraint(plugin, dep.version_spec),
+                             extras=tuple(dep.extras))
+                 for dep in payload.dependencies]
+    except ValueError as exc:
+        raise ResolveInvalidRequest(str(exc)) from exc
+    profile = await sources.default_profile(db, "pypi")
     cache = ResolveCache()
-    key = ResolveCache.build_key({"format": "nested", **payload.model_dump(mode="json")})
+    key = ResolveCache.build_key({"format": "nested", "sources": _fingerprint(profile), **payload.model_dump(mode="json")})
     cached = await cache.get_valid(db, key)
     if cached is not None:
         inc_resolve_cache_hit()
@@ -119,20 +129,19 @@ async def resolve_dependencies(db: AsyncSession, payload: ResolveRequest) -> Res
         return ResolveSuccessResponse.model_validate(cached)
     inc_resolve_cache_miss()
 
-    plugin = _plugin("pypi")
-    try:
-        roots = [ResolveRoot(ref=plugin.coordinates.parse(dep.name), constraint=dep.version_spec or "*", extras=tuple(dep.extras))
-                 for dep in payload.dependencies]
-    except ValueError as exc:
-        raise ResolveInvalidRequest(str(exc)) from exc
     request = ContractRequest(
         roots=roots,
         environment=plugin.parse_environment(payload.environment.model_dump()),
-        profile=await sources.default_profile(db, "pypi"),
+        profile=profile,
         include_dev=payload.options.include_dev,
     )
     graph, catalog = await _run(db, plugin, request)
     _raise_for_error(graph)
+    for node in graph.nodes:
+        # The nested format had no partial answers: a dependency no source has was a 404.
+        missing = next((e.removeprefix(NOT_FOUND_PREFIX) for e in node.errors if e.startswith(NOT_FOUND_PREFIX)), None)
+        if missing:
+            raise ResolveNotFoundError(missing)
 
     nodes = {node.id: node for node in graph.nodes}
     children: dict[str, list[Any]] = {}
@@ -174,12 +183,29 @@ async def resolve_dependencies(db: AsyncSession, payload: ResolveRequest) -> Res
 
 async def _run(db: AsyncSession, plugin: EcosystemPlugin, request: ContractRequest) -> tuple[ResolveGraph, DbCatalog]:
     catalog = DbCatalog(db, plugin)
+    resolver = plugin.resolver()
     try:
-        graph = await asyncio.wait_for(plugin.resolver().resolve(request, catalog), request.timeout_s + _TIMEOUT_MARGIN_S)
+        graph = await asyncio.wait_for(resolver.resolve(request, catalog), request.timeout_s + _TIMEOUT_MARGIN_S)
     except TimeoutError:
-        graph = ResolveGraph(strategy="", nodes=[], edges=[], conflicts=[], warnings=[], fetched=[],
-                             error={"code": "resolve_timeout", "message": f"resolve took longer than {request.timeout_s:g} s"})
+        graph = ResolveGraph(strategy=getattr(resolver, "strategy", ""), nodes=[], edges=[], conflicts=[], warnings=[],
+                             fetched=[], error={"code": "resolve_timeout",
+                                                "message": f"resolve took longer than {request.timeout_s:g} s"})
+    if graph.error and graph.error.get("code") in ("resolve_timeout", "upstream_error"):
+        await db.rollback()   # a catalog call was cut short: whatever it left in the session goes
     return graph, catalog
+
+
+def _fingerprint(profile: SourceProfile) -> list[list[object]]:
+    """What the answer depends on besides the catalog: the profile's enabled sources, their order and routing."""
+    return [[r.id, r.priority, r.routing] for r in profile.registries]
+
+
+def _constraint(plugin: EcosystemPlugin, raw: str) -> str:
+    try:
+        plugin.versions.constraint(raw or "*")
+    except ValueError as exc:   # the contract's InvalidVersion
+        raise ResolveInvalidRequest(str(exc)) from exc
+    return raw or "*"
 
 
 def _roots(graph: ResolveGraph, lock: bool) -> tuple[set[str], set[str]]:
@@ -237,6 +263,8 @@ def _raise_for_error(graph: ResolveGraph) -> None:
         raise ResolveTimeoutError(message)
     if code == "resolve_limit_exceeded":
         raise ResolveLimitError(message, details=dict(graph.error))
+    if code == "upstream_error":
+        raise ResolveUpstreamError(message)
     raise ResolveInternalError(message)
 
 
@@ -264,7 +292,7 @@ def _root(plugin: EcosystemPlugin, ecosystem: str, purl: str, constraint: str, e
         raise ResolveInvalidRequest(f"root {purl!r} is not in ecosystem {ecosystem!r}")
     if version and constraint in ("", "*"):
         constraint = f"=={version}"
-    return ResolveRoot(ref=ref, constraint=constraint or "*", extras=tuple(extras))
+    return ResolveRoot(ref=ref, constraint=_constraint(plugin, constraint), extras=tuple(extras))
 
 
 def _is_newer_version(latest_compatible_version: str | None, selected_version: str) -> bool:
