@@ -7,11 +7,14 @@ from pydantic import BaseModel, Field
 
 class PackageListItem(BaseModel):
     ecosystem: str
+    namespace: str
     name: str
     normalized_name: str
+    purl: str
+    origin: str
     description: str | None
     license_spdx: str | None
-    latest_version: str
+    latest_version: str | None
     updated_at: datetime
     has_vulnerabilities: bool
 

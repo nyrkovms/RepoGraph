@@ -48,6 +48,17 @@ class RunInfo(BaseModel):
     error: str | None
 
 
+class RegistryState(BaseModel):
+    slug: str
+    ecosystem: Ecosystem
+    enabled: bool
+    last_success_at: datetime | None
+    last_error: str | None
+    consecutive_failures: int
+    degraded_until: datetime | None
+    cursor_data: dict
+
+
 class SyncStatusResponse(BaseModel):
     status: str
     sync_type: str
@@ -58,3 +69,4 @@ class SyncStatusResponse(BaseModel):
     cursor_data: dict
     last_update_run: UpdateRunInfo | None = None
     recent_runs: list[RunInfo] = Field(default_factory=list)
+    registries: list[RegistryState] = Field(default_factory=list)

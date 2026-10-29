@@ -8,11 +8,14 @@ from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db_session
-from app.models.enums import Ecosystem
+from app.models.enums import Ecosystem, PackageOrigin
 from app.models.package import Package
+from app.models.package_registry import PackageRegistry
+from app.models.registry import Registry
 from app.models.vulnerability import PackageVulnerability
 from app.schemas.packages import PackageListItem, PackageListResponse
 from app.services.cursor import CursorError, decode_cursor, encode_cursor, parse_iso_datetime, parse_uuid
+from app.services.purls import package_purl
 
 router = APIRouter()
 
@@ -26,6 +29,9 @@ class PackageSort(str, Enum):
 @router.get("/packages", response_model=PackageListResponse)
 async def list_packages(
     db: AsyncSession = Depends(get_db_session),
+    ecosystem: list[Ecosystem] | None = Query(default=None),
+    registry: str | None = Query(default=None),
+    origin: list[PackageOrigin] | None = Query(default=None),
     license: str | None = Query(default=None),
     has_vulnerabilities: bool | None = Query(default=None),
     updated_after: datetime | None = Query(default=None),
@@ -36,6 +42,9 @@ async def list_packages(
     packages, next_cursor, has_more = await _query_packages(
         db=db,
         q=None,
+        ecosystems=ecosystem,
+        registry=registry,
+        origins=origin,
         license=license,
         has_vulnerabilities=has_vulnerabilities,
         updated_after=updated_after,
@@ -50,6 +59,9 @@ async def list_packages(
 async def _query_packages(
     db: AsyncSession,
     q: str | None,
+    ecosystems: list[Ecosystem] | None,
+    registry: str | None,
+    origins: list[PackageOrigin] | None,
     license: str | None,
     has_vulnerabilities: bool | None,
     updated_after: datetime | None,
@@ -59,7 +71,23 @@ async def _query_packages(
 ) -> tuple[list[PackageListItem], str | None, bool]:
     cursor_payload = _decode_cursor_or_422(cursor)
 
-    stmt = select(Package).where(Package.ecosystem == Ecosystem.pypi)
+    stmt = select(Package)
+
+    if ecosystems:
+        stmt = stmt.where(Package.ecosystem.in_(ecosystems))
+
+    if registry:
+        # An unknown slug matches nothing: an empty page, not an error.
+        stmt = stmt.where(
+            exists(
+                select(PackageRegistry.package_id)
+                .join(Registry, Registry.id == PackageRegistry.registry_id)
+                .where(PackageRegistry.package_id == Package.id, Registry.slug == registry)
+            )
+        )
+
+    if origins:
+        stmt = stmt.where(Package.origin.in_(origins))
 
     if q:
         needle = f"%{q.lower()}%"
@@ -130,8 +158,11 @@ async def _query_packages(
     response_items = [
         PackageListItem(
             ecosystem=row.ecosystem.value,
+            namespace=row.namespace or "",
             name=row.name,
             normalized_name=row.normalized_name,
+            purl=package_purl(row.ecosystem.value, row.namespace, row.normalized_name),
+            origin=row.origin.value,
             description=row.description,
             license_spdx=row.license_spdx,
             latest_version=row.latest_version,

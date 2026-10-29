@@ -6,17 +6,21 @@ from app.api.v1.updates import fetch_last_update_run
 from app.auth.tokens import require_admin
 from app.db import get_db_session
 from app.ecosystems.registry import load_builtin_plugins, registered
+from app.models.enums import Ecosystem
+from app.models.registry import Registry
 from app.models.run import Run
+from app.models.sync_state import SyncState
 from app.schemas.admin import (
     AdminTaskResponse,
     FetchPackagesRequest,
     PresenceProbeRequest,
+    RegistryState,
     RetryFailedRequest,
     RunInfo,
     SeedRequest,
     SyncStatusResponse,
 )
-from app.services.sync_state import get_or_create_pypi_sync_state
+from app.services.runs import FAILED, RUNNING
 from app.tasks.fetch_deps import fetch_missing_dependencies
 from app.tasks.fetch_packages import fetch_packages, invalid_purls, ref_from_target
 from app.tasks.presence_probe import run_presence_probe
@@ -78,20 +82,49 @@ async def trigger_presence_probe(payload: PresenceProbeRequest = Body(default_fa
     return AdminTaskResponse(task_id=task.id, status="queued", operation="presence_probe")
 
 
+def sync_summary(last_run: Run | None) -> dict[str, object]:
+    """The old single-source keys of /sync/status as a summary of the latest run of any operation."""
+    if last_run is None:
+        return {"status": "idle", "sync_type": "incremental", "packages_synced": 0, "packages_total": 0, "last_error": None}
+    return {
+        "status": last_run.status if last_run.status in (RUNNING, FAILED) else "idle",
+        "sync_type": "full" if last_run.operation == "seed" else "incremental",
+        "packages_synced": last_run.packages_checked,
+        "packages_total": last_run.packages_total,
+        "last_error": last_run.error,
+    }
+
+
 @router.get("/sync/status", response_model=SyncStatusResponse, dependencies=[Depends(require_admin)])
 async def sync_status(db: AsyncSession = Depends(get_db_session)) -> SyncStatusResponse:
-    row = await get_or_create_pypi_sync_state(db)
     last_update_run = await fetch_last_update_run(db)
     runs = (await db.scalars(select(Run).order_by(Run.started_at.desc()).limit(RECENT_RUNS))).all()
-    await db.commit()
+    rows = (
+        await db.execute(
+            select(Registry, SyncState).outerjoin(SyncState, SyncState.registry_id == Registry.id)
+        )
+    ).all()
+    states = sorted(rows, key=lambda row: (row[0].ecosystem.value, row[0].priority, row[0].slug))
+    pypi_states = [state for registry, state in states if registry.ecosystem == Ecosystem.pypi and state is not None]
+    last_success = max((s.last_success_at for s in pypi_states if s.last_success_at), default=None)
+    pypi_primary = next((state for registry, state in states if registry.slug == "pypi" and state is not None), None)
     return SyncStatusResponse(
-        status=row.status.value,
-        sync_type=row.sync_type.value,
-        last_success_at=row.last_success_at.isoformat() if row.last_success_at else None,
-        last_error=row.last_error,
-        packages_synced=row.packages_synced,
-        packages_total=row.packages_total,
-        cursor_data=row.cursor_data,
+        **sync_summary(runs[0] if runs else None),
+        last_success_at=last_success.isoformat() if last_success else None,
+        cursor_data=pypi_primary.cursor_data if pypi_primary else {},
         last_update_run=last_update_run,
         recent_runs=[RunInfo.model_validate(run) for run in runs],
+        registries=[
+            RegistryState(
+                slug=registry.slug,
+                ecosystem=registry.ecosystem,
+                enabled=registry.enabled,
+                last_success_at=state.last_success_at if state else None,
+                last_error=state.last_error if state else None,
+                consecutive_failures=state.consecutive_failures if state else 0,
+                degraded_until=state.degraded_until if state else None,
+                cursor_data=state.cursor_data if state else {},
+            )
+            for registry, state in states
+        ],
     )
