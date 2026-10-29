@@ -19,6 +19,10 @@ def register(plugin: EcosystemPlugin) -> None:
 
 
 def get_plugin(ecosystem: Ecosystem | str) -> EcosystemPlugin:
+    """The plugin of the ecosystem. Built-in plugins are loaded on first use: a fresh process (the api right after a
+    restart, a CLI command) must not depend on some other code path having imported them first."""
+    if ecosystem not in _PLUGINS:
+        load_builtin_plugins()
     try:
         return _PLUGINS[ecosystem]
     except KeyError:
@@ -26,6 +30,7 @@ def get_plugin(ecosystem: Ecosystem | str) -> EcosystemPlugin:
 
 
 def registered() -> list[EcosystemPlugin]:
+    _import_builtins()
     return [_PLUGINS[name] for name in sorted(_PLUGINS)]
 
 
@@ -34,6 +39,9 @@ BUILTIN_PLUGIN_MODULES: tuple[str, ...] = ("app.ecosystems.pypi.plugin",)
 
 
 def load_builtin_plugins() -> list[EcosystemPlugin]:
-    for module in BUILTIN_PLUGIN_MODULES:
-        importlib.import_module(module)
     return registered()
+
+
+def _import_builtins() -> None:
+    for module in BUILTIN_PLUGIN_MODULES:
+        importlib.import_module(module)   # registers the plugin on first import; a no-op afterwards
