@@ -1,0 +1,165 @@
+{
+ "name": "@angular/core",
+ "dist-tags": {
+  "v17-lts": "17.3.12",
+  "v21-lts": "21.2.25",
+  "latest": "22.2.3",
+  "next": "22.3.0-next.2"
+ },
+ "versions": {
+  "0.0.0-0": {
+   "name": "@angular/core",
+   "version": "0.0.0-0",
+   "peerDependencies": {
+    "rxjs": "5.0.0-beta.2",
+    "zone.js": "^0.6.6"
+   },
+   "dist": {
+    "shasum": "86a993dccd1afc17de1d1108913fca0b609cd4e9",
+    "tarball": "https://registry.npmjs.org/@angular/core/-/core-0.0.0-0.tgz",
+    "integrity": "sha512-Ult986apXwGkFNAQHrwU8ckoQBFPWgyMxzAcEwJAzkJXfM/h4jt+SHZfAKgNsRLjE2H1E8fr0OibDEkp0nHymw=="
+   }
+  },
+  "10.0.13": {
+   "name": "@angular/core",
+   "version": "10.0.13",
+   "dependencies": {
+    "tslib": "^2.0.0"
+   },
+   "peerDependencies": {
+    "rxjs": "^6.5.3",
+    "zone.js": "~0.10.3"
+   },
+   "dist": {
+    "shasum": "ec0e89f42ff13f91800e17c3f7810383906a3bc0",
+    "tarball": "https://registry.npmjs.org/@angular/core/-/core-10.0.13.tgz",
+    "fileCount": 419,
+    "integrity": "sha512-e5ilTXlOhJ74tunj8qs7C68WF7Fcow/Dc4yuZFMMsDw5+tjYx9sJCz6z8I8ahP/QkSjC+Zg7WyKggI4zLelNog==",
+    "unpackedSize": 17678908
+   },
+   "deprecated": "failed release"
+  },
+  "17.3.12": {
+   "name": "@angular/core",
+   "version": "17.3.12",
+   "dependencies": {
+    "tslib": "^2.3.0"
+   },
+   "peerDependencies": {
+    "rxjs": "^6.5.3 || ^7.4.0",
+    "zone.js": "~0.14.0"
+   },
+   "dist": {
+    "shasum": "d66ee14071c9f157f68907cff461f235e6eaffe1",
+    "tarball": "https://registry.npmjs.org/@angular/core/-/core-17.3.12.tgz",
+    "fileCount": 389,
+    "integrity": "sha512-MuFt5yKi161JmauUta4Dh0m8ofwoq6Ino+KoOtkYMBGsSx+A7dSm+DUxxNwdj7+DNyg3LjVGCFgBFnq4g8z06A==",
+    "unpackedSize": 28829091
+   },
+   "engines": {
+    "node": "^18.13.0 || >=20.9.0"
+   }
+  },
+  "21.2.25": {
+   "name": "@angular/core",
+   "version": "21.2.25",
+   "dependencies": {
+    "tslib": "^2.3.0"
+   },
+   "peerDependencies": {
+    "rxjs": "^6.5.3 || ^7.4.0",
+    "zone.js": "~0.15.0 || ~0.16.0",
+    "@angular/compiler": "21.2.25"
+   },
+   "dist": {
+    "shasum": "905103a3e1bfb5ab8c1dd85038b1f6108ffda919",
+    "tarball": "https://registry.npmjs.org/@angular/core/-/core-21.2.25.tgz",
+    "fileCount": 95,
+    "integrity": "sha512-cku7EX0igTPnuqEWZ1NiQY4Pn1g2xBljQSk1+bXRKnudJiZCK8e1u2v0byNzWuKwmdz7kKXjz71o224HrtccVA==",
+    "unpackedSize": 6817799
+   },
+   "engines": {
+    "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
+   },
+   "peerDependenciesMeta": {
+    "zone.js": {
+     "optional": true
+    },
+    "@angular/compiler": {
+     "optional": true
+    }
+   }
+  },
+  "22.2.3": {
+   "name": "@angular/core",
+   "version": "22.2.3",
+   "dependencies": {
+    "tslib": "^2.3.0"
+   },
+   "devDependencies": {
+    "@mcp-b/webmcp-types": "^5.0.0",
+    "@mcp-b/webmcp-polyfill": "^5.0.0",
+    "@modelcontextprotocol/server": "^2.0.0"
+   },
+   "peerDependencies": {
+    "rxjs": "^6.5.3 || ^7.4.0",
+    "zone.js": "~0.15.0 || ~0.16.0",
+    "@angular/compiler": "22.2.3"
+   },
+   "dist": {
+    "shasum": "7d150456dca4eeb2b2dfbecba85a20f717376b0f",
+    "tarball": "https://registry.npmjs.org/@angular/core/-/core-22.2.3.tgz",
+    "fileCount": 107,
+    "integrity": "sha512-ponarFrAZsPutT+htRt3PEmkt2/IB7DyrBy2f48sxsIx3ZA6xw09i2HOEBo+VBphlN6B/ynK9q+o04HPhdJ+dQ==",
+    "unpackedSize": 7058784
+   },
+   "engines": {
+    "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
+   },
+   "peerDependenciesMeta": {
+    "zone.js": {
+     "optional": true
+    },
+    "@angular/compiler": {
+     "optional": true
+    }
+   }
+  },
+  "22.3.0-next.2": {
+   "name": "@angular/core",
+   "version": "22.3.0-next.2",
+   "dependencies": {
+    "tslib": "^2.3.0"
+   },
+   "devDependencies": {
+    "@mcp-b/webmcp-types": "^5.0.0",
+    "@mcp-b/webmcp-polyfill": "^5.0.0",
+    "@modelcontextprotocol/server": "^2.0.0"
+   },
+   "peerDependencies": {
+    "rxjs": "^6.5.3 || ^7.4.0",
+    "zone.js": "~0.15.0 || ~0.16.0",
+    "@angular/compiler": "22.3.0-next.2"
+   },
+   "dist": {
+    "shasum": "5be181a322b49027e41163ef6f5c369af9b850c2",
+    "tarball": "https://registry.npmjs.org/@angular/core/-/core-22.3.0-next.2.tgz",
+    "fileCount": 107,
+    "integrity": "sha512-9onGgNA0v0q9UI31uVAk3K5Q2r/ye82qwKsQv5FesyZ1hnEyrMMc0kdTzHkgDDRS2xpwVHchZH8BTgJA6A+SGQ==",
+    "unpackedSize": 7057040
+   },
+   "engines": {
+    "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
+   },
+   "peerDependenciesMeta": {
+    "zone.js": {
+     "optional": true
+    },
+    "@angular/compiler": {
+     "optional": true
+    }
+   }
+  }
+ },
+ "modified": "2026-10-14T23:41:35.906Z"
+}
