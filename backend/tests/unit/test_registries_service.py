@@ -40,7 +40,6 @@ def test_valid_registry_passes() -> None:
         ({"ecosystem": "npm"}, "no plugin is registered for ecosystem 'npm'"),
         ({"ecosystem": "nope"}, "no plugin is registered"),
         ({"protocol": "gopher"}, "unknown protocol 'gopher'"),
-        ({"protocol": "pypi-simple"}, "no adapter for protocol 'pypi-simple'"),
         ({"protocol": "npm-registry"}, "no adapter for protocol 'npm-registry'"),
         ({"routing": {"mode": "sometimes", "packages": ["a"]}}, "unknown routing mode"),
         ({"routing": {"mode": "exclusive"}}, "needs routing.packages"),
@@ -143,11 +142,10 @@ def test_example_file_is_importable_and_valid() -> None:
     ]
 
 
-def test_example_pytorch_index_is_rejected_until_the_adapter_exists() -> None:
+def test_example_pytorch_index_is_accepted() -> None:
     cuda = _fields(slug="pytorch-cu121", protocol="pypi-simple", base_url="https://download.pytorch.org/whl/cu121/",
                    routing={"mode": "exclusive", "packages": ["torch", "torchvision", "torchaudio"]})
-    with pytest.raises(RegistryInvalid, match="no adapter for protocol 'pypi-simple'"):
-        validate_registry(cuda)
+    validate_registry(cuda)
 
 
 # --- connection test ---------------------------------------------------------------------------------
