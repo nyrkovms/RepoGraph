@@ -199,3 +199,16 @@ def test_connection_timeout(monkeypatch) -> None:
     result = _check(monkeypatch, hangs, timeout=0.05)
     assert result.ok is False
     assert result.error is not None and result.error.startswith("TimeoutError")
+
+
+def test_pytorch_file_is_importable_and_valid() -> None:
+    path = Path(__file__).resolve().parents[2] / "registries.pytorch.yaml"
+    document = parse_import(path.read_text(encoding="utf-8"))
+    assert [(r.slug, r.protocol, r.routing["mode"]) for r in document.registries] == [
+        ("pytorch-cpu", "pypi-simple", "exclusive"), ("pytorch-cu121", "pypi-simple", "exclusive"),
+        ("pytorch-cu128", "pypi-simple", "exclusive")]
+    for registry in document.registries:
+        validate_registry(RegistryFields.from_body(registry))
+    assert {p.slug: [m.slug for m in p.registries] for p in document.profiles} == {
+        "cpu": ["pytorch-cpu", "pypi"], "cuda121": ["pytorch-cu121", "pypi"], "cuda128": ["pytorch-cu128", "pypi"]}
+    assert not any(p.is_default for p in document.profiles)

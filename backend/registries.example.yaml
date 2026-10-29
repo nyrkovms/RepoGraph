@@ -15,18 +15,7 @@ registries:
     auth_type: none
     # enabled: true     # switched on only if the connection test passes
 
-  # PyTorch CUDA index. Can be imported once E0.5 brings the `pypi-simple` adapter; until then the protocol is
-  # rejected on import.
-  #
-  # - slug: pytorch-cu121
-  #   name: PyTorch CUDA 12.1
-  #   ecosystem: pypi
-  #   protocol: pypi-simple
-  #   base_url: https://download.pytorch.org/whl/cu121/
-  #   priority: 50
-  #   routing:
-  #     mode: exclusive
-  #     packages: [torch, torchvision, torchaudio]
+  # PyTorch wheel indexes: see registries.pytorch.yaml.
 
 profiles:
   - slug: default
@@ -35,4 +24,3 @@ profiles:
     is_default: true
     registries:
       - slug: pypi-mirror
-      # - slug: pytorch-cu121
