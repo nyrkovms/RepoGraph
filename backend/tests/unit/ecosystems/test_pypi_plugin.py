@@ -166,7 +166,7 @@ class _UnauthorizedConnector(_Connector):
 
 
 def _simple_root(monkeypatch, status: int) -> list[str]:
-    from app.ecosystems.pypi import adapters
+    from app.ecosystems.pypi.adapters import warehouse as adapters
 
     asked: list[str] = []
 
