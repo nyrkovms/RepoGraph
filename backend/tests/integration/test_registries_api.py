@@ -232,7 +232,7 @@ def test_create_defaults(client: TestClient, auth: dict) -> None:
     [
         ({"protocol": "gopher"}, "unknown protocol"),
         ({"protocol": "npm-registry"}, "no adapter for protocol"),
-        ({"ecosystem": "npm", "protocol": "npm-registry"}, "no plugin is registered"),
+        ({"ecosystem": "go", "protocol": "goproxy"}, "no plugin is registered"),
         ({"routing": {"mode": "sometimes", "packages": ["torch"]}}, "unknown routing mode"),
         ({"routing": {"mode": "exclusive"}}, "needs routing.packages"),
         ({"auth_type": "bearer"}, "credentials_ref is required"),
@@ -486,10 +486,10 @@ def test_fetch_packages_rejects_bad_purls_and_queues_nothing(
     monkeypatch.setattr(admin_api, "fetch_packages", SimpleNamespace(delay=lambda purls: queued.append(purls)))
 
     response = client.post("/api/v1/admin/packages", headers=auth,
-                           json={"purls": ["pkg:pypi/flask", "flask", "pkg:npm/left-pad", "pkg:pypi/ns/pkg"]})
+                           json={"purls": ["pkg:pypi/flask", "flask", "pkg:golang/github.com/a/b", "pkg:pypi/ns/pkg"]})
     assert response.status_code == 422
     detail = response.json()["detail"]
-    assert "flask:" in detail and "pkg:npm/left-pad" in detail and "pkg:pypi/ns/pkg" in detail
+    assert "flask:" in detail and "pkg:golang/github.com/a/b" in detail and "pkg:pypi/ns/pkg" in detail
     assert "pkg:pypi/flask:" not in detail
     assert queued == []
 

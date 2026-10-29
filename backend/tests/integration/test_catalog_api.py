@@ -84,7 +84,7 @@ async def _build(db: AsyncSession, now: datetime) -> dict[str, Any]:
     await db.flush()
 
     widget = _package(npm_hi, Ecosystem.npm, f"{PREFIX}widget", origin=PackageOrigin.seed, latest=None, now=now)
-    ui = _package(npm_hi, Ecosystem.npm, f"{PREFIX}ui", namespace="@c1b", origin=PackageOrigin.manual, latest="1.0.0",
+    ui = _package(npm_hi, Ecosystem.npm, f"{PREFIX}ui", namespace="c1b", origin=PackageOrigin.manual, latest="1.0.0",
                   now=now)
     pywidget = _package(pypi2, Ecosystem.pypi, f"{PREFIX}widget", origin=PackageOrigin.dependency, latest="0.1", now=now)
     db.add_all([widget, ui, pywidget])
@@ -159,7 +159,7 @@ def test_packages_filtered_by_ecosystem_and_registry(client: TestClient, world) 
     payload = client.get(f"{API}/packages", params={"ecosystem": "npm", "registry": world.npm_hi}).json()
     assert [(row["normalized_name"], row["namespace"], row["purl"], row["origin"], row["latest_version"])
             for row in payload["data"]] == [
-        (f"{PREFIX}ui", "@c1b", f"pkg:npm/%40c1b/{PREFIX}ui", "manual", "1.0.0"),
+        (f"{PREFIX}ui", "c1b", f"pkg:npm/%40c1b/{PREFIX}ui", "manual", "1.0.0"),   # scope stored without @
         (f"{PREFIX}widget", "", f"pkg:npm/{PREFIX}widget", "seed", None),
     ]
     assert all(row["ecosystem"] == "npm" for row in payload["data"])

@@ -357,6 +357,8 @@ class CatalogVersion:
     status: VersionStatus                  # the best status among the visible sources publishing it
     engines: Mapping[str, str] | None = None
     artifacts: Sequence[str] = ()          # file names in that source (PyPI wheel tags name the platforms)
+    tags: Sequence[str] = ()               # dist-tags pointing at it (npm `latest` decides the version picked)
+    deprecated: bool = False
 
 
 class CatalogAccess(Protocol):

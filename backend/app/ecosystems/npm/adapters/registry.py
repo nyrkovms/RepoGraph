@@ -35,6 +35,7 @@ from app.ecosystems.base import (
     TrackedPackage,
     VersionDependencies,
 )
+from app.ecosystems.npm.changes import NpmChangesDetector
 from app.ecosystems.npm.coordinates import NpmCoordinates, split_name
 from app.services.http import make_client
 from app.services.retry_policy import compute_backoff_delay_seconds, is_retryable_upstream_error
@@ -134,8 +135,14 @@ def normalize_dependencies(manifest: Mapping[str, object]) -> list[NormalizedDep
 
 
 def _engines(manifest: Mapping[str, object]) -> dict[str, str] | None:
+    """`engines` plus the version's `os`/`cpu` lists (comma-joined, `!` negations kept): all of them are
+    requirements on the environment, and readers that only see a version's engines (resolve) need the platform."""
     # Old packages publish `engines` as a list; only a mapping of strings is a constraint we can use.
     engines = {k: v for k, v in _mapping(manifest.get("engines")).items() if isinstance(v, str)}
+    for key in ("os", "cpu"):
+        values = manifest.get(key)
+        if isinstance(values, list) and values and all(isinstance(v, str) for v in values):
+            engines[key] = ",".join(values)
     return engines or None
 
 
@@ -268,9 +275,9 @@ class NpmRegistryAdapter:
         (await self.get(f"{self.root}-/ping", {})).raise_for_status()
 
     def change_detector(self) -> ChangeDetector:
-        if self.registry.config.get("changes_url"):
-            # Seam for the `_changes` feed of registry.npmjs.org (WP F4); until then no source configures it.
-            raise NotImplementedError("the npm _changes feed detector is not implemented yet")
+        changes_url = self.registry.config.get("changes_url")
+        if isinstance(changes_url, str) and changes_url:
+            return NpmChangesDetector(self.registry, changes_url)   # the replication feed of registry.npmjs.org
         return NpmEtagChangeDetector(self)
 
     def min_interval_seconds(self) -> float:

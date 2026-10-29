@@ -17,6 +17,8 @@ from pathlib import Path
 import httpx
 import pytest
 
+from app.ecosystems.npm.changes import NpmChangesDetector
+
 from app.ecosystems.base import NormalizedDependency, PackageRef, RegistryConfig, TrackedPackage
 from app.ecosystems.npm.adapters import NpmRegistryAdapter, normalize_dependencies
 from app.ecosystems.npm.adapters import registry as npm_registry
@@ -289,7 +291,7 @@ def test_version_from_entry_details() -> None:
     }
     version = version_from_entry("1.0.0", entry, with_dependencies=True)
     assert version.deprecation is None                   # an empty message un-deprecates
-    assert version.engines is None                       # old packages publish a list
+    assert version.engines == {"cpu": "x64"}             # old packages publish `engines` as a list; cpu joins them
     assert version.raw_metadata == {"cpu": ["x64"], "bundleDependencies": ["a"], "_hasShrinkwrap": True}
     assert version.dependencies == []                    # none declared, and loaded
     (artifact,) = version.artifacts
@@ -562,8 +564,8 @@ def _conditional(etag: str, new_etag: str | None = None) -> Callable[[httpx.Requ
 def test_detector_is_the_etag_one_unless_a_changes_feed_is_configured() -> None:
     assert isinstance(_adapter().change_detector(), NpmEtagChangeDetector)
     assert isinstance(_adapter(_registry(changes_url="")).change_detector(), NpmEtagChangeDetector)
-    with pytest.raises(NotImplementedError, match="_changes"):   # the seam of WP F4
-        _adapter(_registry(changes_url="https://replicate.npmjs.com/registry/_changes")).change_detector()
+    feed = _adapter(_registry(changes_url="https://replicate.npmjs.com/registry/")).change_detector()
+    assert isinstance(feed, NpmChangesDetector) and feed.changes_url == "https://replicate.npmjs.com/registry/"
 
 
 def test_detector_asks_conditionally_and_reports_changed_and_missing(serve) -> None:
@@ -616,3 +618,9 @@ def test_detector_survives_one_failing_package(serve) -> None:
     assert [(p.ref.name, revision) for p, revision in result.changed] == [("changed", '"new"')]
     assert result.missing == []
 
+
+
+def test_os_and_cpu_become_engines_in_npm_syntax() -> None:
+    entry = {"os": ["darwin", "!win32"], "cpu": ["arm64", "x64"], "engines": {"node": ">=18"}}
+    assert version_from_entry("1.0.0", entry, with_dependencies=False).engines == {
+        "node": ">=18", "os": "darwin,!win32", "cpu": "arm64,x64"}

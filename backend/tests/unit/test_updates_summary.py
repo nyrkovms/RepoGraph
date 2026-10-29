@@ -167,7 +167,7 @@ def test_same_name_in_two_ecosystems_is_two_packages() -> None:
     events = [
         ev("x", "release_yanked", 1, "1.0"),
         ev("x", "release_yanked", 2, "2.0", ecosystem="npm"),
-        ev("x", "release_yanked", 3, "3.0", ecosystem="npm", namespace="@corp"),
+        ev("x", "release_yanked", 3, "3.0", ecosystem="npm", namespace="corp"),   # stored without the @ (SPEC §4)
     ]
     packages = aggregate_summary(events)
     assert {(p.ecosystem, p.purl): p.yanked for p in packages} == {
