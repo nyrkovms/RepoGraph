@@ -14,16 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.connectors.base import PackageNotFound
 from app.ecosystems.base import (
     CatalogVersion,
-    DependencyType,
     EcosystemPlugin,
     NormalizedDependency,
     PackageRef,
     SourceProfile,
     VersionStatus,
 )
-from app.fetcher.pipeline import find_package, source_dependencies, sync_package
+from app.fetcher.pipeline import dependency_from_row, find_package, source_dependencies, sync_package
 from app.models.artifact import Artifact
-from app.models.dependency import Dependency
 from app.models.enums import PackageOrigin
 from app.models.version import PackageVersion
 from app.services import visibility
@@ -101,7 +99,7 @@ class DbCatalog:
             self.failed = True
             await self.db.rollback()
             return None
-        deps = None if rows is None else [_normalized(d) for d in rows]
+        deps = None if rows is None else [dependency_from_row(d) for d in rows]
         if changed:
             await self.db.commit()   # lazily loaded dependencies stay in the catalog whatever the resolve ends with
         return deps
@@ -122,15 +120,3 @@ class DbCatalog:
             raise
         await self.db.commit()
         return True
-
-
-def _normalized(dep: Dependency) -> NormalizedDependency:
-    return NormalizedDependency(
-        target=PackageRef(ecosystem=dep.dependency_ecosystem.value, namespace=dep.dependency_namespace or "",
-                          name=dep.dependency_name),
-        constraint=dep.version_constraint,
-        dependency_type=cast(DependencyType, dep.dependency_type.value),
-        raw_spec=dep.raw_spec,
-        extra_name=dep.extra_name,
-        environment_markers=dep.environment_markers,
-    )

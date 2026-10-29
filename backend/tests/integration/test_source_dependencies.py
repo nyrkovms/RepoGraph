@@ -14,6 +14,7 @@ from app.api.v1 import package_detail as routes
 from app.config import get_settings
 from app.ecosystems.base import (
     FetchedDocument,
+    NormalizedArtifact,
     NormalizedDependency,
     NormalizedPackage,
     NormalizedVersion,
@@ -180,5 +181,81 @@ def test_source_without_metadata_makes_them_unknown(monkeypatch) -> None:
         tree = await routes.get_dependencies_tree("pypi", name, "1.0", db, profile=None, depth=1,
                                                   include_optional=False, python_version=None, os=None)
         assert tree.dependencies_unknown is False and {n.name for n in tree.dependencies} == {"filelock", "nvidia-blob"}
+
+    _run(monkeypatch, answers, check)
+
+
+def test_source_with_no_dependencies_at_all_is_an_empty_variant(monkeypatch) -> None:
+    name = f"d3-{uuid.uuid4().hex[:10]}"
+    answers = {name: VersionDependencies([])}
+
+    async def check(db: AsyncSession, pypi: Registry, mirror: Registry, calls: list[str]) -> None:
+        await _write(db, name, pypi, mirror, ["nvidia-blob"])
+        assert await _graph(db, name, await _profile(db, mirror, pypi)) == {name: []}   # not pypi.org's nvidia-blob
+
+    _run(monkeypatch, answers, check)
+
+
+def test_source_is_read_again_when_the_canonical_set_moves(monkeypatch) -> None:
+    name = f"d3-{uuid.uuid4().hex[:10]}"
+    answers = {name: VersionDependencies([_dep("filelock")])}
+
+    async def check(db: AsyncSession, pypi: Registry, mirror: Registry, calls: list[str]) -> None:
+        await _write(db, name, pypi, mirror, ["filelock"])                 # the index matches pypi.org: digest only
+        profile = await _profile(db, mirror, pypi)
+        assert set(await _graph(db, name, profile)) == {name, "filelock"}
+        await _write(db, name, pypi, mirror, ["filelock", "nvidia-blob"])  # pypi.org's metadata changes
+        assert set(await _graph(db, name, profile)) == {name, "filelock"}  # still the index's own set
+        assert calls == [f"{name}@1.0", f"{name}@1.0"]
+
+    _run(monkeypatch, answers, check)
+
+
+def test_index_that_adds_metadata_later_is_read_again(monkeypatch) -> None:
+    name = f"d3-{uuid.uuid4().hex[:10]}"
+    answers = {name: VersionDependencies([], available=False)}
+
+    async def check(db: AsyncSession, pypi: Registry, mirror: Registry, calls: list[str]) -> None:
+        await _write(db, name, pypi, mirror, ["filelock"])
+        profile = await _profile(db, mirror, pypi)
+        assert await _graph(db, name, profile) == {name: ["dependencies unknown"]}
+        answers[name] = VersionDependencies([_dep("filelock")])
+        snapshot = NormalizedPackage(
+            ref=PackageRef(ecosystem="pypi", namespace="", name=name), registry_id=str(mirror.id), display_name=name,
+            revision="e2", versions=[NormalizedVersion(version="1.0", status="active", dependencies=None, artifacts=[
+                NormalizedArtifact(filename=f"{name}-1.0-py3-none-any.whl", artifact_type="wheel", download_url=None,
+                                   has_metadata_file=True)])])
+        await pipeline.write_package(db, PLUGIN, [snapshot], missing_registry_ids=(), origin=PackageOrigin.seed)
+        await db.commit()
+        assert set(await _graph(db, name, profile)) == {name, "filelock"}
+
+    _run(monkeypatch, answers, check)
+
+
+def test_tree_reads_lazily_and_survives_a_failing_source(monkeypatch) -> None:
+    name, child = f"d3-{uuid.uuid4().hex[:10]}", f"d3-{uuid.uuid4().hex[:10]}"
+    answers = {name: VersionDependencies([_dep(child)]), child: VersionDependencies([], available=False)}
+
+    async def check(db: AsyncSession, pypi: Registry, mirror: Registry, calls: list[str]) -> None:
+        await _write(db, child, pypi, mirror, [])
+        await _write(db, name, pypi, mirror, ["filelock"])
+        profile = await _profile(db, mirror, pypi)
+        tree = await routes.get_dependencies_tree("pypi", name, "1.0", db, profile=profile, depth=1,
+                                                  include_optional=False, python_version=None, os=None)
+        assert [n.name for n in tree.dependencies] == [child]
+        assert tree.dependencies[0].dependencies_unknown is False          # not expanded, not known yet
+        tree = await routes.get_dependencies_tree("pypi", name, "1.0", db, profile=profile, depth=2,
+                                                  include_optional=False, python_version=None, os=None)
+        assert tree.dependencies[0].dependencies_unknown is True
+        tree = await routes.get_dependencies_tree("pypi", name, "1.0", db, profile=profile, depth=1,
+                                                  include_optional=False, python_version=None, os=None)
+        assert tree.dependencies[0].dependencies_unknown is True           # known now, without expanding it
+
+        broken = f"d3-{uuid.uuid4().hex[:10]}"
+        await _write(db, broken, pypi, mirror, ["filelock"])
+        answers.pop(broken, None)                                          # the stub raises KeyError: a failing source
+        tree = await routes.get_dependencies_tree("pypi", broken, "1.0", db, profile=profile, depth=1,
+                                                  include_optional=False, python_version=None, os=None)
+        assert (tree.dependencies_unknown, tree.dependencies) == (True, [])
 
     _run(monkeypatch, answers, check)

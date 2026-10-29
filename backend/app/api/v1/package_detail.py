@@ -3,6 +3,7 @@ PyPI routes `/packages/pypi/{name}/…`, which stay as deprecated aliases until 
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from urllib.parse import quote
@@ -21,7 +22,7 @@ from app.ecosystems.registry import UnknownEcosystem, get_plugin
 from app.fetcher import sources
 from app.fetcher.lazy import LazyFetcher
 from app.fetcher.pipeline import (
-    ensure_version_dependencies,
+    UNAVAILABLE_DIGEST,
     find_package,
     resolve_dependency_links,
     select_best_version,
@@ -29,7 +30,7 @@ from app.fetcher.pipeline import (
 )
 from app.models.artifact import Artifact
 from app.models.dependency import Dependency
-from app.models.enums import DependencyType, PackageVersionStatus
+from app.models.enums import DependenciesState, DependencyType, PackageVersionStatus
 from app.models.package import Package
 from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
@@ -53,6 +54,7 @@ from app.services import visibility
 from app.services.cursor import encode_cursor, parse_iso_datetime, parse_uuid
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 FULL_TREE_MAX_DEPTH = 200
 API_PREFIX = "/api/v1"
 _COORDS = "/packages/{ecosystem}/{coordinates:path}/-"
@@ -249,7 +251,6 @@ async def get_dependencies_tree(
 
     env = _build_marker_environment(python_version=python_version, os_name=os)
     fetcher = LazyFetcher(db=db)
-    await ensure_version_dependencies(db, target.package, version_row)
     max_depth = depth or FULL_TREE_MAX_DEPTH
     nodes = await _build_tree_for_version(
         db=db,
@@ -561,10 +562,28 @@ class _ProfileView:
         slug = visibility.chosen_source(statuses)
         chosen = next((r for r in registries if r.slug == slug), None)
         registry_id = chosen.id if chosen is not None else str(version_row.metadata_registry_id)
-        rows, _ = await source_dependencies(self.db, package, version_row, registry_id)
+        try:
+            async with self.db.begin_nested():
+                rows, _ = await source_dependencies(self.db, package, version_row, registry_id)
+        except Exception:  # noqa: BLE001 - one source failing leaves that node unknown, not the whole tree a 500
+            logger.warning("Dependencies of %s %s could not be loaded", package.normalized_name, version_row.version,
+                           exc_info=True)
+            rows = None
         if rows is None:
             self.unknown.add(version_row.id)
         return list(rows or [])
+
+    async def known_unknown(self, package: Package, version_row: PackageVersion) -> bool:
+        """For a node the tree does not expand: are its dependencies already known to be unknown? Nothing is loaded."""
+        registries = await self.registries(package)
+        statuses = (await visibility.source_statuses(self.db, registries, [version_row.id])).get(version_row.id, [])
+        slug = visibility.chosen_source(statuses)
+        chosen = next((r for r in registries if r.slug == slug), None)
+        if chosen is None or chosen.id == str(version_row.metadata_registry_id):
+            return version_row.dependencies_state == DependenciesState.unavailable
+        digest = await self.db.scalar(select(VersionSource.metadata_digest).where(
+            VersionSource.version_id == version_row.id, VersionSource.registry_id == uuid.UUID(chosen.id)))
+        return digest == UNAVAILABLE_DIGEST
 
     async def pick(self, package: Package, constraint: str | None, linked_id: object | None) -> object | None:
         if package.id not in self._active:
@@ -601,7 +620,6 @@ async def _build_tree_for_version(
     visited: set[str],
     fetcher: LazyFetcher,
 ) -> list[DependencyNode]:
-    await ensure_version_dependencies(db, package, version_row)
     deps = await view.dependencies(package, version_row)
 
     visible_deps: list[Dependency] = []
@@ -620,6 +638,7 @@ async def _build_tree_for_version(
         resolved_version = None
         children: list[DependencyNode] = []
         cycle = False
+        dependencies_unknown = False
 
         if not dep.resolved_package_id:
             await _ensure_dependency_resolved(db, dep, fetcher)
@@ -637,7 +656,6 @@ async def _build_tree_for_version(
                     if resolved_key in visited:
                         cycle = True
                     else:
-                        await ensure_version_dependencies(db, child_package, resolved)
                         children = await _build_tree_for_version(
                             db=db,
                             view=view,
@@ -651,6 +669,7 @@ async def _build_tree_for_version(
                             visited=visited | {resolved_key},
                             fetcher=fetcher,
                         )
+                dependencies_unknown = resolved.id in view.unknown or await view.known_unknown(child_package, resolved)
 
         nodes.append(
             DependencyNode(
@@ -661,7 +680,7 @@ async def _build_tree_for_version(
                 environment_markers=dep.environment_markers,
                 resolved_version=resolved_version,
                 cycle=cycle,
-                dependencies_unknown=resolved_version_id in view.unknown if resolved_version_id else False,
+                dependencies_unknown=dependencies_unknown,
                 children=children,
             )
         )
