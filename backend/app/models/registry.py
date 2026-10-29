@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from app.models.enums import Ecosystem, RegistryProtocol, RegistryType, Tier
+from app.models.enums import Ecosystem, RegistryProtocol
 
 
 class Registry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -19,29 +19,11 @@ class Registry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     ecosystem: Mapped[Ecosystem] = mapped_column(Enum(Ecosystem, name="ecosystem_enum"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    registry_type: Mapped[RegistryType] = mapped_column(
-        Enum(RegistryType, name="registry_type_enum"),
-        nullable=False,
-        default=RegistryType.public,
-        server_default=text("'public'"),
-    )
     base_url: Mapped[str] = mapped_column(String(2048), nullable=False)
-    api_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
-    url_pattern: Mapped[str | None] = mapped_column(String(2048), nullable=True)
-    auth_required: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
-    auth_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    tier: Mapped[Tier] = mapped_column(
-        Enum(Tier, name="tier_enum"), default=Tier.tier1, server_default=text("'tier1'"), nullable=False
-    )
-    sync_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"), nullable=False)
-    sync_priority: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-    # Added by 0006 (the columns above that 0007 removes are kept until then).
-    # Nullable until 0007: the 0005 code inserts registries without it.
-    protocol: Mapped[RegistryProtocol | None] = mapped_column(
+    protocol: Mapped[RegistryProtocol] = mapped_column(
         Enum(RegistryProtocol, name="registry_protocol_enum", values_callable=lambda e: [m.value for m in e]),
-        nullable=True,
+        nullable=False,
     )
     config: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     routing: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

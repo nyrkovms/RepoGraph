@@ -11,18 +11,6 @@ class Ecosystem(str, Enum):
     rpm = "rpm"
 
 
-class RegistryType(str, Enum):
-    public = "public"
-    corporate = "corporate"
-    mirror = "mirror"
-
-
-class Tier(str, Enum):
-    tier1 = "tier1"
-    tier2 = "tier2"
-    tier3 = "tier3"
-
-
 class PackageVersionStatus(str, Enum):
     active = "active"
     yanked = "yanked"
@@ -54,11 +42,6 @@ class VulnerabilitySeverity(str, Enum):
     critical = "critical"
 
 
-class SyncType(str, Enum):
-    full = "full"
-    incremental = "incremental"
-
-
 class SyncStatus(str, Enum):
     idle = "idle"
     running = "running"
@@ -78,13 +61,6 @@ class PackageEventKind(str, Enum):
     project_restored = "project_restored"
     release_deprecated = "release_deprecated"
     source_added = "source_added"
-
-
-class UpdateRunStatus(str, Enum):
-    running = "running"
-    success = "success"
-    partial = "partial"
-    failed = "failed"
 
 
 # Values contain hyphens, so the database enum is built from the values (see `Registry.protocol`), not member names.

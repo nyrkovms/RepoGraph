@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint, text
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,7 +25,7 @@ class Package(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     ecosystem: Mapped[Ecosystem] = mapped_column(Enum(Ecosystem, name="ecosystem_enum"), nullable=False)
-    namespace: Mapped[str | None] = mapped_column(String(255), nullable=True, server_default=text("''"))
+    namespace: Mapped[str] = mapped_column(String(255), nullable=False, server_default=text("''"))
     name: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_name: Mapped[str] = mapped_column(Text, nullable=False)
     primary_registry_id: Mapped[str] = mapped_column(ForeignKey("registries.id"), nullable=False)
@@ -46,16 +46,10 @@ class Package(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    deprecated: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
-    deprecation_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    deprecation_alternative: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    last_serial: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     unavailable_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     raw_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
-    # Added by 0006.
     origin: Mapped[PackageOrigin] = mapped_column(
         Enum(PackageOrigin, name="package_origin_enum"),
         nullable=False,

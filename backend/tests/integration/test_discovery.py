@@ -224,8 +224,8 @@ def insert_state(registry_id: str, *, degraded: bool, failures: int = 5):
 
     from sqlalchemy.dialects.postgresql import insert
 
-    from app.models.enums import SyncStatus, SyncType
+    from app.models.enums import SyncStatus
 
     until = datetime.now(UTC) + timedelta(minutes=10) if degraded else None
-    return insert(SyncState).values(registry_id=registry_id, sync_type=SyncType.incremental, status=SyncStatus.idle,
+    return insert(SyncState).values(registry_id=registry_id, status=SyncStatus.idle,
                                     cursor_data={}, consecutive_failures=failures, degraded_until=until)

@@ -9,7 +9,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     LargeBinary,
-    String,
     Text,
     UniqueConstraint,
     text,
@@ -25,9 +24,7 @@ class PackageVersion(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "package_versions"
     __table_args__ = (
         UniqueConstraint("package_id", "version", name="uq_package_versions_pkg_version"),
-        Index("idx_ver_pkg_ver", "package_id", "version", unique=True),
         Index("idx_ver_release", "release_date"),
-        Index("idx_ver_needed", "needed_in_index", postgresql_where=text("needed_in_index = true")),
         Index("idx_ver_pkg_sort", "package_id", text("sort_key DESC")),
     )
 
@@ -39,15 +36,12 @@ class PackageVersion(UUIDPrimaryKeyMixin, Base):
         nullable=False,
         default=PackageVersionStatus.active,
     )
-    requires_python: Mapped[str | None] = mapped_column(String(128), nullable=True)
     download_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     features: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    needed_in_index: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
     raw_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
-    # Added by 0006.
-    sort_key: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
-    is_prerelease: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    sort_key: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)   # VersionScheme.sort_key
+    is_prerelease: Mapped[bool] = mapped_column(Boolean, nullable=False)
     status_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     deprecation: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     engines: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

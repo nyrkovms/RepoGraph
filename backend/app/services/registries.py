@@ -235,7 +235,6 @@ def _apply(row: Registry, fields: RegistryFields) -> None:
     row.routing = fields.routing
     row.auth_type = fields.auth_type
     row.credentials_ref = fields.credentials_ref
-    row.auth_required = fields.auth_type != "none"  # legacy column, dropped by 0007
 
 
 async def create_registry(db: AsyncSession, body: RegistryCreate) -> RegistryResponse:

@@ -87,7 +87,7 @@ case "$cmd" in
   status)
     "${COMPOSE[@]}" ps
     "${COMPOSE[@]}" exec -T postgres sh -c \
-      'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select version_num from alembic_version" -c "select (select count(*) from packages) as packages, (select count(*) from package_versions) as versions, (select max(started_at) from update_runs) as last_update_run"'
+      'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select version_num from alembic_version" -c "select (select count(*) from packages) as packages, (select count(*) from package_versions) as versions, (select max(started_at) from runs where operation = '\''daily_update'\'') as last_update_run"'
     ;;
   logs)
     "${COMPOSE[@]}" logs -f --tail=100 "$@"

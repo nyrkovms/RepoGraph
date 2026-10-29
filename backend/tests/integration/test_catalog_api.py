@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -92,7 +92,8 @@ async def _build(db: AsyncSession, now: datetime) -> dict[str, Any]:
     db.add_all([_link(widget, npm_hi, now), _link(ui, npm_hi, now), _link(widget, npm_lo, now, missing=True),
                 _link(pywidget, pypi2, now)])
 
-    version = PackageVersion(id=uuid.uuid4(), package_id=widget.id, version="1.0.0", raw_metadata={})
+    version = PackageVersion(id=uuid.uuid4(), package_id=widget.id, version="1.0.0", raw_metadata={},
+                             sort_key=b"\x01", is_prerelease=False)
     db.add(version)
     await db.flush()
     db.add(VersionSource(version_id=version.id, registry_id=npm_hi.id, first_seen_at=now))
@@ -372,6 +373,7 @@ def test_sync_status_without_runs_creates_no_rows() -> None:
         engine = create_async_engine(get_settings().async_db_url, poolclass=NullPool)
         try:
             async with AsyncSession(engine) as db:
+                await db.execute(update(PackageEvent).values(run_id=None))
                 await db.execute(delete(Run))
                 await db.execute(delete(SyncState))
                 status = await admin_api.sync_status(db)

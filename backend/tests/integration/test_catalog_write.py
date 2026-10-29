@@ -122,12 +122,12 @@ def test_one_source_writes_the_catalog_row() -> None:
         versions = await _versions(db, package.id)
         assert versions["2.0"].dependencies_state == DependenciesState.hydrated
         assert versions["1.0"].dependencies_state == DependenciesState.pending   # lazy: not loaded yet
-        assert versions["2.0"].requires_python == ">=3.9" and versions["2.0"].sort_key > versions["1.0"].sort_key
+        assert versions["2.0"].engines == {"python": ">=3.9"} and versions["2.0"].sort_key > versions["1.0"].sort_key
         assert str(versions["2.0"].metadata_registry_id) == pypi
         assert await _deps(db, versions["2.0"].id) == ["typing-extensions"]
         assert await _sources(db, versions["1.0"].id) == {pypi: "active"}
         registry = await db.scalar(select(PackageRegistry).where(PackageRegistry.package_id == package.id))
-        assert (registry.is_primary, registry.upstream_revision, registry.missing_since) == (True, "1", None)
+        assert (str(package.primary_registry_id), registry.upstream_revision, registry.missing_since) == (pypi, "1", None)
         assert await _events(db, package.id) == [("tracking_started", None)]
 
         # A refresh that does not carry the dependencies of 2.0 keeps them (dependencies=None = not loaded).

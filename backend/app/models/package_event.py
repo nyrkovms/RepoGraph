@@ -22,6 +22,5 @@ class PackageEvent(Base):
     kind: Mapped[PackageEventKind] = mapped_column(Enum(PackageEventKind, name="package_event_kind_enum"), nullable=False)
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    # No FK: 0006 drops the one to update_runs, 0007 re-creates it against runs.
-    run_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("runs.id"), nullable=True)
     details: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb"))

@@ -22,12 +22,11 @@ from app.ecosystems.base import PackageRef, RegistryConfig, TrackedPackage
 from app.ecosystems.registry import registered
 from app.fetcher import discovery, sources
 from app.fetcher.pipeline import load_builtin_plugins, mark_unavailable, plugin_for, sync_package
-from app.models.enums import Ecosystem, SyncStatus, SyncType, UpdateRunStatus
+from app.models.enums import Ecosystem, SyncStatus
 from app.models.package import Package
 from app.models.package_registry import PackageRegistry
 from app.models.run import Run
 from app.models.sync_state import SyncState
-from app.models.update_run import UpdateRun
 from app.services import runs
 from app.services.sync_failures import clear_sync_failure, upsert_sync_failure
 
@@ -167,8 +166,7 @@ async def _detect(db: AsyncSession, registries: list[RegistryConfig]) -> tuple[d
 
 async def _save_cursors(db: AsyncSession, cursors: Mapping[str, Mapping[str, object]]) -> None:
     for registry_id, cursor in cursors.items():
-        stmt = insert(SyncState).values(registry_id=registry_id, sync_type=SyncType.incremental, status=SyncStatus.idle,
-                                        cursor_data=dict(cursor))
+        stmt = insert(SyncState).values(registry_id=registry_id, status=SyncStatus.idle, cursor_data=dict(cursor))
         await db.execute(stmt.on_conflict_do_update(index_elements=["registry_id"], set_={"cursor_data": dict(cursor)}))
 
 
@@ -185,9 +183,6 @@ async def run_ecosystem(ecosystem: str) -> dict:
             return {"status": "skipped", "operation": OPERATION, "ecosystem": ecosystem,
                     "running_run_id": str(running.id) if running else None}
         run_id = run.id
-        if ecosystem == "pypi":
-            # update_runs stays filled until 0007 (readers move to runs in E0-C); same id, as 0006 backfills.
-            db.add(UpdateRun(id=run_id, status=UpdateRunStatus.running))
         await db.commit()
         registries = await sources.enabled_registries(db, ecosystem)
 
@@ -234,18 +229,6 @@ async def run_ecosystem(ecosystem: str) -> dict:
         events = await runs.finish_run(db, run, status, error=error, per_registry=per_registry, **counts)
         if status != runs.FAILED:
             await _save_cursors(db, cursors)
-        legacy = await db.get(UpdateRun, run_id)
-        if legacy is not None:
-            legacy.status = UpdateRunStatus(status)
-            legacy.finished_at = run.finished_at
-            legacy.error = run.error
-            legacy.index_serial = index_serial
-            legacy.packages_checked = counts["packages_checked"]
-            legacy.packages_changed = counts["packages_changed"]
-            legacy.packages_updated = counts["packages_updated"]
-            legacy.packages_failed = counts["packages_failed"]
-            legacy.packages_unavailable = counts["packages_unavailable"]
-            legacy.events_created = run.events_created
         await db.commit()
         finished_at = run.finished_at
 

@@ -8,10 +8,8 @@ from app.connectors.base import PackageNotFound
 from app.db import loop_local_session
 from app.fetcher.pipeline import plugin_for, sync_package
 from app.models.enums import PackageOrigin
-from app.models.enums import SyncType
 from app.services.metrics import observe_sync_duration
 from app.services.sync_failures import clear_sync_failure, upsert_sync_failure
-from app.services.sync_state import mark_sync_failed, mark_sync_progress, mark_sync_running, mark_sync_success
 from app.tasks.fetch_packages import ref_from_target
 
 logger = logging.getLogger(__name__)
@@ -25,26 +23,14 @@ async def _fetch_package_async(target: str) -> dict[str, str]:
     purl, name = coordinates.to_purl(ref), coordinates.display(ref)
 
     async with loop_local_session() as db:
-        await mark_sync_running(db, SyncType.incremental, packages_total=1)
-        await db.commit()
-
         try:
             await sync_package(db, ref, origin=PackageOrigin.manual)
             await clear_sync_failure(db, ref=ref)
-            await mark_sync_progress(db, processed=1)
             elapsed_ms = (perf_counter() - started) * 1000
-            await mark_sync_success(
-                db,
-                processed=1,
-                total=1,
-                duration_ms=elapsed_ms,
-                operation="fetch",
-            )
             await db.commit()
             observe_sync_duration("fetch", elapsed_ms / 1000.0)
         except PackageNotFound as exc:
             logger.warning("Fetch package not found: package=%s", purl)
-            elapsed_ms = (perf_counter() - started) * 1000
             await db.rollback()
             await upsert_sync_failure(
                 db,
@@ -53,33 +39,16 @@ async def _fetch_package_async(target: str) -> dict[str, str]:
                 exc=exc,
                 retryable=False,
             )
-            await mark_sync_failed(
-                db,
-                str(exc),
-                processed=0,
-                total=1,
-                duration_ms=elapsed_ms,
-                operation="fetch",
-            )
             await db.commit()
             raise
         except Exception as exc:  # noqa: BLE001
             logger.exception("Fetch failed: package=%s", purl)
-            elapsed_ms = (perf_counter() - started) * 1000
             await db.rollback()
             await upsert_sync_failure(
                 db,
                 operation="fetch",
                 ref=ref,
                 exc=exc,
-            )
-            await mark_sync_failed(
-                db,
-                str(exc),
-                processed=0,
-                total=1,
-                duration_ms=elapsed_ms,
-                operation="fetch",
             )
             await db.commit()
             raise

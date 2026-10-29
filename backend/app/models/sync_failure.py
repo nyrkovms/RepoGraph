@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -11,14 +11,13 @@ from app.models.enums import Ecosystem
 class SyncFailure(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "sync_failures"
     __table_args__ = (
-        UniqueConstraint("operation", "package_name", name="uq_sync_failures_operation_package"),
+        Index("uq_sync_failures_key", "operation", "ecosystem", "registry_id", "package_ref", unique=True,
+              postgresql_nulls_not_distinct=True),
         Index("idx_sync_failures_retry_due", "retryable", "next_retry_at"),
         Index("idx_sync_failures_last_seen", "last_seen_at"),
     )
 
     operation: Mapped[str] = mapped_column(String(32), nullable=False)
-    # Still the conflict key of uq_sync_failures_operation_package; every writer sets it until 0007 (IMPL §2).
-    package_name: Mapped[str] = mapped_column(String(255), nullable=False)
     error_class: Mapped[str] = mapped_column(String(255), nullable=False)
     error_message: Mapped[str] = mapped_column(Text, nullable=False)
     traceback: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -27,7 +26,6 @@ class SyncFailure(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
-    # Added by 0006: failures are keyed by ecosystem, source and purl (new unique key in 0007).
-    ecosystem: Mapped[Ecosystem | None] = mapped_column(Enum(Ecosystem, name="ecosystem_enum"), nullable=True)
-    registry_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("registries.id"), nullable=True)
-    package_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ecosystem: Mapped[Ecosystem] = mapped_column(Enum(Ecosystem, name="ecosystem_enum"), nullable=False)
+    registry_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("registries.id"), nullable=True)   # NULL: no single source
+    package_ref: Mapped[str] = mapped_column(Text, nullable=False)   # purl without version

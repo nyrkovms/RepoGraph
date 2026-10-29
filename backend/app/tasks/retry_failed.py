@@ -9,15 +9,13 @@ from app.celery_app import celery_app
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
 from app.db import loop_local_session
-from app.ecosystems.base import PackageRef
-from app.fetcher.pipeline import pypi_ref, sync_package
-from app.models.enums import PackageOrigin, SyncType
+from app.fetcher.pipeline import sync_package
+from app.models.enums import PackageOrigin
 from app.models.run import Run
 from app.models.sync_failure import SyncFailure
 from app.services.metrics import observe_sync_duration
-from app.services.runs import FAILED, PARTIAL, SUCCESS, finish_run, start_run
+from app.services.runs import FAILED, PARTIAL, SUCCESS, finish_run, progress_run, start_run
 from app.services.sync_failures import clear_sync_failure, list_due_sync_failures, upsert_sync_failure
-from app.services.sync_state import mark_sync_failed, mark_sync_progress, mark_sync_running, mark_sync_success
 from app.tasks.fetch_packages import ref_from_purl
 
 logger = logging.getLogger(__name__)
@@ -29,11 +27,6 @@ _ORIGIN_BY_OPERATION = {
     "fetch": PackageOrigin.manual,
     "daily_update": PackageOrigin.dependency,
 }
-
-
-def failure_ref(package_ref: str | None, package_name: str) -> PackageRef:
-    """The package of a failure row; rows written before `package_ref` existed hold a bare PyPI name only."""
-    return ref_from_purl(package_ref) if package_ref else pypi_ref(package_name)
 
 
 async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | str]:
@@ -61,22 +54,22 @@ async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | s
             }
 
         # Plain values: the rollback in the except branches expires the ORM rows.
-        failures = [(row.id, row.package_ref, row.package_name, row.operation) for row in rows]
+        failures = [(row.id, row.package_ref, row.operation) for row in rows]
 
         run = await start_run(db, "retry", None, exclusive=False)
         assert run is not None
         run_id = run.id
-        await mark_sync_running(db, SyncType.incremental, packages_total=total)
+        await progress_run(db, run_id, packages_total=total)
         await db.commit()
 
         try:
-            for failure_id, package_ref, package_name, operation in failures:
+            for failure_id, package_ref, operation in failures:
                 try:
-                    ref = failure_ref(package_ref, package_name)
+                    ref = ref_from_purl(package_ref)
                 except ValueError as exc:
                     # A purl no plugin understands (e.g. its ecosystem was removed): retrying cannot help.
                     failed += 1
-                    logger.warning("Retry skipped, bad package_ref %r: %s", package_ref or package_name, exc)
+                    logger.warning("Retry skipped, bad package_ref %r: %s", package_ref, exc)
                     await db.execute(
                         update(SyncFailure).where(SyncFailure.id == failure_id).values(retryable=False, next_retry_at=None)
                     )
@@ -90,7 +83,6 @@ async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | s
                 except PackageNotFound as exc:
                     failed += 1
                     logger.warning("Retry failed package not found: package=%s operation=%s", ref.name, operation)
-                    elapsed_ms = (perf_counter() - started) * 1000
                     await db.rollback()
                     await upsert_sync_failure(
                         db,
@@ -99,20 +91,11 @@ async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | s
                         exc=exc,
                         retryable=False,
                     )
-                    await mark_sync_failed(
-                        db,
-                        str(exc),
-                        processed=recovered,
-                        total=total,
-                        duration_ms=elapsed_ms,
-                        operation="retry_failed",
-                    )
                     await db.commit()
                     continue
                 except Exception as exc:  # noqa: BLE001
                     failed += 1
                     logger.exception("Retry failed: package=%s operation=%s", ref.name, operation)
-                    elapsed_ms = (perf_counter() - started) * 1000
                     await db.rollback()
                     await upsert_sync_failure(
                         db,
@@ -120,29 +103,14 @@ async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | s
                         ref=ref,
                         exc=exc,
                     )
-                    await mark_sync_failed(
-                        db,
-                        str(exc),
-                        processed=recovered,
-                        total=total,
-                        duration_ms=elapsed_ms,
-                        operation="retry_failed",
-                    )
                     await db.commit()
                     continue
 
-                await mark_sync_progress(db, processed=recovered)
+                await progress_run(db, run_id, packages_checked=recovered + failed, packages_updated=recovered,
+                                   packages_failed=failed)
                 await db.commit()
 
             elapsed_ms = (perf_counter() - started) * 1000
-            await mark_sync_success(
-                db,
-                processed=recovered,
-                total=total,
-                duration_ms=elapsed_ms,
-                operation="retry_failed",
-            )
-            await db.commit()
             observe_sync_duration("retry_failed", elapsed_ms / 1000.0)
         except Exception as exc:
             await db.rollback()
