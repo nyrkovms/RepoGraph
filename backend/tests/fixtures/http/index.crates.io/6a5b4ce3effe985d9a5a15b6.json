@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"230d1bac1d83bde63418ab7bffcc71a1\"",
+    "last-modified": "Sun, 01 Feb 2026 13:13:55 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/we/b-/web-time"
+  },
+  "status": 200
+}

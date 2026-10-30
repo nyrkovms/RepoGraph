@@ -1,0 +1,13 @@
+{
+  "headers": {
+    "content-type": "application/xml"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ro/ot/root-cfb6e88b"
+  },
+  "status": 404
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"ea428a1750344ce49d998faf8f37ad76\"",
+    "last-modified": "Thu, 13 Aug 2026 23:27:59 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/li/te/litemap"
+  },
+  "status": 200
+}

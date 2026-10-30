@@ -25,6 +25,8 @@ of `(package, version)`. Cases live in `<ecosystem>/<case>/`:
 
 - `expected.json` — written by `scripts/generate_resolver_references.sh`, never by hand:
   `{"tool": "pip 24.3.1", "command": [...], "generated_at": "...", "install": [{"name": ..., "version": ...}]}`.
+  crates cases also carry `lockfile`, the packages of `Cargo.lock` (every platform); the test resolves them a
+  second time with `target: "*"` and compares that set too.
 
 `tests/integration/test_resolver_reference.py` resolves every case through the API service on recorded upstream
 responses (`HTTP_REPLAY_DIR`, no network) and compares the sets; a case without `expected.json` is skipped. The

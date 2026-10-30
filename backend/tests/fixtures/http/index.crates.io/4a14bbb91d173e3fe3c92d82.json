@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"5caac0ef5fa84f856ca9e05fed7b5ac0\"",
+    "last-modified": "Sun, 06 Sep 2026 05:45:09 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ip/ne/ipnet"
+  },
+  "status": 200
+}

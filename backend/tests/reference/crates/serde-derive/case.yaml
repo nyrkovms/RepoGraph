@@ -1,0 +1,11 @@
+description: >
+  serde with the derive feature: an optional dependency (serde_derive) switched on by a feature, proc-macro build
+  dependencies (proc-macro2, quote, syn) shared between crates.
+roots:
+  - {purl: pkg:cargo/serde, constraint: "1", extras: [derive]}
+environment: {target: x86_64-unknown-linux-gnu}
+sources:
+  - {slug: crates-io, protocol: cargo-sparse, base_url: "https://index.crates.io/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

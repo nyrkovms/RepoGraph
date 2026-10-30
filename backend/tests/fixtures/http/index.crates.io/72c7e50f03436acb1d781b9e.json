@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"04a4f217db8821e758a02318b35808dc\"",
+    "last-modified": "Sun, 01 Feb 2026 13:14:56 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wi/nd/windows-targets"
+  },
+  "status": 200
+}

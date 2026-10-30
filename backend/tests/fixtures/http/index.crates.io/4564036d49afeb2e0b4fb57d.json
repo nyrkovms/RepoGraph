@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"732ab8798e476c1d72e0b69746b9b2d5\"",
+    "last-modified": "Sat, 03 Oct 2026 16:33:12 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/3/m/mio"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"c52ed09af494dcc9e8855a51808c7bc6\"",
+    "last-modified": "Mon, 31 Aug 2026 14:49:27 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/to/we/tower-http"
+  },
+  "status": 200
+}

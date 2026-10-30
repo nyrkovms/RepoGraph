@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"79ee26535188ff3158f33956c562207d\"",
+    "last-modified": "Thu, 27 Aug 2026 21:37:03 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/cp/uf/cpufeatures"
+  },
+  "status": 200
+}

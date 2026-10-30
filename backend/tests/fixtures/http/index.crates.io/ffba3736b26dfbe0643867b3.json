@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"39a1cffd446ba14cc5e84cc4726c24f7\"",
+    "last-modified": "Thu, 24 Sep 2026 17:48:01 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/hy/pe/hyper-util"
+  },
+  "status": 200
+}

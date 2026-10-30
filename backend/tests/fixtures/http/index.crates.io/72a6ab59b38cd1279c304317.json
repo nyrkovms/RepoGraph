@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"b93b25c5223f70b10177090989a62fb6\"",
+    "last-modified": "Sun, 01 Feb 2026 13:14:58 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wi/nd/windows_x86_64_msvc"
+  },
+  "status": 200
+}

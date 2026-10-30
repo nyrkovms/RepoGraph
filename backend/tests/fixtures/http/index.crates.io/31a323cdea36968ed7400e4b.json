@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"344a97f7890823c7cf7f760586e34a6a\"",
+    "last-modified": "Tue, 13 Oct 2026 20:03:09 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ze/ro/zerocopy"
+  },
+  "status": 200
+}

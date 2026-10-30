@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"ac731cb04a71e15be0790685358bb0ad\"",
+    "last-modified": "Wed, 29 Jul 2026 13:15:28 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/to/ki/tokio-macros"
+  },
+  "status": 200
+}

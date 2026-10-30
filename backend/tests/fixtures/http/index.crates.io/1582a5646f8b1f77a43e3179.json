@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"b80703e5b81110869d945dc7d919a9c1\"",
+    "last-modified": "Wed, 08 Jul 2026 00:49:56 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/me/mc/memchr"
+  },
+  "status": 200
+}

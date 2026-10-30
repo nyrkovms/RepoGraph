@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"97c6f11a77849464668f8ceecfe2c7a6\"",
+    "last-modified": "Thu, 22 Oct 2026 08:56:16 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ic/u_/icu_properties_data"
+  },
+  "status": 200
+}

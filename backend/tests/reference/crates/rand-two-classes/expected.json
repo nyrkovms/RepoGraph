@@ -1,0 +1,144 @@
+{
+  "tool": "cargo 1.86.0",
+  "command": [
+    "cargo",
+    "tree",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "-e",
+    "normal,build"
+  ],
+  "generated_at": "2026-10-30T12:15:53+00:00",
+  "install": [
+    {
+      "name": "cfg-if",
+      "version": "1.0.5"
+    },
+    {
+      "name": "getrandom",
+      "version": "0.1.16"
+    },
+    {
+      "name": "getrandom",
+      "version": "0.2.17"
+    },
+    {
+      "name": "libc",
+      "version": "0.2.191"
+    },
+    {
+      "name": "ppv-lite86",
+      "version": "0.2.21"
+    },
+    {
+      "name": "rand",
+      "version": "0.7.3"
+    },
+    {
+      "name": "rand",
+      "version": "0.8.8"
+    },
+    {
+      "name": "rand_chacha",
+      "version": "0.2.2"
+    },
+    {
+      "name": "rand_chacha",
+      "version": "0.3.1"
+    },
+    {
+      "name": "rand_core",
+      "version": "0.5.1"
+    },
+    {
+      "name": "rand_core",
+      "version": "0.6.4"
+    },
+    {
+      "name": "zerocopy",
+      "version": "0.8.63"
+    }
+  ],
+  "lockfile": [
+    {
+      "name": "cfg-if",
+      "version": "1.0.5"
+    },
+    {
+      "name": "getrandom",
+      "version": "0.1.16"
+    },
+    {
+      "name": "getrandom",
+      "version": "0.2.17"
+    },
+    {
+      "name": "libc",
+      "version": "0.2.191"
+    },
+    {
+      "name": "ppv-lite86",
+      "version": "0.2.21"
+    },
+    {
+      "name": "proc-macro2",
+      "version": "1.0.107"
+    },
+    {
+      "name": "quote",
+      "version": "1.0.47"
+    },
+    {
+      "name": "rand",
+      "version": "0.7.3"
+    },
+    {
+      "name": "rand",
+      "version": "0.8.8"
+    },
+    {
+      "name": "rand_chacha",
+      "version": "0.2.2"
+    },
+    {
+      "name": "rand_chacha",
+      "version": "0.3.1"
+    },
+    {
+      "name": "rand_core",
+      "version": "0.5.1"
+    },
+    {
+      "name": "rand_core",
+      "version": "0.6.4"
+    },
+    {
+      "name": "rand_hc",
+      "version": "0.2.0"
+    },
+    {
+      "name": "syn",
+      "version": "2.0.119"
+    },
+    {
+      "name": "unicode-ident",
+      "version": "1.0.27"
+    },
+    {
+      "name": "wasi",
+      "version": "0.11.1+wasi-snapshot-preview1"
+    },
+    {
+      "name": "wasi",
+      "version": "0.9.0+wasi-snapshot-preview1"
+    },
+    {
+      "name": "zerocopy",
+      "version": "0.8.63"
+    },
+    {
+      "name": "zerocopy-derive",
+      "version": "0.8.63"
+    }
+  ]
+}

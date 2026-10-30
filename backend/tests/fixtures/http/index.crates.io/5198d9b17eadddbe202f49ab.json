@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"c4a5e94175525cba97d7ef6d4abe4bfd\"",
+    "last-modified": "Sat, 11 Apr 2026 13:36:50 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ra/nd/rand_pcg"
+  },
+  "status": 200
+}

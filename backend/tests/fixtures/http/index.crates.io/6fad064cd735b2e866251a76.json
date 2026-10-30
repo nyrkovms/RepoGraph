@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"6fd860e30105a05b2bc4f7bab78fe153\"",
+    "last-modified": "Thu, 22 Oct 2026 08:52:10 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ic/u_/icu_provider"
+  },
+  "status": 200
+}

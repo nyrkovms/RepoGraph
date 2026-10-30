@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"d6e733b0d0f0e8f615e6dca3951c5d98\"",
+    "last-modified": "Thu, 30 Jul 2026 19:43:06 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/sy/ns/synstructure"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"102e946c78cd205de837279e3c7cfd8e\"",
+    "last-modified": "Sun, 01 Feb 2026 12:46:00 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ri/ng/ring"
+  },
+  "status": 200
+}

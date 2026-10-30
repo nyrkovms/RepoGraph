@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"0f5848725eb0fd28678f4a7c5c93c833\"",
+    "last-modified": "Mon, 13 Jul 2026 12:58:55 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/zm/ij/zmij"
+  },
+  "status": 200
+}

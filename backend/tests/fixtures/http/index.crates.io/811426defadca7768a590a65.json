@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"c119c077bcf893d1850b52b1fc5640a3\"",
+    "last-modified": "Tue, 06 Oct 2026 15:57:21 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/hy/pe/hyper"
+  },
+  "status": 200
+}

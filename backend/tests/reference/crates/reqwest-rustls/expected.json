@@ -1,0 +1,896 @@
+{
+  "tool": "cargo 1.86.0",
+  "command": [
+    "cargo",
+    "tree",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "-e",
+    "normal,build"
+  ],
+  "generated_at": "2026-10-30T12:15:58+00:00",
+  "install": [
+    {
+      "name": "atomic-waker",
+      "version": "1.1.2"
+    },
+    {
+      "name": "base64",
+      "version": "0.22.1"
+    },
+    {
+      "name": "base64",
+      "version": "0.23.1"
+    },
+    {
+      "name": "bitflags",
+      "version": "2.13.2"
+    },
+    {
+      "name": "bytes",
+      "version": "1.12.1"
+    },
+    {
+      "name": "cc",
+      "version": "1.10.0"
+    },
+    {
+      "name": "cfg-if",
+      "version": "1.0.5"
+    },
+    {
+      "name": "displaydoc",
+      "version": "0.2.7"
+    },
+    {
+      "name": "find-msvc-tools",
+      "version": "0.1.15"
+    },
+    {
+      "name": "form_urlencoded",
+      "version": "1.2.2"
+    },
+    {
+      "name": "futures-channel",
+      "version": "0.3.34"
+    },
+    {
+      "name": "futures-core",
+      "version": "0.3.34"
+    },
+    {
+      "name": "futures-task",
+      "version": "0.3.34"
+    },
+    {
+      "name": "futures-util",
+      "version": "0.3.34"
+    },
+    {
+      "name": "getrandom",
+      "version": "0.2.17"
+    },
+    {
+      "name": "http",
+      "version": "1.5.0"
+    },
+    {
+      "name": "http-body",
+      "version": "1.1.0"
+    },
+    {
+      "name": "http-body-util",
+      "version": "0.1.5"
+    },
+    {
+      "name": "httparse",
+      "version": "1.10.1"
+    },
+    {
+      "name": "hyper",
+      "version": "1.12.0"
+    },
+    {
+      "name": "hyper-rustls",
+      "version": "0.27.10"
+    },
+    {
+      "name": "hyper-util",
+      "version": "0.1.21"
+    },
+    {
+      "name": "icu_collections",
+      "version": "2.4.0"
+    },
+    {
+      "name": "icu_locale_core",
+      "version": "2.4.0"
+    },
+    {
+      "name": "icu_normalizer",
+      "version": "2.4.0"
+    },
+    {
+      "name": "icu_normalizer_data",
+      "version": "2.4.0"
+    },
+    {
+      "name": "icu_properties",
+      "version": "2.4.0"
+    },
+    {
+      "name": "icu_properties_data",
+      "version": "2.4.0"
+    },
+    {
+      "name": "icu_provider",
+      "version": "2.4.0"
+    },
+    {
+      "name": "idna",
+      "version": "1.1.0"
+    },
+    {
+      "name": "idna_adapter",
+      "version": "1.2.2"
+    },
+    {
+      "name": "ipnet",
+      "version": "2.12.2"
+    },
+    {
+      "name": "itoa",
+      "version": "1.0.18"
+    },
+    {
+      "name": "libc",
+      "version": "0.2.191"
+    },
+    {
+      "name": "litemap",
+      "version": "0.8.3"
+    },
+    {
+      "name": "log",
+      "version": "0.4.34"
+    },
+    {
+      "name": "memchr",
+      "version": "2.8.3"
+    },
+    {
+      "name": "mio",
+      "version": "1.2.4"
+    },
+    {
+      "name": "once_cell",
+      "version": "1.21.4"
+    },
+    {
+      "name": "percent-encoding",
+      "version": "2.3.2"
+    },
+    {
+      "name": "pin-project-lite",
+      "version": "0.2.17"
+    },
+    {
+      "name": "potential_utf",
+      "version": "0.1.6"
+    },
+    {
+      "name": "proc-macro2",
+      "version": "1.0.107"
+    },
+    {
+      "name": "quote",
+      "version": "1.0.47"
+    },
+    {
+      "name": "reqwest",
+      "version": "0.12.28"
+    },
+    {
+      "name": "ring",
+      "version": "0.17.14"
+    },
+    {
+      "name": "rustls",
+      "version": "0.23.46"
+    },
+    {
+      "name": "rustls-pki-types",
+      "version": "1.15.1"
+    },
+    {
+      "name": "rustls-webpki",
+      "version": "0.103.16"
+    },
+    {
+      "name": "ryu",
+      "version": "1.0.23"
+    },
+    {
+      "name": "serde",
+      "version": "1.0.229"
+    },
+    {
+      "name": "serde_core",
+      "version": "1.0.229"
+    },
+    {
+      "name": "serde_json",
+      "version": "1.0.154"
+    },
+    {
+      "name": "serde_urlencoded",
+      "version": "0.7.1"
+    },
+    {
+      "name": "shlex",
+      "version": "2.0.1"
+    },
+    {
+      "name": "slab",
+      "version": "0.4.12"
+    },
+    {
+      "name": "smallvec",
+      "version": "1.16.4"
+    },
+    {
+      "name": "socket2",
+      "version": "0.6.5"
+    },
+    {
+      "name": "stable_deref_trait",
+      "version": "1.2.1"
+    },
+    {
+      "name": "subtle",
+      "version": "2.6.1"
+    },
+    {
+      "name": "syn",
+      "version": "3.0.9"
+    },
+    {
+      "name": "sync_wrapper",
+      "version": "1.0.2"
+    },
+    {
+      "name": "synstructure",
+      "version": "0.14.0"
+    },
+    {
+      "name": "tinystr",
+      "version": "0.8.5"
+    },
+    {
+      "name": "tokio",
+      "version": "1.54.1"
+    },
+    {
+      "name": "tokio-rustls",
+      "version": "0.26.6"
+    },
+    {
+      "name": "tower",
+      "version": "0.5.3"
+    },
+    {
+      "name": "tower-http",
+      "version": "0.6.11"
+    },
+    {
+      "name": "tower-layer",
+      "version": "0.3.3"
+    },
+    {
+      "name": "tower-service",
+      "version": "0.3.3"
+    },
+    {
+      "name": "tracing",
+      "version": "0.1.44"
+    },
+    {
+      "name": "tracing-core",
+      "version": "0.1.36"
+    },
+    {
+      "name": "try-lock",
+      "version": "0.2.5"
+    },
+    {
+      "name": "unicode-ident",
+      "version": "1.0.27"
+    },
+    {
+      "name": "untrusted",
+      "version": "0.9.0"
+    },
+    {
+      "name": "url",
+      "version": "2.5.8"
+    },
+    {
+      "name": "utf8_iter",
+      "version": "1.1.0"
+    },
+    {
+      "name": "utf_types",
+      "version": "1.0.0"
+    },
+    {
+      "name": "want",
+      "version": "0.3.2"
+    },
+    {
+      "name": "webpki-roots",
+      "version": "1.0.11"
+    },
+    {
+      "name": "writeable",
+      "version": "0.6.4"
+    },
+    {
+      "name": "yoke",
+      "version": "0.8.4"
+    },
+    {
+      "name": "yoke-derive",
+      "version": "0.8.4"
+    },
+    {
+      "name": "zerofrom",
+      "version": "0.1.8"
+    },
+    {
+      "name": "zerofrom-derive",
+      "version": "0.1.8"
+    },
+    {
+      "name": "zeroize",
+      "version": "1.9.1"
+    },
+    {
+      "name": "zerotrie",
+      "version": "0.2.5"
+    },
+    {
+      "name": "zerovec",
+      "version": "0.11.9"
+    },
+    {
+      "name": "zerovec-derive",
+      "version": "0.11.7"
+    },
+    {
+      "name": "zmij",
+      "version": "1.0.23"
+    }
+  ],
+  "lockfile": [
+    {
+      "name": "atomic-waker",
+      "version": "1.1.2"
+    },
+    {
+      "name": "base64",
+      "version": "0.22.1"
+    },
+    {
+      "name": "base64",
+      "version": "0.23.1"
+    },
+    {
+      "name": "bitflags",
+      "version": "2.13.2"
+    },
+    {
+      "name": "bumpalo",
+      "version": "3.20.3"
+    },
+    {
+      "name": "bytes",
+      "version": "1.12.1"
+    },
+    {
+      "name": "cc",
+      "version": "1.10.0"
+    },
+    {
+      "name": "cfg-if",
+      "version": "1.0.5"
+    },
+    {
+      "name": "cfg_aliases",
+      "version": "0.2.2"
+    },
+    {
+      "name": "chacha20",
+      "version": "0.10.2"
+    },
+    {
+      "name": "cpufeatures",
+      "version": "0.3.1"
+    },
+    {
+      "name": "displaydoc",
+      "version": "0.2.7"
+    },
+    {
+      "name": "find-msvc-tools",
+      "version": "0.1.15"
+    },
+    {
+      "name": "form_urlencoded",
+      "version": "1.2.2"
+    },
+    {
+      "name": "futures-channel",
+      "version": "0.3.34"
+    },
+    {
+      "name": "futures-core",
+      "version": "0.3.34"
+    },
+    {
+      "name": "futures-task",
+      "version": "0.3.34"
+    },
+    {
+      "name": "futures-util",
+      "version": "0.3.34"
+    },
+    {
+      "name": "getrandom",
+      "version": "0.2.17"
+    },
+    {
+      "name": "getrandom",
+      "version": "0.4.3"
+    },
+    {
+      "name": "http",
+      "version": "1.5.0"
+    },
+    {
+      "name": "http-body",
+      "version": "1.1.0"
+    },
+    {
+      "name": "http-body-util",
+      "version": "0.1.5"
+    },
+    {
+      "name": "httparse",
+      "version": "1.10.1"
+    },
+    {
+      "name": "hyper",
+      "version": "1.12.0"
+    },
+    {
+      "name": "hyper-rustls",
+      "version": "0.27.10"
+    },
+    {
+      "name": "hyper-util",
+      "version": "0.1.21"
+    },
+    {
+      "name": "icu_collections",
+      "version": "2.4.0"
+    },
+    {
+      "name": "icu_locale_core",
+      "version": "2.4.0"
+    },
+    {
+      "name": "icu_normalizer",
+      "version": "2.4.0"
+    },
+    {
+      "name": "icu_normalizer_data",
+      "version": "2.4.0"
+    },
+    {
+      "name": "icu_properties",
+      "version": "2.4.0"
+    },
+    {
+      "name": "icu_properties_data",
+      "version": "2.4.0"
+    },
+    {
+      "name": "icu_provider",
+      "version": "2.4.0"
+    },
+    {
+      "name": "idna",
+      "version": "1.1.0"
+    },
+    {
+      "name": "idna_adapter",
+      "version": "1.2.2"
+    },
+    {
+      "name": "ipnet",
+      "version": "2.12.2"
+    },
+    {
+      "name": "itoa",
+      "version": "1.0.18"
+    },
+    {
+      "name": "js-sys",
+      "version": "0.3.107"
+    },
+    {
+      "name": "libc",
+      "version": "0.2.191"
+    },
+    {
+      "name": "litemap",
+      "version": "0.8.3"
+    },
+    {
+      "name": "log",
+      "version": "0.4.34"
+    },
+    {
+      "name": "lru-slab",
+      "version": "0.1.3"
+    },
+    {
+      "name": "memchr",
+      "version": "2.8.3"
+    },
+    {
+      "name": "mio",
+      "version": "1.2.4"
+    },
+    {
+      "name": "once_cell",
+      "version": "1.21.4"
+    },
+    {
+      "name": "percent-encoding",
+      "version": "2.3.2"
+    },
+    {
+      "name": "pin-project-lite",
+      "version": "0.2.17"
+    },
+    {
+      "name": "potential_utf",
+      "version": "0.1.6"
+    },
+    {
+      "name": "proc-macro2",
+      "version": "1.0.107"
+    },
+    {
+      "name": "quinn",
+      "version": "0.11.12"
+    },
+    {
+      "name": "quinn-proto",
+      "version": "0.11.19"
+    },
+    {
+      "name": "quinn-udp",
+      "version": "0.5.16"
+    },
+    {
+      "name": "quote",
+      "version": "1.0.47"
+    },
+    {
+      "name": "r-efi",
+      "version": "6.0.0"
+    },
+    {
+      "name": "rand",
+      "version": "0.10.3"
+    },
+    {
+      "name": "rand_core",
+      "version": "0.10.1"
+    },
+    {
+      "name": "rand_pcg",
+      "version": "0.10.2"
+    },
+    {
+      "name": "reqwest",
+      "version": "0.12.28"
+    },
+    {
+      "name": "ring",
+      "version": "0.17.14"
+    },
+    {
+      "name": "rustc-hash",
+      "version": "2.1.3"
+    },
+    {
+      "name": "rustls",
+      "version": "0.23.46"
+    },
+    {
+      "name": "rustls-pki-types",
+      "version": "1.15.1"
+    },
+    {
+      "name": "rustls-webpki",
+      "version": "0.103.16"
+    },
+    {
+      "name": "rustversion",
+      "version": "1.0.23"
+    },
+    {
+      "name": "ryu",
+      "version": "1.0.23"
+    },
+    {
+      "name": "serde",
+      "version": "1.0.229"
+    },
+    {
+      "name": "serde_core",
+      "version": "1.0.229"
+    },
+    {
+      "name": "serde_derive",
+      "version": "1.0.229"
+    },
+    {
+      "name": "serde_json",
+      "version": "1.0.154"
+    },
+    {
+      "name": "serde_urlencoded",
+      "version": "0.7.1"
+    },
+    {
+      "name": "shlex",
+      "version": "2.0.1"
+    },
+    {
+      "name": "slab",
+      "version": "0.4.12"
+    },
+    {
+      "name": "smallvec",
+      "version": "1.16.4"
+    },
+    {
+      "name": "socket2",
+      "version": "0.6.5"
+    },
+    {
+      "name": "stable_deref_trait",
+      "version": "1.2.1"
+    },
+    {
+      "name": "subtle",
+      "version": "2.6.1"
+    },
+    {
+      "name": "syn",
+      "version": "3.0.9"
+    },
+    {
+      "name": "sync_wrapper",
+      "version": "1.0.2"
+    },
+    {
+      "name": "synstructure",
+      "version": "0.14.0"
+    },
+    {
+      "name": "thiserror",
+      "version": "2.0.21"
+    },
+    {
+      "name": "thiserror-impl",
+      "version": "2.0.21"
+    },
+    {
+      "name": "tinystr",
+      "version": "0.8.5"
+    },
+    {
+      "name": "tinyvec",
+      "version": "1.13.3"
+    },
+    {
+      "name": "tokio",
+      "version": "1.54.1"
+    },
+    {
+      "name": "tokio-rustls",
+      "version": "0.26.6"
+    },
+    {
+      "name": "tower",
+      "version": "0.5.3"
+    },
+    {
+      "name": "tower-http",
+      "version": "0.6.11"
+    },
+    {
+      "name": "tower-layer",
+      "version": "0.3.3"
+    },
+    {
+      "name": "tower-service",
+      "version": "0.3.3"
+    },
+    {
+      "name": "tracing",
+      "version": "0.1.44"
+    },
+    {
+      "name": "tracing-core",
+      "version": "0.1.36"
+    },
+    {
+      "name": "try-lock",
+      "version": "0.2.5"
+    },
+    {
+      "name": "unicode-ident",
+      "version": "1.0.27"
+    },
+    {
+      "name": "untrusted",
+      "version": "0.9.0"
+    },
+    {
+      "name": "url",
+      "version": "2.5.8"
+    },
+    {
+      "name": "utf8_iter",
+      "version": "1.1.0"
+    },
+    {
+      "name": "utf_types",
+      "version": "1.0.0"
+    },
+    {
+      "name": "want",
+      "version": "0.3.2"
+    },
+    {
+      "name": "wasi",
+      "version": "0.11.1+wasi-snapshot-preview1"
+    },
+    {
+      "name": "wasm-bindgen",
+      "version": "0.2.130"
+    },
+    {
+      "name": "wasm-bindgen-futures",
+      "version": "0.4.80"
+    },
+    {
+      "name": "wasm-bindgen-macro",
+      "version": "0.2.130"
+    },
+    {
+      "name": "wasm-bindgen-macro-support",
+      "version": "0.2.130"
+    },
+    {
+      "name": "wasm-bindgen-shared",
+      "version": "0.2.130"
+    },
+    {
+      "name": "web-sys",
+      "version": "0.3.107"
+    },
+    {
+      "name": "web-time",
+      "version": "1.1.0"
+    },
+    {
+      "name": "webpki-roots",
+      "version": "1.0.11"
+    },
+    {
+      "name": "windows-link",
+      "version": "0.2.1"
+    },
+    {
+      "name": "windows-sys",
+      "version": "0.52.0"
+    },
+    {
+      "name": "windows-sys",
+      "version": "0.61.2"
+    },
+    {
+      "name": "windows-targets",
+      "version": "0.52.6"
+    },
+    {
+      "name": "windows_aarch64_gnullvm",
+      "version": "0.52.6"
+    },
+    {
+      "name": "windows_aarch64_msvc",
+      "version": "0.52.6"
+    },
+    {
+      "name": "windows_i686_gnu",
+      "version": "0.52.6"
+    },
+    {
+      "name": "windows_i686_gnullvm",
+      "version": "0.52.6"
+    },
+    {
+      "name": "windows_i686_msvc",
+      "version": "0.52.6"
+    },
+    {
+      "name": "windows_x86_64_gnu",
+      "version": "0.52.6"
+    },
+    {
+      "name": "windows_x86_64_gnullvm",
+      "version": "0.52.6"
+    },
+    {
+      "name": "windows_x86_64_msvc",
+      "version": "0.52.6"
+    },
+    {
+      "name": "writeable",
+      "version": "0.6.4"
+    },
+    {
+      "name": "yoke",
+      "version": "0.8.4"
+    },
+    {
+      "name": "yoke-derive",
+      "version": "0.8.4"
+    },
+    {
+      "name": "zerofrom",
+      "version": "0.1.8"
+    },
+    {
+      "name": "zerofrom-derive",
+      "version": "0.1.8"
+    },
+    {
+      "name": "zeroize",
+      "version": "1.9.1"
+    },
+    {
+      "name": "zerotrie",
+      "version": "0.2.5"
+    },
+    {
+      "name": "zerovec",
+      "version": "0.11.9"
+    },
+    {
+      "name": "zerovec-derive",
+      "version": "0.11.7"
+    },
+    {
+      "name": "zmij",
+      "version": "1.0.23"
+    }
+  ]
+}

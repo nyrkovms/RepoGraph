@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"b3feb34194f8cde889d0d7abcb5b2806\"",
+    "last-modified": "Wed, 02 Sep 2026 08:19:22 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ra/nd/rand_core"
+  },
+  "status": 200
+}

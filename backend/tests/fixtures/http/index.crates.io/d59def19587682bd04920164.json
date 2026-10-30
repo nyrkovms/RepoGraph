@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"f89cb9855b6172d7c271b39f94996eb0\"",
+    "last-modified": "Tue, 07 Jul 2026 02:10:27 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ru/st/rustversion"
+  },
+  "status": 200
+}

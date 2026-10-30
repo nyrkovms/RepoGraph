@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"1ac0ba32dacee286c0e6f979eaebc1bf\"",
+    "last-modified": "Fri, 23 Oct 2026 08:25:09 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/we/bp/webpki-roots"
+  },
+  "status": 200
+}

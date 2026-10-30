@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"13374bbcc8cb7c2bf93308339fb2a596\"",
+    "last-modified": "Tue, 11 Aug 2026 12:13:03 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/fu/tu/futures-core"
+  },
+  "status": 200
+}

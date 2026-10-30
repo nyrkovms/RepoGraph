@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"9988db25c4d480f2c4d561d852db8bce\"",
+    "last-modified": "Mon, 27 Apr 2026 17:45:56 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/id/na/idna_adapter"
+  },
+  "status": 200
+}

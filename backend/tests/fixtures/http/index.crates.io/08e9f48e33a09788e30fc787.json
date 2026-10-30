@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"2f115e2338d3211ae376e43eaf72b063\"",
+    "last-modified": "Tue, 11 Aug 2026 12:13:20 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/fu/tu/futures-util"
+  },
+  "status": 200
+}

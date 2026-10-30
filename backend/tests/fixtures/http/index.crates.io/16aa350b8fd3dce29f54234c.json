@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"4e407aee24f0dbabd297f74ffc9f94d2\"",
+    "last-modified": "Sat, 31 Jan 2026 12:59:24 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/sl/ab/slab"
+  },
+  "status": 200
+}

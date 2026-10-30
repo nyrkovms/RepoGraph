@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"5df6634ef562bd471baa74f8d1bd74d1\"",
+    "last-modified": "Mon, 15 Jun 2026 15:41:59 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ra/nd/rand_hc"
+  },
+  "status": 200
+}

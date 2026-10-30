@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"5d7338c52a177a6f8ac9f9f06ee6ee3f\"",
+    "last-modified": "Thu, 27 Aug 2026 18:33:24 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ch/ac/chacha20"
+  },
+  "status": 200
+}

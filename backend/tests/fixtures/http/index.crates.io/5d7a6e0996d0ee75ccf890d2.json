@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"ce7f6d2d07231eb170d9391589936a80\"",
+    "last-modified": "Tue, 11 Aug 2026 12:13:09 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/fu/tu/futures-task"
+  },
+  "status": 200
+}

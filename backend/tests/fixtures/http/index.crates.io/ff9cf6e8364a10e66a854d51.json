@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"9c7b92bacea8bca17ee2630b642f06e5\"",
+    "last-modified": "Sat, 18 Jul 2026 23:05:09 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/se/rd/serde_derive"
+  },
+  "status": 200
+}

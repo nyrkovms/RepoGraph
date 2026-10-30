@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"ae10a7d8aa86c09f91d7e5a4d922faff\"",
+    "last-modified": "Thu, 12 Mar 2026 10:59:54 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/on/ce/once_cell"
+  },
+  "status": 200
+}

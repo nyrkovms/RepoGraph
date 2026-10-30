@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"0c5edeada62be967c8a3b29cab8718f3\"",
+    "last-modified": "Mon, 13 Jul 2026 19:46:00 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/so/ck/socket2"
+  },
+  "status": 200
+}

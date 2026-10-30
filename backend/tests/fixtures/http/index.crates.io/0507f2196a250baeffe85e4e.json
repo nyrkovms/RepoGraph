@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"cacf39a791d3b6dbad51284f6fab6e3a\"",
+    "last-modified": "Tue, 11 Aug 2026 12:13:11 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/fu/tu/futures-channel"
+  },
+  "status": 200
+}

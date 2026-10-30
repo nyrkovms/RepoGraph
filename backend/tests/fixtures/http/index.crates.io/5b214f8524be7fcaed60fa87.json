@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"8fafd8715ad016f8dc3bd52d4391492e\"",
+    "last-modified": "Thu, 22 Oct 2026 08:51:56 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ic/u_/icu_locale_core"
+  },
+  "status": 200
+}

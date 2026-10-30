@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"52c0253dd7bf567077368cb312bbd304\"",
+    "last-modified": "Mon, 14 Sep 2026 10:08:49 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/qu/in/quinn"
+  },
+  "status": 200
+}

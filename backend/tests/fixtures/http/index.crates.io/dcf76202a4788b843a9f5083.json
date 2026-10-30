@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"d3292d2120dafe7228153d3eefb03156\"",
+    "last-modified": "Sun, 01 Feb 2026 13:09:03 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/tr/y-/try-lock"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"1dba390b2b4688955a22def0e3f15ccc\"",
+    "last-modified": "Mon, 12 Oct 2026 04:20:29 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/un/ic/unicode-ident"
+  },
+  "status": 200
+}

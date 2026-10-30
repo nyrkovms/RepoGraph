@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"e7fe50e40e934e2c9946e17390d6cef4\"",
+    "last-modified": "Fri, 27 Feb 2026 15:19:09 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/pi/n-/pin-project-lite"
+  },
+  "status": 200
+}

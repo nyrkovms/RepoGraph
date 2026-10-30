@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"ababb59157c6e9a714a9b1cb302e842e\"",
+    "last-modified": "Sun, 19 Jul 2026 00:18:27 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/pr/oc/proc-macro2"
+  },
+  "status": 200
+}

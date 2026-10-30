@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"dc0dd49972f1a9f1d8dbee19a2baff4b\"",
+    "last-modified": "Tue, 13 Oct 2026 20:02:00 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ze/ro/zerocopy-derive"
+  },
+  "status": 200
+}

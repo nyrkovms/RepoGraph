@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"b0dfac366ed055b46b39cfddddb7749f\"",
+    "last-modified": "Thu, 13 Aug 2026 23:28:21 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ze/ro/zerotrie"
+  },
+  "status": 200
+}

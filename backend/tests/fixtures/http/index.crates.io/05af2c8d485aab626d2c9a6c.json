@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"4af00b7cf94190b10be753840f34481f\"",
+    "last-modified": "Wed, 21 Oct 2026 21:16:14 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/to/ki/tokio"
+  },
+  "status": 200
+}

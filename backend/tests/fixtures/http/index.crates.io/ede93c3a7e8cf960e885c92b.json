@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"7296b7c948e281168b0eae7465fe3918\"",
+    "last-modified": "Sun, 19 Jul 2026 00:16:58 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/qu/ot/quote"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"523c67e6d565fe89210c9458e1370593\"",
+    "last-modified": "Thu, 22 Oct 2026 08:56:38 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ic/u_/icu_normalizer_data"
+  },
+  "status": 200
+}
