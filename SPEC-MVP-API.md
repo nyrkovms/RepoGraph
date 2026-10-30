@@ -3,14 +3,14 @@
 > Source of truth для контрактов HTTP API MVP.
 
 **Source of truth:** [SPEC-MVP.md](./SPEC-MVP.md); адресация по purl, источники и формат resolve — [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §9.1, §11  
-**Версия:** 1.6-api  
+**Версия:** 1.7-api  
 **Дата:** 2026-10-30
 
 ## 1. Область и правила владения
 
 - Этот документ владеет только HTTP-контрактами.
 - Он не меняет продуктовые требования и SLA; SLA берутся только из `SPEC-MVP.md`.
-- Описывает API, каким он стал после этапов E0-C, E1 и E2: пакеты адресуются по purl, маршруты `/packages/pypi/{name}/…` остаются deprecated-алиасами до конца E7 (§3.4), resolve отдаёт граф (§4); в каталоге есть PyPI, npm и crates.io.
+- Описывает API, каким он стал после этапов E0-C, E1, E2 и E3: пакеты адресуются по purl, маршруты `/packages/pypi/{name}/…` остаются deprecated-алиасами до конца E7 (§3.4), resolve отдаёт граф (§4); в каталоге есть PyPI, npm, crates.io и Go.
 
 `Decisions fixed`
 - Все request/response/error контракты описываются только здесь.
@@ -24,8 +24,8 @@
 
 - Base path: `/api/v1`.
 - Формат: `application/json` для request/response, кроме health без тела.
-- Экосистемы: в каталоге плагины `pypi`, `npm` и `crates`. Пути и фильтры принимают `ecosystem` (`pypi`, `npm`, `maven`, `go`, `crates`, `nuget`, `rpm`), остальные плагины появятся по планам SPEC-MULTI-ECOSYSTEM; для экосистемы без плагина пакетные маршруты отвечают `404`.
-- Пакет в ответах называет его purl (`pkg:pypi/flask`), версия — purl с `@версия` (`pkg:pypi/flask@3.0.0`). Правила записи — [purl-spec](https://github.com/package-url/purl-spec), по ним строит purl плагин экосистемы. Scope npm — namespace purl с `@`, закодированным как `%40`: `@angular/core` — `pkg:npm/%40angular/core`, `left-pad` — `pkg:npm/left-pad`. Тип purl для crates.io — `cargo`, а слаг экосистемы — `crates`: `serde_json` — `pkg:cargo/serde_json`. Имя крейта записано как опубликовано, без свёртки регистра и `-`/`_` (`serde_json`, `Inflector`), namespace нет.
+- Экосистемы: в каталоге плагины `pypi`, `npm`, `crates` и `go`. Пути и фильтры принимают `ecosystem` (`pypi`, `npm`, `maven`, `go`, `crates`, `nuget`, `rpm`), остальные плагины появятся по планам SPEC-MULTI-ECOSYSTEM; для экосистемы без плагина пакетные маршруты отвечают `404`.
+- Пакет в ответах называет его purl (`pkg:pypi/flask`), версия — purl с `@версия` (`pkg:pypi/flask@3.0.0`). Правила записи — [purl-spec](https://github.com/package-url/purl-spec), по ним строит purl плагин экосистемы. Scope npm — namespace purl с `@`, закодированным как `%40`: `@angular/core` — `pkg:npm/%40angular/core`, `left-pad` — `pkg:npm/left-pad`. Тип purl для crates.io — `cargo`, а слаг экосистемы — `crates`: `serde_json` — `pkg:cargo/serde_json`. Имя крейта записано как опубликовано, без свёртки регистра и `-`/`_` (`serde_json`, `Inflector`), namespace нет. Тип purl для Go — `golang`, слаг экосистемы — `go`: путь модуля без последнего элемента — namespace purl, последний элемент — имя, `github.com/gin-gonic/gin` — `pkg:golang/github.com/gin-gonic/gin`, `github.com/redis/go-redis/v9` — `pkg:golang/github.com/redis/go-redis/v9`. Идентичность Go — путь модуля как написан: регистр значим (`github.com/BurntSushi/toml`), суффикс мажорной версии `/v2` и выше делает другой модуль.
 
 ### 2.2 Аутентификация
 
@@ -130,7 +130,7 @@ Cursor-based ответ для списков:
 }
 ```
 
-- `namespace` — пустая строка, если у экосистемы нет пространства имён (PyPI, crates, npm-пакет без scope). У npm это scope без `@`, а `name` — имя без scope: `@angular/core` приходит как `namespace: "angular"`, `name: "core"`. `latest_version` может быть `null` (проект без релизов).
+- `namespace` — пустая строка, если у экосистемы нет пространства имён (PyPI, crates, Go, npm-пакет без scope). У npm это scope без `@`, а `name` — имя без scope: `@angular/core` приходит как `namespace: "angular"`, `name: "core"`. `latest_version` может быть `null` (проект без релизов).
 - Errors: `422/500`
 
 ## 3.2 `GET /api/v1/search`
@@ -173,6 +173,18 @@ GET /api/v1/purl/pkg:cargo/Inflector              # 307 на /api/v1/packages/cr
 ```
 
 Crates.io отдаёт крейт только по опубликованному имени: `GET /packages/crates/serde-json/-/` не находит `serde_json`. Ввод в другом написании приводится к опубликованному только при добавлении через `POST /admin/packages` (§5.3).
+
+Примеры для Go (путь модуля с его слэшами и регистром, суффикс `/v9` — часть пути):
+
+```
+GET /api/v1/packages/go/github.com/gin-gonic/gin/-/
+GET /api/v1/packages/go/github.com/BurntSushi/toml/-/versions
+GET /api/v1/packages/go/github.com/redis/go-redis/v9/-/versions/v9.7.0/dependencies
+GET /api/v1/packages/go/github.com/gin-gonic/gin/-/versions/v2.0.0%2Bincompatible
+GET /api/v1/purl/pkg:golang/github.com/redis/go-redis/v9   # 307 на /api/v1/packages/go/github.com/redis/go-redis/v9/-/
+```
+
+Go отдаёт модуль только по пути как он написан: `GET /packages/go/github.com/burntsushi/toml/-/` — это другой путь, чем `BurntSushi/toml`, и модуля с ним нет (`404`). Путь без точки в первом элементе (`gin/gin`) не является путём модуля, ответ `404`. Версия пишется с `v` (`v1.10.0`); `+` в пути кодируется как `%2B`. Для Go в Web UI путь страницы — `/package/go/{путь модуля}`.
 
 Общее для всех маршрутов:
 
@@ -278,6 +290,7 @@ Crates.io отдаёт крейт только по опубликованном
 ```
 
 - `features` — данные версии, зависящие от экосистемы. У crates это карта features Cargo: имя feature → список того, что она включает (другие features, `dep:крейт`, `крейт/feature`), например `{"default": ["std"], "std": ["serde/std"], "preserve_order": ["dep:indexmap", "std"]}`. Служебный ключ `dependencies_hydrated`, если он есть, features не является: клиент его пропускает.
+- Go: версия — SemVer с `v`: релиз (`v1.10.0`), версия модуля до v2 без тега в виде псевдоверсии (`v0.0.0-20261014143641-f0251eb4aa3e`, `v1.2.4-0.20261014143641-f0251eb4aa3e`) или `+incompatible` (`v2.0.0+incompatible`, равна `v2.0.0` при сравнении). Псевдоверсия — обычный prerelease (`is_prerelease`). В каталоге она есть только у модуля без тегов: его `@v/list` пуст, и единственная версия — псевдоверсия из `@latest`, а лента index.golang.org (§5.8) обновляет её. У модуля с тегами `@v/list` псевдоверсий не показывает, и каталог их не хранит; в resolve они встречаются в узлах как требования `go.mod`. В `versions` псевдоверсия не отличается от прочих версий, узнают её по виду. Отозванная (`retract` в go.mod) версия приходит со `status: "yanked"`; текст из комментария к `retract` хранится как `status_reason`, объявление `// Deprecated:` — как `deprecation` пакета, а в ответах карточки и версии они пока не отдаются (клиент читает `status_reason` версии и `deprecation.message` карточки, если они появятся). Описания, лицензии и авторов у Go нет (SPEC-MULTI-ECOSYSTEM Q11): `description`, `license_raw`, `license_spdx`, `homepage_url` — `null`.
 - `engines` — требования к среде в нативной записи экосистемы (PyPI: `python`); может быть `null`. `requires_python` — алиас `engines.python`, сохраняется до конца E7.
 - `dependencies_state` — состояние зависимостей версии (`pending` — ещё не загружены, `hydrated`, `unavailable` — зависимости неизвестны).
 - `sources` — все источники версии (без фильтра по профилю) и статус версии в каждом.
@@ -301,6 +314,7 @@ Crates.io отдаёт крейт только по опубликованном
   - `python_version` и `os` включают проверку environment markers (PEP 508); без них применяются все зависимости;
   - npm: в дерево входят runtime-зависимости и обязательные peer-зависимости; optional добавляются при `include_optional=true`. Окружение npm — `node_version`, `os`, `cpu` (SPEC-MULTI-ECOSYSTEM §7.3) — маршрут пока принимает только `os` (`linux|darwin|win32`; `windows`, `macos` — синонимы); `python_version` для npm не действует, `node_version` и `cpu` не принимаются. Окружение целиком действует в resolve (§4.1.1).
   - crates: окружение — `target` (целевая тройка Rust; по умолчанию `x86_64-unknown-linux-gnu`; неизвестная даёт `422`, а `*` значит все платформы), `features` (через запятую) и `default_features` (по умолчанию `true`); `python_version` и `os` не действуют. В дерево входят runtime- и build-зависимости, применимые к `target`; у платформенной зависимости в `environment_markers` стоит `{"rust_cfg": "cfg(windows)"}`. Optional-зависимость входит, если её включает feature окружения (`default` включена, пока `default_features` не `false`) или при `include_optional=true`. `dependency_type` узла: `runtime`, `build` или `optional`; dev-зависимости в дерево не входят. Features задают только корень: ниже корня каждое ребро просит у крейта свои features, а `features` и `default_features` на них не действуют.
+  - Go: окружения у дерева нет, `python_version`, `os` и остальные параметры не действуют. Каждое ребро — `require` из `go.mod` версии (`dependency_type: "runtime"`), `// indirect` тоже входит: это требования сборки. `name` узла — путь модуля, `constraint` и `resolved_version` — версия из `require`. Пометка `// indirect` хранится как `details.indirect = true` зависимости; в узлах `/dependencies` её пока нет, resolve отдаёт её в `edges[].details.indirect` (§4.1.3). Дерево показывает версии, которые требует `go.mod` как есть; выбор Minimal Version Selection делает только resolve. `replace` и `exclude` зависимостей не применяются (Go учитывает их только в главном модуле).
 - Response `200`:
 
 ```json
@@ -428,7 +442,7 @@ Crates.io отдаёт крейт только по опубликованном
 | `profile` | slug профиля источников; без него профиль экосистемы по умолчанию |
 | `input_mode` | `requirements` (по умолчанию) или `lock`; `freeze` — алиас `lock` |
 | `roots` | 1..500 корней: `purl`, `constraint` (по умолчанию `*`, синтаксис экосистемы), `extras`. Версия в purl без `constraint` закрепляет её (`==версия`) |
-| `environment` | окружение в терминах экосистемы; PyPI: имена PEP 508 (`python_version`, `sys_platform`, `os_name`, `platform_machine`, `platform_system`, `implementation_name`) или короткая форма `python_version` + `os`. npm: `node_version`, `os`, `cpu` (§4.1.1). crates: `target`, `features`, `default_features` (§4.1.2). Пустое окружение — как у pip по умолчанию (Python 3.12, linux) |
+| `environment` | окружение в терминах экосистемы; PyPI: имена PEP 508 (`python_version`, `sys_platform`, `os_name`, `platform_machine`, `platform_system`, `implementation_name`) или короткая форма `python_version` + `os`. npm: `node_version`, `os`, `cpu` (§4.1.1). crates: `target`, `features`, `default_features` (§4.1.2). Go: `go_version`, `replace`, `exclude` (§4.1.3). Пустое окружение — как у pip по умолчанию (Python 3.12, linux) |
 | `options.include_dev` / `include_optional` | включать dev- и optional-зависимости; для PyPI `include_optional` не действует: extras задаются в корне явно |
 | `options.timeout_s` | срок resolve, `0 < timeout_s <= 120`, по умолчанию 30 |
 | `managed` | корни `dependencyManagement` (Maven); для PyPI не используется |
@@ -592,6 +606,59 @@ Crates.io отдаёт крейт только по опубликованном
 }
 ```
 
+### 4.1.3 Resolve для Go
+
+Тело и ответ те же, что в §4.1; отличается следующее.
+
+- Запрос: `"ecosystem": "go"`, корни — purl `golang`. `constraint` корня — версия, с которой стартует MVS (`v1.9.1`): корень требуется в этой версии, и итог может быть выше. `*` или отсутствие `constraint` берёт последний релиз профиля, а у модуля без релизов — последнюю псевдоверсию, как `go get путь@latest`. Диапазонов у Go нет.
+
+```json
+{
+  "ecosystem": "go",
+  "roots": [
+    {"purl": "pkg:golang/github.com/gin-gonic/gin", "constraint": "v1.9.1"},
+    {"purl": "pkg:golang/github.com/redis/go-redis/v9", "constraint": "*"}
+  ],
+  "environment": {
+    "go_version": "1.23",
+    "replace": [{"old": "golang.org/x/net@v0.20.0", "new": "golang.org/x/net@v0.21.0"}],
+    "exclude": ["golang.org/x/sys@v0.17.0"]
+  }
+}
+```
+
+- `environment`: `go_version` (по умолчанию `1.23`, префикс `go` допускается), `replace` и `exclude` главного модуля. `replace` — список `{"old": "путь[@версия]", "new": "путь@версия"}`: `old` без версии заменяет все версии модуля, с версией — только её; замена только на модуль с версией (замена на каталог из прокси не разрешается). `exclude` — список `"путь@версия"`: исключённое требование заменяется ближайшей большей непсевдо-версией, которую знает прокси, как это делает Go. `replace` и `exclude` из `go.mod` зависимостей, как и в Go, не действуют. Неверная запись (`replace` без `new`, версия не SemVer с `v`) даёт `422`.
+- `strategy`: `go-mvs`, `emulates`: `Go 1.23 (MVS with module graph pruning)`. Граф читается, как в Go 1.17+ (SPEC-MULTI-ECOSYSTEM §9.5, Q23): главный модуль считается на `go 1.23`, поэтому `go.mod` каждого корня читается, а у модуля с `go >= 1.17` в графе только его непосредственные требования, их `go.mod` дальше не читаются; ниже модуля на `go < 1.17` (и модуля без строки `go`) граф полный. Для каждого пути берётся наибольшая из требуемых версий среди прочитанных `go.mod` и корней, даже если требующий модуль сам не попал в итог.
+- Что значит равенство с `go list -m all`: множество пар `(путь модуля, версия)` в `nodes` равно списку, который печатает `go list -m all` для главного модуля, требующего корни, без самого главного модуля. Цель — 100% совпадений без допустимых расхождений (SPEC-MULTI-ECOSYSTEM §9.5, Q23). `go.mod` читаются как `.mod` документы и в каталог не попадают: в каталог входят только модули итога (и корни).
+- `nodes[].name` — путь модуля, `version` — выбранная версия (может быть псевдоверсией или `+incompatible`). `details.replaced_by` узла — `"путь@версия"` модуля, чей `go.mod` и содержимое заменяют выбранный (если сработал `replace`). `latest_compatible` у корней — последний релиз модуля, у прочих узлов `null`.
+- `edges[]`: из `root` в каждый корень (`constraint` — выбранная версия корня) и между узлами итога по `require` их `go.mod` (`constraint` — требуемая версия, не обязательно выбранная; `type` — `runtime`); `details.indirect = true` у требований `// indirect`.
+- `warnings[]`: `go_version` (`{code, node, message}`) — модулю нужен `go` новее, чем `environment.go_version` (строка `go` его `go.mod`); к `dependencies_unknown` у Go не относится. Модуль без `go.mod` в прокси или с нечитаемым `go.mod` остаётся в итоге, ошибка записывается в `nodes[].errors`.
+- `conflicts[]` пуст: MVS конфликтов не имеет. Неудача resolve приходит в `error` с `code` `not_found` (прокси профиля не знают корня, `packages` — какие), `resolve_limit_exceeded`, `resolve_timeout` или `upstream_error`.
+
+```json
+{
+  "ecosystem": "go",
+  "profile": "default",
+  "strategy": "go-mvs",
+  "emulates": "Go 1.23 (MVS with module graph pruning)",
+  "nodes": [
+    {"id": "n1", "purl": "pkg:golang/github.com/gin-gonic/gin@v1.9.1", "name": "github.com/gin-gonic/gin", "version": "v1.9.1",
+     "registry": "proxy-golang-org", "depth": 1, "root": true, "hidden": false, "latest_compatible": "v1.10.0", "errors": [],
+     "details": {}},
+    {"id": "n2", "purl": "pkg:golang/golang.org/x/net@v0.21.0", "name": "golang.org/x/net", "version": "v0.20.0",
+     "registry": "proxy-golang-org", "depth": 2, "root": false, "hidden": false, "latest_compatible": null, "errors": [],
+     "details": {"replaced_by": "golang.org/x/net@v0.21.0"}}
+  ],
+  "edges": [
+    {"source": "root", "target": "n1", "constraint": "v1.9.1", "type": "runtime", "details": {}},
+    {"source": "n1", "target": "n2", "constraint": "v0.20.0", "type": "runtime", "details": {"indirect": true}}
+  ],
+  "warnings": [
+    {"code": "go_version", "node": "n2", "message": "golang.org/x/net v0.20.0 needs go 1.24"}
+  ]
+}
+```
+
 ## 4.2 `POST /api/v1/resolve`: вложенный формат (алиас до конца E7)
 
 - Request body:
@@ -718,6 +785,8 @@ Crates.io отдаёт крейт только по опубликованном
 
 Для crates purl записывается с типом `cargo`: `pkg:cargo/serde_json`. Если крейта с таким именем нет, а источник знает его под другим написанием (регистр, `-` вместо `_`), пакет сохраняется под опубликованным именем: `pkg:cargo/serde-json` добавляет `serde_json`. Остальные способы обращения к крейту требуют точного имени.
 
+Для Go purl записывается с типом `golang`: `pkg:golang/github.com/gin-gonic/gin`, `pkg:golang/github.com/redis/go-redis/v9`. Путь модуля берётся как написан, регистр значим (`pkg:golang/github.com/BurntSushi/toml`); purl без namespace (`pkg:golang/gin`) неверен, и тогда не запускается ничего.
+
 ## 5.4 `POST /api/v1/admin/retry-failed`
 
 - Auth: `admin`
@@ -755,7 +824,7 @@ Crates.io отдаёт крейт только по опубликованном
 - Response `202`, `operation: "presence_probe"`.
 - Errors: `401/422` (нет плагина экосистемы)`/500`
 
-Для npm: `{"ecosystem": "npm"}`, для crates: `{"ecosystem": "crates"}`. Проверка идёт по источникам профиля экосистемы по умолчанию (стартовые — `npmjs` и `crates-io`, §5.8). Без тела проверяется PyPI.
+Для npm: `{"ecosystem": "npm"}`, для crates: `{"ecosystem": "crates"}`, для Go: `{"ecosystem": "go"}`. Проверка идёт по источникам профиля экосистемы по умолчанию (стартовые — `npmjs`, `crates-io` и `proxy-golang-org`, §5.8). Без тела проверяется PyPI.
 
 ## 5.7 `GET /api/v1/admin/sync/status`
 
@@ -887,6 +956,21 @@ Crates.io отдаёт крейт только по опубликованном
 }
 ```
 
+Стартовый источник Go — `proxy-golang-org` (миграция этапа E3), он входит в профиль `default` экосистемы go. `base_url` — адрес прокси по протоколу GOPROXY, в `config.index_url` лежит лента index.golang.org, по которой ежедневное обновление находит новые версии модулей (`?since=…`, до 2000 строк за запрос, строка — модуль, версия и время; следит за модулями, уже известными каталогу). Другие прокси (Athens, корпоративные) подключаются как источники с протоколом `goproxy`; у них нет ленты, версии узнаются по `@v/list` модуля. Прокси не отдаёт описание, лицензию и авторов модуля, поэтому у Go они пусты.
+
+```json
+{
+  "slug": "proxy-golang-org",
+  "name": "Go module proxy",
+  "ecosystem": "go",
+  "protocol": "goproxy",
+  "base_url": "https://proxy.golang.org/",
+  "priority": 0,
+  "enabled": true,
+  "config": {"index_url": "https://index.golang.org/index"}
+}
+```
+
 Список источников приходит как `{"data": [...]}`, профилей — как `{"data": [{"slug": "default", "name": "PyPI", "ecosystem": "pypi", "is_default": true, "registries": [{"slug": "pypi", "routing_override": null}]}]}`.
 
 ### Изменения (`admin`)
@@ -968,7 +1052,7 @@ Crates.io отдаёт крейт только по опубликованном
   - `kind: enum?` — можно повторять;
   - `ecosystem: enum?` — можно повторять;
   - `registry: string?` — slug источника, в котором есть пакет (у событий нет собственного источника);
-  - `package: string?` — purl (`pkg:pypi/flask`) или голое имя PyPI;
+  - `package: string?` — purl (`pkg:pypi/flask`, `pkg:golang/github.com/gin-gonic/gin`) или голое имя PyPI;
   - `limit: int=50 (max 200)`, `cursor: string?`
 - Виды событий (`kind`): `tracking_started`, `release_added`, `release_yanked`, `release_unyanked`, `release_removed`, `release_restored`, `release_deprecated`, `vulnerability_added`, `vulnerability_withdrawn`, `project_unavailable`, `project_restored`, `source_added`. `release_deprecated` — версия объявлена deprecated, `source_added` — пакет появился в ещё одном источнике (его slug в `details.registry`).
 - Response `200`:
@@ -1093,6 +1177,7 @@ Crates.io отдаёт крейт только по опубликованном
 
 ## 8. Изменения
 
+- **1.7-api (2026-10-30), этап E3.** Каталог содержит Go. Слаг экосистемы `go`, тип purl `golang`, путь модуля как написан (регистр значим, `/vN` — другой модуль), namespace purl — путь без последнего элемента (§2.1, §3.3). Версии Go: релизы, псевдоверсии (prerelease), `+incompatible`, отозванные версии со статусом `yanked` (§3.3.4); дерево зависимостей Go без окружения, `// indirect` входит (§3.3.5). Resolve для Go: `ecosystem: "go"`, окружение `go_version` / `replace` / `exclude`, стратегия `go-mvs` (`Go 1.23 (MVS with module graph pruning)`), результат равен `go list -m all`, `details.replaced_by` узлов, `details.indirect` рёбер, предупреждение `go_version` (§4.1.3). `/admin/packages` принимает purl `golang` (§5.3), `/admin/presence-probe` — `ecosystem: "go"` (§5.6); стартовый источник `proxy-golang-org` с лентой index.golang.org (§5.8).
 - **1.6-api (2026-10-30), этап E2.** Каталог содержит crates.io. Слаг экосистемы `crates`, тип purl `cargo`, имена как опубликовано (`serde_json`, `Inflector`), без namespace (§2.1, §3.1, §3.3); ввод в другом написании приводится к опубликованному только в `POST /admin/packages` (§5.3). Карта features Cargo в `features` версии (§3.3.4). Дерево зависимостей crates принимает `target`, `features` и `default_features`, показывает runtime-, build- и optional-зависимости, платформенные помечает `environment_markers.rust_cfg` (§3.3.5). Resolve для crates: `ecosystem: "crates"`, окружение `target` (в том числе `*`) / `features` / `default_features`, features корня в `extras`, стратегия `cargo-resolver` (`Cargo 1.86 (resolver v2)`), несколько версий крейта в разных классах совместимости, `details.features` узлов, `details.rust_cfg` рёбер (§4.1.2). `/admin/presence-probe` принимает `ecosystem: "crates"` (§5.6); стартовый источник `crates-io` (§5.8).
 - **1.5-api (2026-10-29), этап E1.** Каталог содержит npm. Имена npm в путях пишутся со scope (`@angular/core`), purl кодирует `@` как `%40` (§2.1, §3.3); `namespace` списка и поиска — scope без `@` (§3.1). Дерево зависимостей npm принимает из окружения только `os` (§3.3.5). Resolve для npm: `ecosystem: "npm"`, окружение `node_version`/`os`/`cpu`, стратегия `npm-arborist` (`npm 10 (arborist)`), конфликты вида `unsatisfiable`/`peer` и предупреждение `dependency_unresolvable` (§4.1.1). `/admin/presence-probe` принимает `ecosystem: "npm"` (§5.6); стартовый источник `npmjs` (§5.8).
 - **1.4-api (2026-10-29), этап E0-C.** Адресация по purl: `/purl/{purl}` и `/packages/{ecosystem}/{coordinates}/-/…` с `profile`; маршруты `/packages/pypi/{name}/…` — deprecated-алиасы до конца E7 (§3). Новые поля карточки (`purl`, `namespace`, `origin`, `unavailable_at`, `sources`), версии (`purl`, `engines`, `dependencies_state`, `sources`), файлов (`registry`), списка и поиска (`purl`, `namespace`, `origin`; фильтры `ecosystem`, `registry`, `origin`); `latest_version` бывает `null`. Resolve в формате графа, вложенный формат — алиас (§4). `/stats` по экосистемам и источникам, `/updates` и `/updates/summary` с фильтрами и `last_runs`, новые виды событий `release_deprecated` и `source_added` (§6). `/admin/sync/status` строится по журналу `runs` и отдаёт `recent_runs` и `registries`; добавлены `/admin/packages`, `/admin/daily-update`, `/admin/presence-probe`, `/registries`, `/profiles` и admin-маршруты источников (§5). Удалён `/admin/refresh`. Ошибки resolve: `invalid_request`, `resolve_limit_exceeded`, `upstream_error`, `resolve_timeout` вместо `upstream_timeout` (§2.4).

@@ -1,6 +1,6 @@
 # PackageHub MVP
 
-PyPI-first MVP: каталог метаданных пакетов, demand-driven sync и dependency resolve. Экосистемы каталога: PyPI, npm и crates.io.
+PyPI-first MVP: каталог метаданных пакетов, demand-driven sync и dependency resolve. Экосистемы каталога: PyPI, npm, crates.io и Go.
 
 ## Prerequisites
 
@@ -115,6 +115,42 @@ curl -H 'Content-Type: application/json' http://localhost:8000/api/v1/resolve \
 curl -H "Authorization: Bearer phub_admin_dev" -H 'Content-Type: application/json' http://localhost:8000/api/v1/admin/packages \
   -d '{"purls": ["pkg:cargo/serde_json", "pkg:cargo/tokio"]}'
 ```
+
+Go: слаг экосистемы `go`, тип purl `golang`. Идентичность модуля — его путь как написан, регистр значим
+(`github.com/BurntSushi/toml`); путь без последнего элемента — namespace purl (`pkg:golang/github.com/gin-gonic/gin`), а суффикс
+мажорной версии `/v2` и выше делает другой модуль (`pkg:golang/github.com/redis/go-redis/v9`). Слэши пути остаются в URL как есть.
+Версии — `v1.10.0`, псевдоверсии (`v0.0.0-20261014143641-f0251eb4aa3e`, это prerelease) и `+incompatible` (в пути кодируется как `%2B`);
+отозванная в `go.mod` версия приходит со статусом `yanked`. У Go нет описания, лицензии и авторов, а у дерева зависимостей нет
+окружения: каждое `require` из `go.mod` — ребро `runtime`:
+
+```bash
+curl http://localhost:8000/api/v1/packages/go/github.com/gin-gonic/gin/-/                                  # карточка: purl
+curl http://localhost:8000/api/v1/packages/go/github.com/BurntSushi/toml/-/versions                         # версии с датами
+curl 'http://localhost:8000/api/v1/packages/go/github.com/gin-gonic/gin/-/versions/v1.10.0/dependencies'   # дерево require
+curl 'http://localhost:8000/api/v1/search?q=gin&ecosystem=go'                                              # поиск только по Go
+```
+
+Для resolve укажите `"ecosystem": "go"`; `constraint` корня — версия, с которой начинает Minimal Version Selection (`*` — последняя).
+Окружение: `go_version` (по умолчанию `1.23`), `replace` (`[{"old": "путь[@версия]", "new": "путь@версия"}]`) и `exclude`
+(`["путь@версия"]`) главного модуля. Граф строит стратегия `go-mvs` (`Go 1.23 (MVS with module graph pruning)`); множество
+`(путь, версия)` в ответе равно `go list -m all`. Модуль, которому нужен `go` новее `go_version`, попадает в `warnings` с кодом `go_version`:
+
+```bash
+curl -H 'Content-Type: application/json' http://localhost:8000/api/v1/resolve \
+  -d '{"ecosystem": "go", "roots": [{"purl": "pkg:golang/github.com/gin-gonic/gin", "constraint": "v1.9.1"}], "environment": {"go_version": "1.23", "exclude": ["golang.org/x/sys@v0.17.0"]}}'
+```
+
+Добавить модуль в каталог можно по purl через admin API; путь пишется ровно как у модуля, с регистром и `/vN`. Новые версии известных
+модулей ежедневное обновление находит по ленте index.golang.org (источник `proxy-golang-org`):
+
+```bash
+curl -H "Authorization: Bearer phub_admin_dev" -H 'Content-Type: application/json' http://localhost:8000/api/v1/admin/packages \
+  -d '{"purls": ["pkg:golang/github.com/gin-gonic/gin", "pkg:golang/github.com/redis/go-redis/v9"]}'
+```
+
+В Web UI Go выбирается в переключателе экосистем на странице поиска; страница модуля — `/package/go/<путь модуля>`: purl, версии с датами
+(псевдоверсии и отозванные версии помечены, `+incompatible` показывается как есть). Причина отзыва, баннер deprecation и пометка
+`indirect` у зависимостей появляются, когда API отдаёт `status_reason`, `deprecation` и `details` (пока они только в БД). Окружения у дерева нет.
 
 В Web UI crates.io выбирается в переключателе экосистем на странице поиска; на странице крейта окружение дерева — target, features и
 default features, а выбранной версии показываются её features.
