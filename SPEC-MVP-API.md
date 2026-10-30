@@ -3,14 +3,14 @@
 > Source of truth для контрактов HTTP API MVP.
 
 **Source of truth:** [SPEC-MVP.md](./SPEC-MVP.md); адресация по purl, источники и формат resolve — [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §9.1, §11  
-**Версия:** 1.5-api  
-**Дата:** 2026-10-29
+**Версия:** 1.6-api  
+**Дата:** 2026-10-30
 
 ## 1. Область и правила владения
 
 - Этот документ владеет только HTTP-контрактами.
 - Он не меняет продуктовые требования и SLA; SLA берутся только из `SPEC-MVP.md`.
-- Описывает API, каким он стал после этапов E0-C и E1: пакеты адресуются по purl, маршруты `/packages/pypi/{name}/…` остаются deprecated-алиасами до конца E7 (§3.4), resolve отдаёт граф (§4); в каталоге есть PyPI и npm.
+- Описывает API, каким он стал после этапов E0-C, E1 и E2: пакеты адресуются по purl, маршруты `/packages/pypi/{name}/…` остаются deprecated-алиасами до конца E7 (§3.4), resolve отдаёт граф (§4); в каталоге есть PyPI, npm и crates.io.
 
 `Decisions fixed`
 - Все request/response/error контракты описываются только здесь.
@@ -24,8 +24,8 @@
 
 - Base path: `/api/v1`.
 - Формат: `application/json` для request/response, кроме health без тела.
-- Экосистемы: в каталоге плагины `pypi` и `npm`. Пути и фильтры принимают `ecosystem` (`pypi`, `npm`, `maven`, `go`, `crates`, `nuget`, `rpm`), остальные плагины появятся по планам SPEC-MULTI-ECOSYSTEM; для экосистемы без плагина пакетные маршруты отвечают `404`.
-- Пакет в ответах называет его purl (`pkg:pypi/flask`), версия — purl с `@версия` (`pkg:pypi/flask@3.0.0`). Правила записи — [purl-spec](https://github.com/package-url/purl-spec), по ним строит purl плагин экосистемы. Scope npm — namespace purl с `@`, закодированным как `%40`: `@angular/core` — `pkg:npm/%40angular/core`, `left-pad` — `pkg:npm/left-pad`.
+- Экосистемы: в каталоге плагины `pypi`, `npm` и `crates`. Пути и фильтры принимают `ecosystem` (`pypi`, `npm`, `maven`, `go`, `crates`, `nuget`, `rpm`), остальные плагины появятся по планам SPEC-MULTI-ECOSYSTEM; для экосистемы без плагина пакетные маршруты отвечают `404`.
+- Пакет в ответах называет его purl (`pkg:pypi/flask`), версия — purl с `@версия` (`pkg:pypi/flask@3.0.0`). Правила записи — [purl-spec](https://github.com/package-url/purl-spec), по ним строит purl плагин экосистемы. Scope npm — namespace purl с `@`, закодированным как `%40`: `@angular/core` — `pkg:npm/%40angular/core`, `left-pad` — `pkg:npm/left-pad`. Тип purl для crates.io — `cargo`, а слаг экосистемы — `crates`: `serde_json` — `pkg:cargo/serde_json`. Имя крейта записано как опубликовано, без свёртки регистра и `-`/`_` (`serde_json`, `Inflector`), namespace нет.
 
 ### 2.2 Аутентификация
 
@@ -130,7 +130,7 @@ Cursor-based ответ для списков:
 }
 ```
 
-- `namespace` — пустая строка, если у экосистемы нет пространства имён (PyPI, npm-пакет без scope). У npm это scope без `@`, а `name` — имя без scope: `@angular/core` приходит как `namespace: "angular"`, `name: "core"`. `latest_version` может быть `null` (проект без релизов).
+- `namespace` — пустая строка, если у экосистемы нет пространства имён (PyPI, crates, npm-пакет без scope). У npm это scope без `@`, а `name` — имя без scope: `@angular/core` приходит как `namespace: "angular"`, `name: "core"`. `latest_version` может быть `null` (проект без релизов).
 - Errors: `422/500`
 
 ## 3.2 `GET /api/v1/search`
@@ -162,6 +162,17 @@ GET /api/v1/packages/npm/left-pad/-/versions
 GET /api/v1/packages/npm/@angular/core/-/versions/19.0.0/dependencies?os=linux
 GET /api/v1/purl/pkg:npm/%40angular/core          # 307 на /api/v1/packages/npm/@angular/core/-/
 ```
+
+Примеры для crates.io (имя как опубликовано, регистр и `_` сохраняются):
+
+```
+GET /api/v1/packages/crates/serde_json/-/
+GET /api/v1/packages/crates/serde_json/-/versions
+GET /api/v1/packages/crates/serde_json/-/versions/1.0.140/dependencies?target=x86_64-pc-windows-msvc&features=std&default_features=false
+GET /api/v1/purl/pkg:cargo/Inflector              # 307 на /api/v1/packages/crates/Inflector/-/
+```
+
+Crates.io отдаёт крейт только по опубликованному имени: `GET /packages/crates/serde-json/-/` не находит `serde_json`. Ввод в другом написании приводится к опубликованному только при добавлении через `POST /admin/packages` (§5.3).
 
 Общее для всех маршрутов:
 
@@ -266,6 +277,7 @@ GET /api/v1/purl/pkg:npm/%40angular/core          # 307 на /api/v1/packages/np
 }
 ```
 
+- `features` — данные версии, зависящие от экосистемы. У crates это карта features Cargo: имя feature → список того, что она включает (другие features, `dep:крейт`, `крейт/feature`), например `{"default": ["std"], "std": ["serde/std"], "preserve_order": ["dep:indexmap", "std"]}`. Служебный ключ `dependencies_hydrated`, если он есть, features не является: клиент его пропускает.
 - `engines` — требования к среде в нативной записи экосистемы (PyPI: `python`); может быть `null`. `requires_python` — алиас `engines.python`, сохраняется до конца E7.
 - `dependencies_state` — состояние зависимостей версии (`pending` — ещё не загружены, `hydrated`, `unavailable` — зависимости неизвестны).
 - `sources` — все источники версии (без фильтра по профилю) и статус версии в каждом.
@@ -279,6 +291,8 @@ GET /api/v1/purl/pkg:npm/%40angular/core          # 307 на /api/v1/packages/np
   - `include_optional: bool=false`
   - `python_version: string?`
   - `os: string? (linux|windows|win32|darwin|mac|macos)`
+  - `node_version`, `cpu: string?` (npm)
+  - `target: string?`, `features: string?`, `default_features: bool?` (crates)
 - Semantics:
   - Level 1 дерево на основе `resolved_version_id`;
   - если зависимости выбранной версии ещё не гидратированы, backend выполняет lazy hydrate этой версии;
@@ -286,6 +300,7 @@ GET /api/v1/purl/pkg:npm/%40angular/core          # 307 на /api/v1/packages/np
   - response упорядочивает обычные runtime зависимости выше optional/extra;
   - `python_version` и `os` включают проверку environment markers (PEP 508); без них применяются все зависимости;
   - npm: в дерево входят runtime-зависимости и обязательные peer-зависимости; optional добавляются при `include_optional=true`. Окружение npm — `node_version`, `os`, `cpu` (SPEC-MULTI-ECOSYSTEM §7.3) — маршрут пока принимает только `os` (`linux|darwin|win32`; `windows`, `macos` — синонимы); `python_version` для npm не действует, `node_version` и `cpu` не принимаются. Окружение целиком действует в resolve (§4.1.1).
+  - crates: окружение — `target` (целевая тройка Rust; по умолчанию `x86_64-unknown-linux-gnu`; неизвестная даёт `422`, а `*` значит все платформы), `features` (через запятую) и `default_features` (по умолчанию `true`); `python_version` и `os` не действуют. В дерево входят runtime- и build-зависимости, применимые к `target`; у платформенной зависимости в `environment_markers` стоит `{"rust_cfg": "cfg(windows)"}`. Optional-зависимость входит, если её включает feature окружения (`default` включена, пока `default_features` не `false`) или при `include_optional=true`. `dependency_type` узла: `runtime`, `build` или `optional`; dev-зависимости в дерево не входят. Features задают только корень: ниже корня каждое ребро просит у крейта свои features, а `features` и `default_features` на них не действуют.
 - Response `200`:
 
 ```json
@@ -413,7 +428,7 @@ GET /api/v1/purl/pkg:npm/%40angular/core          # 307 на /api/v1/packages/np
 | `profile` | slug профиля источников; без него профиль экосистемы по умолчанию |
 | `input_mode` | `requirements` (по умолчанию) или `lock`; `freeze` — алиас `lock` |
 | `roots` | 1..500 корней: `purl`, `constraint` (по умолчанию `*`, синтаксис экосистемы), `extras`. Версия в purl без `constraint` закрепляет её (`==версия`) |
-| `environment` | окружение в терминах экосистемы; PyPI: имена PEP 508 (`python_version`, `sys_platform`, `os_name`, `platform_machine`, `platform_system`, `implementation_name`) или короткая форма `python_version` + `os`. npm: `node_version`, `os`, `cpu` (§4.1.1). Пустое окружение — как у pip по умолчанию (Python 3.12, linux) |
+| `environment` | окружение в терминах экосистемы; PyPI: имена PEP 508 (`python_version`, `sys_platform`, `os_name`, `platform_machine`, `platform_system`, `implementation_name`) или короткая форма `python_version` + `os`. npm: `node_version`, `os`, `cpu` (§4.1.1). crates: `target`, `features`, `default_features` (§4.1.2). Пустое окружение — как у pip по умолчанию (Python 3.12, linux) |
 | `options.include_dev` / `include_optional` | включать dev- и optional-зависимости; для PyPI `include_optional` не действует: extras задаются в корне явно |
 | `options.timeout_s` | срок resolve, `0 < timeout_s <= 120`, по умолчанию 30 |
 | `managed` | корни `dependencyManagement` (Maven); для PyPI не используется |
@@ -534,6 +549,45 @@ GET /api/v1/purl/pkg:npm/%40angular/core          # 307 на /api/v1/packages/np
   "nodes": [
     {"id": "n1", "purl": "pkg:npm/express@4.21.2", "name": "express", "version": "4.21.2", "registry": "npmjs",
      "depth": 1, "root": true, "hidden": false, "latest_compatible": "4.21.2", "errors": []}
+  ]
+}
+```
+
+### 4.1.2 Resolve для crates
+
+Тело и ответ те же, что в §4.1; отличается следующее.
+
+- Запрос: `"ecosystem": "crates"`, корни — purl `cargo`. `constraint` — требование Cargo (`^1.0`, `~0.8.5`, `>=1, <2`, `=1.0.140`, `*`; голая версия значит `^`). Features корня — в `extras`.
+
+```json
+{
+  "ecosystem": "crates",
+  "roots": [
+    {"purl": "pkg:cargo/serde_json", "constraint": "^1.0", "extras": ["preserve_order"]},
+    {"purl": "pkg:cargo/rand", "constraint": "^0.8"}
+  ],
+  "environment": {"target": "x86_64-unknown-linux-gnu", "features": ["std"], "default_features": true}
+}
+```
+
+- `environment`: `target` (тройка из списка поддерживаемых, `*` — все платформы, как в `Cargo.lock`), `features` (список или строка через запятую, добавляются к `extras` корней) и `default_features` (по умолчанию `true`). Пропущенные ключи: `x86_64-unknown-linux-gnu`, без features, с default features; пустое окружение — то же самое. Неизвестная `target` даёт `422`.
+- Версии выбираются для всех платформ, как в `Cargo.lock`; `target` отсекает из графа узлы, недоступные на платформе, как `cargo tree --target`. При `target: "*"` в графе все платформы, как в `Cargo.lock`. В этом режиме слабые features (`x?/feat`) тоже включают свою зависимость.
+- `strategy`: `cargo-resolver`, `emulates`: `Cargo 1.86 (resolver v2)`. Идентичность узла — крейт и класс совместимости версии (`1.x`, `0.3.x`, `0.0.3`), поэтому крейт может встретиться в графе несколькими версиями (`rand 0.7.3` и `rand 0.8.5`). yanked-версии выбираются только для `=`-ограничения.
+- `nodes[].name` — имя крейта как опубликовано; `nodes[].details.features` — отсортированный список features, с которыми крейт попал в граф (объединение того, что просят все зависящие от него узлы, и `default`, если она включена).
+- `edges[].type` — `runtime|build|optional`; `details.rust_cfg` ребра — условие платформы (`cfg(windows)`, `cfg(target_os = "linux")` или тройка), если зависимость платформенная. `options.include_dev` добавляет dev-зависимости только у корней; `include_optional` не действует: optional-зависимости приходят вместе с включающими их features.
+- `conflicts[]` пуст: неудача resolve приходит в `error` с `code` `resolution_impossible` (нет версий под все требования к крейту), `not_found` (источники профиля не знают корня), `resolve_too_complex`, `resolve_timeout`, `resolve_limit_exceeded` или `upstream_error`.
+- `warnings[]`: `dependencies_unknown` (зависимости версии неизвестны) и `unresolvable` (`{code, message}`, зависимость корня разрешить не удалось).
+
+```json
+{
+  "ecosystem": "crates",
+  "profile": "default",
+  "strategy": "cargo-resolver",
+  "emulates": "Cargo 1.86 (resolver v2)",
+  "nodes": [
+    {"id": "n1", "purl": "pkg:cargo/serde_json@1.0.140", "name": "serde_json", "version": "1.0.140", "registry": "crates-io",
+     "depth": 1, "root": true, "hidden": false, "latest_compatible": "1.0.140", "errors": [],
+     "details": {"features": ["default", "preserve_order", "std"]}}
   ]
 }
 ```
@@ -662,6 +716,8 @@ GET /api/v1/purl/pkg:npm/%40angular/core          # 307 на /api/v1/packages/np
 - Response `202`, `operation: "fetch_packages"`.
 - Errors: `401/422/500`
 
+Для crates purl записывается с типом `cargo`: `pkg:cargo/serde_json`. Если крейта с таким именем нет, а источник знает его под другим написанием (регистр, `-` вместо `_`), пакет сохраняется под опубликованным именем: `pkg:cargo/serde-json` добавляет `serde_json`. Остальные способы обращения к крейту требуют точного имени.
+
 ## 5.4 `POST /api/v1/admin/retry-failed`
 
 - Auth: `admin`
@@ -699,7 +755,7 @@ GET /api/v1/purl/pkg:npm/%40angular/core          # 307 на /api/v1/packages/np
 - Response `202`, `operation: "presence_probe"`.
 - Errors: `401/422` (нет плагина экосистемы)`/500`
 
-Для npm: `{"ecosystem": "npm"}`. Проверка идёт по источникам профиля npm по умолчанию (стартовый — `npmjs`, §5.8). Без тела проверяется PyPI.
+Для npm: `{"ecosystem": "npm"}`, для crates: `{"ecosystem": "crates"}`. Проверка идёт по источникам профиля экосистемы по умолчанию (стартовые — `npmjs` и `crates-io`, §5.8). Без тела проверяется PyPI.
 
 ## 5.7 `GET /api/v1/admin/sync/status`
 
@@ -813,6 +869,21 @@ GET /api/v1/purl/pkg:npm/%40angular/core          # 307 на /api/v1/packages/np
   "priority": 0,
   "enabled": true,
   "config": {"changes_url": "https://replicate.npmjs.com/registry/"}
+}
+```
+
+Стартовый источник crates — `crates-io` (миграция этапа E2), он входит в профиль `default` экосистемы crates. `base_url` — sparse-индекс, адрес API crates.io лежит в `config.api_url` (описание и лицензия берутся оттуда):
+
+```json
+{
+  "slug": "crates-io",
+  "name": "crates.io",
+  "ecosystem": "crates",
+  "protocol": "cargo-sparse",
+  "base_url": "https://index.crates.io/",
+  "priority": 0,
+  "enabled": true,
+  "config": {"api_url": "https://crates.io"}
 }
 ```
 
@@ -1022,6 +1093,7 @@ GET /api/v1/purl/pkg:npm/%40angular/core          # 307 на /api/v1/packages/np
 
 ## 8. Изменения
 
+- **1.6-api (2026-10-30), этап E2.** Каталог содержит crates.io. Слаг экосистемы `crates`, тип purl `cargo`, имена как опубликовано (`serde_json`, `Inflector`), без namespace (§2.1, §3.1, §3.3); ввод в другом написании приводится к опубликованному только в `POST /admin/packages` (§5.3). Карта features Cargo в `features` версии (§3.3.4). Дерево зависимостей crates принимает `target`, `features` и `default_features`, показывает runtime-, build- и optional-зависимости, платформенные помечает `environment_markers.rust_cfg` (§3.3.5). Resolve для crates: `ecosystem: "crates"`, окружение `target` (в том числе `*`) / `features` / `default_features`, features корня в `extras`, стратегия `cargo-resolver` (`Cargo 1.86 (resolver v2)`), несколько версий крейта в разных классах совместимости, `details.features` узлов, `details.rust_cfg` рёбер (§4.1.2). `/admin/presence-probe` принимает `ecosystem: "crates"` (§5.6); стартовый источник `crates-io` (§5.8).
 - **1.5-api (2026-10-29), этап E1.** Каталог содержит npm. Имена npm в путях пишутся со scope (`@angular/core`), purl кодирует `@` как `%40` (§2.1, §3.3); `namespace` списка и поиска — scope без `@` (§3.1). Дерево зависимостей npm принимает из окружения только `os` (§3.3.5). Resolve для npm: `ecosystem: "npm"`, окружение `node_version`/`os`/`cpu`, стратегия `npm-arborist` (`npm 10 (arborist)`), конфликты вида `unsatisfiable`/`peer` и предупреждение `dependency_unresolvable` (§4.1.1). `/admin/presence-probe` принимает `ecosystem: "npm"` (§5.6); стартовый источник `npmjs` (§5.8).
 - **1.4-api (2026-10-29), этап E0-C.** Адресация по purl: `/purl/{purl}` и `/packages/{ecosystem}/{coordinates}/-/…` с `profile`; маршруты `/packages/pypi/{name}/…` — deprecated-алиасы до конца E7 (§3). Новые поля карточки (`purl`, `namespace`, `origin`, `unavailable_at`, `sources`), версии (`purl`, `engines`, `dependencies_state`, `sources`), файлов (`registry`), списка и поиска (`purl`, `namespace`, `origin`; фильтры `ecosystem`, `registry`, `origin`); `latest_version` бывает `null`. Resolve в формате графа, вложенный формат — алиас (§4). `/stats` по экосистемам и источникам, `/updates` и `/updates/summary` с фильтрами и `last_runs`, новые виды событий `release_deprecated` и `source_added` (§6). `/admin/sync/status` строится по журналу `runs` и отдаёт `recent_runs` и `registries`; добавлены `/admin/packages`, `/admin/daily-update`, `/admin/presence-probe`, `/registries`, `/profiles` и admin-маршруты источников (§5). Удалён `/admin/refresh`. Ошибки resolve: `invalid_request`, `resolve_limit_exceeded`, `upstream_error`, `resolve_timeout` вместо `upstream_timeout` (§2.4).
 - **1.3-mvp-api (2026-03-12).** Версия MVP.
