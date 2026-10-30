@@ -297,6 +297,33 @@ button:disabled {
   margin: 8px 0;
 }
 
+.version-date {
+  margin-left: 8px;
+}
+
+.feature-list {
+  margin: 8px 0;
+}
+
+.feature-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.feature-item dt,
+.feature-item dd {
+  margin: 0;
+}
+
+.feature-item dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .package-description {
   margin-bottom: 12px;
 }

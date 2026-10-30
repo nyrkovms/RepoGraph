@@ -5,7 +5,7 @@ import { fetchDependencies, fetchPackage, fetchVersion, fetchVersions, fetchVuln
 import { getPackageDescriptionParagraphs } from "../lib/packageDescription";
 import { OS_OPTIONS, PYTHON_VERSIONS } from "../lib/runtimeEnv";
 
-const ECOSYSTEM_LABELS = { pypi: "PyPI", npm: "npm" };
+const ECOSYSTEM_LABELS = { pypi: "PyPI", npm: "npm", crates: "crates.io" };
 
 // npm environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): Node.js version, os and cpu as npm names them.
 const NPM_NODE_VERSIONS = ["22.0.0", "20.0.0", "18.0.0"];
@@ -18,19 +18,59 @@ const NPM_CPU_OPTIONS = [
   { value: "x64", label: "x64" },
   { value: "arm64", label: "arm64" },
 ];
+// crates environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): a Rust target triple the backend knows, features, default features.
+const CRATES_TARGETS = [
+  "x86_64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
+  "aarch64-unknown-linux-gnu",
+  "aarch64-unknown-linux-musl",
+  "i686-unknown-linux-gnu",
+  "armv7-unknown-linux-gnueabihf",
+  "riscv64gc-unknown-linux-gnu",
+  "powerpc64le-unknown-linux-gnu",
+  "s390x-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc",
+  "x86_64-pc-windows-gnu",
+  "i686-pc-windows-msvc",
+  "aarch64-pc-windows-msvc",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+  "aarch64-apple-ios",
+  "aarch64-linux-android",
+  "x86_64-unknown-freebsd",
+  "wasm32-unknown-unknown",
+  "wasm32-wasip1",
+  "wasm32-wasip2",
+];
 const DEFAULTS = {
   pypi: { python: "3.12", os: "linux" },
   npm: { node: "20.0.0", os: "linux", cpu: "x64" },
+  crates: { target: "x86_64-unknown-linux-gnu" },
 };
+// Internal key of the version's feature map, not a feature.
+const HIDDEN_FEATURE_KEYS = new Set(["dependencies_hydrated"]);
 
 function pickOption(value, allowed, fallback) {
   return allowed.includes(value) ? value : fallback;
 }
 
-// Query of the dependency tree request: PyPI `python_version` and `os`, npm `node_version`, `os` and `cpu`.
+// "serde, std ,," -> "serde,std": the form of the `features` query parameter.
+function normalizeFeatures(text) {
+  return String(text || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join(",");
+}
+
+// Query of the dependency tree request: PyPI `python_version` and `os`, npm `node_version`, `os` and `cpu`,
+// crates `target`, `features` and `default_features`.
 function treeParams(ecosystem, env, includeOptional) {
   if (ecosystem === "npm") {
     return { include_optional: includeOptional, node_version: env.node, os: env.os, cpu: env.cpu };
+  }
+  if (ecosystem === "crates") {
+    return { include_optional: includeOptional, target: env.target, features: env.features, default_features: env.defaultFeatures };
   }
   return { include_optional: includeOptional, python_version: env.python, os: env.os };
 }
@@ -84,6 +124,15 @@ function collectDependencyConditions(node) {
     labels.push("optional dependency");
   }
 
+  if (node.dependency_type === "build") {
+    labels.push("build dependency");
+  }
+
+  // crates: a platform-specific dependency carries the `cfg(...)` or target triple it is declared under.
+  if (typeof node.environment_markers?.rust_cfg === "string") {
+    labels.push(node.environment_markers.rust_cfg);
+  }
+
   if (node.extra_name) {
     extraValues.add(node.extra_name);
   }
@@ -115,6 +164,63 @@ function collectDependencyConditions(node) {
     }),
     extras: [...extraValues],
   };
+}
+
+function formatDate(value) {
+  const match = /^\d{4}-\d{2}-\d{2}/.exec(String(value || ""));
+  return match ? match[0] : "";
+}
+
+function isWebUrl(value) {
+  return typeof value === "string" && /^https?:\/\//i.test(value);
+}
+
+function UrlValue({ url }) {
+  if (!url) {
+    return "n/a";
+  }
+  return isWebUrl(url) ? (
+    <a href={url} target="_blank" rel="noreferrer noopener">
+      {url}
+    </a>
+  ) : (
+    url
+  );
+}
+
+// Cargo feature map of a version: feature name -> what it enables (other features, `dep:crate`, `crate/feature`).
+function featureEntries(features) {
+  if (!features || typeof features !== "object") {
+    return [];
+  }
+  return Object.entries(features)
+    .filter(([name]) => !HIDDEN_FEATURE_KEYS.has(name))
+    .sort(([left], [right]) => Number(right === "default") - Number(left === "default") || left.localeCompare(right));
+}
+
+function FeaturesBlock({ version, features }) {
+  const entries = featureEntries(features);
+  return (
+    <div className="version-features">
+      <h3>Features of {version}</h3>
+      {entries.length === 0 ? <p className="muted">No features.</p> : null}
+      {entries.length ? (
+        <dl className="feature-list">
+          {entries.map(([name, enables]) => {
+            const list = Array.isArray(enables) ? enables : [];
+            return (
+              <div key={name} className="feature-item">
+                <dt>
+                  <code>{name}</code>
+                </dt>
+                <dd>{list.length ? list.map((item) => <code key={item}>{item}</code>) : <span className="muted">enables nothing</span>}</dd>
+              </div>
+            );
+          })}
+        </dl>
+      ) : null}
+    </div>
+  );
 }
 
 function collectNodeIds(nodes, parentId = "root") {
@@ -210,6 +316,7 @@ export default function PackagePage() {
   const ecosystem = params.ecosystem || "pypi";
   const name = params.ecosystem ? params["*"] : params.name;
   const isNpm = ecosystem === "npm";
+  const isCrates = ecosystem === "crates";
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [pkg, setPkg] = useState(null);
@@ -219,6 +326,11 @@ export default function PackagePage() {
   const [nodeVersion, setNodeVersion] = useState(() => searchParams.get("node") || DEFAULTS.npm.node);
   const [cpu, setCpu] = useState(() => searchParams.get("cpu") || DEFAULTS.npm.cpu);
   const [os, setOs] = useState(() => searchParams.get("os") || DEFAULTS.pypi.os);
+  const [target, setTarget] = useState(() => searchParams.get("target") || DEFAULTS.crates.target);
+  // The features field is applied (and the tree reloaded) on Enter or blur, not on every keystroke.
+  const [features, setFeatures] = useState(() => normalizeFeatures(searchParams.get("features")));
+  const [featuresInput, setFeaturesInput] = useState(() => normalizeFeatures(searchParams.get("features")));
+  const [defaultFeatures, setDefaultFeatures] = useState(() => searchParams.get("default_features") !== "0");
   const [vulns, setVulns] = useState([]);
   const [deps, setDeps] = useState([]);
   const [depsUnknown, setDepsUnknown] = useState(false);
@@ -231,6 +343,7 @@ export default function PackagePage() {
 
   // `os` is one URL parameter for both ecosystems, but PyPI calls Windows "windows" and npm "win32".
   const treeOs = isNpm ? pickOption(os, NPM_OS_OPTIONS.map((item) => item.value), DEFAULTS.npm.os) : os;
+  const treeTarget = pickOption(target, CRATES_TARGETS, DEFAULTS.crates.target);
   const latestVersion = useMemo(() => selectedVersion || pkg?.latest_version || versions?.[0]?.version, [selectedVersion, pkg, versions]);
   const descriptionParagraphs = useMemo(() => getPackageDescriptionParagraphs(pkg?.description), [pkg?.description]);
   const allNodeIds = useMemo(() => collectNodeIds(deps), [deps]);
@@ -248,6 +361,10 @@ export default function PackagePage() {
     setNodeVersion(searchParams.get("node") || DEFAULTS.npm.node);
     setCpu(searchParams.get("cpu") || DEFAULTS.npm.cpu);
     setOs(searchParams.get("os") || DEFAULTS.pypi.os);
+    setTarget(searchParams.get("target") || DEFAULTS.crates.target);
+    setFeatures(normalizeFeatures(searchParams.get("features")));
+    setFeaturesInput(normalizeFeatures(searchParams.get("features")));
+    setDefaultFeatures(searchParams.get("default_features") !== "0");
     setIncludeOptional(searchParams.get("include_optional") === "1");
     setDeps([]);
     setDepsUnknown(false);
@@ -269,17 +386,27 @@ export default function PackagePage() {
       if (cpu && cpu !== DEFAULTS.npm.cpu) {
         next.set("cpu", cpu);
       }
+    } else if (isCrates) {
+      if (target && target !== DEFAULTS.crates.target) {
+        next.set("target", target);
+      }
+      if (features) {
+        next.set("features", features);
+      }
+      if (!defaultFeatures) {
+        next.set("default_features", "0");
+      }
     } else if (pythonVersion && pythonVersion !== DEFAULTS.pypi.python) {
       next.set("python", pythonVersion);
     }
-    if (os && os !== DEFAULTS.pypi.os) {
+    if (!isCrates && os && os !== DEFAULTS.pypi.os) {
       next.set("os", os);
     }
     if (includeOptional) {
       next.set("include_optional", "1");
     }
     setSearchParams(next, { replace: true });
-  }, [isNpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, includeOptional, setSearchParams]);
+  }, [isNpm, isCrates, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, features, defaultFeatures, includeOptional, setSearchParams]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -287,7 +414,7 @@ export default function PackagePage() {
     }
     loadDependencies(name, selectedVersion);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ecosystem, name, selectedVersion, pythonVersion, nodeVersion, cpu, os, includeOptional]);
+  }, [ecosystem, name, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, features, defaultFeatures, includeOptional]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -350,7 +477,11 @@ export default function PackagePage() {
         ecosystem,
         packageName,
         version,
-        treeParams(ecosystem, { python: pythonVersion, node: nodeVersion, cpu, os: treeOs }, includeOptional)
+        treeParams(
+          ecosystem,
+          { python: pythonVersion, node: nodeVersion, cpu, os: treeOs, target: treeTarget, features, defaultFeatures },
+          includeOptional
+        )
       );
       setDeps(depPayload.dependencies || []);
       setDepsUnknown(Boolean(depPayload.dependencies_unknown));
@@ -361,6 +492,23 @@ export default function PackagePage() {
       setDepsUnknown(false);
     } finally {
       setDepsLoading(false);
+    }
+  }
+
+  function applyFeatures() {
+    setFeatures(normalizeFeatures(featuresInput));
+  }
+
+  function refreshTree() {
+    if (!selectedVersion) {
+      return;
+    }
+    // A changed features field reloads the tree through the effect; an unchanged one is reloaded here.
+    const typed = normalizeFeatures(featuresInput);
+    if (typed !== features) {
+      setFeatures(typed);
+    } else {
+      loadDependencies(name, selectedVersion);
     }
   }
 
@@ -416,11 +564,16 @@ export default function PackagePage() {
               <b>License</b>: {pkg.license_spdx || pkg.license_raw || "unknown"}
             </span>
             <span>
-              <b>Homepage</b>: {pkg.homepage_url || "n/a"}
+              <b>Homepage</b>: <UrlValue url={pkg.homepage_url} />
             </span>
             <span>
-              <b>Repo</b>: {pkg.repository_url || "n/a"}
+              <b>Repo</b>: <UrlValue url={pkg.repository_url} />
             </span>
+            {pkg.documentation_url ? (
+              <span>
+                <b>Documentation</b>: <UrlValue url={pkg.documentation_url} />
+              </span>
+            ) : null}
           </div>
 
           {pkg.sources?.length ? (
@@ -449,7 +602,8 @@ export default function PackagePage() {
             {versions.slice(0, 10).map((v) => (
               <li key={v.version}>
                 {v.version}
-                <span className="tag">{v.status}</span>
+                <span className={v.status === "yanked" ? "tag warn" : "tag"}>{v.status}</span>
+                {formatDate(v.release_date) ? <span className="muted version-date">{formatDate(v.release_date)}</span> : null}
               </li>
             ))}
           </ul>
@@ -519,6 +673,49 @@ export default function PackagePage() {
                   </select>
                 </label>
               </>
+            ) : isCrates ? (
+              <>
+                <label>
+                  Target
+                  <select
+                    aria-label="Target"
+                    value={treeTarget}
+                    onChange={(e) => setTarget(e.target.value)}
+                    disabled={loading || depsLoading}
+                  >
+                    {CRATES_TARGETS.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Features
+                  <input
+                    aria-label="Features"
+                    placeholder="derive, std"
+                    value={featuresInput}
+                    onChange={(e) => setFeaturesInput(e.target.value)}
+                    onBlur={applyFeatures}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        applyFeatures();
+                      }
+                    }}
+                  />
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    aria-label="Default features"
+                    checked={defaultFeatures}
+                    onChange={(e) => setDefaultFeatures(e.target.checked)}
+                  />
+                  default features
+                </label>
+              </>
             ) : (
               <>
                 <label>
@@ -566,11 +763,7 @@ export default function PackagePage() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (selectedVersion) {
-                  loadDependencies(name, selectedVersion);
-                }
-              }}
+              onClick={refreshTree}
               disabled={loading || depsLoading || !selectedVersion}
             >
               Refresh tree
@@ -593,6 +786,9 @@ export default function PackagePage() {
                 <span className="tag warn">dependencies unknown</span>
               ) : null}
             </div>
+          ) : null}
+          {isCrates && versionDetail && versionDetail.version === selectedVersion ? (
+            <FeaturesBlock version={versionDetail.version} features={versionDetail.features} />
           ) : null}
           {depsLoading ? <p>Loading dependency tree...</p> : null}
           {!depsLoading && depsUnknown ? (

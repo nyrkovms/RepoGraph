@@ -220,4 +220,24 @@ describe("UpdatesPage links by ecosystem", () => {
     const link = await screen.findByRole("link", { name: "@angular/core" });
     expect(link).toHaveAttribute("href", "/package/npm/%40angular/core");
   });
+
+  it("links a crates entry to its crates package page", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      packages: [{ ...SUMMARY.packages[0], ecosystem: "crates", name: "Inflector", purl: "pkg:cargo/Inflector" }],
+    });
+    renderPage();
+    const link = await screen.findByRole("link", { name: "Inflector" });
+    expect(link).toHaveAttribute("href", "/package/crates/Inflector");
+  });
+
+  it("takes the ecosystem of an entry without one from its purl type", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      packages: [{ ...SUMMARY.packages[0], ecosystem: undefined, name: "serde_json", purl: "pkg:cargo/serde_json" }],
+    });
+    renderPage();
+    const link = await screen.findByRole("link", { name: "serde_json" });
+    expect(link).toHaveAttribute("href", "/package/crates/serde_json");
+  });
 });

@@ -42,4 +42,30 @@ describe("package routes", () => {
     await fetchPackage("pypi", "flask");
     expect(lastUrl().pathname).toBe("/api/v1/packages/pypi/flask/-/");
   });
+
+  it("builds the routes of a crate and passes the crates environment on the tree", async () => {
+    await fetchPackage("crates", "serde_json");
+    expect(lastUrl().pathname).toBe("/api/v1/packages/crates/serde_json/-/");
+
+    await fetchVersion("crates", "Inflector", "0.11.4");
+    expect(lastUrl().pathname).toBe("/api/v1/packages/crates/Inflector/-/versions/0.11.4");
+
+    await fetchDependencies("crates", "serde_json", "1.0.140", {
+      include_optional: false,
+      target: "x86_64-pc-windows-msvc",
+      features: "std,raw_value",
+      default_features: false,
+    });
+    expect(lastUrl().pathname).toBe("/api/v1/packages/crates/serde_json/-/versions/1.0.140/dependencies");
+    expect(Object.fromEntries(lastUrl().searchParams)).toEqual({
+      include_optional: "false",
+      target: "x86_64-pc-windows-msvc",
+      features: "std,raw_value",
+      default_features: "false",
+    });
+
+    // An empty features field is left out of the query.
+    await fetchDependencies("crates", "serde_json", "1.0.140", { target: "wasm32-wasip1", features: "", default_features: true });
+    expect(Object.fromEntries(lastUrl().searchParams)).toEqual({ target: "wasm32-wasip1", default_features: "true" });
+  });
 });

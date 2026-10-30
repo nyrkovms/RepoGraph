@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
@@ -575,6 +575,271 @@ describe("PackagePage", () => {
       expect(await screen.findByText("A lightweight WSGI framework")).toBeInTheDocument();
       expect(api.fetchPackage).toHaveBeenCalledWith("pypi", "flask");
       expect(screen.getByLabelText("Python version")).toBeInTheDocument();
+    });
+  });
+
+  describe("crates", () => {
+    function renderApp(path) {
+      render(
+        <MemoryRouter initialEntries={[path]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <App />
+        </MemoryRouter>
+      );
+    }
+
+    function mockSerdeJson() {
+      api.fetchPackage.mockResolvedValue({
+        ecosystem: "crates",
+        name: "serde_json",
+        normalized_name: "serde_json",
+        namespace: "",
+        purl: "pkg:cargo/serde_json",
+        description: "A JSON serialization file format",
+        homepage_url: "https://serde.rs",
+        repository_url: "https://github.com/serde-rs/json",
+        documentation_url: "https://docs.rs/serde_json",
+        license_spdx: "MIT OR Apache-2.0",
+        latest_version: "1.0.140",
+        sources: [],
+      });
+      api.fetchVersions.mockResolvedValue({
+        data: [
+          { version: "1.0.140", status: "active", release_date: "2026-03-01T10:00:00Z" },
+          { version: "1.0.139", status: "yanked", release_date: "2026-02-01T10:00:00Z" },
+        ],
+        cursor: null,
+        has_more: false,
+      });
+      api.fetchVersion.mockResolvedValue({
+        name: "serde_json",
+        purl: "pkg:cargo/serde_json@1.0.140",
+        version: "1.0.140",
+        status: "active",
+        features: {
+          std: ["serde/std"],
+          default: ["std"],
+          raw_value: [],
+          preserve_order: ["dep:indexmap", "std"],
+          dependencies_hydrated: true,
+        },
+        dependencies_state: "hydrated",
+        sources: [],
+      });
+      api.fetchDependencies.mockResolvedValue({ package: "serde_json", version: "1.0.140", depth: 0, dependencies: [] });
+    }
+
+    it("opens a crate by its route and shows purl, links, versions with dates and yanked ones", async () => {
+      mockSerdeJson();
+      renderApp("/package/crates/serde_json");
+
+      expect(await screen.findByText("A JSON serialization file format")).toBeInTheDocument();
+      expect(screen.getByText("pkg:cargo/serde_json")).toBeInTheDocument();
+      expect(screen.getByText("crates.io", { selector: ".eco-badge" })).toBeInTheDocument();
+      expect(api.fetchPackage).toHaveBeenCalledWith("crates", "serde_json");
+      expect(api.fetchVersions).toHaveBeenCalledWith("crates", "serde_json", { limit: 30 });
+      expect(api.fetchVulnerabilities).toHaveBeenCalledWith("crates", "serde_json");
+      await waitFor(() => expect(api.fetchVersion).toHaveBeenCalledWith("crates", "serde_json", "1.0.140"));
+
+      expect(screen.getByRole("link", { name: "https://serde.rs" })).toHaveAttribute("href", "https://serde.rs");
+      expect(screen.getByRole("link", { name: "https://github.com/serde-rs/json" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "https://docs.rs/serde_json" })).toHaveAttribute(
+        "href",
+        "https://docs.rs/serde_json"
+      );
+      expect(screen.getByText((content) => content.includes("MIT OR Apache-2.0"))).toBeInTheDocument();
+
+      expect(screen.getByText("2026-03-01")).toBeInTheDocument();
+      expect(screen.getByText("2026-02-01")).toBeInTheDocument();
+      expect(screen.getByText("yanked", { selector: ".tag" })).toHaveClass("warn");
+      expect(screen.getByText("active", { selector: ".tag" })).not.toHaveClass("warn");
+    });
+
+    it("shows the crates environment fields, not the Python or npm ones, and sends them to the tree", async () => {
+      const user = userEvent.setup();
+      mockSerdeJson();
+      renderApp("/package/crates/serde_json");
+
+      await screen.findByText("A JSON serialization file format");
+      const target = screen.getByLabelText("Target");
+      expect(target).toHaveValue("x86_64-unknown-linux-gnu");
+      expect(within(target).getAllByRole("option")).toHaveLength(21);
+      expect(screen.getByLabelText("Features")).toHaveValue("");
+      expect(screen.getByLabelText("Default features")).toBeChecked();
+      expect(screen.queryByLabelText("Python version")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Node.js version")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("OS")).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(api.fetchDependencies).toHaveBeenCalledWith("crates", "serde_json", "1.0.140", {
+          include_optional: false,
+          target: "x86_64-unknown-linux-gnu",
+          features: "",
+          default_features: true,
+        });
+      });
+
+      await user.selectOptions(target, "x86_64-pc-windows-msvc");
+      await waitFor(() => {
+        expect(api.fetchDependencies).toHaveBeenLastCalledWith("crates", "serde_json", "1.0.140", {
+          include_optional: false,
+          target: "x86_64-pc-windows-msvc",
+          features: "",
+          default_features: true,
+        });
+      });
+
+      // Features are sent once typed, on Enter, comma-separated and trimmed.
+      const callsBefore = api.fetchDependencies.mock.calls.length;
+      await user.type(screen.getByLabelText("Features"), "std, raw_value ,");
+      expect(api.fetchDependencies.mock.calls).toHaveLength(callsBefore);
+      await user.keyboard("{Enter}");
+      await waitFor(() => {
+        expect(api.fetchDependencies).toHaveBeenLastCalledWith("crates", "serde_json", "1.0.140", {
+          include_optional: false,
+          target: "x86_64-pc-windows-msvc",
+          features: "std,raw_value",
+          default_features: true,
+        });
+      });
+
+      await user.click(screen.getByLabelText("Default features"));
+      await waitFor(() => {
+        expect(api.fetchDependencies).toHaveBeenLastCalledWith("crates", "serde_json", "1.0.140", {
+          include_optional: false,
+          target: "x86_64-pc-windows-msvc",
+          features: "std,raw_value",
+          default_features: false,
+        });
+      });
+    });
+
+    it("reads target, features and default features from the query", async () => {
+      mockSerdeJson();
+      renderApp("/package/crates/serde_json?version=1.0.139&target=aarch64-apple-darwin&features=std&default_features=0");
+
+      await screen.findByText("A JSON serialization file format");
+      expect(screen.getByLabelText("Target")).toHaveValue("aarch64-apple-darwin");
+      expect(screen.getByLabelText("Features")).toHaveValue("std");
+      expect(screen.getByLabelText("Default features")).not.toBeChecked();
+      await waitFor(() => {
+        expect(api.fetchDependencies).toHaveBeenCalledWith("crates", "serde_json", "1.0.139", {
+          include_optional: false,
+          target: "aarch64-apple-darwin",
+          features: "std",
+          default_features: false,
+        });
+      });
+    });
+
+    it("does not send an unknown target from the query", async () => {
+      mockSerdeJson();
+      renderApp("/package/crates/serde_json?target=sparc-sun-solaris");
+
+      await screen.findByText("A JSON serialization file format");
+      await waitFor(() => {
+        expect(api.fetchDependencies).toHaveBeenCalledWith(
+          "crates",
+          "serde_json",
+          "1.0.140",
+          expect.objectContaining({ target: "x86_64-unknown-linux-gnu" })
+        );
+      });
+    });
+
+    it("marks platform-specific, build and optional edges", async () => {
+      mockSerdeJson();
+      api.fetchDependencies.mockResolvedValue({
+        package: "serde_json",
+        version: "1.0.140",
+        depth: 1,
+        dependencies: [
+          {
+            name: "winapi",
+            constraint: "^0.3",
+            dependency_type: "runtime",
+            extra_name: null,
+            environment_markers: { rust_cfg: "cfg(windows)" },
+            resolved_version: "0.3.9",
+            cycle: false,
+            children: [],
+          },
+          {
+            name: "cc",
+            constraint: "^1.0",
+            dependency_type: "build",
+            extra_name: null,
+            environment_markers: null,
+            resolved_version: "1.2.1",
+            cycle: false,
+            children: [],
+          },
+          {
+            name: "itoa",
+            constraint: "^1.0",
+            dependency_type: "runtime",
+            extra_name: null,
+            environment_markers: null,
+            resolved_version: "1.0.15",
+            cycle: false,
+            children: [],
+          },
+        ],
+      });
+      renderApp("/package/crates/serde_json");
+
+      expect(await screen.findByText("winapi")).toBeInTheDocument();
+      expect(screen.getByText("cfg(windows)")).toBeInTheDocument();
+      expect(screen.getAllByText("build dependency")).toHaveLength(1);
+      const cc = screen.getByText("cc").closest("li");
+      expect(within(cc).getByText("build dependency")).toBeInTheDocument();
+      const itoa = screen.getByText("itoa").closest("li");
+      expect(within(itoa).queryByText("build dependency")).not.toBeInTheDocument();
+      expect(within(itoa).queryByText(/cfg\(/)).not.toBeInTheDocument();
+    });
+
+    it("lists the features of the selected version without the internal key", async () => {
+      const user = userEvent.setup();
+      mockSerdeJson();
+      renderApp("/package/crates/serde_json");
+
+      expect(await screen.findByRole("heading", { name: "Features of 1.0.140" })).toBeInTheDocument();
+      const items = document.querySelectorAll(".feature-item");
+      // `default` first, then alphabetical.
+      expect([...items].map((item) => item.querySelector("dt").textContent)).toEqual([
+        "default",
+        "preserve_order",
+        "raw_value",
+        "std",
+      ]);
+      expect(screen.getByText("serde/std")).toBeInTheDocument();
+      expect(screen.getByText("dep:indexmap")).toBeInTheDocument();
+      expect(screen.getByText("enables nothing")).toBeInTheDocument();
+      expect(screen.queryByText("dependencies_hydrated")).not.toBeInTheDocument();
+
+      api.fetchVersion.mockResolvedValue({
+        name: "serde_json",
+        purl: "pkg:cargo/serde_json@1.0.139",
+        version: "1.0.139",
+        status: "yanked",
+        features: {},
+        dependencies_state: "hydrated",
+        sources: [],
+      });
+      await user.selectOptions(screen.getByLabelText("Version"), "1.0.139");
+      expect(await screen.findByRole("heading", { name: "Features of 1.0.139" })).toBeInTheDocument();
+      expect(screen.getByText("No features.")).toBeInTheDocument();
+    });
+
+    it("sends no crates parameters for PyPI or npm and shows no features block", async () => {
+      renderApp("/package/flask");
+      await screen.findByText("werkzeug");
+      await waitFor(() => expect(api.fetchVersion).toHaveBeenCalled());
+      expect(screen.queryByRole("heading", { name: /^Features of/ })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Target")).not.toBeInTheDocument();
+      for (const [, , , params] of api.fetchDependencies.mock.calls) {
+        expect(params).not.toHaveProperty("target");
+        expect(params).not.toHaveProperty("features");
+        expect(params).not.toHaveProperty("default_features");
+      }
     });
   });
 });

@@ -227,4 +227,60 @@ describe("SearchPage", () => {
     expect(screen.getAllByText("npm", { selector: ".eco-badge" })).toHaveLength(2);
     expect(screen.getAllByText("PyPI", { selector: ".eco-badge" })).toHaveLength(1);
   });
+
+  it("switches to crates.io and links crates by the name as published", async () => {
+    const crates = {
+      data: [
+        {
+          ecosystem: "crates",
+          namespace: "",
+          name: "serde_json",
+          normalized_name: "serde_json",
+          purl: "pkg:cargo/serde_json",
+          description: "A JSON serialization file format",
+          license_spdx: "MIT OR Apache-2.0",
+          latest_version: "1.0.140",
+          has_vulnerabilities: false,
+        },
+        {
+          ecosystem: "crates",
+          namespace: "",
+          name: "Inflector",
+          normalized_name: "Inflector",
+          purl: "pkg:cargo/Inflector",
+          description: "String inflection",
+          license_spdx: "BSD-2-Clause",
+          latest_version: "0.11.4",
+          has_vulnerabilities: false,
+        },
+      ],
+      cursor: null,
+      has_more: false,
+    };
+    api.fetchPackages.mockResolvedValue(crates);
+    api.searchPackages.mockResolvedValue(crates);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <SearchPage />
+      </MemoryRouter>
+    );
+    await screen.findByRole("link", { name: "serde_json" });
+
+    expect(screen.getByRole("option", { name: "crates.io" })).toHaveValue("crates");
+    await user.selectOptions(screen.getByLabelText("Ecosystem"), "crates");
+    await waitFor(() => {
+      expect(api.fetchPackages).toHaveBeenLastCalledWith({ limit: 20, sort: "name", ecosystem: "crates" });
+    });
+
+    await user.type(screen.getByLabelText("Search query"), "serde");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => {
+      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "serde", limit: 20, sort: "name", ecosystem: "crates" });
+    });
+
+    expect(screen.getByRole("link", { name: "serde_json" })).toHaveAttribute("href", "/package/crates/serde_json");
+    expect(screen.getByRole("link", { name: "Inflector" })).toHaveAttribute("href", "/package/crates/Inflector");
+    expect(screen.getAllByText("crates.io", { selector: ".eco-badge" })).toHaveLength(2);
+  });
 });
