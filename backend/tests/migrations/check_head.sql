@@ -156,3 +156,15 @@ BEGIN
     RAISE EXCEPTION '0011: default nuget profile'; END IF;
   RAISE NOTICE 'ok: 0011 NuGet starter source';
 END $$;
+
+-- 0012: the Maven starter source (IMPL R4).
+DO $$
+BEGIN
+  IF (SELECT protocol::text || '/' || priority || '/' || enabled || '/' || base_url
+      FROM registries WHERE slug = 'maven-central') <> 'maven2/0/true/https://repo1.maven.org/maven2/' THEN
+    RAISE EXCEPTION '0012: maven-central source'; END IF;
+  IF (SELECT count(*) FROM source_profile_registries spr JOIN source_profiles sp ON sp.id = spr.profile_id
+      JOIN registries r ON r.id = spr.registry_id WHERE sp.ecosystem = 'maven' AND sp.is_default AND r.slug = 'maven-central') <> 1 THEN
+    RAISE EXCEPTION '0012: default maven profile'; END IF;
+  RAISE NOTICE 'ok: 0012 Maven starter source';
+END $$;
