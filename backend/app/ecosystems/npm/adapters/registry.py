@@ -3,7 +3,8 @@
 
 The package is read from the full packument (`application/json`, Q19): every version with its dependencies, engines,
 `deprecated` and `dist`, `dist-tags`, and `time` with the release date of each version, which the abbreviated
-document (`application/vnd.npm.install-v1+json`) lacks. All versions are stored; dependencies are filled in for the
+document (`application/vnd.npm.install-v1+json`) lacks. Description, links, license, keywords and people are the
+top-level copies npm keeps of the latest version's package.json. All versions are stored; dependencies are filled in for the
 version `latest` points at and fetched lazily from `/<name>/<version>` for the others (Q9).
 
 `test_connection` reads `/-/ping`: answered with 200 by registry.npmjs.org (`{}`), registry.npmmirror.com,
@@ -13,6 +14,7 @@ differently fails the check with its status, as a wrong `base_url` should.
 
 import asyncio
 import logging
+import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Literal
@@ -26,6 +28,7 @@ from app.ecosystems.base import (
     ChangeSet,
     DependencyType,
     NormalizedArtifact,
+    NormalizedAuthor,
     NormalizedDependency,
     NormalizedPackage,
     NormalizedVersion,
@@ -183,6 +186,80 @@ def _artifact(entry: Mapping[str, object]) -> NormalizedArtifact | None:
     )
 
 
+def _text(value: object) -> str | None:
+    return value.strip() or None if isinstance(value, str) else None
+
+
+def _date(value: object) -> datetime | None:
+    try:
+        return datetime.fromisoformat(value) if isinstance(value, str) else None
+    except ValueError:
+        return None
+
+
+# `git+ssh://git@github.com/u/r.git`, `git@github.com:u/r.git`, `github:u/r`, `u/r` -> `https://github.com/u/r`.
+_SCP_LIKE = re.compile(r"^(?:[\w.-]+@)?([\w.-]+\.[a-z]{2,}):(?!\d+/)(.+)$", re.IGNORECASE)
+_SHORTHAND_HOSTS = {"github": "github.com", "gitlab": "gitlab.com", "bitbucket": "bitbucket.org"}
+_SHORTHAND = re.compile(r"^(?:(github|gitlab|bitbucket):)?([\w.-]+/[\w.-]+)$")
+
+
+def _repository_url(value: object) -> str | None:
+    """A browsable URL for package.json `repository` (a string or `{type, url, directory}`); None if it is not one."""
+    raw = _text(_mapping(value).get("url")) if isinstance(value, Mapping) else _text(value)
+    if raw is None:
+        return None
+    shorthand = _SHORTHAND.match(raw)
+    if shorthand:
+        return f"https://{_SHORTHAND_HOSTS[shorthand.group(1) or 'github']}/{shorthand.group(2).removesuffix('.git')}"
+    scp = _SCP_LIKE.match(raw)
+    if scp and "://" not in raw:
+        raw = f"https://{scp.group(1)}/{scp.group(2)}"
+    parts = urlsplit(raw.removeprefix("git+"))
+    if parts.scheme not in ("http", "https", "ssh", "git") or not parts.hostname:
+        return None
+    path = parts.path.removesuffix("/").removesuffix(".git")
+    return f"https://{parts.hostname}{path}" if path.strip("/") else None
+
+
+def _license(document: Mapping[str, object]) -> tuple[str | None, str | None]:
+    """(raw, SPDX): `license` is an SPDX expression; old packages have `{type}` or a `licenses` list."""
+    value = document.get("license")
+    if isinstance(value, Mapping):
+        value = value.get("type")
+    raw = _text(value)
+    if raw is None:
+        listed = document.get("licenses")
+        items = listed if isinstance(listed, list) else []
+        names = [name for item in items if (name := _text(item.get("type") if isinstance(item, Mapping) else item))]
+        if not names:
+            return None, None
+        # The list does not say whether its licenses combine with OR or AND: SPDX only for a single one.
+        return " OR ".join(names), names[0] if len(names) == 1 else None
+    # `UNLICENSED` (not for use) and `SEE LICENSE IN <file>` are npm's words for "no SPDX license".
+    return raw, None if raw.upper().startswith(("UNLICENSED", "SEE LICENSE")) else raw
+
+
+_PERSON = re.compile(r"^\s*([^<(]*?)\s*(?:<([^>]*)>)?\s*(?:\(([^)]*)\))?\s*$")
+
+
+def _person(value: object, role: str) -> NormalizedAuthor | None:
+    """`{name, email, url}` or the string form `Name <email> (url)`."""
+    if isinstance(value, Mapping):
+        name, email, url = _text(value.get("name")), _text(value.get("email")), _text(value.get("url"))
+    elif isinstance(value, str) and (match := _PERSON.match(value)):
+        name, email, url = (_text(group) for group in match.groups())
+    else:
+        return None
+    return NormalizedAuthor(name=name, email=email, url=url, role=role) if name else None
+
+
+def _people(document: Mapping[str, object]) -> list[NormalizedAuthor]:
+    maintainers = document.get("maintainers")
+    found = [_person(document.get("author"), "author")]
+    found += [_person(item, "maintainer") for item in (maintainers if isinstance(maintainers, list) else [])]
+    return [person for person in found if person is not None]
+
+
 def _release_dates(document: Mapping[str, object]) -> dict[str, datetime]:
     """`time`: `{version: ISO date}` next to `created`/`modified`; a date that does not parse is left out."""
     dates: dict[str, datetime] = {}
@@ -222,6 +299,9 @@ def package_from_packument(
     latest = tags.get("latest")
     dates = _release_dates(document)
     name = document.get("name")
+    license_raw, license_spdx = _license(document)
+    keywords = document.get("keywords")
+    time = _mapping(document.get("time"))
     return NormalizedPackage(
         ref=ref, registry_id=registry_id,
         display_name=name if isinstance(name, str) and name else _COORDINATES.display(ref),
@@ -233,6 +313,15 @@ def package_from_packument(
             if isinstance(entry, Mapping)
         ],
         dist_tags=tags,
+        description=_text(document.get("description")),
+        homepage_url=_text(document.get("homepage")),
+        repository_url=_repository_url(document.get("repository")),
+        license_raw=license_raw,
+        license_spdx=license_spdx,
+        keywords=[word for word in keywords if isinstance(word, str) and word] if isinstance(keywords, list) else None,
+        authors=_people(document),
+        created_at=_date(time.get("created")),
+        updated_at=_date(time.get("modified")),
     )
 
 
