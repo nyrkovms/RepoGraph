@@ -173,15 +173,10 @@ def test_the_catalog_keeps_documents_and_reads_them_again_without_the_proxy(monk
     asyncio.run(check())
 
 
-def test_a_go_root_without_a_version_resolves_through_the_api_at_its_latest() -> None:
-    from fastapi.testclient import TestClient
-
-    from app.main import app
-
-    with TestClient(app) as client:
-        response = client.post("/api/v1/resolve", json={
-            "ecosystem": "go", "roots": [{"purl": "pkg:golang/github.com/gin-gonic/gin"}],
-            "options": {"timeout_s": 60}})
+def test_a_go_root_without_a_version_resolves_through_the_api_at_its_latest(client) -> None:
+    # The shared client: the app's engine pool belongs to its event loop.
+    response = client.post("/api/v1/resolve", json={
+        "ecosystem": "go", "roots": [{"purl": "pkg:golang/github.com/gin-gonic/gin"}], "options": {"timeout_s": 60}})
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["error"] is None, body["error"]
