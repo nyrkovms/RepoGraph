@@ -767,3 +767,13 @@ def test_the_revision_of_a_fetched_package_is_what_the_detector_compares(serve) 
     assert package is not None
     result = asyncio.run(adapter.change_detector().detect([_tracked("newtonsoft.json", package.revision)], {}))
     assert result.changed == [] and result.missing == []
+
+
+def test_package_fields_come_from_the_newest_listed_release_not_a_preview() -> None:
+    from app.ecosystems.nuget.adapters.v3 import _newest
+
+    entries = [{"version": "13.0.3", "listed": True}, {"version": "14.0.1-beta2", "listed": True},
+               {"version": "13.0.4", "listed": False}]
+    assert _newest(entries) == entries[0]
+    assert _newest(entries[1:]) == entries[1]           # previews only: the newest listed one
+    assert _newest([entries[2]]) == entries[2]          # nothing listed: the newest at all

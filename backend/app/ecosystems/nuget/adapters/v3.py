@@ -233,10 +233,13 @@ def _normalized(entry: Mapping[str, object]) -> str | None:
 
 
 def _newest(entries: Sequence[Mapping[str, object]]) -> Mapping[str, object] | None:
-    """The entry of the newest version, the newest listed one when there is any (versions the scheme rejects have
-    no place in the order)."""
+    """The entry of the newest version: the newest listed release, else listed prerelease, else any (versions the
+    scheme rejects have no place in the order). A preview's description is not the package's (Newtonsoft.Json
+    14.0.1-beta2)."""
     valid = [entry for entry in entries if _normalized(entry) is not None]
-    candidates = [entry for entry in valid if entry.get("listed") is not False] or valid
+    listed = [entry for entry in valid if entry.get("listed") is not False]
+    releases = [entry for entry in listed if not _SCHEME.is_prerelease(str(_normalized(entry)))]
+    candidates = releases or listed or valid
     return max(candidates, key=lambda entry: _SCHEME.sort_key(str(_normalized(entry))), default=None)
 
 
