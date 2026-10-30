@@ -291,4 +291,33 @@ describe("UpdatesPage links by ecosystem", () => {
     const link = await screen.findByRole("link", { name: "serilog.sinks.file" });
     expect(link).toHaveAttribute("href", "/package/nuget/serilog.sinks.file");
   });
+
+  it("links a Maven entry to its package page by groupId:artifactId", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      packages: [
+        {
+          ...SUMMARY.packages[0],
+          ecosystem: "maven",
+          name: "org.springframework:spring-core",
+          purl: "pkg:maven/org.springframework/spring-core",
+        },
+      ],
+    });
+    renderPage();
+    const link = await screen.findByRole("link", { name: "org.springframework:spring-core" });
+    expect(link).toHaveAttribute("href", "/package/maven/org.springframework:spring-core");
+  });
+
+  it("takes the Maven ecosystem of an entry without one from the maven purl type", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      packages: [
+        { ...SUMMARY.packages[0], ecosystem: undefined, name: "guava", purl: "pkg:maven/com.google.guava/guava" },
+      ],
+    });
+    renderPage();
+    const link = await screen.findByRole("link", { name: "com.google.guava:guava" });
+    expect(link).toHaveAttribute("href", "/package/maven/com.google.guava:guava");
+  });
 });

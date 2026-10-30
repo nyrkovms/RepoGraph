@@ -1307,4 +1307,315 @@ describe("PackagePage", () => {
       expect(api.fetchDependencies.mock.calls[0][3]).not.toHaveProperty("target_framework");
     });
   });
+
+  describe("maven", () => {
+    const GA = "org.springframework:spring-core";
+
+    function renderApp(path) {
+      render(
+        <MemoryRouter initialEntries={[path]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <App />
+        </MemoryRouter>
+      );
+    }
+
+    function mockPackage(overrides = {}) {
+      api.fetchPackage.mockResolvedValue({
+        ecosystem: "maven",
+        name: GA,
+        normalized_name: "spring-core",
+        namespace: "org.springframework",
+        purl: "pkg:maven/org.springframework/spring-core",
+        description: "Spring Core",
+        homepage_url: "https://github.com/spring-projects/spring-framework",
+        repository_url: null,
+        documentation_url: null,
+        license_raw: "Apache License, Version 2.0",
+        license_spdx: "Apache-2.0",
+        latest_version: "6.1.14",
+        sources: [],
+        ...overrides,
+      });
+      api.fetchVersions.mockResolvedValue({
+        data: [
+          { version: "6.1.14", status: "active", release_date: "2024-10-16T10:00:00Z", packaging: "jar" },
+          { version: "6.2.0-RC1", status: "active", release_date: "2024-10-10T10:00:00Z" },
+          { version: "6.1.13", status: "active", release_date: null },
+        ],
+        cursor: null,
+        has_more: false,
+      });
+      api.fetchVersion.mockResolvedValue({
+        name: GA,
+        purl: "pkg:maven/org.springframework/spring-core@6.1.14",
+        version: "6.1.14",
+        status: "active",
+        features: null,
+        dependencies_state: "hydrated",
+        sources: [],
+      });
+      api.fetchDependencies.mockResolvedValue({
+        package: GA,
+        version: "6.1.14",
+        depth: 1,
+        dependencies: [
+          {
+            name: "org.springframework:spring-jcl",
+            constraint: "6.1.14",
+            dependency_type: "runtime",
+            extra_name: null,
+            environment_markers: null,
+            details: null,
+            resolved_version: "6.1.14",
+            cycle: false,
+            children: [],
+          },
+          {
+            name: "io.micrometer:micrometer-observation",
+            constraint: "1.12.0",
+            dependency_type: "dev",
+            extra_name: null,
+            environment_markers: null,
+            details: {
+              exclusions: [
+                { group: "commons-logging", artifact: "commons-logging" },
+                { group: "log4j", artifact: "log4j" },
+              ],
+              classifier: "tests",
+              type: "test-jar",
+            },
+            resolved_version: "1.12.0",
+            cycle: false,
+            children: [],
+          },
+          {
+            name: "jakarta.servlet:jakarta.servlet-api",
+            constraint: "6.0.0",
+            dependency_type: "provided",
+            scope: "provided",
+            extra_name: null,
+            environment_markers: null,
+            resolved_version: "6.0.0",
+            cycle: false,
+            children: [],
+          },
+        ],
+      });
+    }
+
+    it("opens a package by groupId:artifactId and shows the purl, groupId, artifactId and the license", async () => {
+      mockPackage();
+      renderApp(`/package/maven/${GA}`);
+
+      expect(await screen.findByText("pkg:maven/org.springframework/spring-core")).toBeInTheDocument();
+      expect(screen.getByText("Maven", { selector: ".eco-badge" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(`Package: ${GA}`);
+      expect(screen.getByText("org.springframework", { selector: "code" })).toBeInTheDocument();
+      expect(screen.getByText("spring-core", { selector: "code" })).toBeInTheDocument();
+      expect(screen.getByText((content) => content.includes("Apache-2.0"))).toBeInTheDocument();
+      expect(api.fetchPackage).toHaveBeenCalledWith("maven", GA);
+      expect(api.fetchVersions).toHaveBeenCalledWith("maven", GA, { limit: 30 });
+      expect(api.fetchVulnerabilities).toHaveBeenCalledWith("maven", GA);
+      await waitFor(() => expect(api.fetchVersion).toHaveBeenCalledWith("maven", GA, "6.1.14"));
+    });
+
+    it("falls back to the license name of the POM when there is no SPDX id", async () => {
+      mockPackage({ license_spdx: null, license_raw: "Eclipse Public License 1.0" });
+      renderApp(`/package/maven/${GA}`);
+
+      await screen.findByText("pkg:maven/org.springframework/spring-core");
+      expect(screen.getByText((content) => content.includes("Eclipse Public License 1.0"))).toBeInTheDocument();
+    });
+
+    it("shows versions with their dates, qualifiers as they are and the packaging where known", async () => {
+      mockPackage();
+      renderApp(`/package/maven/${GA}`);
+
+      await screen.findByText("pkg:maven/org.springframework/spring-core");
+      const items = [...document.querySelectorAll(".inline-list > li")];
+      const row = (version) => items.find((item) => item.textContent.startsWith(version));
+
+      expect(within(row("6.1.14")).getByText("2024-10-16")).toBeInTheDocument();
+      expect(within(row("6.1.14")).getByText("jar")).toBeInTheDocument();
+      expect(within(row("6.2.0-RC1")).getByText("2024-10-10")).toBeInTheDocument();
+      expect(within(row("6.2.0-RC1")).queryByText("jar")).not.toBeInTheDocument();
+      expect(row("6.1.13").querySelector(".version-date")).toBeNull();
+      expect(screen.getByRole("option", { name: "6.2.0-RC1" })).toBeInTheDocument();
+    });
+
+    it("shows the packaging of the selected version when the version data carries it", async () => {
+      mockPackage();
+      api.fetchVersion.mockResolvedValue({
+        name: GA,
+        version: "6.1.14",
+        status: "active",
+        raw_metadata: { packaging: "pom" },
+        dependencies_state: "hydrated",
+        sources: [],
+      });
+      renderApp(`/package/maven/${GA}`);
+
+      expect(await screen.findByText(/^Packaging:/)).toHaveTextContent("Packaging: pom");
+    });
+
+    it("shows the relocation banner with a link to the package it moved to", async () => {
+      mockPackage({
+        deprecation: { message: "Relocated to org.springframework:spring-core-next", alternative: "org.springframework:spring-core-next:7.0.0" },
+      });
+      renderApp(`/package/maven/${GA}`);
+
+      const banner = await screen.findByRole("alert");
+      expect(banner).toHaveTextContent(
+        "Deprecated: Relocated to org.springframework:spring-core-next (moved to org.springframework:spring-core-next:7.0.0)"
+      );
+      expect(within(banner).getByRole("link")).toHaveAttribute(
+        "href",
+        "/package/maven/org.springframework:spring-core-next?version=7.0.0"
+      );
+    });
+
+    it("shows a relocation without a message and links an alternative without a version", async () => {
+      mockPackage({ deprecation: { alternative: "jakarta.servlet:jakarta.servlet-api" } });
+      renderApp(`/package/maven/${GA}`);
+
+      const banner = await screen.findByRole("alert");
+      expect(banner).toHaveTextContent("Deprecated (moved to jakarta.servlet:jakarta.servlet-api)");
+      expect(within(banner).getByRole("link")).toHaveAttribute("href", "/package/maven/jakarta.servlet:jakarta.servlet-api");
+    });
+
+    it("shows no banner for an artifact that has not moved", async () => {
+      mockPackage({ deprecation: null });
+      renderApp(`/package/maven/${GA}`);
+
+      await screen.findByText("pkg:maven/org.springframework/spring-core");
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("shows scope checkboxes with compile and runtime selected and sends only scopes", async () => {
+      mockPackage();
+      renderApp(`/package/maven/${GA}`);
+
+      await screen.findByText("org.springframework:spring-jcl");
+      const group = screen.getByRole("group", { name: "Scopes" });
+      const boxes = within(group).getAllByRole("checkbox");
+      expect(boxes.map((box) => box.parentElement.textContent)).toEqual(["compile", "runtime", "provided", "system", "test"]);
+      expect(within(group).getByLabelText("compile")).toBeChecked();
+      expect(within(group).getByLabelText("runtime")).toBeChecked();
+      expect(within(group).getByLabelText("provided")).not.toBeChecked();
+      expect(within(group).getByLabelText("system")).not.toBeChecked();
+      expect(within(group).getByLabelText("test")).not.toBeChecked();
+      expect(screen.queryByLabelText("Python version")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Target framework")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("OS")).not.toBeInTheDocument();
+      expect(screen.queryByText("include optional")).not.toBeInTheDocument();
+      expect(api.fetchDependencies).toHaveBeenCalledWith("maven", GA, "6.1.14", { scopes: "compile,runtime" });
+    });
+
+    it("reloads the tree with the scopes that were ticked, in a fixed order", async () => {
+      mockPackage();
+      const user = userEvent.setup();
+      renderApp(`/package/maven/${GA}`);
+
+      await screen.findByText("org.springframework:spring-jcl");
+      await user.click(screen.getByLabelText("test"));
+      await waitFor(() =>
+        expect(api.fetchDependencies).toHaveBeenLastCalledWith("maven", GA, "6.1.14", { scopes: "compile,runtime,test" })
+      );
+      await user.click(screen.getByLabelText("provided"));
+      await waitFor(() =>
+        expect(api.fetchDependencies).toHaveBeenLastCalledWith("maven", GA, "6.1.14", { scopes: "compile,runtime,provided,test" })
+      );
+      await user.click(screen.getByLabelText("compile"));
+      await waitFor(() =>
+        expect(api.fetchDependencies).toHaveBeenLastCalledWith("maven", GA, "6.1.14", { scopes: "runtime,provided,test" })
+      );
+    });
+
+    it("keeps the last selected scope: the API refuses an empty list", async () => {
+      mockPackage();
+      const user = userEvent.setup();
+      renderApp(`/package/maven/${GA}?scopes=test`);
+
+      await waitFor(() =>
+        expect(api.fetchDependencies).toHaveBeenCalledWith("maven", GA, "6.1.14", { scopes: "test" })
+      );
+      await screen.findByText("org.springframework:spring-jcl");
+      await user.click(screen.getByLabelText("test"));
+      expect(screen.getByLabelText("test")).toBeChecked();
+      expect(api.fetchDependencies).toHaveBeenLastCalledWith("maven", GA, "6.1.14", { scopes: "test" });
+    });
+
+    it("reads the scopes from the query, drops unknown ones and falls back to the default", async () => {
+      mockPackage();
+      renderApp(`/package/maven/${GA}?scopes=system,bogus,compile`);
+      await waitFor(() =>
+        expect(api.fetchDependencies).toHaveBeenCalledWith("maven", GA, "6.1.14", { scopes: "compile,system" })
+      );
+      expect(screen.getByLabelText("system")).toBeChecked();
+      expect(screen.getByLabelText("runtime")).not.toBeChecked();
+    });
+
+    it("falls back to compile,runtime when the query has no known scope", async () => {
+      mockPackage();
+      renderApp(`/package/maven/${GA}?scopes=bogus`);
+      await waitFor(() =>
+        expect(api.fetchDependencies).toHaveBeenCalledWith("maven", GA, "6.1.14", { scopes: "compile,runtime" })
+      );
+    });
+
+    it("shows the scope, exclusions, classifier and type of an edge", async () => {
+      mockPackage();
+      renderApp(`/package/maven/${GA}`);
+
+      await screen.findByText("org.springframework:spring-jcl");
+      const item = (name) => screen.getByText(name).closest(".dep-tree-item");
+
+      const test = item("io.micrometer:micrometer-observation");
+      expect(within(test).getByText("scope test")).toHaveClass("cond");
+      expect(within(test).getByText("excludes commons-logging:commons-logging, log4j:log4j")).toHaveClass("cond");
+      expect(within(test).getByText("classifier tests")).toHaveClass("cond");
+      expect(within(test).getByText("type test-jar")).toHaveClass("cond");
+
+      // A scope the API gives wins over the one derived from the dependency type.
+      expect(within(item("jakarta.servlet:jakarta.servlet-api")).getByText("scope provided")).toBeInTheDocument();
+
+      // compile and runtime edges are not told apart by dependency_type: no scope label without a scope.
+      const plain = item("org.springframework:spring-jcl");
+      expect(within(plain).queryByText(/^scope /)).not.toBeInTheDocument();
+      expect(within(plain).queryByText(/excludes|classifier|type /)).not.toBeInTheDocument();
+    });
+
+    it("shows the edge's own scope when the API gives it", async () => {
+      mockPackage();
+      api.fetchDependencies.mockResolvedValue({
+        package: GA,
+        version: "6.1.14",
+        depth: 1,
+        dependencies: [
+          {
+            name: "org.springframework:spring-jcl",
+            constraint: "6.1.14",
+            dependency_type: "runtime",
+            scope: "runtime",
+            extra_name: null,
+            environment_markers: null,
+            resolved_version: "6.1.14",
+            cycle: false,
+            children: [],
+          },
+        ],
+      });
+      renderApp(`/package/maven/${GA}`);
+
+      await screen.findByText("org.springframework:spring-jcl");
+      expect(screen.getByText("scope runtime")).toHaveClass("cond");
+    });
+
+    it("sends no scopes for the other ecosystems", async () => {
+      renderApp("/package/flask");
+      await screen.findByText("werkzeug");
+      expect(screen.queryByRole("group", { name: "Scopes" })).not.toBeInTheDocument();
+      expect(api.fetchDependencies.mock.calls[0][3]).not.toHaveProperty("scopes");
+    });
+  });
 });

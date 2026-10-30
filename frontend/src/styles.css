@@ -500,3 +500,10 @@ button:disabled {
 .timeline-time {
   margin-left: auto;
 }
+
+.scope-select {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}

@@ -14,7 +14,9 @@ const PERIODS = [
 function displayName(item) {
   if (!item.purl) return item.name;
   // The scope's `@` is encoded in a purl, so a literal `@` can only start a version.
-  return decodeURIComponent(item.purl.replace(/^pkg:[^/]+\//, "").replace(/@[^/]*$/, ""));
+  const native = decodeURIComponent(item.purl.replace(/^pkg:[^/]+\//, "").replace(/[?#].*$/, "").replace(/@[^/]*$/, ""));
+  // Maven: `pkg:maven/org.springframework/spring-core` is the package `org.springframework:spring-core`.
+  return item.purl.startsWith("pkg:maven/") ? native.replace("/", ":") : native;
 }
 
 // The slug of an ecosystem differs from its purl type for crates (`pkg:cargo/...`) and Go (`pkg:golang/...`).
@@ -28,7 +30,7 @@ function ecosystemOf(item) {
 
 function packageLink(item) {
   const ecosystem = ecosystemOf(item);
-  return `/package/${ecosystem}/${displayName(item).split("/").map(encodeURIComponent).join("/")}`;
+  return `/package/${ecosystem}/${displayName(item).split("/").map((part) => encodeURIComponent(part).replaceAll("%3A", ":")).join("/")}`;
 }
 
 const TOTAL_LABELS = [
