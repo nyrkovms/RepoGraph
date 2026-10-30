@@ -1,0 +1,10 @@
+description: >
+  jackson-databind 2.17.2: a parent chain and the jackson BOM decide its dependencies' versions.
+roots:
+  - {purl: "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.17.2", constraint: "2.17.2"}
+environment: {scopes: [compile, runtime], strategy: maven}
+sources:
+  - {slug: maven-central, protocol: maven2, base_url: "https://repo1.maven.org/maven2/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

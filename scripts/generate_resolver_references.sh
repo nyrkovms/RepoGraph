@@ -10,6 +10,7 @@
 # go: `go list -m all` of a main module (go 1.23) that requires the roots, with module graph pruning as Go does it,
 # in the golang image below.
 # nuget: `dotnet restore` of a net8.0 project (.NET SDK 8) referencing the roots, packages from project.assets.json.
+# maven: `mvn dependency:list -DincludeScope=runtime` of a project depending on the roots (Maven 3.9, JDK 21).
 # Needs docker and the live network. Usage: scripts/generate_resolver_references.sh [case-dir ...]
 set -euo pipefail
 
@@ -21,6 +22,7 @@ IMAGE="python:3.12-slim"
 RUST_IMAGE="rust:1.86-slim"
 GO_IMAGE="golang:1.23"
 DOTNET_IMAGE="mcr.microsoft.com/dotnet/sdk:8.0"
+MAVEN_IMAGE="maven:3.9-eclipse-temurin-21"
 CASES=("$@")
 if [[ ${#CASES[@]} -eq 0 ]]; then
   # No mapfile: macOS ships bash 3.
@@ -164,8 +166,50 @@ PY
   rm -rf "$work"
 }
 
+maven_case() {
+  local case_dir="$1" platform="$2" work
+  work="$(mktemp -d)"
+  python3 - "$case_dir/case.yaml" "$work" <<'PY'
+import sys, yaml
+case = yaml.safe_load(open(sys.argv[1]))
+deps = ""
+for r in case["roots"]:
+    coords, _, version = r["purl"].split("/", 1)[1].partition("@")
+    group, artifact = coords.split("/")
+    deps += f"<dependency><groupId>{group}</groupId><artifactId>{artifact}</artifactId><version>{r['constraint'] or version}</version></dependency>"
+open(f"{sys.argv[2]}/pom.xml", "w").write(
+    '<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>'
+    '<groupId>reference</groupId><artifactId>case</artifactId><version>0</version>'
+    f'<dependencies>{deps}</dependencies></project>')
+PY
+  docker run --rm --platform "${platform:-linux/amd64}" -v "$work:/w" -w /w "$MAVEN_IMAGE" sh -c \
+    'mvn -q -B dependency:list -DincludeScope=runtime -DoutputFile=deps.txt -DoutputAbsoluteArtifactFilename=false >/dev/null && mvn -v | head -1 > tool.txt'
+  python3 - "$work" "$case_dir/expected.json" <<'PY'
+import datetime, json, re, sys
+work, out = sys.argv[1], sys.argv[2]
+rows = []
+for line in open(f"{work}/deps.txt"):
+    parts = line.strip().split(":")
+    if len(parts) >= 5 and not line.startswith("The following"):
+        group, artifact, version = parts[0], parts[1], parts[-2] if len(parts) == 5 else parts[-2]
+        rows.append({"name": f"{group}:{artifact}", "version": parts[3] if len(parts) == 5 else parts[4]})
+rows = sorted({(r["name"], r["version"]) for r in rows})
+tool = re.sub(r"\s*\(.*", "", open(f"{work}/tool.txt").read().strip())
+json.dump({"tool": tool, "command": ["mvn", "dependency:list", "-DincludeScope=runtime"],
+           "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+           "install": [{"name": n, "version": v} for n, v in rows]}, open(out, "w"), indent=2)
+open(out, "a").write("\n")
+print(len(rows), "artifacts")
+PY
+  rm -rf "$work"
+}
+
 for case_dir in "${CASES[@]}"; do
   echo "== ${case_dir}"
+  if [[ "$(basename "$(dirname "$case_dir")")" == "maven" ]]; then
+    maven_case "$case_dir" "$(sed -n 's/^  platform: *\([^ #]*\).*/\1/p' "${case_dir}/case.yaml")"
+    continue
+  fi
   if [[ "$(basename "$(dirname "$case_dir")")" == "nuget" ]]; then
     nuget_case "$case_dir" "$(sed -n 's/^  platform: *\([^ #]*\).*/\1/p' "${case_dir}/case.yaml")"
     continue

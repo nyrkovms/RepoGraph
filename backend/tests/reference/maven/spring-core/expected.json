@@ -1,0 +1,19 @@
+{
+  "tool": "Apache Maven 3.9.16",
+  "command": [
+    "mvn",
+    "dependency:list",
+    "-DincludeScope=runtime"
+  ],
+  "generated_at": "2026-10-30T22:54:40+00:00",
+  "install": [
+    {
+      "name": "org.springframework:spring-core",
+      "version": "6.1.14"
+    },
+    {
+      "name": "org.springframework:spring-jcl",
+      "version": "6.1.14"
+    }
+  ]
+}

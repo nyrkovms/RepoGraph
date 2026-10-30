@@ -1,0 +1,10 @@
+description: >
+  spring-core 6.1.14: a small compile graph (spring-jcl).
+roots:
+  - {purl: "pkg:maven/org.springframework/spring-core@6.1.14", constraint: "6.1.14"}
+environment: {scopes: [compile, runtime], strategy: maven}
+sources:
+  - {slug: maven-central, protocol: maven2, base_url: "https://repo1.maven.org/maven2/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []
