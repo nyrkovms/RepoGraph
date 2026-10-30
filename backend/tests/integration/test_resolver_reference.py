@@ -5,6 +5,7 @@ recorded upstream responses; see tests/reference/README.md for the format."""
 
 import asyncio
 import json
+from collections.abc import Callable
 import os
 import uuid
 from pathlib import Path
@@ -64,7 +65,9 @@ def test_reference_case(case_dir: Path) -> None:
     case = yaml.safe_load((case_dir / "case.yaml").read_text())
     expected = json.loads(expected_file.read_text())
     ecosystem = case_dir.parent.name
-    allowed = {canonicalize_name(d["package"]) for d in case.get("allowed_differences") or []}
+    # PyPI names compare normalized (PEP 503); elsewhere the spelling is the identity (Go paths, crates names).
+    name = canonicalize_name if ecosystem == "pypi" else str
+    allowed = {name(d["package"]) for d in case.get("allowed_differences") or []}
 
     async def run(environment: dict) -> set[tuple[str, str]]:
         engine = create_async_engine(get_settings().async_db_url, poolclass=NullPool)
@@ -82,8 +85,8 @@ def test_reference_case(case_dir: Path) -> None:
                 ))
                 assert graph.error is None, graph.error
                 errors = {node.name: node.errors for node in graph.nodes if node.errors}
-                assert not {name for name in errors if canonicalize_name(name) not in allowed}, errors
-                return {(canonicalize_name(node.name), node.version) for node in graph.nodes}
+                assert not {n for n in errors if name(n) not in allowed}, errors
+                return {(name(node.name), node.version) for node in graph.nodes}
             finally:
                 await db.close()
                 await transaction.rollback()
@@ -95,13 +98,14 @@ def test_reference_case(case_dir: Path) -> None:
     if os.environ.get("HTTP_RECORD_DIR"):
         # scripts/record_fixtures.sh: the upstream answers are recorded now and expected.json is generated right after.
         pytest.skip("recording upstream responses; the expectation is regenerated afterwards")
-    _compare(ours, expected["install"], allowed, expected["tool"])
+    _compare(ours, expected["install"], allowed, expected["tool"], name)
     if ours_lock is not None:
-        _compare(ours_lock, expected["lockfile"], allowed, f"{expected['tool']} (Cargo.lock)")
+        _compare(ours_lock, expected["lockfile"], allowed, f"{expected['tool']} (Cargo.lock)", name)
 
 
-def _compare(ours: set[tuple[str, str]], native_rows: list[dict], allowed: set[str], tool: str) -> None:
-    native = {(canonicalize_name(item["name"]), item["version"]) for item in native_rows}
+def _compare(ours: set[tuple[str, str]], native_rows: list[dict], allowed: set[str], tool: str,
+             name: Callable[[str], str]) -> None:
+    native = {(name(item["name"]), item["version"]) for item in native_rows}
     ours_cmp = {pair for pair in ours if pair[0] not in allowed}
     native_cmp = {pair for pair in native if pair[0] not in allowed}
     matched = len(ours_cmp & native_cmp) / max(len(native_cmp), 1)
