@@ -67,4 +67,16 @@ SAMPLES: dict[str, Samples] = {
         invalid_versions=["1.0.0-01", "a.b.c", "latest", ""],
         prereleases=["1.0.0-alpha", "1.0.0-Beta", "1.0.0-rc.1"],
     ),
+    "maven": Samples(
+        # groupId:artifactId, case-sensitive.
+        names=[("org.springframework:spring-core", "pkg:maven/org.springframework/spring-core"),
+               ("com.google.guava:guava", "pkg:maven/com.google.guava/guava"),
+               ("junit:junit", "pkg:maven/junit/junit")],
+        # Checked against maven-artifact 3.9.9 (tests/fixtures/maven/versions/expected.json); an unknown qualifier
+        # (guava's `-jre`) sorts above the release.
+        ordered_versions=["1.0-alpha-1", "1.0-beta-2", "1.0-M1", "1.0-RC1", "1.0-SNAPSHOT", "1.0", "1.0-sp-1",
+                          "1.0.1", "1.2", "1.10", "2.0", "2.0-jre"],
+        invalid_versions=["", "1.0 beta", "1.0\t"],
+        prereleases=["1.0-alpha-1", "1.0-beta-2", "1.0-M1", "1.0-RC1", "1.0-SNAPSHOT"],
+    ),
 }

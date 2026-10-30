@@ -21,3 +21,12 @@ def test_select_best_version_prefers_stable_and_skips_invalid() -> None:
     assert select_best_version(PYPI, versions, ">=1") == "c"
     assert select_best_version(PYPI, versions, "not a specifier") == "c"
     assert select_best_version(PYPI, versions, ">=3") is None
+
+
+def test_select_best_version_takes_a_maven_soft_version_as_named() -> None:
+    maven = plugin_for("maven")
+    versions = [("6.1.13", "a"), ("6.1.14", "b"), ("6.2.0", "c")]
+
+    assert select_best_version(maven, versions, "6.1.14") == "b"          # admits any version, names one
+    assert select_best_version(maven, versions, "6.0.0") == "c"           # not published here: the highest
+    assert select_best_version(maven, versions, "[6.1,6.2)") == "b"

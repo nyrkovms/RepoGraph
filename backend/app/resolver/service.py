@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ecosystems.base import EcosystemPlugin, Environment, ResolveGraph, ResolveRoot, SourceProfile
 from app.ecosystems.base import ResolveRequest as ContractRequest
+from app.ecosystems.maven.coordinates import purl_qualifiers
 from app.ecosystems.pypi.resolver import NOT_FOUND_PREFIX
 from app.ecosystems.registry import UnknownEcosystem, get_plugin
 from app.fetcher import sources
@@ -284,7 +285,7 @@ async def _profile(db: AsyncSession, ecosystem: str, slug: str | None) -> Source
 
 
 # How a range pins one version where it is not PEP 440's `==` (a bare version is an exact range in node-semver).
-_PIN = {"npm": "{}", "crates": "={}", "go": "{}", "nuget": "[{}]"}
+_PIN = {"npm": "{}", "crates": "={}", "go": "{}", "nuget": "[{}]", "maven": "{}"}
 
 
 def _environment(plugin: EcosystemPlugin, raw: Mapping[str, object]) -> Environment:
@@ -305,7 +306,9 @@ def _root(plugin: EcosystemPlugin, ecosystem: str, purl: str, constraint: str, e
         raise ResolveInvalidRequest(f"root {purl!r} is not in ecosystem {ecosystem!r}")
     if version and constraint in ("", "*"):
         constraint = _PIN.get(ecosystem, "=={}").format(version)
-    return ResolveRoot(ref=ref, constraint=_constraint(plugin, constraint), extras=tuple(extras))
+    # Maven: `type=pom` marks a BOM among the managed entries, `classifier` names a secondary artifact.
+    qualifiers = purl_qualifiers(purl) if ecosystem == "maven" else {}
+    return ResolveRoot(ref=ref, constraint=_constraint(plugin, constraint), extras=tuple(extras), qualifiers=qualifiers)
 
 
 def _is_newer_version(latest_compatible_version: str | None, selected_version: str) -> bool:

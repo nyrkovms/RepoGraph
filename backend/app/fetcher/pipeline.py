@@ -1065,6 +1065,12 @@ def _pick(plugin: EcosystemPlugin, candidates: Sequence[tuple[str, object, bool]
         spec = plugin.versions.constraint(constraint or "*")
     except InvalidVersion:
         spec = plugin.versions.constraint("*")
+    # A Maven bare version is a soft requirement: it admits any version but names the one to use when it exists.
+    recommended = getattr(spec, "recommended", None)
+    if recommended is not None:
+        named = next((row_id for version, row_id, _ in candidates if version == recommended), None)
+        if named is not None:
+            return named
     fallback = None
     for version, row_id, prerelease in candidates:
         if not spec.contains(version):

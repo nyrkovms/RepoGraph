@@ -17,6 +17,21 @@ registries:
 
   # PyTorch wheel indexes: see registries.pytorch.yaml.
 
+  # Maven: Google Maven serves only its own groups; the Gradle Plugin Portal holds plugin markers (SPEC §6.2, §9.7).
+  - slug: google-maven
+    name: Google Maven
+    ecosystem: maven
+    protocol: maven2
+    base_url: https://dl.google.com/android/maven2/
+    priority: 10
+    routing: {mode: allow, group_patterns: ["androidx.*", "com.android.*", "com.google.android.*"]}
+  - slug: gradle-plugin-portal
+    name: Gradle Plugin Portal
+    ecosystem: maven
+    protocol: maven2
+    base_url: https://plugins.gradle.org/m2/
+    priority: 20
+
 profiles:
   - slug: default
     name: Default
