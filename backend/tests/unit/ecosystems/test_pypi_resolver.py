@@ -253,10 +253,12 @@ def test_catalog_failure_is_a_graph_error() -> None:
 
 
 def test_timeout_waits_for_the_catalog_call_it_cut_short() -> None:
+    started: list[str] = []
     finished: list[str] = []
 
     class Slow(Catalog):
         async def versions(self, ref: PackageRef, profile: SourceProfile) -> Sequence[CatalogVersion]:
+            started.append(ref.name)
             try:
                 await asyncio.sleep(0.3)
             finally:
@@ -266,4 +268,6 @@ def test_timeout_waits_for_the_catalog_call_it_cut_short() -> None:
 
     graph = _resolve(Slow({}), ("a", "*"), timeout_s=0.05)
     assert graph.error["code"] == "resolve_timeout"
-    assert finished == ["a"]
+    # A call cancelled before its first step never ran and needs no waiting (a loaded CI runner, #20); one that ran
+    # has finished its cleanup by the time resolve returns.
+    assert finished == started

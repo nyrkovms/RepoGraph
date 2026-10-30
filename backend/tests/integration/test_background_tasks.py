@@ -277,7 +277,7 @@ def test_admin_presence_probe_queues_the_task(client: TestClient, auth: dict, mo
     assert response.status_code == 200
     assert response.json() == {"task_id": "task-1", "status": "queued", "operation": "presence_probe"}
     # go has no plugin yet (E3): the task would fail before journaling anything.
-    assert client.post("/api/v1/admin/presence-probe", headers=auth, json={"ecosystem": "go"}).status_code == 422
+    assert client.post("/api/v1/admin/presence-probe", headers=auth, json={"ecosystem": "maven"}).status_code == 422
     assert client.post("/api/v1/admin/presence-probe", headers=auth, json={"ecosystem": "cobol"}).status_code == 422
     assert client.post("/api/v1/admin/presence-probe").status_code == 401
     assert queued == [("pypi",)]

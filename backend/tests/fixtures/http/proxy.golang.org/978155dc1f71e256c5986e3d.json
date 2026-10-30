@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain; charset=UTF-8",
+    "etag": "\"d0baff90f5cc5382efd40458aa0e091736abe4c7094b791dca3c42ea827c61bf\"",
+    "last-modified": "Sat, 04 Nov 2023 21:07:13 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://proxy.golang.org/github.com/spf13/cobra/@v/v1.8.0.mod"
+  },
+  "status": 200
+}

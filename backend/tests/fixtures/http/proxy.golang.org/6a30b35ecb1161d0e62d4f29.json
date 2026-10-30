@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain; charset=UTF-8",
+    "etag": "\"9dec2eaf373ee3fea5f91119cf1cb36f7f27e9d4681407ded5f6522381c0c20e\"",
+    "last-modified": "Mon, 08 Jan 2024 18:26:06 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://proxy.golang.org/golang.org/x/net/@v/v0.20.0.mod"
+  },
+  "status": 200
+}

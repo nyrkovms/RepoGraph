@@ -1,0 +1,13 @@
+{
+  "headers": {
+    "content-type": "text/plain; charset=UTF-8"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://proxy.golang.org/github.com/gin-gonic/gin/@v/list"
+  },
+  "status": 200
+}

@@ -1,0 +1,10 @@
+description: >
+  grpc 1.67: a large pruned graph with shared modules required at different versions.
+roots:
+  - {purl: "pkg:golang/google.golang.org/grpc@v1.67.0", constraint: "v1.67.0"}
+environment: {go_version: "1.23"}
+sources:
+  - {slug: proxy-golang-org, protocol: goproxy, base_url: "https://proxy.golang.org/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

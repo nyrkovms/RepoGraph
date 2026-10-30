@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain; charset=UTF-8",
+    "etag": "\"c39547cce6e866e8cfa395d2937bce30801cd07f0b901c2133248f1fba12f58d\"",
+    "last-modified": "Sat, 07 Nov 2020 22:42:11 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://proxy.golang.org/github.com/russross/blackfriday/v2/@v/v2.1.0.mod"
+  },
+  "status": 200
+}

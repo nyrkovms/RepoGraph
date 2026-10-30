@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain; charset=UTF-8",
+    "etag": "\"9b7bd3c7674e6154d5d5fe93dc51c79e4b225302473e64fb94b421555ae69665\"",
+    "last-modified": "Sat, 28 Feb 2026 10:11:25 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://proxy.golang.org/github.com/gin-gonic/gin/@v/v1.12.0.mod"
+  },
+  "status": 200
+}

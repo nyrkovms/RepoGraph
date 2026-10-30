@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain; charset=UTF-8",
+    "etag": "\"21579860a20306fcf43b1bd234d1fba319499c77611b71c05f9bf3ba90dab939\"",
+    "last-modified": "Fri, 27 May 2022 08:39:34 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://proxy.golang.org/gopkg.in/yaml.v3/@v/v3.0.1.mod"
+  },
+  "status": 200
+}

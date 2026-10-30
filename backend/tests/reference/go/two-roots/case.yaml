@@ -1,0 +1,12 @@
+description: >
+  Two roots where one raises the other: grpc 1.67 requires a newer golang.org/x/net than the root asks for, so Go reads
+  the graph again from the selected x/net (expandGraph) and its own requirements join the build list.
+roots:
+  - {purl: "pkg:golang/golang.org/x/net@v0.20.0", constraint: "v0.20.0"}
+  - {purl: "pkg:golang/google.golang.org/grpc@v1.67.0", constraint: "v1.67.0"}
+environment: {go_version: "1.23"}
+sources:
+  - {slug: proxy-golang-org, protocol: goproxy, base_url: "https://proxy.golang.org/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

@@ -283,4 +283,81 @@ describe("SearchPage", () => {
     expect(screen.getByRole("link", { name: "Inflector" })).toHaveAttribute("href", "/package/crates/Inflector");
     expect(screen.getAllByText("crates.io", { selector: ".eco-badge" })).toHaveLength(2);
   });
+
+  it("switches to Go and links modules by their full path", async () => {
+    const modules = {
+      data: [
+        {
+          ecosystem: "go",
+          namespace: "",
+          name: "github.com/gin-gonic/gin",
+          normalized_name: "github.com/gin-gonic/gin",
+          purl: "pkg:golang/github.com/gin-gonic/gin",
+          description: null,
+          license_spdx: null,
+          latest_version: "v1.10.0",
+          has_vulnerabilities: false,
+        },
+        {
+          ecosystem: "go",
+          namespace: "",
+          name: "github.com/BurntSushi/toml",
+          normalized_name: "github.com/BurntSushi/toml",
+          purl: "pkg:golang/github.com/BurntSushi/toml",
+          description: null,
+          license_spdx: null,
+          latest_version: "v1.4.0",
+          has_vulnerabilities: false,
+        },
+        {
+          ecosystem: "go",
+          namespace: "",
+          name: "github.com/redis/go-redis/v9",
+          normalized_name: "github.com/redis/go-redis/v9",
+          purl: "pkg:golang/github.com/redis/go-redis/v9",
+          description: null,
+          license_spdx: null,
+          latest_version: "v9.7.0",
+          has_vulnerabilities: false,
+        },
+      ],
+      cursor: null,
+      has_more: false,
+    };
+    api.fetchPackages.mockResolvedValue(modules);
+    api.searchPackages.mockResolvedValue(modules);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <SearchPage />
+      </MemoryRouter>
+    );
+    await screen.findByRole("link", { name: "github.com/gin-gonic/gin" });
+
+    expect(screen.getByRole("option", { name: "Go" })).toHaveValue("go");
+    await user.selectOptions(screen.getByLabelText("Ecosystem"), "go");
+    await waitFor(() => {
+      expect(api.fetchPackages).toHaveBeenLastCalledWith({ limit: 20, sort: "name", ecosystem: "go" });
+    });
+
+    await user.type(screen.getByLabelText("Search query"), "gin");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => {
+      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "gin", limit: 20, sort: "name", ecosystem: "go" });
+    });
+
+    expect(screen.getByRole("link", { name: "github.com/gin-gonic/gin" })).toHaveAttribute(
+      "href",
+      "/package/go/github.com/gin-gonic/gin"
+    );
+    expect(screen.getByRole("link", { name: "github.com/BurntSushi/toml" })).toHaveAttribute(
+      "href",
+      "/package/go/github.com/BurntSushi/toml"
+    );
+    expect(screen.getByRole("link", { name: "github.com/redis/go-redis/v9" })).toHaveAttribute(
+      "href",
+      "/package/go/github.com/redis/go-redis/v9"
+    );
+    expect(screen.getAllByText("Go", { selector: ".eco-badge" })).toHaveLength(3);
+  });
 });

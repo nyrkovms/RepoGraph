@@ -132,3 +132,15 @@ BEGIN
     RAISE EXCEPTION '0009: default crates profile'; END IF;
   RAISE NOTICE 'ok: 0009 crates.io starter source';
 END $$;
+
+-- 0010: the Go starter source (IMPL R4).
+DO $$
+BEGIN
+  IF (SELECT protocol::text || '/' || priority || '/' || enabled || '/' || base_url || '/' || (config->>'index_url')
+      FROM registries WHERE slug = 'proxy-golang-org') <> 'goproxy/0/true/https://proxy.golang.org//https://index.golang.org/index' THEN
+    RAISE EXCEPTION '0010: proxy-golang-org source'; END IF;
+  IF (SELECT count(*) FROM source_profile_registries spr JOIN source_profiles sp ON sp.id = spr.profile_id
+      JOIN registries r ON r.id = spr.registry_id WHERE sp.ecosystem = 'go' AND sp.is_default AND r.slug = 'proxy-golang-org') <> 1 THEN
+    RAISE EXCEPTION '0010: default go profile'; END IF;
+  RAISE NOTICE 'ok: 0010 Go starter source';
+END $$;

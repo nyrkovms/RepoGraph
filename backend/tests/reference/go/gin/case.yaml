@@ -1,0 +1,10 @@
+description: >
+  gin 1.10 (go 1.20): a pruned graph, its go.mod lists every module it needs.
+roots:
+  - {purl: "pkg:golang/github.com/gin-gonic/gin@v1.10.0", constraint: "v1.10.0"}
+environment: {go_version: "1.23"}
+sources:
+  - {slug: proxy-golang-org, protocol: goproxy, base_url: "https://proxy.golang.org/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

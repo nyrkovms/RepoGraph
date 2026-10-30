@@ -5,7 +5,7 @@ import { fetchDependencies, fetchPackage, fetchVersion, fetchVersions, fetchVuln
 import { getPackageDescriptionParagraphs } from "../lib/packageDescription";
 import { OS_OPTIONS, PYTHON_VERSIONS } from "../lib/runtimeEnv";
 
-const ECOSYSTEM_LABELS = { pypi: "PyPI", npm: "npm", crates: "crates.io" };
+const ECOSYSTEM_LABELS = { pypi: "PyPI", npm: "npm", crates: "crates.io", go: "Go" };
 
 // npm environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): Node.js version, os and cpu as npm names them.
 const NPM_NODE_VERSIONS = ["22.0.0", "20.0.0", "18.0.0"];
@@ -47,6 +47,15 @@ const DEFAULTS = {
   npm: { node: "20.0.0", os: "linux", cpu: "x64" },
   crates: { target: "x86_64-unknown-linux-gnu" },
 };
+// Go has no tree environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): every `require` of a go.mod applies.
+// A pseudo-version (`v0.0.0-20261014143641-f0251eb4aa3e`, `v1.2.4-0.2026...-abc`, `v1.2.4-pre.0.2026...-abc`) is a
+// commit, not a release; `+incompatible` stays part of the version string.
+const GO_PSEUDO_VERSION = /^v\d+\.(?:0\.0-|\d+\.\d+-(?:[^+]*\.)?0\.)\d{14}-[0-9A-Za-z]+(?:\+[0-9A-Za-z.-]+)?$/;
+
+function isGoPseudoVersion(version) {
+  return GO_PSEUDO_VERSION.test(String(version || ""));
+}
+
 // Internal key of the version's feature map, not a feature.
 const HIDDEN_FEATURE_KEYS = new Set(["dependencies_hydrated"]);
 
@@ -64,8 +73,11 @@ function normalizeFeatures(text) {
 }
 
 // Query of the dependency tree request: PyPI `python_version` and `os`, npm `node_version`, `os` and `cpu`,
-// crates `target`, `features` and `default_features`.
+// crates `target`, `features` and `default_features`, Go none.
 function treeParams(ecosystem, env, includeOptional) {
+  if (ecosystem === "go") {
+    return {};
+  }
   if (ecosystem === "npm") {
     return { include_optional: includeOptional, node_version: env.node, os: env.os, cpu: env.cpu };
   }
@@ -131,6 +143,11 @@ function collectDependencyConditions(node) {
   // crates: a platform-specific dependency carries the `cfg(...)` or target triple it is declared under.
   if (typeof node.environment_markers?.rust_cfg === "string") {
     labels.push(node.environment_markers.rust_cfg);
+  }
+
+  // Go: a requirement the module's go.mod marks `// indirect`.
+  if (node.details?.indirect) {
+    labels.push("indirect");
   }
 
   if (node.extra_name) {
@@ -220,6 +237,26 @@ function FeaturesBlock({ version, features }) {
         </dl>
       ) : null}
     </div>
+  );
+}
+
+// Module-level deprecation (`// Deprecated:` in go.mod) of a package or version: {message, ...}.
+function deprecationMessage(deprecation) {
+  if (!deprecation) {
+    return "";
+  }
+  return typeof deprecation === "string" ? deprecation : String(deprecation.message || "");
+}
+
+function VersionStatus({ version, isGo }) {
+  // A Go module's author retracts a version in go.mod with a rationale; the catalog keeps it as yanked.
+  const retracted = isGo && version.status === "yanked";
+  return (
+    <>
+      <span className={version.status === "yanked" ? "tag warn" : "tag"}>{retracted ? "retracted" : version.status}</span>
+      {isGoPseudoVersion(version.version) ? <span className="tag cond">pseudo-version</span> : null}
+      {retracted && version.status_reason ? <span className="muted version-reason">{version.status_reason}</span> : null}
+    </>
   );
 }
 
@@ -317,6 +354,7 @@ export default function PackagePage() {
   const name = params.ecosystem ? params["*"] : params.name;
   const isNpm = ecosystem === "npm";
   const isCrates = ecosystem === "crates";
+  const isGo = ecosystem === "go";
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [pkg, setPkg] = useState(null);
@@ -345,6 +383,13 @@ export default function PackagePage() {
   const treeOs = isNpm ? pickOption(os, NPM_OS_OPTIONS.map((item) => item.value), DEFAULTS.npm.os) : os;
   const treeTarget = pickOption(target, CRATES_TARGETS, DEFAULTS.crates.target);
   const latestVersion = useMemo(() => selectedVersion || pkg?.latest_version || versions?.[0]?.version, [selectedVersion, pkg, versions]);
+  // `deprecation.message` of the package (Go: the `// Deprecated:` paragraph of go.mod), `true` when it has no text.
+  const deprecated = useMemo(() => {
+    if (!pkg?.deprecation) {
+      return "";
+    }
+    return deprecationMessage(pkg.deprecation) || true;
+  }, [pkg?.deprecation]);
   const descriptionParagraphs = useMemo(() => getPackageDescriptionParagraphs(pkg?.description), [pkg?.description]);
   const allNodeIds = useMemo(() => collectNodeIds(deps), [deps]);
   const isTreeCollapsed = useMemo(
@@ -396,17 +441,17 @@ export default function PackagePage() {
       if (!defaultFeatures) {
         next.set("default_features", "0");
       }
-    } else if (pythonVersion && pythonVersion !== DEFAULTS.pypi.python) {
+    } else if (!isGo && pythonVersion && pythonVersion !== DEFAULTS.pypi.python) {
       next.set("python", pythonVersion);
     }
-    if (!isCrates && os && os !== DEFAULTS.pypi.os) {
+    if (!isCrates && !isGo && os && os !== DEFAULTS.pypi.os) {
       next.set("os", os);
     }
-    if (includeOptional) {
+    if (includeOptional && !isGo) {
       next.set("include_optional", "1");
     }
     setSearchParams(next, { replace: true });
-  }, [isNpm, isCrates, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, features, defaultFeatures, includeOptional, setSearchParams]);
+  }, [isNpm, isCrates, isGo, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, features, defaultFeatures, includeOptional, setSearchParams]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -544,13 +589,22 @@ export default function PackagePage() {
 
       {pkg ? (
         <>
-          <div className="package-description">
-            {descriptionParagraphs.length ? (
-              descriptionParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)
-            ) : (
-              <p>No description</p>
-            )}
-          </div>
+          {deprecated ? (
+            <div className="banner warn" role="alert">
+              <b>Deprecated</b>
+              {deprecated !== true ? `: ${deprecated}` : ""}
+            </div>
+          ) : null}
+          {/* Go modules have no description, license or authors in the catalog: no empty blocks for them. */}
+          {descriptionParagraphs.length || !isGo ? (
+            <div className="package-description">
+              {descriptionParagraphs.length ? (
+                descriptionParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)
+              ) : (
+                <p>No description</p>
+              )}
+            </div>
+          ) : null}
           <div className="meta-grid">
             {pkg.purl ? (
               <span>
@@ -560,15 +614,21 @@ export default function PackagePage() {
             <span>
               <b>Latest</b>: {latestVersion}
             </span>
-            <span>
-              <b>License</b>: {pkg.license_spdx || pkg.license_raw || "unknown"}
-            </span>
-            <span>
-              <b>Homepage</b>: <UrlValue url={pkg.homepage_url} />
-            </span>
-            <span>
-              <b>Repo</b>: <UrlValue url={pkg.repository_url} />
-            </span>
+            {!isGo || pkg.license_spdx || pkg.license_raw ? (
+              <span>
+                <b>License</b>: {pkg.license_spdx || pkg.license_raw || "unknown"}
+              </span>
+            ) : null}
+            {!isGo || pkg.homepage_url ? (
+              <span>
+                <b>Homepage</b>: <UrlValue url={pkg.homepage_url} />
+              </span>
+            ) : null}
+            {!isGo || pkg.repository_url ? (
+              <span>
+                <b>Repo</b>: <UrlValue url={pkg.repository_url} />
+              </span>
+            ) : null}
             {pkg.documentation_url ? (
               <span>
                 <b>Documentation</b>: <UrlValue url={pkg.documentation_url} />
@@ -602,7 +662,7 @@ export default function PackagePage() {
             {versions.slice(0, 10).map((v) => (
               <li key={v.version}>
                 {v.version}
-                <span className={v.status === "yanked" ? "tag warn" : "tag"}>{v.status}</span>
+                <VersionStatus version={v} isGo={isGo} />
                 {formatDate(v.release_date) ? <span className="muted version-date">{formatDate(v.release_date)}</span> : null}
               </li>
             ))}
@@ -673,7 +733,7 @@ export default function PackagePage() {
                   </select>
                 </label>
               </>
-            ) : isCrates ? (
+            ) : isGo ? null : isCrates ? (
               <>
                 <label>
                   Target
@@ -750,14 +810,16 @@ export default function PackagePage() {
                 </label>
               </>
             )}
-            <label>
-              <input
-                type="checkbox"
-                checked={includeOptional}
-                onChange={(e) => setIncludeOptional(e.target.checked)}
-              />
-              include optional
-            </label>
+            {isGo ? null : (
+              <label>
+                <input
+                  type="checkbox"
+                  checked={includeOptional}
+                  onChange={(e) => setIncludeOptional(e.target.checked)}
+                />
+                include optional
+              </label>
+            )}
             <button type="button" onClick={toggleTreeCollapse} disabled={depsLoading || deps.length === 0}>
               {isTreeCollapsed ? "Expand tree" : "Collapse tree"}
             </button>
@@ -784,6 +846,11 @@ export default function PackagePage() {
               ) : null}
               {versionDetail.dependencies_state === "unavailable" ? (
                 <span className="tag warn">dependencies unknown</span>
+              ) : null}
+              {isGo && versionDetail.status === "yanked" ? (
+                <p className="muted">
+                  Retracted{versionDetail.status_reason ? `: ${versionDetail.status_reason}` : ""}
+                </p>
               ) : null}
             </div>
           ) : null}

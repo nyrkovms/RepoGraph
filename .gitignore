@@ -13,3 +13,6 @@ frontend/dist/
 # uv run artifacts
 backend/uv.lock
 backend/*.egg-info/
+
+# Copies a file sync (iCloud) makes next to a changed file: "name 2.py", "key 2.json".
+* 2.*

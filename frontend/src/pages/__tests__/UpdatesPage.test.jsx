@@ -240,4 +240,33 @@ describe("UpdatesPage links by ecosystem", () => {
     const link = await screen.findByRole("link", { name: "serde_json" });
     expect(link).toHaveAttribute("href", "/package/crates/serde_json");
   });
+
+  it("links a Go entry to its Go package page with the module path as is", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      packages: [
+        {
+          ...SUMMARY.packages[0],
+          ecosystem: "go",
+          name: "toml",
+          purl: "pkg:golang/github.com/BurntSushi/toml",
+        },
+      ],
+    });
+    renderPage();
+    const link = await screen.findByRole("link", { name: "github.com/BurntSushi/toml" });
+    expect(link).toHaveAttribute("href", "/package/go/github.com/BurntSushi/toml");
+  });
+
+  it("takes the Go ecosystem of an entry without one from the golang purl type", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      packages: [
+        { ...SUMMARY.packages[0], ecosystem: undefined, name: "go-redis", purl: "pkg:golang/github.com/redis/go-redis/v9" },
+      ],
+    });
+    renderPage();
+    const link = await screen.findByRole("link", { name: "github.com/redis/go-redis/v9" });
+    expect(link).toHaveAttribute("href", "/package/go/github.com/redis/go-redis/v9");
+  });
 });

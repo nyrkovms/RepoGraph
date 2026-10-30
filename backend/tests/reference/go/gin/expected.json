@@ -1,0 +1,132 @@
+{
+  "tool": "go version go1.23.12",
+  "command": [
+    "go",
+    "list",
+    "-m",
+    "all"
+  ],
+  "generated_at": "2026-10-30T14:42:10+00:00",
+  "install": [
+    {
+      "name": "github.com/bytedance/sonic",
+      "version": "v1.11.6"
+    },
+    {
+      "name": "github.com/bytedance/sonic/loader",
+      "version": "v0.1.1"
+    },
+    {
+      "name": "github.com/cloudwego/base64x",
+      "version": "v0.1.4"
+    },
+    {
+      "name": "github.com/cloudwego/iasm",
+      "version": "v0.2.0"
+    },
+    {
+      "name": "github.com/davecgh/go-spew",
+      "version": "v1.1.1"
+    },
+    {
+      "name": "github.com/gabriel-vasile/mimetype",
+      "version": "v1.4.3"
+    },
+    {
+      "name": "github.com/gin-contrib/sse",
+      "version": "v0.1.0"
+    },
+    {
+      "name": "github.com/gin-gonic/gin",
+      "version": "v1.10.0"
+    },
+    {
+      "name": "github.com/go-playground/locales",
+      "version": "v0.14.1"
+    },
+    {
+      "name": "github.com/go-playground/universal-translator",
+      "version": "v0.18.1"
+    },
+    {
+      "name": "github.com/go-playground/validator/v10",
+      "version": "v10.20.0"
+    },
+    {
+      "name": "github.com/goccy/go-json",
+      "version": "v0.10.2"
+    },
+    {
+      "name": "github.com/json-iterator/go",
+      "version": "v1.1.12"
+    },
+    {
+      "name": "github.com/klauspost/cpuid/v2",
+      "version": "v2.2.7"
+    },
+    {
+      "name": "github.com/leodido/go-urn",
+      "version": "v1.4.0"
+    },
+    {
+      "name": "github.com/mattn/go-isatty",
+      "version": "v0.0.20"
+    },
+    {
+      "name": "github.com/modern-go/concurrent",
+      "version": "v0.0.0-20180306012644-bacd9c7ef1dd"
+    },
+    {
+      "name": "github.com/modern-go/reflect2",
+      "version": "v1.0.2"
+    },
+    {
+      "name": "github.com/pelletier/go-toml/v2",
+      "version": "v2.2.2"
+    },
+    {
+      "name": "github.com/pmezard/go-difflib",
+      "version": "v1.0.0"
+    },
+    {
+      "name": "github.com/stretchr/testify",
+      "version": "v1.9.0"
+    },
+    {
+      "name": "github.com/twitchyliquid64/golang-asm",
+      "version": "v0.15.1"
+    },
+    {
+      "name": "github.com/ugorji/go/codec",
+      "version": "v1.2.12"
+    },
+    {
+      "name": "golang.org/x/arch",
+      "version": "v0.8.0"
+    },
+    {
+      "name": "golang.org/x/crypto",
+      "version": "v0.23.0"
+    },
+    {
+      "name": "golang.org/x/net",
+      "version": "v0.25.0"
+    },
+    {
+      "name": "golang.org/x/sys",
+      "version": "v0.20.0"
+    },
+    {
+      "name": "golang.org/x/text",
+      "version": "v0.15.0"
+    },
+    {
+      "name": "google.golang.org/protobuf",
+      "version": "v1.34.1"
+    },
+    {
+      "name": "gopkg.in/yaml.v3",
+      "version": "v3.0.1"
+    }
+  ]
+}
