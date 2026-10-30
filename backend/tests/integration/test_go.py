@@ -8,9 +8,13 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 from sqlalchemy import delete, select, update
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
+from app.api.v1 import package_detail as routes
+from app.config import get_settings
 from app.db import loop_local_session
-from app.ecosystems.base import PackageRef
+from app.ecosystems.base import NormalizedDependency, NormalizedPackage, NormalizedVersion, PackageRef
 from app.ecosystems.go import changes
 from app.fetcher import pipeline
 from app.models.enums import PackageOrigin
@@ -93,3 +97,43 @@ def test_a_module_is_read_from_the_proxy_then_followed_through_the_index(monkeyp
     assert asked and second["status"] == "success"
     # The replayed list still has the stored revision: a lagging proxy, retried once and left for the next run.
     assert second["changed"] == 1 and second["per_registry"]["proxy-golang-org"]["changed"] == 1
+
+
+def test_the_api_serves_retraction_reasons_deprecation_and_dependency_details() -> None:
+    go = pipeline.plugin_for("go")
+
+    async def check() -> None:
+        engine = create_async_engine(get_settings().async_db_url, poolclass=NullPool)
+        async with engine.connect() as conn:
+            transaction = await conn.begin()
+            db = AsyncSession(bind=conn, expire_on_commit=False, join_transaction_mode="create_savepoint")
+            try:
+                proxy = await db.scalar(select(Registry).where(Registry.slug == "proxy-golang-org"))
+                path = f"example.com/m{uuid.uuid4().hex[:8]}"
+                dep = NormalizedDependency(target=PackageRef("go", "", "example.com/dep"), constraint="v1.0.0",
+                                           dependency_type="runtime", raw_spec="example.com/dep v1.0.0 // indirect",
+                                           scope="require", details={"indirect": True})
+                snapshot = NormalizedPackage(
+                    ref=PackageRef("go", "", path), registry_id=str(proxy.id), display_name=path, revision="1",
+                    deprecation={"message": "use example.com/n"},
+                    versions=[NormalizedVersion(version="v1.0.0", status="yanked", status_reason="Published by mistake"),
+                              NormalizedVersion(version="v1.1.0", status="active", dependencies=[dep])])
+                await pipeline.write_package(db, go, [snapshot], missing_registry_ids=(), origin=PackageOrigin.seed)
+                await db.flush()
+
+                package = await routes.get_package("go", path, db)
+                assert package.deprecation == {"message": "use example.com/n"}
+                versions = await routes.list_versions("go", path, db, profile=None, limit=50, cursor=None)
+                assert {v.version: v.status_reason for v in versions.data} == {
+                    "v1.0.0": "Published by mistake", "v1.1.0": None}
+                assert (await routes.get_version("go", path, "v1.0.0", db)).status_reason == "Published by mistake"
+                tree = await routes.get_dependencies_tree(
+                    "go", path, "v1.1.0", db, profile=None, depth=1, include_optional=False, python_version=None,
+                    os=None, node_version=None, cpu=None, target_triple=None, features=None, default_features=None)
+                assert [(n.name, n.details) for n in tree.dependencies] == [("example.com/dep", {"indirect": True})]
+            finally:
+                await db.close()
+                await transaction.rollback()
+        await engine.dispose()
+
+    asyncio.run(check())

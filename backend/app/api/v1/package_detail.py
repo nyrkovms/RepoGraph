@@ -133,6 +133,7 @@ async def get_package(ecosystem: str, coordinates: str, db: AsyncSession = Depen
         latest_version=package.latest_version,
         synced_at=package.synced_at,
         unavailable_at=package.unavailable_at,
+        deprecation=package.deprecation,
         sources=[
             PackageSourceItem(
                 registry=registry.slug,
@@ -199,6 +200,7 @@ async def list_versions(
             version=row.version,
             release_date=row.release_date,
             status=(visibility.effective_status(statuses.get(row.id, [])) or row.status).value,
+            status_reason=row.status_reason,
             requires_python=_requires_python(row),
         )
         for row in data_rows
@@ -226,6 +228,7 @@ async def get_version(
         version=row.version,
         release_date=row.release_date,
         status=row.status.value,
+        status_reason=row.status_reason,
         requires_python=_requires_python(row),
         engines=row.engines,
         features=row.features,
@@ -719,6 +722,7 @@ async def _build_tree_for_version(
                 dependency_type=dep.dependency_type.value,
                 extra_name=dep.extra_name,
                 environment_markers=dep.environment_markers,
+                details=dep.details,
                 resolved_version=resolved_version,
                 cycle=cycle,
                 dependencies_unknown=dependencies_unknown,

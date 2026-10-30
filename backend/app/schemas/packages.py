@@ -50,6 +50,7 @@ class PackageDetailResponse(BaseModel):
     latest_version: str | None
     synced_at: datetime
     unavailable_at: datetime | None = None
+    deprecation: dict | None = None        # {"message": ...}: npm deprecated, Go `// Deprecated:`
     sources: list[PackageSourceItem] = Field(default_factory=list)
 
 
@@ -57,6 +58,7 @@ class VersionItem(BaseModel):
     version: str
     release_date: datetime | None
     status: str
+    status_reason: str | None = None       # why yanked: Go retract rationale, PyPI yanked reason
     requires_python: str | None
 
 
@@ -79,6 +81,7 @@ class VersionDetailResponse(BaseModel):
     version: str
     release_date: datetime | None
     status: str
+    status_reason: str | None = None
     requires_python: str | None
     engines: dict | None = None
     features: dict | None
@@ -92,6 +95,7 @@ class DependencyNode(BaseModel):
     dependency_type: str
     extra_name: str | None
     environment_markers: dict | None = None
+    details: dict | None = None            # Go `indirect`, Cargo features and registry, npm peer `optional`
     resolved_version: str | None
     cycle: bool = False
     dependencies_unknown: bool = False   # the resolved version's source has no metadata for it (Q14)
