@@ -59,6 +59,7 @@ class VersionItem(BaseModel):
     release_date: datetime | None
     status: str
     status_reason: str | None = None       # why yanked: Go retract rationale, PyPI yanked reason
+    deprecation: dict | None = None        # npm deprecated, NuGet deprecation (reasons, message, alternate)
     requires_python: str | None
 
 
@@ -82,6 +83,7 @@ class VersionDetailResponse(BaseModel):
     release_date: datetime | None
     status: str
     status_reason: str | None = None
+    deprecation: dict | None = None
     requires_python: str | None
     engines: dict | None = None
     features: dict | None

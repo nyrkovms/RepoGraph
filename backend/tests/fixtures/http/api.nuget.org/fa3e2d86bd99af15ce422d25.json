@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "0x8DC58B967ADFDCF",
+    "last-modified": "Tue, 09 Apr 2024 17:20:51 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.netcore.platforms/page/8.0.0-preview.2.23128.3/8.0.0-preview.7.23375.6.json"
+  },
+  "status": 200
+}

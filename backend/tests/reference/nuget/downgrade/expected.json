@@ -4,19 +4,19 @@
     "dotnet",
     "restore"
   ],
-  "generated_at": "2026-10-30T18:04:43+00:00",
+  "generated_at": "2026-10-30T19:09:20+00:00",
   "install": [
     {
       "name": "Microsoft.Extensions.DependencyInjection",
-      "version": "8.0.0"
+      "version": "9.0.0"
     },
     {
       "name": "Microsoft.Extensions.DependencyInjection.Abstractions",
-      "version": "8.0.0"
+      "version": "9.0.0"
     },
     {
       "name": "Microsoft.Extensions.Logging",
-      "version": "8.0.0"
+      "version": "9.0.0"
     },
     {
       "name": "Microsoft.Extensions.Logging.Abstractions",
@@ -24,11 +24,14 @@
     },
     {
       "name": "Microsoft.Extensions.Options",
-      "version": "8.0.2"
+      "version": "9.0.0"
     },
     {
       "name": "Microsoft.Extensions.Primitives",
-      "version": "8.0.0"
+      "version": "9.0.0"
     }
+  ],
+  "errors": [
+    "NU1605"
   ]
 }

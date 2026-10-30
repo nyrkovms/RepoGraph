@@ -33,7 +33,8 @@ def _entry(package_id: str, minutes: int, kind: str = "nuget:PackageDetails") ->
 
 def _serve(monkeypatch, pages: dict[str, tuple[int, list[dict] | httpx.Response]]) -> list[str]:
     asked: list[str] = []
-    index = {"items": [{"@id": f"https://catalog.example/{name}.json", "commitTimeStamp": _stamp(stamp)}
+    index = {"commitTimeStamp": _stamp(max((s for s, _ in pages.values()), default=0)),
+             "items": [{"@id": f"https://catalog.example/{name}.json", "commitTimeStamp": _stamp(stamp)}
                        for name, (stamp, _) in pages.items()]}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -111,3 +112,11 @@ def test_the_weekly_check_goes_through_the_reconciler(monkeypatch) -> None:
     result = _detect([dapper, gone], {"commit": T0.isoformat(), "reconciled_at": old}, reconciler=reconciler)
     assert reconciler.asked == 1 and result.changed == [(dapper, "etag-2")]
     assert (result.missing, result.reconcile_all) == ([gone], False)
+
+
+def test_entries_past_the_index_commit_wait_for_the_next_run(monkeypatch) -> None:
+    # The index says its last commit is at minute 2; an entry at minute 5 belongs to a commit still being written.
+    _serve(monkeypatch, {"page1": (2, [_entry("Dapper", 2), _entry("Serilog", 5)])})
+    result = _detect([_tracked("Dapper"), _tracked("Serilog")], {"commit": T0.isoformat(), **FRESH})
+    assert [p.ref.name for p, _ in result.changed] == ["dapper"]
+    assert result.cursor["commit"] == (T0 + timedelta(minutes=2)).isoformat()

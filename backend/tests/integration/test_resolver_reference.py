@@ -84,7 +84,12 @@ def test_reference_case(case_dir: Path) -> None:
                     options=GraphOptions.model_construct(timeout_s=900) if os.environ.get("HTTP_RECORD_DIR")
                     else GraphOptions(timeout_s=120),
                 ))
-                assert graph.error is None, graph.error
+                # A restore the native tool fails (NuGet NU1605) still has its packages; the error code must agree.
+                wanted = expected.get("errors") or []
+                if wanted:
+                    assert graph.error is not None and graph.error["code"] in wanted, graph.error
+                else:
+                    assert graph.error is None, graph.error
                 errors = {node.name: node.errors for node in graph.nodes if node.errors}
                 assert not {n for n in errors if name(n) not in allowed}, errors
                 return {(name(node.name), node.version) for node in graph.nodes}

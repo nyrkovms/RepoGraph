@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "0x8DE969859AEF91A",
+    "last-modified": "Fri, 10 Apr 2026 00:30:21 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime.azure/index.json"
+  },
+  "status": 200
+}

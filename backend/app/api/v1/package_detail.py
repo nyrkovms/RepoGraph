@@ -201,6 +201,7 @@ async def list_versions(
             release_date=row.release_date,
             status=(visibility.effective_status(statuses.get(row.id, [])) or row.status).value,
             status_reason=row.status_reason,
+            deprecation=row.deprecation,
             requires_python=_requires_python(row),
         )
         for row in data_rows
@@ -229,6 +230,7 @@ async def get_version(
         release_date=row.release_date,
         status=row.status.value,
         status_reason=row.status_reason,
+        deprecation=row.deprecation,
         requires_python=_requires_python(row),
         engines=row.engines,
         features=row.features,

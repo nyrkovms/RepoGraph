@@ -1,0 +1,11 @@
+description: >
+  The project references Logging.Abstractions 8.0.0 directly while Logging 9.0.0 needs it at >= 9.0.0: the direct reference wins, a detected downgrade (NU1605), which the .NET SDK treats as an error.
+roots:
+  - {purl: "pkg:nuget/Microsoft.Extensions.Logging.Abstractions", constraint: "8.0.0"}
+  - {purl: "pkg:nuget/Microsoft.Extensions.Logging", constraint: "9.0.0"}
+environment: {target_framework: net8.0}
+sources:
+  - {slug: nuget-org, protocol: nuget-v3, base_url: "https://api.nuget.org/v3/index.json", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

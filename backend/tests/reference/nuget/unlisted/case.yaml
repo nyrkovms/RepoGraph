@@ -1,0 +1,10 @@
+description: >
+  Microsoft.Azure.KeyVault >= 2.3.0, where 2.3.1 is unlisted and 2.3.2 listed: does restore take an unlisted lowest version.
+roots:
+  - {purl: "pkg:nuget/Microsoft.Azure.KeyVault", constraint: "2.3.0"}
+environment: {target_framework: net8.0}
+sources:
+  - {slug: nuget-org, protocol: nuget-v3, base_url: "https://api.nuget.org/v3/index.json", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

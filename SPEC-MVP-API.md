@@ -303,7 +303,7 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
 
 - `features` — данные версии, зависящие от экосистемы. У crates это карта features Cargo: имя feature → список того, что она включает (другие features, `dep:крейт`, `крейт/feature`), например `{"default": ["std"], "std": ["serde/std"], "preserve_order": ["dep:indexmap", "std"]}`. Служебный ключ `dependencies_hydrated`, если он есть, features не является: клиент его пропускает.
 - Go: версия — SemVer с `v`: релиз (`v1.10.0`), версия модуля до v2 без тега в виде псевдоверсии (`v0.0.0-20261014143641-f0251eb4aa3e`, `v1.2.4-0.20261014143641-f0251eb4aa3e`) или `+incompatible` (`v2.0.0+incompatible`, равна `v2.0.0` при сравнении). Псевдоверсия — обычный prerelease (`is_prerelease`). В каталоге она есть только у модуля без тегов: его `@v/list` пуст, и единственная версия — псевдоверсия из `@latest`, а лента index.golang.org (§5.8) обновляет её. У модуля с тегами `@v/list` псевдоверсий не показывает, и каталог их не хранит; в resolve они встречаются в узлах как требования `go.mod`. В `versions` псевдоверсия не отличается от прочих версий, узнают её по виду. Отозванная (`retract` в go.mod) версия приходит со `status: "yanked"`; текст из комментария к `retract` приходит в `status_reason` версии (в списке версий и в карточке версии), объявление `// Deprecated:` — в `deprecation` карточки пакета (`{"message": ...}`; так же устаревший пакет npm). Описания, лицензии и авторов у Go нет (SPEC-MULTI-ECOSYSTEM Q11): `description`, `license_raw`, `license_spdx`, `homepage_url` — `null`.
-- NuGet: версия — NuGetVersion: SemVer 2 с необязательной четвёртой частью (`13.0.3`, `12.0.3.1`, `1.0.0-beta.2`); метки prerelease сравниваются без учёта регистра (`1.0.0-BETA` = `1.0.0-beta`), `+метаданные` не влияют на порядок. Версия приходит в нормализованной записи NuGet (`1.0` как `1.0.0`). Скрытая автором (unlisted) версия не удаляется: она остаётся в `versions` со `status: "unlisted"`, потому что lock-файл может её закреплять (resolve выбирает такую версию, только когда подходящих листед-версий нет), у неё может не быть `release_date` (`null`). Deprecation версии (причины `Legacy`, `CriticalBugs`, `Other`, сообщение, пакет-замена) каталог сохраняет, события `release_deprecated` попадают в ленту (§6.3); в ответах карточки версии и списка версий оно пока не отдаётся (клиент читает `deprecation` версии, если оно появится). Если deprecated новейшая из листед-версий, `deprecation` пакета (`{"message": ...}`) несёт сообщение или перечень причин. Лицензия пакета — `license_spdx` (выражение `licenseExpression`) и `license_raw` (то же выражение; когда у пакета только `licenseUrl` — ссылка, а `license_spdx` — `null`); описание, `homepage_url` (`projectUrl`), авторы и теги берутся из записи новейшей листед-версии.
+- NuGet: версия — NuGetVersion: SemVer 2 с необязательной четвёртой частью (`13.0.3`, `12.0.3.1`, `1.0.0-beta.2`); метки prerelease сравниваются без учёта регистра (`1.0.0-BETA` = `1.0.0-beta`), `+метаданные` не влияют на порядок. Версия приходит в нормализованной записи NuGet (`1.0` как `1.0.0`). Скрытая автором (unlisted) версия не удаляется: она остаётся в `versions` со `status: "unlisted"`, потому что lock-файл может её закреплять (resolve выбирает такую версию, только когда подходящих листед-версий нет), у неё может не быть `release_date` (`null`). Deprecation версии (причины `Legacy`, `CriticalBugs`, `Other`, сообщение, пакет-замена) каталог сохраняет, события `release_deprecated` попадают в ленту (§6.3); в ответах карточки версии и списка версий оно пока не отдаётся (клиент читает `deprecation` версии). Если deprecated новейшая из листед-версий, `deprecation` пакета (`{"message": ...}`) несёт сообщение или перечень причин. Лицензия пакета — `license_spdx` (выражение `licenseExpression`) и `license_raw` (то же выражение; когда у пакета только `licenseUrl` — ссылка, а `license_spdx` — `null`); описание, `homepage_url` (`projectUrl`), авторы и теги берутся из записи новейшей листед-версии.
 - `engines` — требования к среде в нативной записи экосистемы (PyPI: `python`); может быть `null`. `requires_python` — алиас `engines.python`, сохраняется до конца E7.
 - `dependencies_state` — состояние зависимостей версии (`pending` — ещё не загружены, `hydrated`, `unavailable` — зависимости неизвестны).
 - `sources` — все источники версии (без фильтра по профилю) и статус версии в каждом.
@@ -665,8 +665,8 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
      "details": {"replaced_by": "golang.org/x/net@v0.21.0"}}
   ],
   "edges": [
-    {"source": "root", "target": "n1", "constraint": "v1.9.1", "type": "runtime", "details": {}},
-    {"source": "n1", "target": "n2", "constraint": "v0.20.0", "type": "runtime", "details": {"indirect": true}}
+    {"from": "root", "to": "n1", "constraint": "v1.9.1", "type": "runtime", "details": {}},
+    {"from": "n1", "to": "n2", "constraint": "v0.20.0", "type": "runtime", "details": {"indirect": true}}
   ],
   "warnings": [
     {"code": "go_version", "node": "n2", "message": "golang.org/x/net v0.20.0 needs go 1.24"}
@@ -822,11 +822,11 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
 ```
 
 - `environment`: `target_framework` (по умолчанию `net8.0`, допустимые значения те же, что у дерева, §3.3.5; другое даёт `422`). Пустое окружение — `net8.0`.
-- `strategy`: `nuget-nearest-wins`, `emulates`: `.NET SDK 8 (NuGet 6.x)`. Правила `dotnet restore` (SPEC-MULTI-ECOSYSTEM §9.6): (1) диапазон берёт самую низкую подходящую версию (плавающий диапазон `1.*` — самую высокую подходящую), листед-версии раньше unlisted; (2) ближайшая ссылка к проекту побеждает: пакет решается на том уровне графа, где встретился впервые, а более глубокие ссылки на него версию не меняют; (3) родственные ссылки на одном уровне (cousin dependencies) берут самую низкую версию, которую допускают все их диапазоны. Для зависимостей версии берётся ближайшая группа `target_framework`; пакет, достижимый только через версию, которая не победила, в граф не входит.
+- `strategy`: `nuget-nearest-wins`, `emulates`: `.NET SDK 8 (NuGet 6.x)`. Правила `dotnet restore` (SPEC-MULTI-ECOSYSTEM §9.6): (1) каждая ссылка берёт самую низкую подходящую версию (плавающий диапазон `1.*` — самую высокую подходящую); unlisted-версии участвуют, как в restore; (2) ссылка затеняется, если предок на её же пути объявляет тот же пакет напрямую (ссылки проекта — предки всего графа); (3) ссылки из разных путей — кузены на любой глубине: побеждает наибольшая версия, проигравшие уходят вместе со своими поддеревьями. Для зависимостей версии берётся ближайшая группа `target_framework`.
 - Равенство с `dotnet restore`: множество пар `(id, версия)` в `nodes` равно пакетам, которые `dotnet restore` пишет в `project.assets.json` проекта на этой платформе со ссылками на корни (цель — 100% совпадений без допустимых расхождений, SPEC-MULTI-ECOSYSTEM §9.6).
 - `nodes[].name` — id строчными, `version` — выбранная версия (в нормализованной записи NuGet), `latest_compatible` у корней — новейшая листед-версия без prerelease, у прочих узлов `null`. `edges[].constraint` — диапазон как написан в пакете, `type` — `runtime`.
-- `warnings[]`: `NU1605` (`{code, package, message}`) — ближайшая ссылка выбрала версию ниже, чем требует более глубокая (downgrade, `dotnet restore` сообщает то же предупреждением); `dependencies_unknown`; `unresolvable` (`{code, message}`) — ссылка корня не разрешилась (нет подходящей версии). Узел без метаданных зависимостей остаётся в итоге, причина в `nodes[].errors`.
-- `conflicts[]` пуст: неудача resolve приходит в `error`. `code` `NU1107` (cousin-ссылки на один пакет не имеют общей версии; `package` — id, `message` — id и их диапазоны, как в `dotnet restore`), `not_found` (источники профиля не знают корня), `resolve_limit_exceeded`, `resolve_timeout` или `upstream_error`.
+- `warnings[]`: `no_framework_group` (`{code, package, message}`) — у версии есть только группы .NET Framework или платформенные, а NuGet взял бы их через AssetTargetFallback (вне Q7); `unresolvable` (`{code, message}`) — ссылка корня не разрешилась. Узел без метаданных зависимостей остаётся в итоге, причина в `nodes[].errors`.
+- `conflicts[]` пуст: неудача resolve приходит в `error`, граф при этом остаётся (NuGet тоже пишет `project.assets.json` неудачного restore). `code`: `NU1605` (понижение: затенённая ссылка хотела версию выше, чем дала ближайшая; .NET SDK считает это ошибкой), `NU1107` (победитель среди кузенов не удовлетворяет чьему-то диапазону), `NU1108` (цикл), `not_found`, `resolve_limit_exceeded`, `resolve_timeout` или `upstream_error`.
 
 ```json
 {
@@ -842,17 +842,15 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
   "edges": [
     {"from": "root", "to": "n1", "constraint": "[12.0.1,14.0)", "type": "runtime", "details": {}}
   ],
-  "warnings": [
-    {"code": "NU1605", "package": "system.memory", "message": "detected package downgrade: system.memory from 4.5.5 to 4.5.4 (a nearer reference wins)"}
-  ],
+  "warnings": [],
   "error": null
 }
 ```
 
-Ошибка графа (cousin-конфликт):
+Ошибка графа (понижение версии, граф в ответе остаётся):
 
 ```json
-{"code": "NU1107", "message": "version conflict detected for newtonsoft.json: [12.0.1,13.0), [13.0.1,14.0)", "package": "newtonsoft.json", "packages_seen": 3}
+{"code": "NU1605", "message": "detected package downgrade: microsoft.extensions.logging.abstractions from 9.0.0 to 8.0.0 (reference from microsoft.extensions.logging)", "packages_seen": 7}
 ```
 
 ## 5.4 `POST /api/v1/admin/retry-failed`

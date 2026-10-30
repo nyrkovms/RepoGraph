@@ -71,21 +71,48 @@ def test_lowest_applicable_version_and_floating() -> None:
     assert _resolve(catalog, ("a", "1.1")).strategy == "nuget-nearest-wins" and RESOLVER.emulates.startswith(".NET SDK 8")
 
 
-def test_the_nearest_reference_wins_and_a_downgrade_is_reported() -> None:
+def test_a_direct_declaration_eclipses_its_subtree_and_a_downgrade_fails_the_restore() -> None:
     catalog = Catalog({"app": [_v("1.0.0")], "lib": [_v("1.0.0")], "core": [_v("1.0.0"), _v("2.0.0")]},
                       {"app@1.0.0": _deps(("lib", "1.0.0"), ("core", "1.0.0")), "lib@1.0.0": _deps(("core", "2.0.0"))})
     graph = _resolve(catalog, ("app", "1.0.0"))
-    assert _set(graph) == {("app", "1.0.0"), ("lib", "1.0.0"), ("core", "1.0.0")}
-    assert [w["code"] for w in graph.warnings] == ["NU1605"]
+    # NuGet writes the assets file of the failed restore: the graph stays, the error says why.
+    assert {(n.ref.name, n.version) for n in graph.nodes} == {("app", "1.0.0"), ("lib", "1.0.0"), ("core", "1.0.0")}
+    assert graph.error is not None and graph.error["code"] == "NU1605"
+    catalog.deps["lib@1.0.0"] = _deps(("core", "[0.5.0, )"))     # wanting less is no downgrade
+    assert _set(_resolve(catalog, ("app", "1.0.0"))) == {("app", "1.0.0"), ("lib", "1.0.0"), ("core", "1.0.0")}
 
 
-def test_cousins_take_the_lowest_version_all_ranges_allow_or_conflict() -> None:
-    catalog = Catalog({"a": [_v("1.0.0")], "b": [_v("1.0.0")], "c": [_v("1.0.0"), _v("1.5.0"), _v("2.0.0")]},
-                      {"a@1.0.0": _deps(("c", "1.0.0")), "b@1.0.0": _deps(("c", "[1.5.0, 3.0.0)"))})
-    assert _set(_resolve(catalog, ("a", "1.0.0"), ("b", "1.0.0"))) == {("a", "1.0.0"), ("b", "1.0.0"), ("c", "1.5.0")}
-    catalog.deps["b@1.0.0"] = _deps(("c", "[0.5.0, 1.0.0)"))
+def test_cousins_at_any_depth_take_the_highest_best_match_or_conflict() -> None:
+    # a -> c [1.0.0, ) at depth 2; b -> d -> c [2.0.0, ) at depth 3: cousins, the highest wins (not the nearer).
+    catalog = Catalog({"a": [_v("1.0.0")], "b": [_v("1.0.0")], "d": [_v("1.0.0")], "c": [_v("1.0.0"), _v("2.0.0")]},
+                      {"a@1.0.0": _deps(("c", "[1.0.0, )")), "b@1.0.0": _deps(("d", "1.0.0")),
+                       "d@1.0.0": _deps(("c", "[2.0.0, )"))})
     graph = _resolve(catalog, ("a", "1.0.0"), ("b", "1.0.0"))
-    assert graph.error is not None and graph.error["code"] == "NU1107" and graph.error["package"] == "c"
+    assert ("c", "2.0.0") in _set(graph) and graph.warnings == []
+    catalog.deps["a@1.0.0"] = _deps(("c", "[1.0.0]"))           # the winner breaks a's exact range
+    graph = _resolve(catalog, ("a", "1.0.0"), ("b", "1.0.0"))
+    assert graph.error is not None and graph.error["code"] == "NU1107" and "c" in graph.error["message"]
+
+
+def test_cousins_skip_prereleases_each_range_would_not_take() -> None:
+    catalog = Catalog({"a": [_v("1.0.0")], "b": [_v("1.0.0")], "c": [_v("1.0.0"), _v("1.2.0-beta"), _v("1.2.0")]},
+                      {"a@1.0.0": _deps(("c", "[1.0.0, )")), "b@1.0.0": _deps(("c", "[1.1.0, )"))})
+    assert ("c", "1.2.0") in _set(_resolve(catalog, ("a", "1.0.0"), ("b", "1.0.0")))
+
+
+def test_the_versions_that_lose_take_their_subtrees_with_them() -> None:
+    catalog = Catalog({"a": [_v("1.0.0")], "b": [_v("1.0.0")], "c": [_v("1.0.0"), _v("2.0.0")], "old": [_v("1.0.0")]},
+                      {"a@1.0.0": _deps(("c", "1.0.0")), "b@1.0.0": _deps(("c", "2.0.0")),
+                       "c@1.0.0": _deps(("old", "1.0.0"))})
+    assert _set(_resolve(catalog, ("a", "1.0.0"), ("b", "1.0.0"))) == {
+        ("a", "1.0.0"), ("b", "1.0.0"), ("c", "2.0.0")}
+
+
+def test_a_cycle_fails_the_restore() -> None:
+    catalog = Catalog({"p": [_v("1.0.0")], "q": [_v("1.0.0")]},
+                      {"p@1.0.0": _deps(("q", "1.0.0")), "q@1.0.0": _deps(("p", "1.0.0"))})
+    graph = _resolve(catalog, ("p", "1.0.0"))
+    assert graph.error is not None and graph.error["code"] == "NU1108"
 
 
 def test_the_group_of_the_target_framework_decides_the_dependencies() -> None:
@@ -100,10 +127,11 @@ def test_the_group_of_the_target_framework_decides_the_dependencies() -> None:
     assert ("only-standard", "1.0.0") in _set(_resolve(catalog, ("a", "1.0.0"), env={"target_framework": "net5.0"}))
 
 
-def test_unlisted_versions_only_when_nothing_listed_fits() -> None:
+def test_unlisted_versions_count_like_any_other() -> None:
+    # Restore reads the full version list: Microsoft.Azure.KeyVault >= 2.3.0 takes the unlisted 2.3.1 (reference case).
     catalog = Catalog({"a": [_v("1.0.0", "unlisted"), _v("1.1.0")]})
-    assert _set(_resolve(catalog, ("a", "1.0.0"))) == {("a", "1.1.0")}
-    assert _set(_resolve(catalog, ("a", "[1.0.0]"))) == {("a", "1.0.0")}
+    assert _set(_resolve(catalog, ("a", "1.0.0"))) == {("a", "1.0.0")}
+    assert _set(_resolve(catalog, ("a", "1.*"))) == {("a", "1.1.0")}
 
 
 def test_a_version_that_lost_does_not_bring_its_dependencies() -> None:
@@ -119,5 +147,13 @@ def test_unknown_dependencies_missing_packages_and_bad_ranges() -> None:
     assert graph.nodes[0].errors == [UNKNOWN_DEPENDENCIES]
     assert _resolve(Catalog({}), ("ghost", "1.0.0")).error["code"] == "not_found"  # type: ignore[index]
     catalog = Catalog({"a": [_v("1.0.0")], "b": [_v("1.0.0")]}, {"a@1.0.0": _deps(("b", "[1.0"), ("gone", "1.0.0"))})
-    a = next(n for n in _resolve(catalog, ("a", "1.0.0")).nodes if n.ref.name == "a")
+    graph = _resolve(catalog, ("a", "1.0.0"))
+    a = next(n for n in graph.nodes if n.ref.name == "a")
     assert a.errors == ["b '[1.0' is not a NuGet version range", "no version of gone matches 1.0.0"]
+
+
+def test_a_version_with_only_framework_groups_is_reported() -> None:
+    deps = _deps(("old", "1.0.0"), group=".NETFramework4.6.2", groups=[".NETFramework4.6.2"])
+    catalog = Catalog({"a": [_v("1.0.0")], "old": [_v("1.0.0")]}, {"a@1.0.0": deps})
+    graph = _resolve(catalog, ("a", "1.0.0"))
+    assert _set(graph) == {("a", "1.0.0")} and [w["code"] for w in graph.warnings] == ["no_framework_group"]

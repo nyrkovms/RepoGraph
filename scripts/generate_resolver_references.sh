@@ -145,7 +145,7 @@ open(f"{sys.argv[2]}/case.csproj", "w").write(
     f'  <ItemGroup>\n{refs}  </ItemGroup>\n</Project>\n')
 PY
   docker run --rm --platform "${platform:-linux/amd64}" -v "$work:/w" -w /w -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
-    -e DOTNET_NOLOGO=1 "$DOTNET_IMAGE" sh -c 'dotnet restore -v q >/dev/null && dotnet --version > tool.txt'
+    -e DOTNET_NOLOGO=1 "$DOTNET_IMAGE" sh -c 'dotnet restore -v q >/dev/null; dotnet --version > tool.txt'
   python3 - "$work" "$case_dir/expected.json" <<'PY'
 import datetime, json, sys
 work, out = sys.argv[1], sys.argv[2]
@@ -153,11 +153,13 @@ assets = json.load(open(f"{work}/obj/project.assets.json"))
 rows = sorted(({"name": key.split("/")[0], "version": key.split("/")[1]}
                for key, lib in assets["libraries"].items() if lib.get("type") == "package"),
               key=lambda r: r["name"].lower())
+# A restore that fails (NU1605, NU1107) still writes the assets file; its error codes are part of the answer.
+errors = sorted({log["code"] for log in assets.get("logs") or [] if log.get("level") == "Error"})
 json.dump({"tool": "dotnet " + open(f"{work}/tool.txt").read().strip(), "command": ["dotnet", "restore"],
            "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
-           "install": rows}, open(out, "w"), indent=2)
+           "install": rows, **({"errors": errors} if errors else {})}, open(out, "w"), indent=2)
 open(out, "a").write("\n")
-print(len(rows), "packages")
+print(len(rows), "packages", errors or "")
 PY
   rm -rf "$work"
 }

@@ -13,6 +13,7 @@ The entries also hold `vulnerabilities`; they are not stored (D6). Unlisted vers
 import asyncio
 import hashlib
 import logging
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -246,6 +247,10 @@ def _newest(entries: Sequence[Mapping[str, object]]) -> Mapping[str, object] | N
 # --- the adapter ------------------------------------------------------------------------------------
 
 
+SERVICE_INDEX_TTL_SECONDS = 3600.0
+_SERVICE_INDEXES: dict[str, tuple[float, ServiceIndex]] = {}
+
+
 def _is_missing(response: httpx.Response) -> bool:
     return response.status_code == 404
 
@@ -272,9 +277,14 @@ class NuGetV3Adapter:
         return parse_service_index(_json_object(response), str(response.url))
 
     async def service_index(self) -> ServiceIndex:
+        # Adapters are built per package; the index is shared by every adapter of a feed for a while.
+        cached = _SERVICE_INDEXES.get(self.registry.base_url)
+        if self._service is None and cached is not None and time.monotonic() - cached[0] < SERVICE_INDEX_TTL_SECONDS:
+            self._service = cached[1]
         # The same for every package of the feed: read once per adapter.
         if self._service is None:
             self._service = await self._read_service_index()
+            _SERVICE_INDEXES[self.registry.base_url] = (time.monotonic(), self._service)
         return self._service
 
     async def registration_url(self, ref: PackageRef) -> str:
@@ -409,7 +419,11 @@ class NuGetEtagChangeDetector:
                 return package, "same" if package.unavailable else "missing", None
             if response.status_code == 304:
                 return package, "changed" if package.unavailable else "same", known
-            return package, "changed", response.headers.get("etag")
+            revision = _revision(response)
+            # A feed without ETags gets a content hash as revision: an unchanged index is the same hash.
+            if revision == known:
+                return package, "changed" if package.unavailable else "same", known
+            return package, "changed", revision
 
         changed: list[tuple[TrackedPackage, str | None]] = []
         missing: list[TrackedPackage] = []

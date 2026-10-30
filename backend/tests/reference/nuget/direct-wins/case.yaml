@@ -1,5 +1,5 @@
 description: >
-  Logging 8.0.0 wants Options >= 8.0.0 while the project asks 8.0.2 directly: the direct dependency wins.
+  Logging 8.0.0 wants Options >= 8.0.0 while the project asks 8.0.2 directly: the direct reference wins.
 roots:
   - {purl: "pkg:nuget/Microsoft.Extensions.Logging@8.0.0", constraint: "8.0.0"}
   - {purl: "pkg:nuget/Microsoft.Extensions.Options@8.0.2", constraint: "8.0.2"}

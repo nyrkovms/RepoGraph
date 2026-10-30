@@ -1,0 +1,14 @@
+{
+  "tool": "dotnet 8.0.427",
+  "command": [
+    "dotnet",
+    "restore"
+  ],
+  "generated_at": "2026-10-30T19:09:27+00:00",
+  "install": [
+    {
+      "name": "Serilog",
+      "version": "3.1.1"
+    }
+  ]
+}

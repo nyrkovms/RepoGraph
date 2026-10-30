@@ -161,7 +161,7 @@ rpm_worker/                   — Dockerfile, worker.py, modules.py, solver.py
 | pypi | — | project | PEP 503: lowercase, `[-_.]+` → `-` | `pkg:pypi/flask` |
 | npm | scope без `@` | имя без scope | Нет: новые имена lowercase, старые (`JSONStream`) хранятся как есть | `pkg:npm/%40angular/core` |
 | maven | groupId | artifactId | Без изменений, регистр важен | `pkg:maven/org.springframework/spring-core` |
-| nuget | — | id | `normalized_name` lowercase, `name` — исходное написание | `pkg:nuget/Newtonsoft.Json` |
+| nuget | — | id | `normalized_name` lowercase, `name` — исходное написание | `pkg:nuget/newtonsoft.json` (имя в purl NuGet без учёта регистра, пишем в нижнем) |
 | go | — | module path | Без изменений; в URL к proxy заглавные экранируются (`!x`). Мажорные версии `/v2` — **другой** модуль | `pkg:golang/github.com/redis/go-redis/v9` |
 | crates | — | crate | Нет: имя как опубликовано (`serde_json`, `Inflector`). crates.io не допускает двух крейтов, отличающихся только регистром или `-`/`_`; ввод `serde-json` приводится к каноническому имени через API (Q21) | `pkg:cargo/serde_json` |
 | rpm | дистрибутив и мажорный релиз: `rhel-9`, `rocky-9`, `epel-9`, `fedora-41` | имя бинарного пакета | Без изменений | `pkg:rpm/redhat/openssl?distro=rhel-9` |
@@ -243,7 +243,7 @@ rpm_worker/                   — Dockerfile, worker.py, modules.py, solver.py
 | RPM EVR | rpm | `rpm.labelCompare` (rpm 4.16, Rocky 9) | 28 версий, 784 пары, 0 расхождений (`~`, `^`, эпохи, `el9_4`, модульные сборки, UEK) |
 | PEP 440 | pypi | `packaging` | 38 версий, 1444 пары, 0 расхождений (dev/pre/post, local `+cpu`/`+cu121`, эпохи) |
 | Maven ComparableVersion | maven | — | Не проверено: нужен эталон на Java (`maven-artifact`). Делается на E5 |
-| NuGetVersion | nuget | — | Не проверено: нужен эталон на .NET (`NuGet.Versioning`). Делается на E4 |
+| NuGetVersion | nuget | NuGet.Versioning 6.11.1 | 153 версии попарно, 232 диапазона (Satisfies, FindBestMatch), 0 расхождений; байтовый ключ с четвёртым числом и тремя видами меток (NuGet считает `-1` числом) |
 
 Если для Maven или NuGet байтовый ключ не сойдётся с эталоном, есть запасной вариант: ранг версии внутри пакета, пересчитываемый при добавлении версий. Он тоже хранится в `bytea`, так что схема не меняется.
 
@@ -559,9 +559,9 @@ resolvelib (backtracking), PEP 508 markers, extras — без изменений
 
 ### 9.6 NuGet
 
-1. **Lowest applicable version.** Из диапазона берётся минимальная подходящая версия.
-2. **Direct dependency wins.** Версия из корня побеждает транзитивные.
-3. **Cousin dependencies.** Берётся наименьшая версия, удовлетворяющая всем диапазонам. Если такой нет — конфликт (`NU1107`).
+1. **Lowest applicable version.** Из диапазона берётся минимальная подходящая версия (`FindBestMatch`); unlisted-версии участвуют: restore читает полный список версий.
+2. **Direct dependency wins.** Ссылка затеняется, если предок на её же пути объявляет тот же пакет напрямую; если затенённая хотела больше — понижение `NU1605`, в .NET SDK это ошибка restore.
+3. **Cousin dependencies.** Ссылки из разных путей — кузены на любой глубине: побеждает наибольшая из их версий, проигравшие уходят вместе со своими поддеревьями. Если победитель не удовлетворяет чьему-то диапазону — конфликт (`NU1107`). Цикл — `NU1108`. Неудачный restore оставляет граф, код ошибки — в `error`.
 4. **Группа зависимостей по TFM.** В первой волне — только современные целевые платформы (Q7): `net5.0` и новее (на nuget.org уже есть `net10.0` и `net11.0`) и `netstandard1.0`–`2.1`. Проект на `netX.0` использует ближайшую группу из `netX.0 → … → net5.0 → netcoreapp3.1 → … → netstandard2.1 → … → netstandard1.0`. .NET Framework 4.x и платформенные TFM (`net8.0-windows`, `-android`, `-ios`) — когда понадобятся.
 5. Floating-версии `1.*` → максимальная подходящая.
 - Эталон — `dotnet restore` + `project.assets.json`.

@@ -1,21 +1,25 @@
 """NuGet resolve: the packages `dotnet restore` puts in project.assets.json (SPEC-MULTI-ECOSYSTEM.md §9.6).
 
-The graph is walked level by level from the project's references, each version's dependencies taken from the group
-its target framework picks (frameworks.py):
+The way NuGet's RemoteDependencyWalker and its conflict resolution do it:
 
-1. **Lowest applicable version** — a range takes the lowest version it allows (a floating one the highest matching the
-   float), as `VersionRange.FindBestMatch`; listed versions first, an unlisted one only when nothing listed fits.
-2. **Direct dependency wins** — a package is decided at the level nearest to the project; references further down
-   are not used for it (one that wanted a higher version is a downgrade, NU1605, reported as a warning).
-3. **Cousin dependencies** — references to one package at the same level take the lowest version all their ranges
-   allow; when there is none the restore fails (NU1107).
+1. **Walk.** Every edge takes its own best match (`VersionRange.FindBestMatch`: the lowest applicable version, for a
+   floating range the highest matching the float; unlisted versions count, restore reads the full version list), and
+   the walk continues below it with the dependencies of the version's nearest framework group. A package that loops
+   back to an ancestor is a cycle (NU1108).
+2. **Direct dependency wins.** An edge is eclipsed when an ancestor on its own path declares the same package directly
+   (the project's references are ancestors of everything): it is not walked; when it wanted more than the nearer
+   declaration gives, that is a downgrade (NU1605), which the .NET SDK treats as an error.
+3. **Cousins.** References from different paths, at any depth, are cousins: the highest of their versions wins, the
+   others drop out with everything only they brought, and that repeats until nothing changes. A reference whose range
+   the winner does not satisfy fails the restore (NU1107).
 
-Only the decided version's dependencies are walked, so a package reachable only through a version that lost is not
-in the graph.
+A failed restore keeps its graph, as NuGet still writes the assets file, with the error code in `error`.
 """
 
 import time
 from collections import defaultdict
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 
 from app.ecosystems.base import (
     CatalogAccess,
@@ -29,24 +33,46 @@ from app.ecosystems.base import (
     ResolveLimitExceeded,
     ResolveRequest,
 )
-from app.ecosystems.nuget.environment import NuGetEnvironment, dependency_applies
+from app.ecosystems.nuget.environment import NuGetEnvironment, dependency_applies, groups_of
+from app.ecosystems.nuget.frameworks import nearest
 from app.ecosystems.nuget.versions import NuGetConstraint, NuGetVersionScheme, parse_range
 
 STRATEGY = "nuget-nearest-wins"
 UNKNOWN_DEPENDENCIES = "dependencies unknown"
+MAX_WALK = 50_000          # tree nodes; the graph is far smaller, the tree repeats shared subtrees per path
 _SCHEME = NuGetVersionScheme()
 
 
+@dataclass(eq=False)
+class _Node:
+    package_id: str
+    ref: PackageRef | None              # None: the project
+    raw: str                            # the range as written on the edge
+    constraint: NuGetConstraint | None
+    version: CatalogVersion | None
+    parent: "_Node | None"
+    depth: int
+    children: list["_Node"] = field(default_factory=list)
+    declared: dict[str, "_Node | None"] = field(default_factory=dict)   # direct dependencies by id -> their node
+
+
 class _Aborted(Exception):
-    def __init__(self, code: str, message: str, **details: object) -> None:
+    def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
-        self.details = details
 
 
 def _range(raw: str) -> NuGetConstraint:
     # A dependency without a range takes any version, the lowest first (`[0.0.0, )`).
     return parse_range(raw.strip() or "0.0.0")
+
+
+def _valid(version: str) -> bool:
+    try:
+        _SCHEME.validate(version)
+    except InvalidVersion:
+        return False
+    return True
 
 
 class _Resolve:
@@ -58,10 +84,13 @@ class _Resolve:
         self.deadline = time.monotonic() + request.timeout_s
         self.graph = ResolveGraph(strategy=STRATEGY, nodes=[], edges=[], conflicts=[], warnings=[], fetched=[])
         self.versions: dict[str, list[CatalogVersion]] = {}
+        self.deps: dict[tuple[str, str], list[NormalizedDependency] | None] = {}
         self.fetches = 0
-        self.decided: dict[str, tuple[CatalogVersion, int]] = {}   # id -> (version, level)
-        self.refs: dict[str, PackageRef] = {}
-        self.errors: dict[str, list[str]] = defaultdict(list)
+        self.walked = 0
+        self.errors: dict[tuple[str, str], list[str]] = defaultdict(list)   # (id, version) -> node errors
+        self.downgrades: list[tuple[_Node, str, str]] = []   # (eclipsed edge's parent, id, wanted range)
+        self.cycles: list[str] = []
+        self.root = _Node("", None, "", None, None, None, 0)
 
     def _check(self) -> None:
         if time.monotonic() >= self.deadline:
@@ -81,102 +110,179 @@ class _Resolve:
             self.versions[ref.name] = [v for v in versions if v.status in ("active", "unlisted") and _valid(v.version)]
         return self.versions[ref.name]
 
-    async def choose(self, ref: PackageRef, ranges: list[NuGetConstraint]) -> CatalogVersion | None:
-        """The lowest version every range allows (FindBestMatch for a single range), listed versions first."""
-        versions = await self.candidates(ref)
-        for pool in ([v for v in versions if v.status == "active"], versions):
-            names = [v.version for v in pool]
-            if len(ranges) == 1:
-                best = ranges[0].best_match(names)
-            else:
-                allowed = [n for n in names if all(r.contains(n) for r in ranges)]
-                best = min(allowed, key=_SCHEME.sort_key) if allowed else None
-            if best is not None:
-                return next(v for v in pool if v.version == best)
+    async def dependencies(self, ref: PackageRef, version: CatalogVersion) -> list[NormalizedDependency] | None:
+        key = (ref.name, version.version)
+        if key not in self.deps:
+            self._check()
+            found = await self.catalog.dependencies(ref, version.version, version.registry_id)
+            self.deps[key] = None if found is None else [
+                dep for dep in found if dependency_applies(dep, self.env, include_optional=False)]
+            if found and not self.deps[key] and nearest(self.env.framework, groups_of(found[0])) is None:
+                # NuGet would fall back to a .NET Framework group (AssetTargetFallback), which Q7 leaves out.
+                self.graph.warnings.append({
+                    "code": "no_framework_group", "package": ref.name,
+                    "message": f"{ref.name} {version.version} has no dependency group for {self.env.target_framework}; "
+                               f"its .NET Framework or platform groups are not used"})
+        return self.deps[key]
+
+    # --- 1-2: the walk ---------------------------------------------------------------------------------------------
+
+    async def walk(self) -> None:
+        wants = [(root.ref, root.constraint) for root in self.request.roots]
+        await self._expand(self.root, wants)
+
+    async def _expand(self, node: _Node, wants: Sequence[tuple[PackageRef, str]]) -> None:
+        node.declared = {ref.name: None for ref, _ in wants}
+        for ref, raw in wants:
+            self.walked += 1
+            if self.walked > MAX_WALK:
+                raise ResolveLimitExceeded("nodes", self.request.max_nodes)
+            if self._is_ancestor(node, ref.name):
+                self.cycles.append(f"{self._path(node)} -> {ref.name}")
+                continue
+            eclipsing = self._eclipsing(node, ref.name)
+            if eclipsing is not None:
+                self.downgrades.append((node, ref.name, raw))
+                continue
+            try:
+                constraint = _range(raw)
+            except InvalidVersion:
+                self._node_error(node, f"{ref.name} {raw!r} is not a NuGet version range")
+                continue
+            names = [v.version for v in await self.candidates(ref)]
+            best = constraint.best_match(names)
+            version = next((v for v in self.versions[ref.name] if v.version == best), None) if best else None
+            child = _Node(ref.name, ref, raw, constraint, version, node, node.depth + 1)
+            node.children.append(child)
+            node.declared[ref.name] = child
+            if version is None:
+                self._node_error(node, f"no version of {ref.name} matches {raw}")
+                continue
+            deps = await self.dependencies(ref, version)
+            if deps is None:
+                self.errors[(ref.name, version.version)].append(UNKNOWN_DEPENDENCIES)
+                continue
+            await self._expand(child, [(dep.target, dep.constraint) for dep in deps])
+
+    @staticmethod
+    def _is_ancestor(node: _Node, package_id: str) -> bool:
+        current: _Node | None = node
+        while current is not None:
+            if current.package_id == package_id:
+                return True
+            current = current.parent
+        return False
+
+    @staticmethod
+    def _eclipsing(node: _Node, package_id: str) -> _Node | None:
+        """The ancestor (strictly above `node`) that declares `package_id` directly, whose declaration wins."""
+        current = node.parent
+        while current is not None:
+            if package_id in current.declared:
+                return current
+            current = current.parent
         return None
 
-    async def walk(self) -> list[tuple[str, str, str, int]]:
-        """Decide every package level by level; returns the edges (from id or "", to id, range, level)."""
-        edges: list[tuple[str, str, str, int]] = []
-        level_wants: list[tuple[str, PackageRef, str]] = [("", root.ref, root.constraint) for root in self.request.roots]
-        level = 1
-        while level_wants:
-            self._check()
-            by_id: dict[str, list[tuple[str, PackageRef, str]]] = defaultdict(list)
-            for want in level_wants:
-                by_id[want[1].name].append(want)
-            next_wants: list[tuple[str, PackageRef, str]] = []
-            for package_id, wants in sorted(by_id.items()):
-                ranges = []
-                for parent, _, raw in wants:
-                    try:
-                        ranges.append(_range(raw))
-                    except InvalidVersion:
-                        self.errors[parent].append(f"{package_id} {raw!r} is not a NuGet version range")
-                if package_id in self.decided:
-                    decided, _ = self.decided[package_id]
-                    for (parent, _, raw), constraint in zip(wants, ranges):
-                        edges.append((parent, package_id, raw, level))
-                        if constraint.min is not None and _SCHEME.sort_key(decided.version) < _SCHEME.sort_key(constraint.min):
-                            self.graph.warnings.append({
-                                "code": "NU1605", "package": package_id,
-                                "message": f"detected package downgrade: {package_id} from {constraint.min} to "
-                                           f"{decided.version} (a nearer reference wins)"})
-                    continue
-                if not ranges:
-                    continue
-                chosen = await self.choose(wants[0][1], ranges)
-                if chosen is None:
-                    if len(wants) > 1:
-                        raise _Aborted("NU1107", f"version conflict detected for {package_id}: "
-                                                 f"{', '.join(sorted({w[2] for w in wants}))}", package=package_id)
-                    self.errors[wants[0][0]].append(f"no version of {package_id} matches {wants[0][2]}")
-                    continue
-                if len(self.decided) >= self.request.max_nodes:
-                    raise ResolveLimitExceeded("nodes", self.request.max_nodes)
-                self.decided[package_id] = (chosen, level)
-                self.refs[package_id] = wants[0][1]
-                edges.extend((parent, package_id, raw, level) for parent, _, raw in wants)
-                deps = await self.catalog.dependencies(wants[0][1], chosen.version, chosen.registry_id)
-                if deps is None:
-                    self.errors[package_id].append(UNKNOWN_DEPENDENCIES)
-                    continue
-                next_wants.extend((package_id, dep.target, dep.constraint) for dep in deps if self._applies(dep))
-            level_wants = next_wants
-            level += 1
-        return edges
+    @staticmethod
+    def _path(node: _Node) -> str:
+        names: list[str] = []
+        current: _Node | None = node
+        while current is not None and current.ref is not None:
+            names.append(current.package_id)
+            current = current.parent
+        return " -> ".join(reversed(names))
 
-    def _applies(self, dep: NormalizedDependency) -> bool:
-        return dependency_applies(dep, self.env, include_optional=False)
+    def _node_error(self, node: _Node, message: str) -> None:
+        key = (node.package_id, node.version.version) if node.version is not None else ("", "")
+        if message not in self.errors[key]:
+            self.errors[key].append(message)
 
-    async def build(self, edges: list[tuple[str, str, str, int]]) -> None:
-        ids = {package_id: f"n{number}" for number, package_id in
-               enumerate(sorted(self.decided, key=lambda p: (self.decided[p][1], p)), start=1)}
+    # --- 3: cousins ------------------------------------------------------------------------------------------------
+
+    def settle(self) -> tuple[dict[str, CatalogVersion], set[int]]:
+        """Pick the highest version per package among the references still in the graph, drop the losers' subtrees,
+        repeat until stable; returns the winners and the ids (`id()`) of the nodes still in the graph."""
+        rejected: set[int] = set()
+        while True:
+            live = self._live(rejected)
+            winners: dict[str, CatalogVersion] = {}
+            for node in live:
+                if node.version is not None:
+                    best = winners.get(node.package_id)
+                    if best is None or _SCHEME.sort_key(node.version.version) > _SCHEME.sort_key(best.version):
+                        winners[node.package_id] = node.version
+            losers = {id(node) for node in live if node.version is not None
+                      and node.version.version != winners[node.package_id].version}
+            if not losers:
+                return winners, {id(node) for node in live}
+            rejected |= losers
+
+    def _live(self, rejected: set[int]) -> list[_Node]:
+        live: list[_Node] = []
+        stack = list(self.root.children)
+        while stack:
+            node = stack.pop()
+            if id(node) in rejected:
+                continue
+            live.append(node)
+            stack.extend(node.children)
+        return live
+
+    def check(self, winners: dict[str, CatalogVersion], live: set[int]) -> None:
+        """NU1107 for a reference (from a node still in the graph) the winner does not satisfy; NU1605 for a downgrade
+        under a node still in the graph; NU1108 for a cycle."""
+        all_nodes = self._live(set())
+        for node in all_nodes:
+            parent_live = node.parent is self.root or (node.parent is not None and id(node.parent) in live)
+            winner = winners.get(node.package_id)
+            if parent_live and winner is not None and node.constraint is not None \
+                    and not node.constraint.contains(winner.version):
+                raise _Aborted("NU1107", f"version conflict detected for {node.package_id}: {node.raw} "
+                                         f"(from {self._path(node.parent or self.root) or 'the project'}) and "
+                                         f"{winner.version}")
+        for parent, package_id, raw in self.downgrades:
+            if parent is not self.root and id(parent) not in live:
+                continue
+            winner = winners.get(package_id)
+            try:
+                constraint = _range(raw)
+            except InvalidVersion:
+                continue
+            if winner is not None and constraint.min is not None \
+                    and _SCHEME.sort_key(winner.version) < _SCHEME.sort_key(constraint.min):
+                raise _Aborted("NU1605", f"detected package downgrade: {package_id} from {constraint.min} to "
+                                         f"{winner.version} (reference from {self._path(parent) or 'the project'})")
+        if self.cycles:
+            raise _Aborted("NU1108", f"cycle detected: {self.cycles[0]}")
+
+    def build(self, winners: dict[str, CatalogVersion], live: set[int]) -> None:
+        nodes = [n for n in self._live(set()) if id(n) in live and n.version is not None]
+        depth: dict[str, int] = {}
+        refs: dict[str, PackageRef] = {}
+        for node in nodes:
+            depth[node.package_id] = min(depth.get(node.package_id, 10**9), node.depth)
+            refs[node.package_id] = node.ref or PackageRef("nuget", "", node.package_id)
+        ids = {pid: f"n{n}" for n, pid in enumerate(sorted(winners, key=lambda p: (depth.get(p, 0), p)), start=1)}
         roots = {root.ref.name for root in self.request.roots}
-        for package_id, (version, level) in sorted(self.decided.items(), key=lambda item: ids[item[0]]):
+        for package_id, version in sorted(winners.items(), key=lambda item: ids[item[0]]):
             latest = None
             if package_id in roots:
                 stable = [v.version for v in self.versions.get(package_id, [])
                           if v.status == "active" and not _SCHEME.is_prerelease(v.version)]
                 latest = max(stable, key=_SCHEME.sort_key) if stable else None
             self.graph.nodes.append(ResolvedNode(
-                id=ids[package_id], ref=self.refs[package_id], version=version.version,
-                registry_slug=version.registry_slug, depth=level, errors=list(self.errors.get(package_id, [])),
+                id=ids[package_id], ref=refs[package_id], version=version.version, registry_slug=version.registry_slug,
+                depth=depth.get(package_id, 1), errors=list(self.errors.get((package_id, version.version), [])),
                 latest_compatible=latest))
-        for parent, child, raw, _ in edges:
-            if child in ids and (parent == "" or parent in ids):
-                self.graph.edges.append(ResolvedEdge(source=ids[parent] if parent else "root", target=ids[child],
-                                                     constraint=raw, dependency_type="runtime"))
-        for message in self.errors.get("", []):
+        seen: set[tuple[str, str]] = set()
+        for node in nodes:
+            source = "root" if node.parent is self.root else ids.get(node.parent.package_id, "") if node.parent else ""
+            if source and (source, ids[node.package_id]) not in seen:
+                seen.add((source, ids[node.package_id]))
+                self.graph.edges.append(ResolvedEdge(source=source, target=ids[node.package_id], constraint=node.raw,
+                                                     dependency_type="runtime"))
+        for message in self.errors.get(("", ""), []):
             self.graph.warnings.append({"code": "unresolvable", "message": message})
-
-
-def _valid(version: str) -> bool:
-    try:
-        _SCHEME.validate(version)
-    except InvalidVersion:
-        return False
-    return True
 
 
 class NuGetResolver:
@@ -186,20 +292,21 @@ class NuGetResolver:
     async def resolve(self, request: ResolveRequest, catalog: CatalogAccess) -> ResolveGraph:
         state = _Resolve(request, catalog)
         try:
-            edges = await state.walk()
-            missing = [r.ref.name for r in request.roots if r.ref.name not in state.decided
-                       and not state.versions.get(r.ref.name)]
+            await state.walk()
+            missing = [r.ref.name for r in request.roots if not state.versions.get(r.ref.name)]
             if missing:
                 state.graph.error = {"code": "not_found", "packages": missing,
                                      "message": f"no source of the profile has {', '.join(missing)}"}
                 return state.graph
-            await state.build(edges)
+            winners, live = state.settle()
+            state.build(winners, live)
+            state.check(winners, live)
         except ResolveLimitExceeded as exc:
             state.graph.error = {"code": "resolve_limit_exceeded", "message": str(exc), "limit": exc.limit,
                                  "value": exc.value, "packages_seen": len(state.versions), "lazy_fetches": state.fetches}
         except _Aborted as exc:
-            state.graph.error = {"code": exc.code, "message": str(exc), "packages_seen": len(state.versions),
-                                 **exc.details}
+            # The graph stays: NuGet writes the assets file of a failed restore too.
+            state.graph.error = {"code": exc.code, "message": str(exc), "packages_seen": len(state.versions)}
         except Exception as exc:  # noqa: BLE001 - an upstream or database failure ends the resolve, not the request
             state.graph.error = {"code": "upstream_error", "message": f"{type(exc).__name__}: {exc}",
                                  "packages_seen": len(state.versions)}

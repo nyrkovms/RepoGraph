@@ -72,6 +72,10 @@ class NuGetCatalogChangesDetector:
         async with make_client(TIMEOUT_SECONDS) as client:
             index = await client.get(self.catalog_url)
             index.raise_for_status()
+            # A commit spanning pages may still be written past the index's own commitTimeStamp: stop there.
+            committed = _timestamp(index.json().get("commitTimeStamp"))
+            if committed is not None and committed < started:
+                started = committed
             pages = sorted(
                 ((stamp, str(page["@id"])) for page in index.json().get("items") or []
                  if isinstance(page, dict) and (stamp := _timestamp(page.get("commitTimeStamp"))) is not None

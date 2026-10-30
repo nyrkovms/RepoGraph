@@ -153,6 +153,14 @@ def _resources(*pairs: tuple[str, str]) -> dict:
     return {"version": "3.0.0", "resources": [{"@id": url, "@type": kind} for kind, url in pairs]}
 
 
+
+@pytest.fixture(autouse=True)
+def _fresh_service_indexes():
+    """The service index is shared across adapters of a feed (an hour): every test starts without it."""
+    v3._SERVICE_INDEXES.clear()
+    yield
+    v3._SERVICE_INDEXES.clear()
+
 # --- the service index ---------------------------------------------------------------------------------------------
 
 
@@ -777,3 +785,21 @@ def test_package_fields_come_from_the_newest_listed_release_not_a_preview() -> N
     assert _newest(entries) == entries[0]
     assert _newest(entries[1:]) == entries[1]           # previews only: the newest listed one
     assert _newest([entries[2]]) == entries[2]          # nothing listed: the newest at all
+
+
+def test_adapters_of_one_feed_share_the_service_index(serve) -> None:
+    upstream = serve({f"{REGISTRATIONS}newtonsoft.json/index.json": _ok("registration-newtonsoft-json.json")})
+    asyncio.run(_adapter().exists(_ref("newtonsoft.json")))
+    asyncio.run(_adapter().exists(_ref("newtonsoft.json")))
+    assert upstream.urls.count(INDEX) == 1
+
+
+def test_a_feed_without_etags_is_compared_by_content(serve) -> None:
+    import hashlib
+
+    body = _text("registration-newtonsoft-json.json").encode()
+    serve({f"{REGISTRATIONS}newtonsoft.json/index.json": httpx.Response(200, content=body)})
+    package = TrackedPackage(ref=_ref("newtonsoft.json"), package_id="p", revision=hashlib.sha256(body).hexdigest(),
+                             etag=None, unavailable=False)
+    result = asyncio.run(NuGetEtagChangeDetector(_adapter()).detect([package], {}))
+    assert result.changed == [] and result.missing == []
