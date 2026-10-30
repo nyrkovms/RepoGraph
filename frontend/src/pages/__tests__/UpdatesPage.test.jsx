@@ -104,7 +104,7 @@ describe("UpdatesPage", () => {
   it("renders last run, totals, versions and badges", async () => {
     renderPage();
 
-    expect(await screen.findByRole("link", { name: "flask" })).toHaveAttribute("href", "/package/flask");
+    expect(await screen.findByRole("link", { name: "flask" })).toHaveAttribute("href", "/package/pypi/flask");
     expect(screen.getByText(/Data as of/)).toBeInTheDocument();
 
     const totals = screen.getByLabelText("Totals");
@@ -207,5 +207,17 @@ describe("UpdatesPage", () => {
       })
     );
     expect(screen.getByText(/occurred/)).toBeInTheDocument();
+  });
+});
+
+describe("UpdatesPage links by ecosystem", () => {
+  it("links an npm entry to its npm package page", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      packages: [{ ...SUMMARY.packages[0], ecosystem: "npm", name: "core", purl: "pkg:npm/%40angular/core" }],
+    });
+    renderPage();
+    const link = await screen.findByRole("link", { name: "@angular/core" });
+    expect(link).toHaveAttribute("href", "/package/npm/%40angular/core");
   });
 });

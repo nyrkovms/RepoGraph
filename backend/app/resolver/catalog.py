@@ -22,7 +22,7 @@ from app.ecosystems.base import (
 )
 from app.fetcher.discovery import NegativeCache
 from app.fetcher.pipeline import dependency_from_row, find_package, source_dependencies, sync_package
-from app.models.artifact import Artifact
+from app.models.artifact import Artifact, DistTag
 from app.models.enums import PackageOrigin
 from app.models.package_registry import PackageRegistry
 from app.models.version import PackageVersion
@@ -51,7 +51,8 @@ class DbCatalog:
         registries = await visibility.visible_registries(self.db, self.plugin, ref, package.id, profile)
         rows = (
             await self.db.execute(
-                select(PackageVersion.id, PackageVersion.version, PackageVersion.engines)
+                select(PackageVersion.id, PackageVersion.version, PackageVersion.engines, PackageVersion.deprecation,
+                       PackageVersion.raw_metadata.has_key("bundleDependencies").label("bundled"))
                 .where(PackageVersion.package_id == package.id, visibility.visible_clause(registries))
             )
         ).all()
@@ -69,6 +70,10 @@ class DbCatalog:
             ).all():
                 files.setdefault((version_id, str(registry_id)), []).append(filename)
 
+        tags: dict[str, tuple[str, ...]] = {}
+        for tag, version in (await self.db.execute(
+                select(DistTag.tag, DistTag.version).where(DistTag.package_id == package.id))).all():
+            tags[version] = (*tags.get(version, ()), tag)
         result = []
         for row in rows:
             registry = chosen.get(row.id)
@@ -83,6 +88,9 @@ class DbCatalog:
                     status=cast(VersionStatus, status.value),
                     engines={k: str(v) for k, v in (row.engines or {}).items()},
                     artifacts=files.get((row.id, registry.id), []),
+                    tags=tags.get(row.version, ()),
+                    deprecated=row.deprecation is not None,
+                    bundled=bool(row.bundled),
                 )
             )
         return result

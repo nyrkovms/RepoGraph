@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"1e06736734002ad46c8fb4363badb304\"",
+    "last-modified": "Wed, 18 Sep 2024 05:34:04 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/fsevents"
+  },
+  "status": 200
+}

@@ -1,0 +1,13 @@
+{
+  "headers": {
+    "content-type": "application/json"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/cookie/0.7.2"
+  },
+  "status": 200
+}

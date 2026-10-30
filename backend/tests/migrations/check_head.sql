@@ -108,3 +108,15 @@ BEGIN
   IF (SELECT run_id FROM package_events WHERE kind = 'release_added') <> md5('run:1')::uuid THEN RAISE EXCEPTION '0007: event run_id'; END IF;
   RAISE NOTICE 'ok: 0007 contract';
 END $$;
+
+-- 0008: the npm starter source (IMPL R4).
+DO $$
+BEGIN
+  IF (SELECT protocol::text || '/' || priority || '/' || enabled || '/' || (config->>'changes_url')
+      FROM registries WHERE slug = 'npmjs') <> 'npm-registry/0/true/https://replicate.npmjs.com/registry/' THEN
+    RAISE EXCEPTION '0008: npmjs source'; END IF;
+  IF (SELECT count(*) FROM source_profile_registries spr JOIN source_profiles sp ON sp.id = spr.profile_id
+      JOIN registries r ON r.id = spr.registry_id WHERE sp.ecosystem = 'npm' AND sp.is_default AND r.slug = 'npmjs') <> 1 THEN
+    RAISE EXCEPTION '0008: default npm profile'; END IF;
+  RAISE NOTICE 'ok: 0008 npm starter source';
+END $$;

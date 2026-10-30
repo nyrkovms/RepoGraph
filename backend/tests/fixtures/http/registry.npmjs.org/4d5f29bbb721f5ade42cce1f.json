@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"581a33512765b55950aa731f711e4164\"",
+    "last-modified": "Wed, 11 Dec 2024 04:53:20 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/side-channel-map"
+  },
+  "status": 200
+}

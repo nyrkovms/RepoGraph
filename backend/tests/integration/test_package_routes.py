@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -86,9 +86,9 @@ def test_purl_redirects_to_the_canonical_path(client: TestClient) -> None:
     ("path", "status"),
     [
         ("/api/v1/purl/pkg:cocoapods/x", 404),          # no ecosystem for the type
-        ("/api/v1/purl/pkg:npm/left-pad", 404),         # ecosystem without a plugin yet
+        ("/api/v1/purl/pkg:golang/github.com/a/b", 404),   # ecosystem without a plugin yet
         ("/api/v1/purl/flask", 422),                    # not a purl
-        ("/api/v1/packages/npm/left-pad/-/", 404),
+        ("/api/v1/packages/go/github.com/a/b/-/", 404),
         ("/api/v1/packages/rubygems/rails/-/", 404),
         ("/api/v1/packages/pypi/flask/-/versions/0.0.0.does-not-exist", 404),
         ("/api/v1/packages/pypi/flask/-/versions?profile=no-such-profile", 404),
@@ -288,5 +288,47 @@ def test_tree_takes_the_variant_of_the_source_where_the_version_is_active() -> N
         response = await routes.get_dependencies_tree("pypi", root, "1.0", db, profile=await _profile(db, (mirror, None), (pypi, None)),
                                                       depth=1, include_optional=False, python_version=None, os=None)
         assert [n.name for n in response.dependencies] == [child]
+
+    _in_rolled_back_transaction(check)
+
+
+def test_npm_tree_follows_the_npm_environment() -> None:
+    npm = pipeline.plugin_for("npm")
+
+    def dep(name: str, kind: str, **details: object) -> NormalizedDependency:
+        return NormalizedDependency(target=PackageRef(ecosystem="npm", namespace="", name=name), constraint="^1.0.0",
+                                    dependency_type=kind, raw_spec=f"{name}@^1.0.0",  # type: ignore[arg-type]
+                                    details=details or None)
+
+    async def check(db: AsyncSession, pypi: Registry, mirror: Registry) -> None:
+        npmjs = await db.scalar(select(Registry).where(Registry.slug == "npmjs"))
+        scope, child, native, peer = _name(), _name(), _name(), _name()
+
+        async def write(ref: PackageRef, version: NormalizedVersion) -> None:
+            snapshot = NormalizedPackage(ref=ref, registry_id=str(npmjs.id), display_name=ref.name, revision="1",
+                                         versions=[version])
+            await pipeline.write_package(db, npm, [snapshot], missing_registry_ids=(), origin=PackageOrigin.seed)
+            await db.flush()
+
+        def bare(name: str) -> PackageRef:
+            return PackageRef(ecosystem="npm", namespace="", name=name)
+
+        await write(bare(child), NormalizedVersion(version="1.0.0", status="active"))
+        await write(bare(native), NormalizedVersion(version="1.2.0", status="active", engines={"os": "darwin"}))
+        await write(bare(peer), NormalizedVersion(version="1.0.0", status="active"))
+        await write(PackageRef(ecosystem="npm", namespace=scope, name="root"), NormalizedVersion(
+            version="1.0.0", status="active",
+            dependencies=[dep(child, "runtime"), dep(native, "optional"), dep(peer, "peer", optional=True)]))
+
+        async def tree(os: str, include_optional: bool) -> tuple[str, list[str]]:
+            response = await routes.get_dependencies_tree(
+                "npm", f"@{scope}/root", "1.0.0", db, profile=None, depth=1, include_optional=include_optional,
+                python_version=None, os=os, node_version=None, cpu=None)
+            return response.package, [node.name for node in response.dependencies]
+
+        # The optional dependency is for darwin only: npm skips it elsewhere; an optional peer is never installed.
+        assert await tree("linux", include_optional=True) == (f"@{scope}/root", [child])
+        assert await tree("darwin", include_optional=True) == (f"@{scope}/root", [child, native])
+        assert await tree("darwin", include_optional=False) == (f"@{scope}/root", [child])
 
     _in_rolled_back_transaction(check)

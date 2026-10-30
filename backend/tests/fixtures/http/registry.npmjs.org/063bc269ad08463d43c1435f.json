@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"4a24edcada6222b9a70f2e2880a0dcbb\"",
+    "last-modified": "Thu, 22 Oct 2026 11:39:40 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/body-parser"
+  },
+  "status": 200
+}

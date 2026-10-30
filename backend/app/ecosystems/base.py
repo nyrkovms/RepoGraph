@@ -258,9 +258,14 @@ class TrackedPackage:
     unavailable: bool
 
 
+CHANGED_SINCE = "not:"   # ChangeSet.changed revision prefix
+
+
 @dataclass(slots=True)
 class ChangeSet:
-    changed: list[tuple[TrackedPackage, str | None]]   # with the revision the source reports
+    # With the revision the source reports, or "not:<revision>" when a feed only says the package changed since the
+    # stored revision (npm `_changes` gives CouchDB revs, not ETags): an answer still at <revision> is a lagging CDN.
+    changed: list[tuple[TrackedPackage, str | None]]
     missing: list[TrackedPackage]
     cursor: Mapping[str, object]                       # new sync_states.cursor_data
     reconcile_all: bool = False                        # feed lost (npm seq reset): check every package conditionally
@@ -310,6 +315,7 @@ class ResolvedNode:
     depth: int
     errors: list[str] = field(default_factory=list)   # node-level problems: unknown dependencies, unresolvable requirement
     latest_compatible: str | None = None   # newest version usable in the environment, ignoring the constraint (R2)
+    details: Mapping[str, object] = field(default_factory=dict)   # npm: {"bundled": true}
 
 
 @dataclass(slots=True)
@@ -352,6 +358,9 @@ class CatalogVersion:
     status: VersionStatus                  # the best status among the visible sources publishing it
     engines: Mapping[str, str] | None = None
     artifacts: Sequence[str] = ()          # file names in that source (PyPI wheel tags name the platforms)
+    tags: Sequence[str] = ()               # dist-tags pointing at it (npm `latest` decides the version picked)
+    deprecated: bool = False
+    bundled: bool = False                  # npm bundleDependencies: inside the tarball, not resolved from a registry
 
 
 class CatalogAccess(Protocol):

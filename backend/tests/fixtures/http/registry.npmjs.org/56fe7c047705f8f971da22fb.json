@@ -1,0 +1,13 @@
+{
+  "headers": {
+    "content-type": "application/json"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/iconv-lite/0.4.24"
+  },
+  "status": 200
+}

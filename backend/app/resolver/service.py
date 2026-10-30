@@ -80,7 +80,7 @@ async def resolve_graph(db: AsyncSession, payload: GraphResolveRequest) -> Graph
                 id=node.id, purl=plugin.coordinates.to_purl(node.ref, node.version),
                 name=plugin.coordinates.display(node.ref), version=node.version, registry=node.registry_slug,
                 depth=node.depth, root=node.id in root_ids, hidden=node.id in hidden,
-                latest_compatible=node.latest_compatible, errors=list(node.errors),
+                latest_compatible=node.latest_compatible, errors=list(node.errors), details=dict(node.details),
             )
             for node in graph.nodes
         ],
@@ -283,6 +283,10 @@ async def _profile(db: AsyncSession, ecosystem: str, slug: str | None) -> Source
     return profile
 
 
+# How a range pins one version where it is not PEP 440's `==` (a bare version is an exact range in node-semver).
+_PIN = {"npm": "{}"}
+
+
 def _root(plugin: EcosystemPlugin, ecosystem: str, purl: str, constraint: str, extras: Sequence[str]) -> ResolveRoot:
     """A root by purl; a version in the purl pins it when no constraint is given."""
     try:
@@ -292,7 +296,7 @@ def _root(plugin: EcosystemPlugin, ecosystem: str, purl: str, constraint: str, e
     if ref.ecosystem != ecosystem:
         raise ResolveInvalidRequest(f"root {purl!r} is not in ecosystem {ecosystem!r}")
     if version and constraint in ("", "*"):
-        constraint = f"=={version}"
+        constraint = _PIN.get(ecosystem, "=={}").format(version)
     return ResolveRoot(ref=ref, constraint=_constraint(plugin, constraint), extras=tuple(extras))
 
 

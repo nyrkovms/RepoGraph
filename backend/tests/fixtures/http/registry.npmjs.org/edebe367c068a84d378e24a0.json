@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"bc2b9dbc5a9a2463b3f871f344829d02\"",
+    "last-modified": "Mon, 27 Jun 2022 07:24:38 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/to-regex-range"
+  },
+  "status": 200
+}

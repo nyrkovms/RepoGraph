@@ -1,0 +1,14 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "last-modified": "Fri, 30 Oct 2026 07:53:06 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/path-to-regexp/0.1.13"
+  },
+  "status": 200
+}

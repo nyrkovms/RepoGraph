@@ -1,0 +1,31 @@
+{
+  "tool": "npm 10.8.2",
+  "command": [
+    "npm",
+    "install",
+    "--package-lock-only"
+  ],
+  "generated_at": "2026-10-29T17:30:54.255Z",
+  "install": [
+    {
+      "name": "js-tokens",
+      "version": "4.0.0"
+    },
+    {
+      "name": "loose-envify",
+      "version": "1.4.0"
+    },
+    {
+      "name": "react-dom",
+      "version": "18.3.1"
+    },
+    {
+      "name": "react",
+      "version": "18.3.1"
+    },
+    {
+      "name": "scheduler",
+      "version": "0.23.2"
+    }
+  ]
+}

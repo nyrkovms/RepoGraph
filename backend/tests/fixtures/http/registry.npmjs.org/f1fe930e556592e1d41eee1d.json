@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"d50f5e17077a1d2a85a9eac1f48d3418\"",
+    "last-modified": "Sat, 11 Jul 2026 11:42:52 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/gopd"
+  },
+  "status": 200
+}

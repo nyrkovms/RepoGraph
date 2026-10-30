@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"baa7941074ce23249a9f605c2be7968e\"",
+    "last-modified": "Tue, 30 Jun 2026 22:15:15 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/cookie"
+  },
+  "status": 200
+}

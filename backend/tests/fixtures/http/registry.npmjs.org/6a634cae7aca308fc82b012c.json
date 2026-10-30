@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"5c220e662c51657cbbb7574e9600d8fd\"",
+    "last-modified": "Thu, 22 Oct 2026 18:22:18 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/path-to-regexp"
+  },
+  "status": 200
+}

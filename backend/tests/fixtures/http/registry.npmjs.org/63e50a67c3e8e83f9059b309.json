@@ -1,0 +1,13 @@
+{
+  "headers": {
+    "content-type": "application/json"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/mime-types/2.1.35"
+  },
+  "status": 200
+}

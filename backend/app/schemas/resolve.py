@@ -115,6 +115,7 @@ class GraphNode(BaseModel):
     hidden: bool = False
     latest_compatible: str | None = None
     errors: list[str] = Field(default_factory=list)
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class GraphEdge(BaseModel):

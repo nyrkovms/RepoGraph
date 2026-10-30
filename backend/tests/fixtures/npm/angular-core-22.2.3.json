@@ -1,0 +1,140 @@
+{
+ "bugs": {
+  "url": "https://github.com/angular/angular/issues"
+ },
+ "dist": {
+  "shasum": "7d150456dca4eeb2b2dfbecba85a20f717376b0f",
+  "tarball": "https://registry.npmjs.org/@angular/core/-/core-22.2.3.tgz",
+  "fileCount": 107,
+  "integrity": "sha512-ponarFrAZsPutT+htRt3PEmkt2/IB7DyrBy2f48sxsIx3ZA6xw09i2HOEBo+VBphlN6B/ynK9q+o04HPhdJ+dQ==",
+  "unpackedSize": 7058784
+ },
+ "name": "@angular/core",
+ "type": "module",
+ "author": {
+  "name": "angular"
+ },
+ "module": "./fesm2022/core.mjs",
+ "angular": {
+  "bestPractices": {
+   "path": "./resources/best-practices.md",
+   "format": "markdown"
+  }
+ },
+ "engines": {
+  "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
+ },
+ "exports": {
+  ".": {
+   "types": "./types/core.d.ts",
+   "default": "./fesm2022/core.mjs"
+  },
+  "./testing": {
+   "types": "./types/testing.d.ts",
+   "default": "./fesm2022/testing.mjs"
+  },
+  "./package.json": {
+   "default": "./package.json"
+  },
+  "./rxjs-interop": {
+   "types": "./types/rxjs-interop.d.ts",
+   "default": "./fesm2022/rxjs-interop.mjs"
+  },
+  "./schematics/*": {
+   "default": "./schematics/*.js"
+  },
+  "./primitives/di": {
+   "types": "./types/primitives-di.d.ts",
+   "default": "./fesm2022/primitives-di.mjs"
+  },
+  "./primitives/signals": {
+   "types": "./types/primitives-signals.d.ts",
+   "default": "./fesm2022/primitives-signals.mjs"
+  },
+  "./primitives/event-dispatch": {
+   "types": "./types/primitives-event-dispatch.d.ts",
+   "default": "./fesm2022/primitives-event-dispatch.mjs"
+  },
+  "./event-dispatch-contract.min.js": {
+   "default": "./event-dispatch-contract.min.js"
+  }
+ },
+ "gitHead": "ec3bef4616cbd95e3c338bc96ce47831fdfb211c",
+ "license": "MIT",
+ "typings": "./types/core.d.ts",
+ "_npmUser": {
+  "name": "google-wombot",
+  "email": "node-team-npm+wombot@google.com"
+ },
+ "homepage": "https://github.com/angular/angular#readme",
+ "ng-update": {
+  "migrations": "./schematics/migrations.json",
+  "packageGroup": [
+   "@angular/core",
+   "@angular/bazel",
+   "@angular/common",
+   "@angular/compiler",
+   "@angular/compiler-cli",
+   "@angular/animations",
+   "@angular/elements",
+   "@angular/platform-browser",
+   "@angular/platform-browser-dynamic",
+   "@angular/forms",
+   "@angular/platform-server",
+   "@angular/upgrade",
+   "@angular/router",
+   "@angular/language-service",
+   "@angular/localize",
+   "@angular/service-worker"
+  ]
+ },
+ "repository": {
+  "url": "git+https://github.com/angular/angular.git",
+  "type": "git",
+  "directory": "packages/core"
+ },
+ "schematics": "./schematics/collection.json",
+ "_npmVersion": "11.19.0",
+ "description": "Angular - the core framework",
+ "directories": {},
+ "maintainers": [
+  {
+   "name": "angular",
+   "email": "devops+npm@angular.io"
+  },
+  {
+   "name": "google-wombot",
+   "email": "node-team-npm+wombot@google.com"
+  }
+ ],
+ "sideEffects": false,
+ "_nodeVersion": "24.21.0",
+ "dependencies": {
+  "tslib": "^2.3.0"
+ },
+ "_hasShrinkwrap": false,
+ "devDependencies": {
+  "@mcp-b/webmcp-types": "^5.0.0",
+  "@mcp-b/webmcp-polyfill": "^5.0.0",
+  "@modelcontextprotocol/server": "^2.0.0"
+ },
+ "peerDependencies": {
+  "rxjs": "^6.5.3 || ^7.4.0",
+  "zone.js": "~0.15.0 || ~0.16.0",
+  "@angular/compiler": "22.2.3"
+ },
+ "peerDependenciesMeta": {
+  "zone.js": {
+   "optional": true
+  },
+  "@angular/compiler": {
+   "optional": true
+  }
+ },
+ "_npmOperationalInternal": {
+  "tmp": "tmp/core_22.2.3_1792021295581_0.5092544426148593",
+  "host": "s3://npm-registry-packages-npm-production"
+ },
+ "_id": "@angular/core@22.2.3",
+ "version": "22.2.3"
+}

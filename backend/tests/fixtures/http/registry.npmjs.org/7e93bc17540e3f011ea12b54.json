@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"cf594403471ff60e12c021b415ab5b14\"",
+    "last-modified": "Mon, 03 Mar 2025 17:50:05 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/call-bound"
+  },
+  "status": 200
+}

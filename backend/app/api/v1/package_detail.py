@@ -17,12 +17,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.packages import _decode_cursor_or_422
 from app.db import get_db_session
 from app.ecosystems import purl as purls
+from app.ecosystems.npm.environment import NpmEnvironment
+from app.ecosystems.npm.environment import version_allows as npm_version_allows
 from app.ecosystems.base import EcosystemPlugin, PackageRef, RegistryConfig, SourceProfile
 from app.ecosystems.registry import UnknownEcosystem, get_plugin
 from app.fetcher import sources
 from app.fetcher.lazy import LazyFetcher
 from app.fetcher.pipeline import (
     UNAVAILABLE_DIGEST,
+    dependency_from_row,
     find_package,
     resolve_dependency_links,
     select_best_version,
@@ -244,12 +247,22 @@ async def get_dependencies_tree(
     include_optional: bool = Query(default=False),
     python_version: str | None = Query(default=None),
     os: str | None = Query(default=None),
+    node_version: str | None = Query(default=None),
+    cpu: str | None = Query(default=None),
 ) -> DependencyTreeResponse:
+    """The tree in the ecosystem's environment: PyPI `python_version`/`os` (markers), npm `node_version`/`os`/`cpu`
+    (optional dependencies whose version does not fit the platform are left out, as npm does)."""
     target = await _target(db, ecosystem, coordinates)
     version_row = await _version(db, target, version)
     view = _ProfileView(db, await _profile(db, ecosystem, profile))
 
-    env = _build_marker_environment(python_version=python_version, os_name=os)
+    env = None
+    if target.plugin.ecosystem == "npm":
+        npm_env = target.plugin.parse_environment({"node_version": node_version, "os": os, "cpu": cpu})
+        view.npm_env = npm_env if isinstance(npm_env, NpmEnvironment) else NpmEnvironment()
+        view.plugin = target.plugin
+    else:
+        env = _build_marker_environment(python_version=python_version, os_name=os)
     fetcher = LazyFetcher(db=db)
     max_depth = depth or FULL_TREE_MAX_DEPTH
     nodes = await _build_tree_for_version(
@@ -268,7 +281,7 @@ async def get_dependencies_tree(
     await db.commit()
 
     return DependencyTreeResponse(
-        package=target.package.normalized_name,
+        package=target.display,
         version=version,
         profile=view.profile.slug,
         depth=_measure_tree_depth(nodes),
@@ -323,7 +336,7 @@ async def list_vulnerabilities(
     ).scalars().all()
 
     return VulnerabilityListResponse(
-        package=target.package.normalized_name,
+        package=target.display,
         data=[
             VulnerabilityItem(
                 source=row.source.value,
@@ -372,7 +385,8 @@ async def get_dependencies_tree_alias(
     os: str | None = Query(default=None),
 ) -> DependencyTreeResponse:
     return await get_dependencies_tree("pypi", name, ver, db, profile=None, depth=depth,
-                                       include_optional=include_optional, python_version=python_version, os=os)
+                                       include_optional=include_optional, python_version=python_version, os=os,
+                                       node_version=None, cpu=None)
 
 
 @router.get("/packages/pypi/{name}/versions/{ver}/artifacts", response_model=ArtifactListResponse, deprecated=True)
@@ -547,6 +561,8 @@ class _ProfileView:
     _registries: dict[object, list[RegistryConfig]] = field(default_factory=dict)
     _active: dict[object, list[tuple[str, object]]] = field(default_factory=dict)
     unknown: set[object] = field(default_factory=set)   # versions whose dependencies are unknown
+    npm_env: NpmEnvironment | None = None                 # set for npm: platform rules instead of PEP 508 markers
+    plugin: EcosystemPlugin | None = None                 # with npm_env: decides which dependencies apply
 
     async def registries(self, package: Package) -> list[RegistryConfig]:
         if package.id not in self._registries:
@@ -626,9 +642,13 @@ async def _build_tree_for_version(
     for dep in deps:
         current_level_include_optional = include_optional and expand_optional_at_current_level
 
-        if not _dependency_type_allowed(dep.dependency_type, include_optional=current_level_include_optional):
+        if view.npm_env is not None and view.plugin is not None:
+            # npm installs optional dependencies at every level and (npm >= 7) peers that are not optional.
+            if not view.plugin.dependency_applies(dependency_from_row(dep), view.npm_env, include_optional):
+                continue
+        elif not _dependency_type_allowed(dep.dependency_type, include_optional=current_level_include_optional):
             continue
-        if not _tree_marker_applies(dep.environment_markers, env, include_optional=current_level_include_optional):
+        elif not _tree_marker_applies(dep.environment_markers, env, include_optional=current_level_include_optional):
             continue
         visible_deps.append(dep)
 
@@ -649,6 +669,9 @@ async def _build_tree_for_version(
 
         if child_package and resolved_version_id:
             resolved = await db.scalar(select(PackageVersion).where(PackageVersion.id == resolved_version_id))
+            if resolved and view.npm_env is not None and dep.dependency_type == DependencyType.optional \
+                    and not npm_version_allows(resolved.engines, view.npm_env):
+                continue   # not for this platform: npm skips it without an error
             if resolved:
                 resolved_version = resolved.version
                 resolved_key = str(resolved.id)

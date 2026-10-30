@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"e94aaa5fa607b2db1fc84a97912b27cd\"",
+    "last-modified": "Mon, 08 Jun 2026 20:34:48 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/side-channel"
+  },
+  "status": 200
+}

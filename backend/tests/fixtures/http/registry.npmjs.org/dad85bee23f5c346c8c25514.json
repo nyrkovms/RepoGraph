@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"488e2a360e53c8c0eafd527c976f82c5\"",
+    "last-modified": "Mon, 08 Dec 2025 21:09:56 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/js-tokens"
+  },
+  "status": 200
+}

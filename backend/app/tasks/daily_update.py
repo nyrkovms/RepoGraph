@@ -18,7 +18,7 @@ from app.celery_app import celery_app
 from app.config import get_settings
 from app.connectors.base import PackageNotFound
 from app.db import loop_local_session, loop_local_sessionmaker
-from app.ecosystems.base import PackageRef, RegistryConfig, TrackedPackage
+from app.ecosystems.base import CHANGED_SINCE, PackageRef, RegistryConfig, TrackedPackage
 from app.ecosystems.registry import registered
 from app.fetcher import discovery, sources
 from app.fetcher.pipeline import load_builtin_plugins, mark_unavailable, plugin_for, sync_package
@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 OPERATION = "daily_update"
 _OUTCOMES = ("updated", "stale", "unavailable", "failed")
+PENDING = "pending"   # cursor key: package ids still stale at the end of a run
 
 
 @dataclass(slots=True)
@@ -43,6 +44,7 @@ class _Work:
     package_id: object
     ref: PackageRef
     expected: dict[str, str | None] = field(default_factory=dict)
+    pending: bool = False   # only here because it was still stale at the end of the last run
 
 
 async def _tracked(db: AsyncSession, registry: RegistryConfig) -> list[TrackedPackage]:
@@ -65,9 +67,14 @@ async def _tracked(db: AsyncSession, registry: RegistryConfig) -> list[TrackedPa
 
 
 def is_stale(expected: str | None, stored: str | None) -> bool:
-    """A source answered with an older revision than its change feed announced: PyPI JSON is served through a CDN
-    and may lag behind the index right after a release. Only numeric revisions (serials) are comparable."""
-    if expected is None or stored is None or not (expected.isdigit() and stored.isdigit()):
+    """A source answered with an older revision than its change feed announced: PyPI JSON and npm packuments are
+    served through a CDN and may lag behind the feed right after a release. Numeric revisions (serials) compare by
+    value; "not:<revision>" (a feed that only knows the package changed) is stale while the answer is still that."""
+    if expected is None or stored is None:
+        return False
+    if expected.startswith(CHANGED_SINCE):
+        return stored == expected[len(CHANGED_SINCE):]
+    if not (expected.isdigit() and stored.isdigit()):
         return False
     return int(stored) < int(expected)
 
@@ -156,12 +163,33 @@ async def _detect(db: AsyncSession, registries: list[RegistryConfig]) -> tuple[d
             # The feed was lost (npm seq reset): every package of the source is checked.
             for package in tracked:
                 work.setdefault(package.package_id, _Work(package.package_id, package.ref))
+        # Still stale at the end of the last run: a feed cursor has moved past them, so they would wait for the
+        # weekly check. They get one more run.
+        pending = set(cursors.get(registry.id, {}).get(PENDING) or ())
+        for package in tracked:
+            if package.package_id in pending and package.package_id not in work:
+                work[package.package_id] = _Work(package.package_id, package.ref, pending=True, expected={
+                    registry.id: f"{CHANGED_SINCE}{package.revision}"} if package.revision else {})
         new_cursors[registry.id] = changes.cursor
         per_registry[registry.slug] = {
             "status": "ok", "tracked": len(tracked), "changed": len(changes.changed), "missing": len(changes.missing),
             "cursor": dict(changes.cursor),
         }
     return work, per_registry, new_cursors, len(checked)
+
+
+def _carry_over(cursors: dict[str, Mapping[str, object]], stale: list[_Work]) -> None:
+    """Remember the packages still stale in the cursors of the sources that announced them, for the next run."""
+    pending: dict[str, list[str]] = {}
+    for work in stale:
+        if work.pending:
+            logger.warning("Daily update: %s is still stale after another run, left for the full check", work.ref.name)
+            continue
+        for registry_id in work.expected:
+            pending.setdefault(registry_id, []).append(str(work.package_id))
+    for registry_id, ids in pending.items():
+        if registry_id in cursors:
+            cursors[registry_id] = {**cursors[registry_id], PENDING: sorted(ids)}
 
 
 async def _save_cursors(db: AsyncSession, cursors: Mapping[str, Mapping[str, object]]) -> None:
@@ -204,6 +232,7 @@ async def run_ecosystem(ecosystem: str) -> dict:
                 retry = await _update_many(make_session, results["stale"], run_id, concurrency)
                 if retry["stale"]:
                     logger.warning("Daily update: %s packages still stale, next run picks them up", len(retry["stale"]))
+                    _carry_over(cursors, retry["stale"])
                 results["stale"] = retry["stale"]
                 for outcome in ("updated", "unavailable", "failed"):
                     results[outcome].extend(retry[outcome])

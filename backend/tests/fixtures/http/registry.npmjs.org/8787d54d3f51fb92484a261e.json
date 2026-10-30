@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"58a16aca7a634b127464dba3bb05aa7c\"",
+    "last-modified": "Wed, 18 Sep 2024 05:27:13 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/braces"
+  },
+  "status": 200
+}

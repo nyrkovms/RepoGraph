@@ -6,11 +6,39 @@ import { getPackageDescriptionPreview } from "../lib/packageDescription";
 
 const AUTOCOMPLETE_LIMIT = 8;
 
+const ECOSYSTEM_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "pypi", label: "PyPI" },
+  { value: "npm", label: "npm" },
+];
+
+function ecosystemLabel(ecosystem) {
+  return ECOSYSTEM_OPTIONS.find((option) => option.value === ecosystem)?.label || ecosystem;
+}
+
+// The native spelling of the package name: an npm scope is kept apart from the name in the catalog (`@angular` + `core`).
+function nativeName(item) {
+  return item.namespace ? `@${item.namespace}/${item.normalized_name}` : item.normalized_name;
+}
+
+function displayName(item) {
+  return item.namespace ? `@${item.namespace}/${item.name}` : item.name;
+}
+
+function packageHref(item) {
+  return `/package/${item.ecosystem}/${nativeName(item)}`;
+}
+
+function itemKey(item) {
+  return `${item.ecosystem}-${nativeName(item)}-${item.latest_version}`;
+}
+
 export default function SearchPage() {
   const navigate = useNavigate();
   const autocompleteRequestId = useRef(0);
 
   const [query, setQuery] = useState("");
+  const [ecosystem, setEcosystem] = useState("");
   const [rows, setRows] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -19,10 +47,11 @@ export default function SearchPage() {
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
+  // The list is reloaded on mount and whenever the ecosystem switcher changes.
   useEffect(() => {
     loadFirstPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ecosystem]);
 
   useEffect(() => {
     const trimmedQuery = query.trim();
@@ -38,7 +67,7 @@ export default function SearchPage() {
 
     const timeoutId = window.setTimeout(async () => {
       try {
-        const payload = await searchPackages({ q: trimmedQuery, limit: AUTOCOMPLETE_LIMIT, sort: "name" });
+        const payload = await searchPackages({ q: trimmedQuery, limit: AUTOCOMPLETE_LIMIT, sort: "name", ...ecosystemFilter() });
         if (autocompleteRequestId.current !== requestId) {
           return;
         }
@@ -56,15 +85,20 @@ export default function SearchPage() {
     }, 250);
 
     return () => window.clearTimeout(timeoutId);
-  }, [query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, ecosystem]);
+
+  function ecosystemFilter() {
+    return ecosystem ? { ecosystem } : {};
+  }
 
   async function loadFirstPage() {
     setLoading(true);
     setError("");
     try {
       const payload = query.trim()
-        ? await searchPackages({ q: query.trim(), limit: 20, sort: "name" })
-        : await fetchPackages({ limit: 20, sort: "name" });
+        ? await searchPackages({ q: query.trim(), limit: 20, sort: "name", ...ecosystemFilter() })
+        : await fetchPackages({ limit: 20, sort: "name", ...ecosystemFilter() });
       setRows(payload.data || []);
       setCursor(payload.cursor || null);
     } catch (err) {
@@ -82,8 +116,8 @@ export default function SearchPage() {
     setError("");
     try {
       const payload = query.trim()
-        ? await searchPackages({ q: query.trim(), limit: 20, sort: "name", cursor })
-        : await fetchPackages({ limit: 20, sort: "name", cursor });
+        ? await searchPackages({ q: query.trim(), limit: 20, sort: "name", ...ecosystemFilter(), cursor })
+        : await fetchPackages({ limit: 20, sort: "name", ...ecosystemFilter(), cursor });
       setRows((prev) => [...prev, ...(payload.data || [])]);
       setCursor(payload.cursor || null);
     } catch (err) {
@@ -101,7 +135,7 @@ export default function SearchPage() {
   function selectSuggestion(item) {
     setQuery(item.normalized_name);
     closeSuggestions();
-    navigate(`/package/${item.normalized_name}`);
+    navigate(packageHref(item));
   }
 
   function handleSubmit() {
@@ -150,6 +184,16 @@ export default function SearchPage() {
     <section>
       <h2>Search packages</h2>
       <div className="toolbar">
+        <label>
+          Ecosystem
+          <select aria-label="Ecosystem" value={ecosystem} onChange={(e) => setEcosystem(e.target.value)}>
+            {ECOSYSTEM_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="autocomplete">
           <input
             placeholder="flask, requests, numpy..."
@@ -170,7 +214,7 @@ export default function SearchPage() {
           {suggestionsOpen && suggestions.length ? (
             <ul className="autocomplete-list" role="listbox" aria-label="Search suggestions">
               {suggestions.map((item, index) => (
-                <li key={`${item.normalized_name}-${item.latest_version}`}>
+                <li key={itemKey(item)}>
                   <button
                     type="button"
                     className={index === highlightedIndex ? "autocomplete-item active" : "autocomplete-item"}
@@ -178,7 +222,8 @@ export default function SearchPage() {
                     onClick={() => selectSuggestion(item)}
                   >
                     <span>
-                      <b>{item.name}</b>
+                      <b>{displayName(item)}</b>
+                      <span className="tag eco-badge">{ecosystemLabel(item.ecosystem)}</span>
                       <span className="muted autocomplete-version">{item.latest_version}</span>
                     </span>
                     {item.description ? (
@@ -199,8 +244,9 @@ export default function SearchPage() {
 
       <ul className="result-list">
         {rows.map((item) => (
-          <li key={`${item.normalized_name}-${item.latest_version}`}>
-            <Link to={`/package/${item.normalized_name}`}>{item.name}</Link>
+          <li key={itemKey(item)}>
+            <Link to={packageHref(item)}>{displayName(item)}</Link>
+            <span className="tag eco-badge">{ecosystemLabel(item.ecosystem)}</span>
             <span className="tag">{item.latest_version}</span>
             {item.license_spdx ? <span className="tag">{item.license_spdx}</span> : null}
             {item.has_vulnerabilities ? <span className="tag warn">vuln</span> : null}

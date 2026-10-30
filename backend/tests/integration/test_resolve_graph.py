@@ -65,9 +65,9 @@ def test_nested_format_is_still_served(client: TestClient) -> None:
 
 def test_invalid_graph_requests(client: TestClient) -> None:
     for body in (
-        {"ecosystem": "npm", "roots": [{"purl": "pkg:npm/left-pad"}]},
+        {"ecosystem": "go", "roots": [{"purl": "pkg:golang/github.com/a/b"}]},
         {"profile": "no-such-profile", "roots": [{"purl": "pkg:pypi/flask"}]},
-        {"roots": [{"purl": "pkg:npm/left-pad"}]},
+        {"roots": [{"purl": "pkg:npm/left-pad"}]},          # an npm root in a PyPI request
         {"roots": [{"purl": "flask"}]},
     ):
         response = client.post("/api/v1/resolve", json=body)

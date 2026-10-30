@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"6219388f7067e65be6ef9ebcd8780a2e\"",
+    "last-modified": "Thu, 25 Jun 2026 20:55:43 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/range-parser"
+  },
+  "status": 200
+}

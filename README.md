@@ -66,12 +66,27 @@ curl http://localhost:8000/api/v1/packages/pypi/flask/-/versions/3.1.3  # вер
 curl -i http://localhost:8000/api/v1/purl/pkg:pypi/flask                # 307 на канонический путь
 ```
 
+npm работает так же; scope пакета пишется с `@`, в purl он закодирован как `%40`:
+
+```bash
+curl http://localhost:8000/api/v1/packages/npm/@angular/core/-/                                      # карточка: purl, namespace
+curl 'http://localhost:8000/api/v1/packages/npm/left-pad/-/versions/1.3.0/dependencies?os=linux'      # дерево зависимостей
+curl 'http://localhost:8000/api/v1/search?q=react&ecosystem=npm'                                       # поиск только по npm
+```
+
 `POST /resolve` отвечает графом: узлы с purl и источником версии, рёбра, конфликты. Сбой всего графа приходит в поле `error`
 ответа `200`. Старый вложенный формат (`dependencies` вместо `roots`) работает как алиас до конца E7.
 
 ```bash
 curl -H 'Content-Type: application/json' http://localhost:8000/api/v1/resolve \
   -d '{"roots": [{"purl": "pkg:pypi/flask", "constraint": ">=3.0"}], "options": {"timeout_s": 30}}'
+```
+
+Для npm добавьте `"ecosystem": "npm"` и окружение (`node_version`, `os`, `cpu`); граф строит стратегия `npm-arborist`:
+
+```bash
+curl -H 'Content-Type: application/json' http://localhost:8000/api/v1/resolve \
+  -d '{"ecosystem": "npm", "roots": [{"purl": "pkg:npm/express", "constraint": "^4.18.0"}], "environment": {"node_version": "20.11.0", "os": "linux", "cpu": "x64"}}'
 ```
 
 ## Test stand

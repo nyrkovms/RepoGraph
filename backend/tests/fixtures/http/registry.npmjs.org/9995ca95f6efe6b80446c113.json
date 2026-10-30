@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"224e7a7f74e981f25bd33866aff073dc\"",
+    "last-modified": "Wed, 15 Jun 2022 00:47:43 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/depd"
+  },
+  "status": 200
+}

@@ -1,0 +1,85 @@
+{
+ "name": "react-dom",
+ "dist-tags": {
+  "latest": "19.3.1"
+ },
+ "versions": {
+  "0.1.0": {
+   "name": "react-dom",
+   "version": "0.1.0",
+   "devDependencies": {
+    "react": "0.10.0",
+    "colors": "0.6.2",
+    "uglify-js": "2.4.13",
+    "jasmine-node": "2.0.0-beta4"
+   },
+   "dist": {
+    "shasum": "6c821d418caed4f8ed39424cf0fad36f03fb35c4",
+    "tarball": "https://registry.npmjs.org/react-dom/-/react-dom-0.1.0.tgz",
+    "integrity": "sha512-RH+35P/4utEAlBAGKIEGaHFkiFZTk/Zb76YynMlnNH2q+GubDlH+iPkJGEeIdhtYVdt/bvuDpoXj0FS+PsOQsQ=="
+   },
+   "deprecated": "The old react-dom package has been deprecated. Until React v0.14 is officially released, please installed react-dom with npm install react-dom@latest."
+  },
+  "16.0.0": {
+   "name": "react-dom",
+   "version": "16.0.0",
+   "dependencies": {
+    "fbjs": "^0.8.16",
+    "prop-types": "^15.6.0",
+    "loose-envify": "^1.1.0",
+    "object-assign": "^4.1.1"
+   },
+   "peerDependencies": {
+    "react": "^16.0.0-beta.5"
+   },
+   "dist": {
+    "shasum": "9cc3079c3dcd70d4c6e01b84aab2a7e34c303f58",
+    "tarball": "https://registry.npmjs.org/react-dom/-/react-dom-16.0.0.tgz",
+    "integrity": "sha512-MjJdK6es/HG+kcjpa6eRhXrusL4hh4omy/036mI7uykjredUkk8Z0E6FzJW+g3JBR2bxov8AQxiE71WDlja6dw=="
+   },
+   "deprecated": "This version of react-dom/server contains a minor vulnerability. Please update react-dom to 16.0.1 or 16.4.2+. Learn more: https://fb.me/cve-2018-6341"
+  },
+  "18.2.0": {
+   "name": "react-dom",
+   "version": "18.2.0",
+   "dependencies": {
+    "scheduler": "^0.23.0",
+    "loose-envify": "^1.1.0"
+   },
+   "peerDependencies": {
+    "react": "^18.2.0"
+   },
+   "dist": {
+    "shasum": "22aaf38708db2674ed9ada224ca4aa708d821e3d",
+    "tarball": "https://registry.npmjs.org/react-dom/-/react-dom-18.2.0.tgz",
+    "fileCount": 32,
+    "integrity": "sha512-6IMTriUmvsjHUjNtEDudZfuDQUoWXVxKHhlEGSk81n4YFS+r/Kl99wXiwlVXtPBtJenozv2P+hxDsw9eA7Xo6g==",
+    "unpackedSize": 4502126
+   }
+  },
+  "19.3.1": {
+   "name": "react-dom",
+   "version": "19.3.1",
+   "dependencies": {
+    "scheduler": "^0.28.0"
+   },
+   "peerDependencies": {
+    "react": "^19.3.1"
+   },
+   "dist": {
+    "shasum": "b384c53cfcbe9c2a5d09d863b98455de9d68afe2",
+    "tarball": "https://registry.npmjs.org/react-dom/-/react-dom-19.3.1.tgz",
+    "fileCount": 43,
+    "integrity": "sha512-Y0bARz53lhEC1NMCASs0/j+faB/zqt3R8hpvg1e8+61ZVJ4UL0UdC4cBbXfZMcIuhrfgeILTLe+ZeBCavQPtKQ==",
+    "attestations": {
+     "url": "https://registry.npmjs.org/-/npm/v1/attestations/react-dom@19.3.1",
+     "provenance": {
+      "predicateType": "https://slsa.dev/provenance/v1"
+     }
+    },
+    "unpackedSize": 8067632
+   }
+  }
+ },
+ "modified": "2026-10-29T16:26:12.350Z"
+}

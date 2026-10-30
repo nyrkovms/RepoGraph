@@ -37,7 +37,7 @@ def test_valid_registry_passes() -> None:
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [
-        ({"ecosystem": "npm"}, "no plugin is registered for ecosystem 'npm'"),
+        ({"ecosystem": "go"}, "no plugin is registered for ecosystem 'go'"),
         ({"ecosystem": "nope"}, "no plugin is registered"),
         ({"protocol": "gopher"}, "unknown protocol 'gopher'"),
         ({"protocol": "npm-registry"}, "no adapter for protocol 'npm-registry'"),

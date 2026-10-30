@@ -2,7 +2,8 @@
 #
 # Each index serves only the PyTorch packages (`allow`): everything else, including the nvidia-* libraries the CUDA
 # builds require, comes from pypi.org, as with `pip --index-url <index> --extra-index-url https://pypi.org/simple`, and
-# download.pytorch.org (which answers 403, not 404, for a project it does not carry) is never asked about other projects.
+# download.pytorch.org (which answers 403, not 404, for a project it does not carry) is never asked about other projects:
+# only 404 means "not here" (SPEC Q18), so indexes like this one always come with routing that keeps them to their own.
 # `exclusive` is set in the profiles, not on the sources: inside `cuda121` torch comes only from the CUDA index, while
 # the catalog keeps reading torch from pypi.org too (the default profile and the daily update see its releases).
 # Sources are created disabled and enabled after a passing connection test.

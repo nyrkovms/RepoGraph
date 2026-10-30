@@ -261,6 +261,11 @@ button:disabled {
   font-weight: 700;
 }
 
+.tag.eco-badge {
+  background: #e2e8f0;
+  color: #334155;
+}
+
 .tag.warn {
   background: #fee2e2;
   color: #991b1b;

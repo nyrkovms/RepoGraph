@@ -1,0 +1,72 @@
+{
+ "name": "@isaacs/cliui",
+ "dist-tags": {
+  "latest": "9.0.0"
+ },
+ "versions": {
+  "8.0.2": {
+   "name": "@isaacs/cliui",
+   "version": "8.0.2",
+   "dependencies": {
+    "wrap-ansi": "^8.1.0",
+    "strip-ansi": "^7.0.1",
+    "string-width": "^5.1.2",
+    "wrap-ansi-cjs": "npm:wrap-ansi@^7.0.0",
+    "strip-ansi-cjs": "npm:strip-ansi@^6.0.1",
+    "string-width-cjs": "npm:string-width@^4.2.0"
+   },
+   "devDependencies": {
+    "c8": "^7.3.0",
+    "gts": "^3.0.0",
+    "chai": "^4.2.0",
+    "chalk": "^4.1.0",
+    "mocha": "^10.0.0",
+    "eslint": "^7.6.0",
+    "rimraf": "^3.0.2",
+    "rollup": "^2.23.1",
+    "cross-env": "^7.0.2",
+    "standardx": "^7.0.0",
+    "typescript": "^4.0.0",
+    "@types/node": "^14.0.27",
+    "rollup-plugin-ts": "^3.0.2",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-import": "^2.22.0",
+    "@typescript-eslint/parser": "^4.0.0",
+    "@typescript-eslint/eslint-plugin": "^4.0.0"
+   },
+   "dist": {
+    "shasum": "b37667b7bc181c168782259bab42474fbf52b550",
+    "tarball": "https://registry.npmjs.org/@isaacs/cliui/-/cliui-8.0.2.tgz",
+    "fileCount": 7,
+    "integrity": "sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==",
+    "unpackedSize": 27797
+   },
+   "engines": {
+    "node": ">=12"
+   }
+  },
+  "9.0.0": {
+   "name": "@isaacs/cliui",
+   "version": "9.0.0",
+   "devDependencies": {
+    "@types/node": "^25.2.1",
+    "esbuild": "^0.27.2",
+    "prettier": "^3.8.1",
+    "tap": "^21.5.0",
+    "tshy": "^3.1.0",
+    "typedoc": "^0.28.16"
+   },
+   "dist": {
+    "integrity": "sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg==",
+    "shasum": "4d0a3f127058043bf2e7ee169eaf30ed901302f3",
+    "tarball": "https://registry.npmjs.org/@isaacs/cliui/-/cliui-9.0.0.tgz",
+    "fileCount": 73,
+    "unpackedSize": 522445
+   },
+   "engines": {
+    "node": ">=18"
+   }
+  }
+ },
+ "modified": "2026-02-05T18:40:56.362Z"
+}

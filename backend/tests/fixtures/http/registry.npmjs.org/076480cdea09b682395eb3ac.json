@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"3fbf5b2037f5c38cbc5d7c0050f922c8\"",
+    "last-modified": "Tue, 28 Jun 2022 07:26:55 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/utils-merge"
+  },
+  "status": 200
+}

@@ -1,0 +1,11 @@
+description: >
+  express 4: a classic tree with shared dependencies (debug, ms, mime-types, ...) that npm deduplicates and hoists,
+  and two versions of `ms`/`debug` where ranges disagree.
+roots:
+  - {purl: pkg:npm/express, constraint: "^4.21.0"}
+environment: {node_version: "20.18.0", os: linux, cpu: x64}
+sources:
+  - {slug: npmjs, protocol: npm-registry, base_url: "https://registry.npmjs.org/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []
