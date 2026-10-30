@@ -279,6 +279,38 @@
 
 *Сделано в E3 (2026-10-30, PR #18):* H1–H7. Решения владельца: резолвер повторяет подрезку графа Go 1.17+ (Q23), build list в каталог не добавляется (Q24). Эталоны `go list -m all` (gin, cobra на go 1.15, golang.org/x/net, grpc, два корня с `expandGraph`) совпадают на 100%; без подрезки у gin было бы 45 модулей вместо 30, а grpc прочитал бы больше 500 `go.mod`. `go.mod` транзитивных модулей идут через новый канал каталога `CatalogAccess.document` (кэш `source_documents`). Последняя версия модуля — та, что называет `@latest` прокси (тег `latest`), отзывы читаются и из `go.mod` самой новой версии; у модуля без тегов ревизия — `latest:<псевдоверсия>`. API отдаёт `status_reason` версий, `deprecation` пакета и `details` узлов дерева. Ревью этапа: 6 серьёзных и 8 мелких замечаний, исправлены; не исправлено — #19 (ложное «удалена» у псевдоверсий модулей без тегов); известные ограничения: `go.mod` читаются последовательно, лимит 500 считает и закэшированные, `.info` перечитываются при каждой синхронизации. Попутно удалены 23 копии фикстур npm от синхронизации файлов (`* 2.*` теперь в `.gitignore`).
 
+### E4 — NuGet (детальный план, 2026-10-30)
+
+**Пробы апстрима (2026-10-30).**
+- `api.nuget.org/v3/index.json` — индекс служб: `RegistrationsBaseUrl/3.6.0` = `registration5-gz-semver2/` (gzip, SemVer 2),
+  `PackageBaseAddress/3.0.0` = `v3-flatcontainer/`, `Catalog/3.0.0` = `catalog0/index.json`. Другие фиды публикуют свой
+  индекс служб; адрес источника — его индекс.
+- Registration `…/<id в нижнем регистре>/index.json`: ETag, `Last-Modified`; страницы по 64 версии — у небольших пакетов
+  внутри индекса (`items`), у крупных отдельными документами (`microsoft.extensions.logging`: индекс 616 Б, страница
+  17 КБ). `catalogEntry`: `id` (исходное написание), `version` (нормализованная), `listed`, `published` (1900 год у
+  unlisted), `dependencyGroups` (`targetFramework` в виде `.NETStandard2.0`, `net10.0`; зависимости `{id, range}`,
+  `range` вида `[1.0.0, )`), `deprecation`, `vulnerabilities` (не храним, D6), `licenseExpression`/`licenseUrl`,
+  `projectUrl`, `description`, `authors`, `tags`, `packageContent` (`.nupkg`). Отсутствующий пакет — 404.
+- Flat container `…/<id>/index.json` — список версий без метаданных.
+- Catalog: индекс 23 438 страниц, страница ~690 записей (~230 КБ); запись `{"@type": "nuget:PackageDetails" |
+  "nuget:PackageDelete", "nuget:id", "nuget:version", "commitTimeStamp"}`; курсор — `commitTimeStamp`.
+- TFM: на nuget.org уже есть группы `net10.0` (.NET 10, LTS, вышел в ноябре 2025) и `net11.0` (превью). Q7 («`net5.0+` и
+  `netstandard`») их покрывает; перечень `net5.0`–`net9.0` в §9.6 устарел и расширяется до `net10.0`, `net11.0`.
+
+| WP | Содержание | Исполнитель | Готово, когда |
+|---|---|---|---|
+| I1 | **NuGetVersion** (`ecosystems/nuget/versions.py`): SemVer 2 + четвёртый сегмент, регистр prerelease не важен, нормализация (`1.0` = `1.0.0`, `1.0.0.0` = `1.0.0`, ведущие нули); `sort_key` — общий SemVer-ключ с четвёртым числом или ранг (§5.5); диапазоны `[1.0,2.0)`, `(,1.0]`, голая `1.0` = `>=1.0`, плавающие `1.*`, `1.0.*`, `*`, `1.0.0-*` | Sonnet, **ревью** Opus | Векторы `NuGet.Versioning` (`NuGetVersion.Parse`, `CompareTo`, `VersionRange.Parse`/`Satisfies`, `FindBestMatch`) из контейнера `mcr.microsoft.com/dotnet/sdk:8.0` совпадают на 100% |
+| I2 | **Координаты и purl**: id без учёта регистра, `normalized_name` — нижний регистр, `name` — написание из registration; `pkg:nuget/Newtonsoft.Json` | Sonnet | Unit-тесты: purl в обе стороны, регистр |
+| I3 | **Адаптер `nuget-v3`**: индекс служб (кэш на адаптер), registration с внешними страницами, версии (unlisted → `unlisted`, дата `published`), deprecation версии (причины, сообщение, альтернативный пакет), зависимости по группам TFM (`environment_markers.dotnet_target_framework`, исходный `range`), лицензия, ссылки, авторы, теги, артефакт `.nupkg`; ревизия — ETag registration; детектор по ETag для фидов без catalog | Sonnet по образцу cargo-sparse | Unit на записанных ответах (Newtonsoft.Json, пакет с внешними страницами, unlisted, deprecated); интеграция `sync_package` |
+| I4 | **Детектор catalog** nuget.org (§8.1): курсор `commitTimeStamp`, страницы индекса новее курсора до времени начала прогона, фильтр по id каталога (без учёта регистра), `PackageDelete` → проверка 404; первый прогон, потерянный курсор и еженедельная сверка — по ETag registration | Opus | Unit на записанных страницах; интеграция ежедневного обновления NuGet |
+| I5 | **TFM, окружение и резолвер** (§7.3, §9.6): `target_framework` (`net8.0` по умолчанию), нормализация TFM (`.NETStandard2.0` ↔ `netstandard2.0`, `.NETCoreApp3.1`, `net5.0`…`net11.0`), ближайшая группа по цепочке §9.6; резолвер: lowest applicable, direct wins, cousin (наименьшая версия на все диапазоны, иначе `NU1107`), плавающие — максимальная; `emulates = ".NET SDK 8 (NuGet 6.x)"` | Opus, **ревью** | Эталоны `dotnet restore` (SDK 8, проект `net8.0`, `project.assets.json`) — 3–5 пакетов: совпадение 100% |
+| I6 | **Миграция 0011**: стартовый источник `nuget-org` (`nuget-v3`, `https://api.nuget.org/v3/index.json`, `config.catalog_url`, priority 0) и профиль по умолчанию экосистемы nuget (R4); плагин в `BUILTIN_PLUGIN_MODULES` | Opus | `check_migrations.sh`; плагин регистрируется в свежем процессе |
+| I7 | **Фикстуры, UI, документация**: запись ответов; UI — NuGet в поиске, карточка (unlisted, deprecation), форма окружения (`target_framework`); SPEC-MVP-API/README | Sonnet | `make check`, smoke на стенде |
+
+Порядок: I1, I2 и I6 независимы; I3 после I1 и I2; I4 после I3; I5 после I1 и I3; I7 в конце. Ревью этапа — субагентом,
+проверка на стенде: seed `Newtonsoft.Json`, `Microsoft.Extensions.Logging`, `Serilog`, ежедневное обновление по catalog,
+resolve эталонов.
+
 ### E1–E6 — экосистемы
 
 Состав каждого этапа:

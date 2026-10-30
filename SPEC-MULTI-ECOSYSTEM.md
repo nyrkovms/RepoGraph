@@ -562,7 +562,7 @@ resolvelib (backtracking), PEP 508 markers, extras — без изменений
 1. **Lowest applicable version.** Из диапазона берётся минимальная подходящая версия.
 2. **Direct dependency wins.** Версия из корня побеждает транзитивные.
 3. **Cousin dependencies.** Берётся наименьшая версия, удовлетворяющая всем диапазонам. Если такой нет — конфликт (`NU1107`).
-4. **Группа зависимостей по TFM.** В первой волне — только современные целевые платформы (Q7): `net5.0`–`net9.0` и `netstandard1.0`–`2.1`. Проект на `netX.0` использует ближайшую группу из `netX.0 → … → net5.0 → netcoreapp3.1 → … → netstandard2.1 → … → netstandard1.0`. .NET Framework 4.x и платформенные TFM (`net8.0-windows`, `-android`, `-ios`) — когда понадобятся.
+4. **Группа зависимостей по TFM.** В первой волне — только современные целевые платформы (Q7): `net5.0` и новее (на nuget.org уже есть `net10.0` и `net11.0`) и `netstandard1.0`–`2.1`. Проект на `netX.0` использует ближайшую группу из `netX.0 → … → net5.0 → netcoreapp3.1 → … → netstandard2.1 → … → netstandard1.0`. .NET Framework 4.x и платформенные TFM (`net8.0-windows`, `-android`, `-ios`) — когда понадобятся.
 5. Floating-версии `1.*` → максимальная подходящая.
 - Эталон — `dotnet restore` + `project.assets.json`.
 
