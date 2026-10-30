@@ -674,6 +674,55 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
 }
 ```
 
+### 4.1.4 Resolve для NuGet
+
+Тело и ответ те же, что в §4.1; отличается следующее.
+
+- Запрос: `"ecosystem": "nuget"`, корни — purl `nuget`. `constraint` — диапазон версий NuGet: `1.0` значит `>= 1.0`, `[1.0]` ровно эта версия, `[1.0,2.0)`, `(,2.0]`, плавающий `1.*` (самая высокая подходящая). `*` или отсутствие `constraint` — плавающий `*`, самая высокая версия; зависимость пакета без диапазона берёт, наоборот, самую низкую. Версия в purl без `constraint` закрепляет её (`[версия]`). Неверный диапазон даёт `422`.
+
+```json
+{
+  "ecosystem": "nuget",
+  "roots": [
+    {"purl": "pkg:nuget/newtonsoft.json", "constraint": "[12.0.1,14.0)"},
+    {"purl": "pkg:nuget/serilog", "constraint": "3.*"}
+  ],
+  "environment": {"target_framework": "net8.0"}
+}
+```
+
+- `environment`: `target_framework` (по умолчанию `net8.0`, допустимые значения те же, что у дерева, §3.3.5; другое даёт `422`). Пустое окружение — `net8.0`.
+- `strategy`: `nuget-nearest-wins`, `emulates`: `.NET SDK 8 (NuGet 6.x)`. Правила `dotnet restore` (SPEC-MULTI-ECOSYSTEM §9.6): (1) каждая ссылка берёт самую низкую подходящую версию (плавающий диапазон `1.*` — самую высокую подходящую); unlisted-версии участвуют, как в restore; (2) ссылка затеняется, если предок на её же пути объявляет тот же пакет напрямую (ссылки проекта — предки всего графа); (3) ссылки из разных путей — кузены на любой глубине: побеждает наибольшая версия, проигравшие уходят вместе со своими поддеревьями. Для зависимостей версии берётся ближайшая группа `target_framework`.
+- Равенство с `dotnet restore`: множество пар `(id, версия)` в `nodes` равно пакетам, которые `dotnet restore` пишет в `project.assets.json` проекта на этой платформе со ссылками на корни (цель — 100% совпадений без допустимых расхождений, SPEC-MULTI-ECOSYSTEM §9.6).
+- `nodes[].name` — id строчными, `version` — выбранная версия (в нормализованной записи NuGet), `latest_compatible` у корней — новейшая листед-версия без prerelease, у прочих узлов `null`. `edges[].constraint` — диапазон как написан в пакете, `type` — `runtime`.
+- `warnings[]`: `no_framework_group` (`{code, package, message}`) — у версии есть только группы .NET Framework или платформенные, а NuGet взял бы их через AssetTargetFallback (вне Q7); `unresolvable` (`{code, message}`) — ссылка корня не разрешилась. Узел без метаданных зависимостей остаётся в итоге, причина в `nodes[].errors`.
+- `conflicts[]` пуст: неудача resolve приходит в `error`, граф при этом остаётся (NuGet тоже пишет `project.assets.json` неудачного restore). `code`: `NU1605` (понижение: затенённая ссылка хотела версию выше, чем дала ближайшая; .NET SDK считает это ошибкой), `NU1107` (победитель среди кузенов не удовлетворяет чьему-то диапазону), `NU1108` (цикл), `not_found`, `resolve_limit_exceeded`, `resolve_timeout` или `upstream_error`.
+
+```json
+{
+  "ecosystem": "nuget",
+  "profile": "default",
+  "strategy": "nuget-nearest-wins",
+  "emulates": ".NET SDK 8 (NuGet 6.x)",
+  "nodes": [
+    {"id": "n1", "purl": "pkg:nuget/newtonsoft.json@12.0.1", "name": "newtonsoft.json", "version": "12.0.1",
+     "registry": "nuget-org", "depth": 1, "root": true, "hidden": false, "latest_compatible": "13.0.3", "errors": [],
+     "details": {}}
+  ],
+  "edges": [
+    {"from": "root", "to": "n1", "constraint": "[12.0.1,14.0)", "type": "runtime", "details": {}}
+  ],
+  "warnings": [],
+  "error": null
+}
+```
+
+Ошибка графа (понижение версии, граф в ответе остаётся):
+
+```json
+{"code": "NU1605", "message": "detected package downgrade: microsoft.extensions.logging.abstractions from 9.0.0 to 8.0.0 (reference from microsoft.extensions.logging)", "packages_seen": 7}
+```
+
 ## 4.2 `POST /api/v1/resolve`: вложенный формат (алиас до конца E7)
 
 - Request body:
@@ -803,55 +852,6 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
 Для Go purl записывается с типом `golang`: `pkg:golang/github.com/gin-gonic/gin`, `pkg:golang/github.com/redis/go-redis/v9`. Путь модуля берётся как написан, регистр значим (`pkg:golang/github.com/BurntSushi/toml`); purl без namespace (`pkg:golang/gin`) неверен, и тогда не запускается ничего.
 
 Для NuGet purl записывается с типом `nuget`: `pkg:nuget/newtonsoft.json`. Регистр id не важен (`pkg:nuget/Newtonsoft.Json` добавит тот же пакет), каталог хранит его строчными, а написание реестра — как `name`; purl с namespace (`pkg:nuget/a/b`) неверен, и тогда не запускается ничего.
-
-### 4.1.4 Resolve для NuGet
-
-Тело и ответ те же, что в §4.1; отличается следующее.
-
-- Запрос: `"ecosystem": "nuget"`, корни — purl `nuget`. `constraint` — диапазон версий NuGet: `1.0` значит `>= 1.0`, `[1.0]` ровно эта версия, `[1.0,2.0)`, `(,2.0]`, плавающий `1.*` (самая высокая подходящая). `*` или отсутствие `constraint` — плавающий `*`, самая высокая версия; зависимость пакета без диапазона берёт, наоборот, самую низкую. Версия в purl без `constraint` закрепляет её (`[версия]`). Неверный диапазон даёт `422`.
-
-```json
-{
-  "ecosystem": "nuget",
-  "roots": [
-    {"purl": "pkg:nuget/newtonsoft.json", "constraint": "[12.0.1,14.0)"},
-    {"purl": "pkg:nuget/serilog", "constraint": "3.*"}
-  ],
-  "environment": {"target_framework": "net8.0"}
-}
-```
-
-- `environment`: `target_framework` (по умолчанию `net8.0`, допустимые значения те же, что у дерева, §3.3.5; другое даёт `422`). Пустое окружение — `net8.0`.
-- `strategy`: `nuget-nearest-wins`, `emulates`: `.NET SDK 8 (NuGet 6.x)`. Правила `dotnet restore` (SPEC-MULTI-ECOSYSTEM §9.6): (1) каждая ссылка берёт самую низкую подходящую версию (плавающий диапазон `1.*` — самую высокую подходящую); unlisted-версии участвуют, как в restore; (2) ссылка затеняется, если предок на её же пути объявляет тот же пакет напрямую (ссылки проекта — предки всего графа); (3) ссылки из разных путей — кузены на любой глубине: побеждает наибольшая версия, проигравшие уходят вместе со своими поддеревьями. Для зависимостей версии берётся ближайшая группа `target_framework`.
-- Равенство с `dotnet restore`: множество пар `(id, версия)` в `nodes` равно пакетам, которые `dotnet restore` пишет в `project.assets.json` проекта на этой платформе со ссылками на корни (цель — 100% совпадений без допустимых расхождений, SPEC-MULTI-ECOSYSTEM §9.6).
-- `nodes[].name` — id строчными, `version` — выбранная версия (в нормализованной записи NuGet), `latest_compatible` у корней — новейшая листед-версия без prerelease, у прочих узлов `null`. `edges[].constraint` — диапазон как написан в пакете, `type` — `runtime`.
-- `warnings[]`: `no_framework_group` (`{code, package, message}`) — у версии есть только группы .NET Framework или платформенные, а NuGet взял бы их через AssetTargetFallback (вне Q7); `unresolvable` (`{code, message}`) — ссылка корня не разрешилась. Узел без метаданных зависимостей остаётся в итоге, причина в `nodes[].errors`.
-- `conflicts[]` пуст: неудача resolve приходит в `error`, граф при этом остаётся (NuGet тоже пишет `project.assets.json` неудачного restore). `code`: `NU1605` (понижение: затенённая ссылка хотела версию выше, чем дала ближайшая; .NET SDK считает это ошибкой), `NU1107` (победитель среди кузенов не удовлетворяет чьему-то диапазону), `NU1108` (цикл), `not_found`, `resolve_limit_exceeded`, `resolve_timeout` или `upstream_error`.
-
-```json
-{
-  "ecosystem": "nuget",
-  "profile": "default",
-  "strategy": "nuget-nearest-wins",
-  "emulates": ".NET SDK 8 (NuGet 6.x)",
-  "nodes": [
-    {"id": "n1", "purl": "pkg:nuget/newtonsoft.json@12.0.1", "name": "newtonsoft.json", "version": "12.0.1",
-     "registry": "nuget-org", "depth": 1, "root": true, "hidden": false, "latest_compatible": "13.0.3", "errors": [],
-     "details": {}}
-  ],
-  "edges": [
-    {"from": "root", "to": "n1", "constraint": "[12.0.1,14.0)", "type": "runtime", "details": {}}
-  ],
-  "warnings": [],
-  "error": null
-}
-```
-
-Ошибка графа (понижение версии, граф в ответе остаётся):
-
-```json
-{"code": "NU1605", "message": "detected package downgrade: microsoft.extensions.logging.abstractions from 9.0.0 to 8.0.0 (reference from microsoft.extensions.logging)", "packages_seen": 7}
-```
 
 ## 5.4 `POST /api/v1/admin/retry-failed`
 
