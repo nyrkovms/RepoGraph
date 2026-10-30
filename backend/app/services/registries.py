@@ -107,7 +107,7 @@ class RegistryFields:
 
 
 # Names that parse in every plugin's notation (npm scope, Maven coordinates, Go and RPM paths are tried in turn).
-_PROBE_NAMES = ("x", "x:x", "@x/x", "x/x")
+_PROBE_NAMES = ("x", "x:x", "@x/x", "example.com/x", "x/x")
 
 
 def _plugin(ecosystem: str) -> EcosystemPlugin:

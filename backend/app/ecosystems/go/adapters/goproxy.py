@@ -38,6 +38,7 @@ from app.ecosystems.base import (
     TrackedPackage,
     VersionDependencies,
 )
+from app.ecosystems.go.changes import GoIndexChangesDetector
 from app.ecosystems.go.coordinates import GoCoordinates, escape_path, escape_version
 from app.ecosystems.go.gomod import GoMod, GoModError, Retract, parse_go_mod
 from app.ecosystems.go.versions import GoVersionScheme, compare
@@ -243,6 +244,10 @@ class GoProxyAdapter:
         await self.get(f"{self.root}{_TEST_MODULE}/@latest")
 
     def change_detector(self) -> ChangeDetector:
+        index_url = self.registry.config.get("index_url")
+        if isinstance(index_url, str) and index_url:
+            # proxy.golang.org: the module index; full checks go module by module through the list.
+            return GoIndexChangesDetector(self.registry, index_url, reconciler=GoListChangeDetector(self))
         return GoListChangeDetector(self)
 
     def min_interval_seconds(self) -> float:

@@ -86,7 +86,7 @@ def test_purl_redirects_to_the_canonical_path(client: TestClient) -> None:
     ("path", "status"),
     [
         ("/api/v1/purl/pkg:cocoapods/x", 404),          # no ecosystem for the type
-        ("/api/v1/purl/pkg:golang/github.com/a/b", 404),   # ecosystem without a plugin yet
+        ("/api/v1/purl/pkg:maven/org.example/x", 404),   # ecosystem without a plugin yet
         ("/api/v1/purl/flask", 422),                    # not a purl
         ("/api/v1/packages/go/github.com/a/b/-/", 404),
         ("/api/v1/packages/rubygems/rails/-/", 404),

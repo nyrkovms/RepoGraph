@@ -34,10 +34,18 @@ def test_valid_registry_passes() -> None:
     validate_registry(_fields(auth_type="bearer", credentials_ref="MIRROR_TOKEN"))
 
 
+def test_go_routing_is_validated_with_a_module_path() -> None:
+    # A Go module path needs a dot in its first element: plain `x/x` would not parse and nothing could be checked.
+    go = {"ecosystem": "go", "protocol": "goproxy"}
+    validate_registry(_fields(**go, routing={"mode": "allow", "modules": ["corp.example.com/*"]}))
+    with pytest.raises(RegistryInvalid, match="must be a list of strings"):
+        validate_registry(_fields(**go, routing={"mode": "allow", "modules": "corp.example.com"}))
+
+
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [
-        ({"ecosystem": "go"}, "no plugin is registered for ecosystem 'go'"),
+        ({"ecosystem": "maven"}, "no plugin is registered for ecosystem 'maven'"),   # no Maven plugin until E5
         ({"ecosystem": "nope"}, "no plugin is registered"),
         ({"protocol": "gopher"}, "unknown protocol 'gopher'"),
         ({"protocol": "npm-registry"}, "no adapter for protocol 'npm-registry'"),

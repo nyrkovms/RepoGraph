@@ -44,4 +44,17 @@ SAMPLES: dict[str, Samples] = {
         prereleases=["0.0.0-0", "1.0.0-0", "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-beta.2", "1.0.0-beta.11",
                      "1.0.0-rc.1"],
     ),
+    "go": Samples(
+        # Module paths as written: case and the major-version suffix are part of the identity.
+        names=[("github.com/gin-gonic/gin", "pkg:golang/github.com/gin-gonic/gin"),
+               ("github.com/BurntSushi/toml", "pkg:golang/github.com/BurntSushi/toml"),
+               ("github.com/redis/go-redis/v9", "pkg:golang/github.com/redis/go-redis/v9")],
+        # Checked against golang.org/x/mod/semver (tests/fixtures/go/semver/expected.json).
+        ordered_versions=["v0.0.0-20191109021931-daa7c04131f5", "v0.1.0", "v1.0.0-0", "v1.0.0-alpha", "v1.0.0-rc.1",
+                          "v1.0.0", "v1.9.0", "v1.10.0", "v1.10.1-0.20240101000000-abcdefabcdef", "v1.10.1",
+                          "v2.0.0+incompatible", "v10.0.0"],
+        invalid_versions=["1.2.3", "v1.2", "v01.2.3", "latest"],
+        prereleases=["v0.0.0-20191109021931-daa7c04131f5", "v1.0.0-0", "v1.0.0-alpha", "v1.0.0-rc.1",
+                     "v1.10.1-0.20240101000000-abcdefabcdef"],
+    ),
 }
