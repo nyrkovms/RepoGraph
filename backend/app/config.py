@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     sync_pypi_simple_base_url: str = "https://pypi.org/simple"
 
     # Offline tests: record upstream responses / serve them back without network (app/services/http.py).
+    # crates.io answers 403 to clients without a User-Agent of their own (python-httpx/... included).
+    http_user_agent: str = "PackageHub/0.1 (+https://github.com/nyrkovms/RepoGraph)"
     http_record_dir: str | None = None
     http_replay_dir: str | None = None
 
