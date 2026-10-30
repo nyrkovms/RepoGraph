@@ -277,7 +277,8 @@ class NpmRegistryAdapter:
     def change_detector(self) -> ChangeDetector:
         changes_url = self.registry.config.get("changes_url")
         if isinstance(changes_url, str) and changes_url:
-            return NpmChangesDetector(self.registry, changes_url)   # the replication feed of registry.npmjs.org
+            # The replication feed of registry.npmjs.org; full checks go packument by packument with the ETag.
+            return NpmChangesDetector(self.registry, changes_url, reconciler=NpmEtagChangeDetector(self))
         return NpmEtagChangeDetector(self)
 
     def min_interval_seconds(self) -> float:

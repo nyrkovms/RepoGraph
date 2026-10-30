@@ -70,12 +70,22 @@ def _display(ref: PackageRef) -> str:
 
 
 def _satisfies(version: str, constraint: str) -> bool:
-    if constraint.strip() in ("", "*", "latest"):
-        return True
+    """semver.satisfies: `*` and an empty range match no prerelease; a dist-tag is not a range."""
     try:
         return _SCHEME.constraint(constraint).contains(version)
     except InvalidVersion:
         return False
+
+
+def _reuses(version: str, constraint: str) -> bool:
+    """arborist's dep-valid: an installed version serves `*`, an empty range and a dist-tag whatever it is."""
+    spec = constraint.strip()
+    if spec in ("", "*"):
+        return True
+    try:
+        return _SCHEME.constraint(spec).contains(version)
+    except InvalidVersion:
+        return True
 
 
 class _Resolve:
@@ -112,14 +122,15 @@ class _Resolve:
         return self.versions[ref]
 
     def pick(self, versions: Sequence[CatalogVersion], constraint: str) -> CatalogVersion | None:
-        """npm-pick-manifest: a dist-tag names its version; `latest` wins if it satisfies and is usable; otherwise
-        the matching versions ordered by not deprecated, engine-compatible, highest."""
+        """npm-pick-manifest: a dist-tag names its version; `latest` wins if it satisfies (`*` takes it even as a
+        prerelease) and is usable; otherwise the matching versions, prereleases only when the range names one,
+        ordered by not deprecated, engine-compatible, highest."""
         spec = constraint.strip()
         tagged = {tag: v for v in versions for tag in v.tags}
         if spec in tagged:
             return tagged[spec]
         latest = tagged.get("latest")
-        if latest is not None and _satisfies(latest.version, spec) and not latest.deprecated \
+        if latest is not None and (spec in ("", "*") or _satisfies(latest.version, spec)) and not latest.deprecated \
                 and self._engine_ok(latest):
             return latest
         matching = [v for v in versions if _satisfies(v.version, spec)]
@@ -184,7 +195,7 @@ class _Resolve:
             existing = level.children.get(want.name)
             if existing is not None:
                 if existing.ref == want.ref and existing.version is not None \
-                        and _satisfies(existing.version.version, want.constraint):
+                        and _reuses(existing.version.version, want.constraint):
                     self._edge(dependent, existing, want)
                     return
                 break                       # another version here: the new one goes just below it
@@ -225,6 +236,11 @@ class _Resolve:
         node = _Node(want.name, want.ref, chosen, target, dependent.depth + 1, id=f"n{self.count}")
         target.children[want.name] = node
         self._edge(dependent, node, want)
+        if not self._engine_ok(chosen):
+            # npm installs it anyway and warns (EBADENGINE).
+            self.graph.warnings.append({"code": "engine_node", "node": node.id, "package": _display(want.ref),
+                                        "version": chosen.version, "engines": (chosen.engines or {}).get("node"),
+                                        "node_version": self.env.node_version})
         queue.append(node)
 
     def _edge(self, dependent: _Node, node: _Node, want: _Want) -> None:
@@ -257,7 +273,8 @@ class _Resolve:
                 latest = best.version if best else None
             out.append(ResolvedNode(id=node.id, ref=node.ref, version=node.version.version,
                                     registry_slug=node.version.registry_slug, depth=node.depth,
-                                    errors=list(node.errors), latest_compatible=latest))
+                                    errors=list(node.errors), latest_compatible=latest,
+                                    details={"bundled": True} if node.version.bundled else {}))
         return out
 
 

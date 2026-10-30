@@ -18,7 +18,6 @@ from app.api.v1.packages import _decode_cursor_or_422
 from app.db import get_db_session
 from app.ecosystems import purl as purls
 from app.ecosystems.npm.environment import NpmEnvironment
-from app.ecosystems.npm.environment import parse_environment as parse_npm_environment
 from app.ecosystems.npm.environment import version_allows as npm_version_allows
 from app.ecosystems.base import EcosystemPlugin, PackageRef, RegistryConfig, SourceProfile
 from app.ecosystems.registry import UnknownEcosystem, get_plugin
@@ -26,6 +25,7 @@ from app.fetcher import sources
 from app.fetcher.lazy import LazyFetcher
 from app.fetcher.pipeline import (
     UNAVAILABLE_DIGEST,
+    dependency_from_row,
     find_package,
     resolve_dependency_links,
     select_best_version,
@@ -258,7 +258,9 @@ async def get_dependencies_tree(
 
     env = None
     if target.plugin.ecosystem == "npm":
-        view.npm_env = parse_npm_environment({"node_version": node_version, "os": os, "cpu": cpu})
+        npm_env = target.plugin.parse_environment({"node_version": node_version, "os": os, "cpu": cpu})
+        view.npm_env = npm_env if isinstance(npm_env, NpmEnvironment) else NpmEnvironment()
+        view.plugin = target.plugin
     else:
         env = _build_marker_environment(python_version=python_version, os_name=os)
     fetcher = LazyFetcher(db=db)
@@ -525,14 +527,6 @@ def _tree_marker_applies(markers: dict | None, env: dict | None, include_optiona
     return all(_condition_applies(condition, env) for condition in non_extra_conditions)
 
 
-def _npm_dependency_shown(dep: Dependency, include_optional: bool) -> bool:
-    if dep.dependency_type == DependencyType.optional:
-        return include_optional
-    if dep.dependency_type == DependencyType.peer:
-        return not (dep.details or {}).get("optional")
-    return dep.dependency_type == DependencyType.runtime
-
-
 def _dependency_type_allowed(dep_type: DependencyType, include_optional: bool) -> bool:
     if dep_type == DependencyType.runtime:
         return True
@@ -568,6 +562,7 @@ class _ProfileView:
     _active: dict[object, list[tuple[str, object]]] = field(default_factory=dict)
     unknown: set[object] = field(default_factory=set)   # versions whose dependencies are unknown
     npm_env: NpmEnvironment | None = None                 # set for npm: platform rules instead of PEP 508 markers
+    plugin: EcosystemPlugin | None = None                 # with npm_env: decides which dependencies apply
 
     async def registries(self, package: Package) -> list[RegistryConfig]:
         if package.id not in self._registries:
@@ -647,9 +642,9 @@ async def _build_tree_for_version(
     for dep in deps:
         current_level_include_optional = include_optional and expand_optional_at_current_level
 
-        if view.npm_env is not None:
+        if view.npm_env is not None and view.plugin is not None:
             # npm installs optional dependencies at every level and (npm >= 7) peers that are not optional.
-            if not _npm_dependency_shown(dep, include_optional):
+            if not view.plugin.dependency_applies(dependency_from_row(dep), view.npm_env, include_optional):
                 continue
         elif not _dependency_type_allowed(dep.dependency_type, include_optional=current_level_include_optional):
             continue

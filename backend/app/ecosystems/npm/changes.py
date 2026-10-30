@@ -2,8 +2,10 @@
 
 `<changes_url>` answers `{"update_seq"}`; `<changes_url>_changes?since=<seq>&limit=<n>` lists `{"seq", "id",
 "deleted"?}` for every change of the whole registry (~4 per second). The cursor is `last_seq`. Pages are read up to the
-`update_seq` taken at the start, each filtered by the names of the catalog; a lost or reset feed asks for a full
-conditional check (`reconcile_all`). Documents are not in the feed: changed packages are re-read by the pipeline.
+`update_seq` taken at the start, each filtered by the names of the catalog. A lost or reset feed, the first run and
+the weekly check go through every tracked packument conditionally (the ETag detector given as `reconciler`; without
+one the run re-reads them all, `reconcile_all`). Documents are not in the feed: changed packages are re-read by the
+pipeline.
 """
 
 import logging
@@ -12,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
-from app.ecosystems.base import CHANGED_SINCE, ChangeSet, PackageRef, RegistryConfig, TrackedPackage
+from app.ecosystems.base import CHANGED_SINCE, ChangeDetector, ChangeSet, PackageRef, RegistryConfig, TrackedPackage
 from app.services.http import make_client
 
 logger = logging.getLogger(__name__)
@@ -28,10 +30,12 @@ def display_name(ref: PackageRef) -> str:
 
 
 class NpmChangesDetector:
-    def __init__(self, registry: RegistryConfig, changes_url: str, page_size: int = PAGE_SIZE) -> None:
+    def __init__(self, registry: RegistryConfig, changes_url: str, page_size: int = PAGE_SIZE,
+                 reconciler: ChangeDetector | None = None) -> None:
         self.registry = registry
         self.changes_url = changes_url.rstrip("/") + "/"
         self.page_size = page_size
+        self.reconciler = reconciler
 
     async def detect(self, tracked: Sequence[TrackedPackage], cursor: Mapping[str, object]) -> ChangeSet:
         changes = await self._read_feed(tracked, cursor)
@@ -40,6 +44,15 @@ class NpmChangesDetector:
         due = changes.reconcile_all or not isinstance(reconciled, str) or \
             datetime.fromisoformat(reconciled) <= now - RECONCILE_EVERY
         changes.cursor = {**changes.cursor, "reconciled_at": now.isoformat() if due else reconciled}
+        if due and self.reconciler is not None:
+            # A packument that has not changed answers 304; the feed's own entries keep a revision to wait for.
+            checked = await self.reconciler.detect(tracked, {})
+            changed = {package.package_id: (package, revision) for package, revision in checked.changed}
+            for package, revision in changes.changed:
+                changed.setdefault(package.package_id, (package, revision))
+            changes.changed = list(changed.values())
+            changes.missing = list(checked.missing)
+            due = False
         changes.reconcile_all = due
         return changes
 
@@ -82,7 +95,10 @@ class NpmChangesDetector:
                     if package is not None:
                         changed[package.package_id] = package
                 next_seq = payload.get("last_seq")
-                if not results or not isinstance(next_seq, int) or next_seq <= last:
+                if results and (not isinstance(next_seq, int) or isinstance(next_seq, bool)):
+                    # CouchDB's opaque string seqs: the cursor could never move and changes would go unnoticed.
+                    raise ValueError(f"npm feed of {self.registry.slug} answered last_seq {next_seq!r}, not a number")
+                if not results or next_seq <= last:
                     break   # nothing newer: the feed is behind its own update_seq
                 last = next_seq
 

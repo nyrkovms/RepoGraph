@@ -25,9 +25,10 @@ def _ref(name: str) -> PackageRef:
     return PackageRef("npm", "", name)
 
 
-def _v(version: str, *tags: str, deprecated: bool = False, engines: dict[str, str] | None = None) -> CatalogVersion:
+def _v(version: str, *tags: str, deprecated: bool = False, engines: dict[str, str] | None = None,
+       bundled: bool = False) -> CatalogVersion:
     return CatalogVersion(version=version, registry_id="r", registry_slug="npmjs", status="active", engines=engines,
-                          tags=tags, deprecated=deprecated)
+                          tags=tags, deprecated=deprecated, bundled=bundled)
 
 
 def _dep(name: str, constraint: str, kind: str = "runtime", alias: str | None = None, **details: object) -> NormalizedDependency:
@@ -75,6 +76,37 @@ def test_deprecated_and_engine_incompatible_versions_are_avoided() -> None:
                              _v("1.3.0", "latest", deprecated=True)]}, {})
     assert _set(_resolve(catalog, ("a", "^1.0.0"), env={"node_version": "20.10.0"})) == {("a", "1.0.0")}
     assert _set(_resolve(catalog, ("a", "^1.0.0"), env={"node_version": "22.1.0"})) == {("a", "1.2.0")}
+
+
+def test_star_and_empty_ranges_skip_prereleases_unless_latest_is_one() -> None:
+    catalog = Catalog({"a": [_v("1.0.0", "latest", deprecated=True), _v("2.0.0-rc.1", "next")]}, {})
+    for spec in ("*", "", "x"):
+        assert _set(_resolve(catalog, ("a", spec))) == {("a", "1.0.0")}, spec
+    assert _resolve(catalog, ("a", "1")).nodes[0].latest_compatible == "1.0.0"
+    catalog = Catalog({"a": [_v("1.0.0"), _v("2.0.0-rc.1", "latest")]}, {})
+    assert _set(_resolve(catalog, ("a", "*"))) == {("a", "2.0.0-rc.1")}   # npm-pick-manifest takes latest for `*`
+    assert _set(_resolve(catalog, ("a", "^1.0.0"))) == {("a", "1.0.0")}
+
+
+def test_installed_version_serves_star_and_tags_even_as_a_prerelease() -> None:
+    catalog = Catalog({"a": [_v("1.0.0")], "b": [_v("1.0.0")], "lib": [_v("1.0.0", "latest"), _v("2.0.0-rc.1", "next")]},
+                      {"a@1.0.0": [_dep("lib", "*")], "b@1.0.0": [_dep("lib", "latest")]})
+    graph = _resolve(catalog, ("lib", "next"), ("a", "1"), ("b", "1"))
+    assert _set(graph) == {("lib", "2.0.0-rc.1"), ("a", "1.0.0"), ("b", "1.0.0")}   # arborist's dep-valid
+
+
+def test_engine_node_mismatch_is_a_warning() -> None:
+    catalog = Catalog({"a": [_v("1.0.0", "latest", engines={"node": ">=22"})]}, {})
+    graph = _resolve(catalog, ("a", "1"), env={"node_version": "20.10.0"})
+    assert _set(graph) == {("a", "1.0.0")}
+    assert [(w["code"], w["package"], w["engines"]) for w in graph.warnings] == [("engine_node", "a", ">=22")]
+    assert _resolve(catalog, ("a", "1"), env={"node_version": "22.1.0"}).warnings == []
+
+
+def test_bundled_dependencies_mark_the_node() -> None:
+    catalog = Catalog({"a": [_v("1.0.0", bundled=True)], "b": [_v("1.0.0")]}, {"a@1.0.0": [_dep("b", "1")]})
+    graph = _resolve(catalog, ("a", "1"))
+    assert {n.ref.name: dict(n.details) for n in graph.nodes} == {"a": {"bundled": True}, "b": {}}
 
 
 def test_compatible_versions_are_deduplicated_and_conflicts_nest() -> None:

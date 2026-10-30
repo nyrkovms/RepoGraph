@@ -51,7 +51,8 @@ class DbCatalog:
         registries = await visibility.visible_registries(self.db, self.plugin, ref, package.id, profile)
         rows = (
             await self.db.execute(
-                select(PackageVersion.id, PackageVersion.version, PackageVersion.engines, PackageVersion.deprecation)
+                select(PackageVersion.id, PackageVersion.version, PackageVersion.engines, PackageVersion.deprecation,
+                       PackageVersion.raw_metadata.has_key("bundleDependencies").label("bundled"))
                 .where(PackageVersion.package_id == package.id, visibility.visible_clause(registries))
             )
         ).all()
@@ -89,6 +90,7 @@ class DbCatalog:
                     artifacts=files.get((row.id, registry.id), []),
                     tags=tags.get(row.version, ()),
                     deprecated=row.deprecation is not None,
+                    bundled=bool(row.bundled),
                 )
             )
         return result

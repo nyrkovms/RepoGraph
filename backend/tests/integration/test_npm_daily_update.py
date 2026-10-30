@@ -3,12 +3,13 @@ the npmjs starter source of migration 0008, the packument from the replay fixtur
 
 import asyncio
 import uuid
+from datetime import UTC, datetime
 
 import httpx
 from sqlalchemy import delete, select, update
 
 from app.db import loop_local_session
-from app.ecosystems.base import PackageRef
+from app.ecosystems.base import ChangeSet, PackageRef, RegistryConfig, TrackedPackage
 from app.ecosystems.npm import changes
 from app.fetcher import pipeline
 from app.models.enums import PackageOrigin
@@ -65,11 +66,12 @@ def test_npm_packages_are_rechecked_through_the_feed(monkeypatch) -> None:
     monkeypatch.setattr(daily_update.asyncio, "sleep", no_wait)
     run_ids: list[str] = []
     try:
-        # First run: no cursor yet, so the feed starts at its current seq and every npm package is checked once.
+        # First run: no cursor yet, so the feed starts at its current seq and every npm package is checked once,
+        # conditionally: the packument still has the stored ETag (304), nothing is re-read.
         asked = _feed(monkeypatch, 1000, [])
         first = asyncio.run(daily_update._run_daily_update_async("npm"))
         run_ids.append(first["run_id"])
-        assert first["status"] == "success" and first["changed"] >= 1
+        assert first["status"] == "success" and first["changed"] == 0
         assert not any("_changes" in url for url in asked)
         cursor = asyncio.run(_cursor())
         assert cursor["last_seq"] == 1000 and "reconciled_at" in cursor
@@ -81,7 +83,56 @@ def test_npm_packages_are_rechecked_through_the_feed(monkeypatch) -> None:
         run_ids.append(second["run_id"])
         assert second["status"] == "success" and second["changed"] == 1
         assert slept, "a stale answer is retried after daily_update_stale_retry_seconds"
-        assert asyncio.run(_cursor())["last_seq"] == 1010
+        cursor = asyncio.run(_cursor())
+        assert cursor["last_seq"] == 1010 and len(cursor["pending"]) == 1   # the feed has moved past it
         assert second["per_registry"]["npmjs"]["changed"] == 1
+
+        # The run after that checks it again although the feed no longer names it; still stale, it is left for the
+        # weekly check.
+        _feed(monkeypatch, 1020, [])
+        third = asyncio.run(daily_update._run_daily_update_async("npm"))
+        run_ids.append(third["run_id"])
+        assert third["status"] == "success" and third["changed"] == 1
+        assert "pending" not in asyncio.run(_cursor())
     finally:
         asyncio.run(_cleanup(run_ids))
+
+
+def test_a_recorded_feed_page_moves_the_cursor_and_finds_its_packages(monkeypatch) -> None:
+    """The real `_changes` answer (recorded): numeric seqs, ids as package names, `last_seq` past the update_seq.
+    The detector reads that same answer: a second live read of the feed would differ at every recording."""
+    feed = "https://replicate.npmjs.com/registry/"
+    registry = RegistryConfig(id="r", slug="npmjs", ecosystem="npm", protocol="npm-registry",
+                              base_url="https://registry.npmjs.org/", priority=0, config={"changes_url": feed},
+                              routing=None, auth_type="none", credentials_ref=None)
+
+    async def run() -> tuple[list[dict], ChangeSet, int]:
+        async with changes.make_client(30) as client:
+            root = (await client.get(feed)).json()
+            target = int(root["update_seq"])
+            since = target - 20
+            page = (await client.get(f"{feed}_changes", params={"since": since, "limit": 100})).json()
+
+        def answer(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/_changes") and request.url.params["since"] == str(since):
+                return httpx.Response(200, json=page)
+            if request.url.path.endswith("/_changes"):
+                return httpx.Response(200, json={"results": [], "last_seq": int(request.url.params["since"])})
+            return httpx.Response(200, json=root)
+
+        monkeypatch.setattr(changes, "make_client",
+                            lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(answer)))
+        named = str(page["results"][0]["id"])
+        scope, _, local = named[1:].partition("/") if named.startswith("@") else ("", "", named)
+        tracked = [TrackedPackage(ref=PackageRef("npm", scope, local), package_id="p1", revision='"e1"', etag=None,
+                                  unavailable=False),
+                   TrackedPackage(ref=PackageRef("npm", "", "surely-not-in-this-page-x"), package_id="p2",
+                                  revision='"e1"', etag=None, unavailable=False)]
+        detector = changes.NpmChangesDetector(registry, feed, page_size=100)
+        found = await detector.detect(tracked, {"last_seq": since, "reconciled_at": datetime.now(UTC).isoformat()})
+        return page["results"], found, target
+
+    results, found, target = asyncio.run(run())
+    assert all(isinstance(entry["seq"], int) and entry["id"] for entry in results)
+    assert [(p.package_id, rev) for p, rev in found.changed] == [("p1", 'not:"e1"')]
+    assert found.cursor["last_seq"] >= target and found.reconcile_all is False

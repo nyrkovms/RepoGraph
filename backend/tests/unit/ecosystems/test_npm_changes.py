@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
-from app.ecosystems.base import PackageRef, RegistryConfig, TrackedPackage
+from app.ecosystems.base import ChangeSet, PackageRef, RegistryConfig, TrackedPackage
 from app.ecosystems.npm import changes
 from app.ecosystems.npm.changes import NpmChangesDetector
 
@@ -95,3 +95,36 @@ def test_a_full_check_once_a_week(monkeypatch) -> None:
     assert result.reconcile_all is True and result.cursor["reconciled_at"] > old
     result = _detect([_tracked("react")], {"last_seq": 100, **FRESH})
     assert result.reconcile_all is False and result.cursor["reconciled_at"] == FRESH["reconciled_at"]
+
+
+class _Reconciler:
+    def __init__(self, changed: list[tuple[TrackedPackage, str | None]], missing: list[TrackedPackage]) -> None:
+        self.result = ChangeSet(changed=changed, missing=missing, cursor={})
+        self.asked: list[list[str]] = []
+
+    async def detect(self, tracked, cursor) -> ChangeSet:
+        self.asked.append([p.ref.name for p in tracked])
+        return self.result
+
+
+def test_a_full_check_goes_through_the_reconciler(monkeypatch) -> None:
+    react, vue, gone = _tracked("react"), _tracked("vue"), _tracked("gone")
+    _serve(monkeypatch, 300, {100: _page(300, "react", "vue")})
+    reconciler = _Reconciler([(vue, '"etag-2"')], [gone])
+    old = (datetime.now(UTC) - timedelta(days=8)).isoformat()
+    result = asyncio.run(NpmChangesDetector(REGISTRY, FEED, reconciler=reconciler)
+                         .detect([react, vue, gone], {"last_seq": 100, "reconciled_at": old}))
+    assert reconciler.asked == [["react", "vue", "gone"]]
+    # The ETag answer wins; a feed entry the packument does not show yet keeps waiting for a new revision.
+    assert sorted((p.ref.name, rev) for p, rev in result.changed) == [("react", 'not:"etag-1"'), ("vue", '"etag-2"')]
+    assert (result.missing, result.reconcile_all, result.cursor["last_seq"]) == ([gone], False, 300)
+
+    reconciler.asked.clear()
+    asyncio.run(NpmChangesDetector(REGISTRY, FEED, reconciler=reconciler).detect([react], {"last_seq": 300, **FRESH}))
+    assert reconciler.asked == []
+
+
+def test_a_string_seq_fails_the_source_instead_of_freezing_the_cursor(monkeypatch) -> None:
+    _serve(monkeypatch, 300, {100: {"results": [{"seq": "200-g1AAA", "id": "react"}], "last_seq": "200-g1AAA"}})
+    with pytest.raises(ValueError, match="not a number"):
+        _detect([_tracked("react")], {"last_seq": 100, **FRESH})

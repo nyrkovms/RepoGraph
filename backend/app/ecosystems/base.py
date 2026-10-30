@@ -315,6 +315,7 @@ class ResolvedNode:
     depth: int
     errors: list[str] = field(default_factory=list)   # node-level problems: unknown dependencies, unresolvable requirement
     latest_compatible: str | None = None   # newest version usable in the environment, ignoring the constraint (R2)
+    details: Mapping[str, object] = field(default_factory=dict)   # npm: {"bundled": true}
 
 
 @dataclass(slots=True)
@@ -359,6 +360,7 @@ class CatalogVersion:
     artifacts: Sequence[str] = ()          # file names in that source (PyPI wheel tags name the platforms)
     tags: Sequence[str] = ()               # dist-tags pointing at it (npm `latest` decides the version picked)
     deprecated: bool = False
+    bundled: bool = False                  # npm bundleDependencies: inside the tarball, not resolved from a registry
 
 
 class CatalogAccess(Protocol):

@@ -159,7 +159,7 @@ rpm_worker/                   — Dockerfile, worker.py, modules.py, solver.py
 | Экосистема | namespace | name | Нормализация | purl |
 |---|---|---|---|---|
 | pypi | — | project | PEP 503: lowercase, `[-_.]+` → `-` | `pkg:pypi/flask` |
-| npm | scope без `@` | имя без scope | Имена в npm уже lowercase | `pkg:npm/%40angular/core` |
+| npm | scope без `@` | имя без scope | Нет: новые имена lowercase, старые (`JSONStream`) хранятся как есть | `pkg:npm/%40angular/core` |
 | maven | groupId | artifactId | Без изменений, регистр важен | `pkg:maven/org.springframework/spring-core` |
 | nuget | — | id | `normalized_name` lowercase, `name` — исходное написание | `pkg:nuget/Newtonsoft.Json` |
 | go | — | module path | Без изменений; в URL к proxy заглавные экранируются (`!x`). Мажорные версии `/v2` — **другой** модуль | `pkg:golang/github.com/redis/go-redis/v9` |

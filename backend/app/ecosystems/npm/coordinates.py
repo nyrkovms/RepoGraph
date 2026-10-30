@@ -7,8 +7,9 @@ from app.ecosystems.purl import Purl, parse
 
 MAX_NAME_LENGTH = 214
 
-# What encodeURIComponent leaves alone, as validate-npm-package-name requires, minus capitals.
-_SAFE = re.compile(r"[a-z0-9._~!*'()-]+")
+# What encodeURIComponent leaves alone, as validate-npm-package-name requires. Capitals are refused only for new
+# packages (`validForOldPackages` allows them): the registry holds `JSONStream`, and the case is part of the name.
+_SAFE = re.compile(r"[A-Za-z0-9._~!*'()-]+")
 # Names the registry refuses on publish. Core-module names (`http`, `util`) are not refused here: such packages
 # exist in the registry and a catalog has to be able to hold them.
 _RESERVED = frozenset({"node_modules", "favicon.ico"})
@@ -31,7 +32,7 @@ def split_name(raw: str) -> tuple[str, str]:
 
 
 def validate_name(raw: str) -> None:
-    """The rules of validate-npm-package-name for new packages that a catalog can apply to what already exists."""
+    """The rules of validate-npm-package-name that hold for old packages too (`validForOldPackages`), and the length."""
     if len(raw) > MAX_NAME_LENGTH:
         raise ValueError(f"npm package name is longer than {MAX_NAME_LENGTH} characters")
     scope, name = split_name(raw)
@@ -41,7 +42,7 @@ def validate_name(raw: str) -> None:
         raise ValueError(f"not an allowed npm package name: {raw!r}")
     for part in (scope, name) if scope else (name,):
         if not _SAFE.fullmatch(part):
-            raise ValueError(f"npm package name must be lowercase and URL-safe: {raw!r}")
+            raise ValueError(f"npm package name must be URL-safe: {raw!r}")
 
 
 class NpmCoordinates:

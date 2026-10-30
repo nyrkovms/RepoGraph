@@ -56,6 +56,9 @@ def test_root_by_purl() -> None:
         _root(PLUGIN, "pypi", "pkg:npm/left-pad", "*", [])
     with pytest.raises(ResolveInvalidRequest):
         _root(PLUGIN, "pypi", "pkg:pypi/flask", "latest", [])
+    npm = get_plugin("npm")
+    pinned = _root(npm, "npm", "pkg:npm/%40angular/core@19.0.0", "", [])   # a bare version, not PEP 440's ==
+    assert (pinned.ref.namespace, pinned.ref.name, pinned.constraint) == ("angular", "core", "19.0.0")
 
 
 def test_is_newer_version() -> None:

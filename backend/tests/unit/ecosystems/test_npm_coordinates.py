@@ -36,9 +36,6 @@ def test_display_is_the_native_spelling() -> None:
 @pytest.mark.parametrize("raw", [
     "",
     "   ",
-    "Express",                    # capitals: not valid for new packages, and npm names are lowercase
-    "@Angular/core",
-    "@angular/Core",
     ".hidden",
     "_private",
     "has space",
@@ -77,6 +74,13 @@ def test_length_limit_counts_the_scope() -> None:
 def test_url_safe_punctuation_that_npm_allows() -> None:
     for raw in ("a.b", "a_b", "a-b", "a~b", "a1", "1a", "a!b", "a'b", "a(b)", "a*b"):
         assert COORDINATES.parse(raw).name == raw
+
+
+def test_old_names_with_capitals_are_accepted_as_they_are() -> None:
+    # validForOldPackages: `JSONStream` exists in the registry; npm names are case-sensitive, nothing is lowered.
+    assert COORDINATES.parse("JSONStream") == _ref("", "JSONStream")
+    assert COORDINATES.from_purl("pkg:npm/JSONStream@1.3.5") == (_ref("", "JSONStream"), "1.3.5")
+    assert COORDINATES.to_purl(_ref("", "JSONStream")) == "pkg:npm/JSONStream"
 
 
 def test_core_module_names_are_accepted() -> None:
@@ -130,8 +134,6 @@ def test_from_purl(purl: str, ref: PackageRef | None, version: str | None) -> No
     "pkg:npm/%40angular",                # the scope without a name is the name `@angular`: not a name
     "pkg:npm/@/core",
     "pkg:npm/foo%2Fbar",                 # a slash inside the name
-    "pkg:npm/Express",
-    "pkg:npm/%40Angular/core",
     "pkg:npm/",
     "npm/left-pad",
     "not a purl",
