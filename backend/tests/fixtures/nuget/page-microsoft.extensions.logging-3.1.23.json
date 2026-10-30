@@ -1,0 +1,446 @@
+{
+ "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/page/1.0.0-rc1-final/3.1.23.json",
+ "@type": "catalog:CatalogPage",
+ "commitId": "46167694-cbbe-4712-b708-1eaf790e8d16",
+ "commitTimeStamp": "2024-11-12T18:25:14.5991651+00:00",
+ "count": 64,
+ "items": [
+  {
+   "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/1.0.0-rc1-final.json",
+   "@type": "Package",
+   "commitId": "cf8b1083-bc96-4980-bddf-fe66ea582bb2",
+   "commitTimeStamp": "2022-06-23T10:56:21.2130606+00:00",
+   "catalogEntry": {
+    "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json",
+    "@type": "PackageDetails",
+    "authors": "Microsoft",
+    "dependencyGroups": [
+     {
+      "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netframework4.5.1",
+      "@type": "PackageDependencyGroup",
+      "dependencies": [
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netframework4.5.1/microsoft.extensions.dependencyinjection.abstractions",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+        "range": "[1.0.0-rc1-final, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.dependencyinjection.abstractions/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netframework4.5.1/microsoft.extensions.logging.abstractions",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.Logging.Abstractions",
+        "range": "[1.0.0-rc1-final, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging.abstractions/index.json"
+       }
+      ],
+      "targetFramework": ".NETFramework4.5.1"
+     },
+     {
+      "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netplatform5.4",
+      "@type": "PackageDependencyGroup",
+      "dependencies": [
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netplatform5.4/microsoft.extensions.dependencyinjection.abstractions",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+        "range": "[1.0.0-rc1-final, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.dependencyinjection.abstractions/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netplatform5.4/microsoft.extensions.logging.abstractions",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.Logging.Abstractions",
+        "range": "[1.0.0-rc1-final, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging.abstractions/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netplatform5.4/system.collections.concurrent",
+        "@type": "PackageDependency",
+        "id": "System.Collections.Concurrent",
+        "range": "[4.0.11-beta-23516, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.collections.concurrent/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netplatform5.4/system.collections",
+        "@type": "PackageDependency",
+        "id": "System.Collections",
+        "range": "[4.0.11-beta-23516, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.collections/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netplatform5.4/system.componentmodel",
+        "@type": "PackageDependency",
+        "id": "System.ComponentModel",
+        "range": "[4.0.1-beta-23516, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.componentmodel/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netplatform5.4/system.globalization",
+        "@type": "PackageDependency",
+        "id": "System.Globalization",
+        "range": "[4.0.11-beta-23516, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.globalization/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netplatform5.4/system.linq",
+        "@type": "PackageDependency",
+        "id": "System.Linq",
+        "range": "[4.0.1-beta-23516, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.linq/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netplatform5.4/system.threading",
+        "@type": "PackageDependency",
+        "id": "System.Threading",
+        "range": "[4.0.11-beta-23516, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.threading/index.json"
+       }
+      ],
+      "targetFramework": ".NETPlatform5.4"
+     },
+     {
+      "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netcore5.0",
+      "@type": "PackageDependencyGroup",
+      "dependencies": [
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netcore5.0/microsoft.extensions.dependencyinjection.abstractions",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+        "range": "[1.0.0-rc1-final, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.dependencyinjection.abstractions/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netcore5.0/microsoft.extensions.logging.abstractions",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.Logging.Abstractions",
+        "range": "[1.0.0-rc1-final, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging.abstractions/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netcore5.0/system.collections",
+        "@type": "PackageDependency",
+        "id": "System.Collections",
+        "range": "[4.0.10, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.collections/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netcore5.0/system.diagnostics.debug",
+        "@type": "PackageDependency",
+        "id": "System.Diagnostics.Debug",
+        "range": "[4.0.10, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.diagnostics.debug/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netcore5.0/system.linq",
+        "@type": "PackageDependency",
+        "id": "System.Linq",
+        "range": "[4.0.0, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.linq/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netcore5.0/system.resources.resourcemanager",
+        "@type": "PackageDependency",
+        "id": "System.Resources.ResourceManager",
+        "range": "[4.0.0, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.resources.resourcemanager/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netcore5.0/system.runtime",
+        "@type": "PackageDependency",
+        "id": "System.Runtime",
+        "range": "[4.0.20, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.runtime/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netcore5.0/system.runtime.extensions",
+        "@type": "PackageDependency",
+        "id": "System.Runtime.Extensions",
+        "range": "[4.0.10, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.runtime.extensions/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netcore5.0/system.threading",
+        "@type": "PackageDependency",
+        "id": "System.Threading",
+        "range": "[4.0.10, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.threading/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#dependencygroup/.netcore5.0/system.threading.tasks",
+        "@type": "PackageDependency",
+        "id": "System.Threading.Tasks",
+        "range": "[4.0.10, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.threading.tasks/index.json"
+       }
+      ],
+      "targetFramework": ".NETCore5.0"
+     }
+    ],
+    "deprecation": {
+     "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.23.10.54.46/microsoft.extensions.logging.1.0.0-rc1-final.json#deprecation",
+     "@type": "deprecation",
+     "message": "This package has been deprecated as part of the .NET Package Deprecation effort. You can learn more about it from https://github.com/dotnet/announcements/issues/217",
+     "reasons": [
+      "Other",
+      "Legacy"
+     ]
+    },
+    "description": "Logging infrastructure.",
+    "iconUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/1.0.0-rc1-final/icon",
+    "id": "Microsoft.Extensions.Logging",
+    "language": "",
+    "licenseExpression": "",
+    "licenseUrl": "http://www.microsoft.com/web/webpi/eula/net_library_eula_enu.htm",
+    "listed": true,
+    "minClientVersion": "",
+    "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/1.0.0-rc1-final/microsoft.extensions.logging.1.0.0-rc1-final.nupkg",
+    "projectUrl": "http://www.asp.net/",
+    "published": "2015-11-18T14:11:09.127+00:00",
+    "requireLicenseAcceptance": true,
+    "summary": "",
+    "tags": [
+     ""
+    ],
+    "title": "",
+    "version": "1.0.0-rc1-final"
+   },
+   "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/1.0.0-rc1-final/microsoft.extensions.logging.1.0.0-rc1-final.nupkg",
+   "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/index.json"
+  },
+  {
+   "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/2.1.0-rc1-final.json",
+   "@type": "Package",
+   "commitId": "de4223d8-9011-4935-b2ea-ac36d5dad73a",
+   "commitTimeStamp": "2022-06-24T01:11:55.4156212+00:00",
+   "catalogEntry": {
+    "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.24.01.11.07/microsoft.extensions.logging.2.1.0-rc1-final.json",
+    "@type": "PackageDetails",
+    "authors": "Microsoft",
+    "dependencyGroups": [
+     {
+      "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.24.01.11.07/microsoft.extensions.logging.2.1.0-rc1-final.json#dependencygroup/.netstandard2.0",
+      "@type": "PackageDependencyGroup",
+      "dependencies": [
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.24.01.11.07/microsoft.extensions.logging.2.1.0-rc1-final.json#dependencygroup/.netstandard2.0/microsoft.extensions.logging.abstractions",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.Logging.Abstractions",
+        "range": "[2.1.0-rc1-final, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging.abstractions/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.24.01.11.07/microsoft.extensions.logging.2.1.0-rc1-final.json#dependencygroup/.netstandard2.0/microsoft.extensions.configuration.binder",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.Configuration.Binder",
+        "range": "[2.1.0-rc1-final, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.configuration.binder/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.24.01.11.07/microsoft.extensions.logging.2.1.0-rc1-final.json#dependencygroup/.netstandard2.0/microsoft.extensions.dependencyinjection.abstractions",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+        "range": "[2.1.0-rc1-final, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.dependencyinjection.abstractions/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.24.01.11.07/microsoft.extensions.logging.2.1.0-rc1-final.json#dependencygroup/.netstandard2.0/microsoft.extensions.options",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.Options",
+        "range": "[2.1.0-rc1-final, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.options/index.json"
+       }
+      ],
+      "targetFramework": ".NETStandard2.0"
+     }
+    ],
+    "deprecation": {
+     "@id": "https://api.nuget.org/v3/catalog0/data/2022.06.24.01.11.07/microsoft.extensions.logging.2.1.0-rc1-final.json#deprecation",
+     "@type": "deprecation",
+     "message": "This package has been deprecated as part of the .NET Package Deprecation effort. You can learn more about it from https://github.com/dotnet/announcements/issues/217",
+     "reasons": [
+      "Other",
+      "Legacy"
+     ]
+    },
+    "description": "Logging infrastructure default implementation for Microsoft.Extensions.Logging.",
+    "iconUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/2.1.0-rc1-final/icon",
+    "id": "Microsoft.Extensions.Logging",
+    "language": "",
+    "licenseExpression": "",
+    "licenseUrl": "https://raw.githubusercontent.com/aspnet/Home/2.0.0/LICENSE.txt",
+    "listed": true,
+    "minClientVersion": "",
+    "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/2.1.0-rc1-final/microsoft.extensions.logging.2.1.0-rc1-final.nupkg",
+    "projectUrl": "https://asp.net/",
+    "published": "2018-05-06T23:13:05.667+00:00",
+    "requireLicenseAcceptance": true,
+    "summary": "",
+    "tags": [
+     "logging"
+    ],
+    "title": "",
+    "version": "2.1.0-rc1-final"
+   },
+   "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/2.1.0-rc1-final/microsoft.extensions.logging.2.1.0-rc1-final.nupkg",
+   "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/index.json"
+  },
+  {
+   "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/3.1.23.json",
+   "@type": "Package",
+   "commitId": "7a033c98-480b-45aa-a7c2-e7bb8f8d49a2",
+   "commitTimeStamp": "2022-03-08T15:06:05.7427459+00:00",
+   "catalogEntry": {
+    "@id": "https://api.nuget.org/v3/catalog0/data/2022.03.08.15.01.19/microsoft.extensions.logging.3.1.23.json",
+    "@type": "PackageDetails",
+    "authors": "Microsoft",
+    "dependencyGroups": [
+     {
+      "@id": "https://api.nuget.org/v3/catalog0/data/2022.03.08.15.01.19/microsoft.extensions.logging.3.1.23.json#dependencygroup/.netcoreapp3.1",
+      "@type": "PackageDependencyGroup",
+      "dependencies": [
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.03.08.15.01.19/microsoft.extensions.logging.3.1.23.json#dependencygroup/.netcoreapp3.1/microsoft.extensions.configuration.binder",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.Configuration.Binder",
+        "range": "[3.1.23, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.configuration.binder/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.03.08.15.01.19/microsoft.extensions.logging.3.1.23.json#dependencygroup/.netcoreapp3.1/microsoft.extensions.dependencyinjection",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.DependencyInjection",
+        "range": "[3.1.23, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.dependencyinjection/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.03.08.15.01.19/microsoft.extensions.logging.3.1.23.json#dependencygroup/.netcoreapp3.1/microsoft.extensions.logging.abstractions",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.Logging.Abstractions",
+        "range": "[3.1.23, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging.abstractions/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.03.08.15.01.19/microsoft.extensions.logging.3.1.23.json#dependencygroup/.netcoreapp3.1/microsoft.extensions.options",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.Options",
+        "range": "[3.1.23, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.options/index.json"
+       }
+      ],
+      "targetFramework": ".NETCoreApp3.1"
+     },
+     {
+      "@id": "https://api.nuget.org/v3/catalog0/data/2022.03.08.15.01.19/microsoft.extensions.logging.3.1.23.json#dependencygroup/.netstandard2.0",
+      "@type": "PackageDependencyGroup",
+      "dependencies": [
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.03.08.15.01.19/microsoft.extensions.logging.3.1.23.json#dependencygroup/.netstandard2.0/microsoft.extensions.configuration.binder",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.Configuration.Binder",
+        "range": "[3.1.23, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.configuration.binder/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.03.08.15.01.19/microsoft.extensions.logging.3.1.23.json#dependencygroup/.netstandard2.0/microsoft.extensions.dependencyinjection",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.DependencyInjection",
+        "range": "[3.1.23, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.dependencyinjection/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.03.08.15.01.19/microsoft.extensions.logging.3.1.23.json#dependencygroup/.netstandard2.0/microsoft.extensions.logging.abstractions",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.Logging.Abstractions",
+        "range": "[3.1.23, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging.abstractions/index.json"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2022.03.08.15.01.19/microsoft.extensions.logging.3.1.23.json#dependencygroup/.netstandard2.0/microsoft.extensions.options",
+        "@type": "PackageDependency",
+        "id": "Microsoft.Extensions.Options",
+        "range": "[3.1.23, )",
+        "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.options/index.json"
+       }
+      ],
+      "targetFramework": ".NETStandard2.0"
+     }
+    ],
+    "description": "Logging infrastructure default implementation for Microsoft.Extensions.Logging.",
+    "iconUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/3.1.23/icon",
+    "id": "Microsoft.Extensions.Logging",
+    "language": "",
+    "licenseExpression": "Apache-2.0",
+    "licenseUrl": "https://www.nuget.org/packages/Microsoft.Extensions.Logging/3.1.23/license",
+    "listed": true,
+    "minClientVersion": "",
+    "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/3.1.23/microsoft.extensions.logging.3.1.23.nupkg",
+    "projectUrl": "https://asp.net/",
+    "published": "2022-03-08T14:42:59.943+00:00",
+    "requireLicenseAcceptance": true,
+    "summary": "",
+    "tags": [
+     "logging"
+    ],
+    "title": "",
+    "version": "3.1.23"
+   },
+   "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/3.1.23/microsoft.extensions.logging.3.1.23.nupkg",
+   "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/index.json"
+  }
+ ],
+ "parent": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/index.json",
+ "lower": "1.0.0-rc1-final",
+ "upper": "3.1.23",
+ "@context": {
+  "@vocab": "http://schema.nuget.org/schema#",
+  "catalog": "http://schema.nuget.org/catalog#",
+  "xsd": "http://www.w3.org/2001/XMLSchema#",
+  "items": {
+   "@id": "catalog:item",
+   "@container": "@set"
+  },
+  "commitTimeStamp": {
+   "@id": "catalog:commitTimeStamp",
+   "@type": "xsd:dateTime"
+  },
+  "commitId": {
+   "@id": "catalog:commitId"
+  },
+  "count": {
+   "@id": "catalog:count"
+  },
+  "parent": {
+   "@id": "catalog:parent",
+   "@type": "@id"
+  },
+  "tags": {
+   "@id": "tag",
+   "@container": "@set"
+  },
+  "reasons": {
+   "@container": "@set"
+  },
+  "packageTargetFrameworks": {
+   "@id": "packageTargetFramework",
+   "@container": "@set"
+  },
+  "dependencyGroups": {
+   "@id": "dependencyGroup",
+   "@container": "@set"
+  },
+  "dependencies": {
+   "@id": "dependency",
+   "@container": "@set"
+  },
+  "packageContent": {
+   "@type": "@id"
+  },
+  "published": {
+   "@type": "xsd:dateTime"
+  },
+  "registration": {
+   "@type": "@id"
+  }
+ }
+}

@@ -1,0 +1,854 @@
+{
+ "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/index.json",
+ "@type": [
+  "catalog:CatalogRoot",
+  "PackageRegistration",
+  "catalog:Permalink"
+ ],
+ "commitId": "95b1f94a-0fb8-4bae-8fce-9bdf3e628843",
+ "commitTimeStamp": "2026-04-10T00:38:07.9089337+00:00",
+ "count": 1,
+ "items": [
+  {
+   "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/index.json#page/0.9.0-preview/3.0.5",
+   "@type": "catalog:CatalogPage",
+   "commitId": "95b1f94a-0fb8-4bae-8fce-9bdf3e628843",
+   "commitTimeStamp": "2026-04-10T00:38:07.9089337+00:00",
+   "count": 24,
+   "items": [
+    {
+     "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/0.9.0-preview.json",
+     "@type": "Package",
+     "commitId": "34be91c7-e674-4191-9345-adda28d87bb8",
+     "commitTimeStamp": "2024-05-12T15:27:10.01666+00:00",
+     "catalogEntry": {
+      "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.0.9.0-preview.json",
+      "@type": "PackageDetails",
+      "authors": "Microsoft",
+      "dependencyGroups": [
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.0.9.0-preview.json#dependencygroup",
+        "@type": "PackageDependencyGroup",
+        "dependencies": [
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.0.9.0-preview.json#dependencygroup/microsoft.azure.common",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Azure.Common",
+          "range": "[2.0.4, 3.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.common/index.json"
+         }
+        ]
+       }
+      ],
+      "deprecation": {
+       "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.0.9.0-preview.json#deprecation",
+       "@type": "deprecation",
+       "alternatePackage": {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.0.9.0-preview.json#deprecation/alternatePackage",
+        "@type": "alternatePackage",
+        "id": "Azure.Security.KeyVault.Certificates",
+        "range": "*"
+       },
+       "message": "Please note, this package is obsolete as of 3/31/2023 and is no longer maintained or monitored. Microsoft encourages you to upgrade to one of the following replacement packages, depending on your use case:\n    Azure.Security.KeyVault.Certificates\n    Azure.Security.KeyVault.Keys\n    Azure.Security.KeyVault.Secrets\n Refer to the migration guide (https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/keyvault/Azure.Security.KeyVault.Secrets/MigrationGuide.md) for guidance on upgrading. Refer to our deprecation policy (https://aka.ms/azsdk/support-policies) for more details.",
+       "reasons": [
+        "Legacy"
+       ]
+      },
+      "description": "Provides key and secret capabilities for Azure Key Vault.",
+      "iconUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/0.9.0-preview/icon",
+      "id": "Microsoft.Azure.KeyVault",
+      "language": "",
+      "licenseExpression": "",
+      "licenseUrl": "http://aka.ms/windowsazureapache2",
+      "listed": true,
+      "minClientVersion": "2.5",
+      "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/0.9.0-preview/microsoft.azure.keyvault.0.9.0-preview.nupkg",
+      "projectUrl": "https://github.com/Azure/azure-sdk-for-net",
+      "published": "2015-04-09T23:03:02.18+00:00",
+      "requireLicenseAcceptance": false,
+      "summary": "Provides key and secret operation capabilities for Azure Key Vault.",
+      "tags": [
+       "Microsoft",
+       "Azure",
+       "key",
+       "vault",
+       "\"key",
+       "vault\"",
+       "REST",
+       "HTTP",
+       "client",
+       "azureofficial",
+       "windowsazureofficial"
+      ],
+      "title": "Microsoft Azure Key Vault Library",
+      "version": "0.9.0-preview"
+     },
+     "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/0.9.0-preview/microsoft.azure.keyvault.0.9.0-preview.nupkg",
+     "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/index.json"
+    },
+    {
+     "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/1.0.0.json",
+     "@type": "Package",
+     "commitId": "34be91c7-e674-4191-9345-adda28d87bb8",
+     "commitTimeStamp": "2024-05-12T15:27:10.01666+00:00",
+     "catalogEntry": {
+      "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.1.0.0.json",
+      "@type": "PackageDetails",
+      "authors": "Microsoft",
+      "dependencyGroups": [
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.1.0.0.json#dependencygroup",
+        "@type": "PackageDependencyGroup",
+        "dependencies": [
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.1.0.0.json#dependencygroup/microsoft.azure.common",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Azure.Common",
+          "range": "[2.0.4, 3.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.common/index.json"
+         }
+        ]
+       }
+      ],
+      "deprecation": {
+       "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.1.0.0.json#deprecation",
+       "@type": "deprecation",
+       "alternatePackage": {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.1.0.0.json#deprecation/alternatePackage",
+        "@type": "alternatePackage",
+        "id": "Azure.Security.KeyVault.Certificates",
+        "range": "*"
+       },
+       "message": "Please note, this package is obsolete as of 3/31/2023 and is no longer maintained or monitored. Microsoft encourages you to upgrade to one of the following replacement packages, depending on your use case:\n    Azure.Security.KeyVault.Certificates\n    Azure.Security.KeyVault.Keys\n    Azure.Security.KeyVault.Secrets\n Refer to the migration guide (https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/keyvault/Azure.Security.KeyVault.Secrets/MigrationGuide.md) for guidance on upgrading. Refer to our deprecation policy (https://aka.ms/azsdk/support-policies) for more details.",
+       "reasons": [
+        "Legacy"
+       ]
+      },
+      "description": "Azure Key Vault enables users to store and use cryptographic keys within the Microsoft Azure environment. Azure Key Vault supports multiple key types and algorithms and enables the use of Hardware Security Modules (HSM) for high value customer keys. In addition, Azure Key Vault allows users to securely store secrets in a Key Vault; secrets are limited size octet objects and Azure Key Vault applies no specific semantics to these objects. A Key Vault may contain a mix of keys and secrets at the same time, and access control for the two types of object is independently controlled. Users, subject to appropriate authorization, may: 1) Manage cryptographic keys using Create, Import, Update, Delete and other operations 2) Manage secrets using Get, Set, Delete and other operations 3) Use cryptographic keys with Sign/Verify, WrapKey/UnwrapKey and Encrypt/Decrypt operations. Operations against Key Vaults are authenticated and authorized using Azure Active Directory.",
+      "iconUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/1.0.0/icon",
+      "id": "Microsoft.Azure.KeyVault",
+      "language": "",
+      "licenseExpression": "",
+      "licenseUrl": "http://aka.ms/windowsazureapache2",
+      "listed": true,
+      "minClientVersion": "2.5",
+      "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/1.0.0/microsoft.azure.keyvault.1.0.0.nupkg",
+      "projectUrl": "https://github.com/Azure/azure-sdk-for-net",
+      "published": "2015-06-18T01:38:57.187+00:00",
+      "requireLicenseAcceptance": false,
+      "summary": "Provides key and secret operation capabilities for Azure Key Vault.",
+      "tags": [
+       "Microsoft",
+       "Azure",
+       "key",
+       "vault",
+       "\"key",
+       "vault\"",
+       "REST",
+       "HTTP",
+       "client",
+       "azureofficial",
+       "windowsazureofficial",
+       "Profile-2015-05-01"
+      ],
+      "title": "Microsoft Azure Key Vault Library",
+      "version": "1.0.0"
+     },
+     "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/1.0.0/microsoft.azure.keyvault.1.0.0.nupkg",
+     "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/index.json"
+    },
+    {
+     "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/2.3.1.json",
+     "@type": "Package",
+     "commitId": "34be91c7-e674-4191-9345-adda28d87bb8",
+     "commitTimeStamp": "2024-05-12T15:27:10.01666+00:00",
+     "catalogEntry": {
+      "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json",
+      "@type": "PackageDetails",
+      "authors": "Microsoft",
+      "dependencyGroups": [
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#dependencygroup/.netframework4.5.2",
+        "@type": "PackageDependencyGroup",
+        "dependencies": [
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#dependencygroup/.netframework4.5.2/microsoft.azure.keyvault.webkey",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Azure.KeyVault.WebKey",
+          "range": "[2.0.7, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault.webkey/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#dependencygroup/.netframework4.5.2/microsoft.rest.clientruntime.azure",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime.Azure",
+          "range": "[3.3.7, 4.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime.azure/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#dependencygroup/.netframework4.5.2/microsoft.rest.clientruntime",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime",
+          "range": "[2.3.8, 3.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#dependencygroup/.netframework4.5.2/newtonsoft.json",
+          "@type": "PackageDependency",
+          "id": "Newtonsoft.Json",
+          "range": "[6.0.8, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/index.json"
+         }
+        ],
+        "targetFramework": ".NETFramework4.5.2"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#dependencygroup/.netstandard1.4",
+        "@type": "PackageDependencyGroup",
+        "dependencies": [
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#dependencygroup/.netstandard1.4/microsoft.azure.keyvault.webkey",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Azure.KeyVault.WebKey",
+          "range": "[2.0.7, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault.webkey/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#dependencygroup/.netstandard1.4/netstandard.library",
+          "@type": "PackageDependency",
+          "id": "NETStandard.Library",
+          "range": "[1.6.1, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/netstandard.library/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#dependencygroup/.netstandard1.4/microsoft.rest.clientruntime.azure",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime.Azure",
+          "range": "[3.3.7, 4.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime.azure/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#dependencygroup/.netstandard1.4/microsoft.rest.clientruntime",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime",
+          "range": "[2.3.8, 3.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#dependencygroup/.netstandard1.4/system.net.http",
+          "@type": "PackageDependency",
+          "id": "System.Net.Http",
+          "range": "[4.3.0, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.net.http/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#dependencygroup/.netstandard1.4/newtonsoft.json",
+          "@type": "PackageDependency",
+          "id": "Newtonsoft.Json",
+          "range": "[9.0.1, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/index.json"
+         }
+        ],
+        "targetFramework": ".NETStandard1.4"
+       }
+      ],
+      "deprecation": {
+       "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#deprecation",
+       "@type": "deprecation",
+       "alternatePackage": {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.1.json#deprecation/alternatePackage",
+        "@type": "alternatePackage",
+        "id": "Azure.Security.KeyVault.Certificates",
+        "range": "*"
+       },
+       "message": "Please note, this package is obsolete as of 3/31/2023 and is no longer maintained or monitored. Microsoft encourages you to upgrade to one of the following replacement packages, depending on your use case:\n    Azure.Security.KeyVault.Certificates\n    Azure.Security.KeyVault.Keys\n    Azure.Security.KeyVault.Secrets\n Refer to the migration guide (https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/keyvault/Azure.Security.KeyVault.Secrets/MigrationGuide.md) for guidance on upgrading. Refer to our deprecation policy (https://aka.ms/azsdk/support-policies) for more details.",
+       "reasons": [
+        "Legacy"
+       ]
+      },
+      "description": "Azure Key Vault enables users to store and use cryptographic keys within the Microsoft Azure environment. Azure Key Vault supports multiple key types and algorithms and enables the use of Hardware Security Modules (HSM) for high value customer keys. In addition, Azure Key Vault allows users to securely store secrets in a Key Vault; secrets are limited size octet objects and Azure Key Vault applies no specific semantics to these objects. A Key Vault may contain a mix of keys and secrets at the same time, and access control for the two types of object is independently controlled. Users, subject to appropriate authorization, may: 1) Manage cryptographic keys using Create, Import, Update, Delete and other operations 2) Manage secrets using Get, Set, Delete and other operations 3) Use cryptographic keys with Sign/Verify, WrapKey/UnwrapKey and Encrypt/Decrypt operations. Operations against Key Vaults are authenticated and authorized using Azure Active Directory. Key Vault now supports certificates, a complex type that makes use of existing key and secret infrastructure for certificate operations. KV certificates also support notification and auto-renewal as well as other management features.",
+      "iconUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/2.3.1/icon",
+      "id": "Microsoft.Azure.KeyVault",
+      "language": "",
+      "licenseExpression": "",
+      "licenseUrl": "https://raw.githubusercontent.com/Microsoft/dotnet/master/LICENSE",
+      "listed": false,
+      "minClientVersion": "",
+      "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/2.3.1/microsoft.azure.keyvault.2.3.1.nupkg",
+      "projectUrl": "https://github.com/Azure/AutoRest",
+      "published": "1900-01-01T00:00:00+00:00",
+      "requireLicenseAcceptance": true,
+      "summary": "",
+      "tags": [
+       "Microsoft",
+       "Azure",
+       "key",
+       "vault",
+       "Key",
+       "Vault",
+       "REST",
+       "HTTP",
+       "client",
+       "azureofficial",
+       "windowsazureofficial"
+      ],
+      "title": "",
+      "version": "2.3.1"
+     },
+     "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/2.3.1/microsoft.azure.keyvault.2.3.1.nupkg",
+     "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/index.json"
+    },
+    {
+     "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/2.3.2.json",
+     "@type": "Package",
+     "commitId": "34be91c7-e674-4191-9345-adda28d87bb8",
+     "commitTimeStamp": "2024-05-12T15:27:10.01666+00:00",
+     "catalogEntry": {
+      "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json",
+      "@type": "PackageDetails",
+      "authors": "Microsoft",
+      "dependencyGroups": [
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#dependencygroup/.netframework4.5.2",
+        "@type": "PackageDependencyGroup",
+        "dependencies": [
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#dependencygroup/.netframework4.5.2/microsoft.azure.keyvault.webkey",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Azure.KeyVault.WebKey",
+          "range": "[2.0.7, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault.webkey/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#dependencygroup/.netframework4.5.2/microsoft.rest.clientruntime.azure",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime.Azure",
+          "range": "[3.3.7, 4.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime.azure/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#dependencygroup/.netframework4.5.2/microsoft.rest.clientruntime",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime",
+          "range": "[2.3.8, 3.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#dependencygroup/.netframework4.5.2/newtonsoft.json",
+          "@type": "PackageDependency",
+          "id": "Newtonsoft.Json",
+          "range": "[6.0.8, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/index.json"
+         }
+        ],
+        "targetFramework": ".NETFramework4.5.2"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#dependencygroup/.netstandard1.4",
+        "@type": "PackageDependencyGroup",
+        "dependencies": [
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#dependencygroup/.netstandard1.4/microsoft.azure.keyvault.webkey",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Azure.KeyVault.WebKey",
+          "range": "[2.0.7, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault.webkey/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#dependencygroup/.netstandard1.4/netstandard.library",
+          "@type": "PackageDependency",
+          "id": "NETStandard.Library",
+          "range": "[1.6.1, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/netstandard.library/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#dependencygroup/.netstandard1.4/microsoft.rest.clientruntime.azure",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime.Azure",
+          "range": "[3.3.7, 4.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime.azure/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#dependencygroup/.netstandard1.4/microsoft.rest.clientruntime",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime",
+          "range": "[2.3.8, 3.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#dependencygroup/.netstandard1.4/system.net.http",
+          "@type": "PackageDependency",
+          "id": "System.Net.Http",
+          "range": "[4.3.0, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.net.http/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#dependencygroup/.netstandard1.4/newtonsoft.json",
+          "@type": "PackageDependency",
+          "id": "Newtonsoft.Json",
+          "range": "[9.0.1, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/index.json"
+         }
+        ],
+        "targetFramework": ".NETStandard1.4"
+       }
+      ],
+      "deprecation": {
+       "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#deprecation",
+       "@type": "deprecation",
+       "alternatePackage": {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.2.3.2.json#deprecation/alternatePackage",
+        "@type": "alternatePackage",
+        "id": "Azure.Security.KeyVault.Certificates",
+        "range": "*"
+       },
+       "message": "Please note, this package is obsolete as of 3/31/2023 and is no longer maintained or monitored. Microsoft encourages you to upgrade to one of the following replacement packages, depending on your use case:\n    Azure.Security.KeyVault.Certificates\n    Azure.Security.KeyVault.Keys\n    Azure.Security.KeyVault.Secrets\n Refer to the migration guide (https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/keyvault/Azure.Security.KeyVault.Secrets/MigrationGuide.md) for guidance on upgrading. Refer to our deprecation policy (https://aka.ms/azsdk/support-policies) for more details.",
+       "reasons": [
+        "Legacy"
+       ]
+      },
+      "description": "Azure Key Vault enables users to store and use cryptographic keys within the Microsoft Azure environment. Azure Key Vault supports multiple key types and algorithms and enables the use of Hardware Security Modules (HSM) for high value customer keys. In addition, Azure Key Vault allows users to securely store secrets in a Key Vault; secrets are limited size octet objects and Azure Key Vault applies no specific semantics to these objects. A Key Vault may contain a mix of keys and secrets at the same time, and access control for the two types of object is independently controlled. Users, subject to appropriate authorization, may: 1) Manage cryptographic keys using Create, Import, Update, Delete and other operations 2) Manage secrets using Get, Set, Delete and other operations 3) Use cryptographic keys with Sign/Verify, WrapKey/UnwrapKey and Encrypt/Decrypt operations. Operations against Key Vaults are authenticated and authorized using Azure Active Directory. Key Vault now supports certificates, a complex type that makes use of existing key and secret infrastructure for certificate operations. KV certificates also support notification and auto-renewal as well as other management features.",
+      "iconUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/2.3.2/icon",
+      "id": "Microsoft.Azure.KeyVault",
+      "language": "",
+      "licenseExpression": "",
+      "licenseUrl": "https://raw.githubusercontent.com/Microsoft/dotnet/master/LICENSE",
+      "listed": true,
+      "minClientVersion": "",
+      "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/2.3.2/microsoft.azure.keyvault.2.3.2.nupkg",
+      "projectUrl": "https://github.com/Azure/AutoRest",
+      "published": "2017-07-05T22:44:42.48+00:00",
+      "requireLicenseAcceptance": true,
+      "summary": "",
+      "tags": [
+       "Microsoft",
+       "Azure",
+       "key",
+       "vault",
+       "Key",
+       "Vault",
+       "REST",
+       "HTTP",
+       "client",
+       "azureofficial",
+       "windowsazureofficial"
+      ],
+      "title": "",
+      "version": "2.3.2"
+     },
+     "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/2.3.2/microsoft.azure.keyvault.2.3.2.nupkg",
+     "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/index.json"
+    },
+    {
+     "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/3.0.0.json",
+     "@type": "Package",
+     "commitId": "34be91c7-e674-4191-9345-adda28d87bb8",
+     "commitTimeStamp": "2024-05-12T15:27:10.01666+00:00",
+     "catalogEntry": {
+      "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json",
+      "@type": "PackageDetails",
+      "authors": "Microsoft",
+      "dependencyGroups": [
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#dependencygroup/.netframework4.5.2",
+        "@type": "PackageDependencyGroup",
+        "dependencies": [
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#dependencygroup/.netframework4.5.2/microsoft.azure.keyvault.webkey",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Azure.KeyVault.WebKey",
+          "range": "[3.0.0, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault.webkey/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#dependencygroup/.netframework4.5.2/microsoft.rest.clientruntime.azure",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime.Azure",
+          "range": "[3.3.12, 4.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime.azure/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#dependencygroup/.netframework4.5.2/microsoft.rest.clientruntime",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime",
+          "range": "[2.3.11, 3.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#dependencygroup/.netframework4.5.2/newtonsoft.json",
+          "@type": "PackageDependency",
+          "id": "Newtonsoft.Json",
+          "range": "[6.0.8, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/index.json"
+         }
+        ],
+        "targetFramework": ".NETFramework4.5.2"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#dependencygroup/.netstandard1.4",
+        "@type": "PackageDependencyGroup",
+        "dependencies": [
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#dependencygroup/.netstandard1.4/microsoft.azure.keyvault.webkey",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Azure.KeyVault.WebKey",
+          "range": "[3.0.0, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault.webkey/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#dependencygroup/.netstandard1.4/netstandard.library",
+          "@type": "PackageDependency",
+          "id": "NETStandard.Library",
+          "range": "[1.6.1, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/netstandard.library/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#dependencygroup/.netstandard1.4/microsoft.rest.clientruntime.azure",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime.Azure",
+          "range": "[3.3.12, 4.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime.azure/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#dependencygroup/.netstandard1.4/microsoft.rest.clientruntime",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime",
+          "range": "[2.3.11, 3.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#dependencygroup/.netstandard1.4/system.net.http",
+          "@type": "PackageDependency",
+          "id": "System.Net.Http",
+          "range": "[4.3.0, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.net.http/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#dependencygroup/.netstandard1.4/newtonsoft.json",
+          "@type": "PackageDependency",
+          "id": "Newtonsoft.Json",
+          "range": "[9.0.1, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/index.json"
+         }
+        ],
+        "targetFramework": ".NETStandard1.4"
+       }
+      ],
+      "deprecation": {
+       "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#deprecation",
+       "@type": "deprecation",
+       "alternatePackage": {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2024.05.12.15.26.05/microsoft.azure.keyvault.3.0.0.json#deprecation/alternatePackage",
+        "@type": "alternatePackage",
+        "id": "Azure.Security.KeyVault.Certificates",
+        "range": "*"
+       },
+       "message": "Please note, this package is obsolete as of 3/31/2023 and is no longer maintained or monitored. Microsoft encourages you to upgrade to one of the following replacement packages, depending on your use case:\n    Azure.Security.KeyVault.Certificates\n    Azure.Security.KeyVault.Keys\n    Azure.Security.KeyVault.Secrets\n Refer to the migration guide (https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/keyvault/Azure.Security.KeyVault.Secrets/MigrationGuide.md) for guidance on upgrading. Refer to our deprecation policy (https://aka.ms/azsdk/support-policies) for more details.",
+       "reasons": [
+        "Legacy"
+       ]
+      },
+      "description": "Azure Key Vault enables users to store and use cryptographic keys within the Microsoft Azure environment. Azure Key Vault supports multiple key types and algorithms and enables the use of Hardware Security Modules (HSM) for high value customer keys. In addition, Azure Key Vault allows users to securely store secrets in a Key Vault; secrets are limited size octet objects and Azure Key Vault applies no specific semantics to these objects. A Key Vault may contain a mix of keys and secrets at the same time, and access control for the two types of object is independently controlled. Users, subject to appropriate authorization, may: 1) Manage cryptographic keys using Create, Import, Update, Delete and other operations 2) Manage secrets using Get, Set, Delete and other operations 3) Use cryptographic keys with Sign/Verify, WrapKey/UnwrapKey and Encrypt/Decrypt operations. Operations against Key Vaults are authenticated and authorized using Azure Active Directory. Key Vault now supports certificates, a complex type that makes use of existing key and secret infrastructure for certificate operations. KV certificates also support notification and auto-renewal as well as other management features.",
+      "iconUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/3.0.0/icon",
+      "id": "Microsoft.Azure.KeyVault",
+      "language": "",
+      "licenseExpression": "",
+      "licenseUrl": "https://raw.githubusercontent.com/Microsoft/dotnet/master/LICENSE",
+      "listed": true,
+      "minClientVersion": "",
+      "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/3.0.0/microsoft.azure.keyvault.3.0.0.nupkg",
+      "projectUrl": "https://github.com/Azure/azure-sdk-for-net",
+      "published": "2018-06-28T22:48:00.883+00:00",
+      "requireLicenseAcceptance": true,
+      "summary": "",
+      "tags": [
+       "Microsoft",
+       "Azure",
+       "Key",
+       "Vault",
+       "REST",
+       "HTTP",
+       "client",
+       "azureofficial",
+       "windowsazureofficial"
+      ],
+      "title": "",
+      "version": "3.0.0"
+     },
+     "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/3.0.0/microsoft.azure.keyvault.3.0.0.nupkg",
+     "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/index.json"
+    },
+    {
+     "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/3.0.5.json",
+     "@type": "Package",
+     "commitId": "95b1f94a-0fb8-4bae-8fce-9bdf3e628843",
+     "commitTimeStamp": "2026-04-10T00:38:07.9089337+00:00",
+     "catalogEntry": {
+      "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json",
+      "@type": "PackageDetails",
+      "authors": "Microsoft",
+      "dependencyGroups": [
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netframework4.5.2",
+        "@type": "PackageDependencyGroup",
+        "dependencies": [
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netframework4.5.2/microsoft.azure.keyvault.webkey",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Azure.KeyVault.WebKey",
+          "range": "[3.0.5, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault.webkey/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netframework4.5.2/microsoft.rest.clientruntime",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime",
+          "range": "[2.3.20, 3.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netframework4.5.2/microsoft.rest.clientruntime.azure",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime.Azure",
+          "range": "[3.3.18, 4.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime.azure/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netframework4.5.2/newtonsoft.json",
+          "@type": "PackageDependency",
+          "id": "Newtonsoft.Json",
+          "range": "[10.0.3, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/index.json"
+         }
+        ],
+        "targetFramework": ".NETFramework4.5.2"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netframework4.6.1",
+        "@type": "PackageDependencyGroup",
+        "dependencies": [
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netframework4.6.1/microsoft.azure.keyvault.webkey",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Azure.KeyVault.WebKey",
+          "range": "[3.0.5, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault.webkey/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netframework4.6.1/microsoft.rest.clientruntime",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime",
+          "range": "[2.3.20, 3.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netframework4.6.1/microsoft.rest.clientruntime.azure",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime.Azure",
+          "range": "[3.3.18, 4.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime.azure/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netframework4.6.1/newtonsoft.json",
+          "@type": "PackageDependency",
+          "id": "Newtonsoft.Json",
+          "range": "[10.0.3, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/index.json"
+         }
+        ],
+        "targetFramework": ".NETFramework4.6.1"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netstandard1.4",
+        "@type": "PackageDependencyGroup",
+        "dependencies": [
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netstandard1.4/microsoft.azure.keyvault.webkey",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Azure.KeyVault.WebKey",
+          "range": "[3.0.5, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault.webkey/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netstandard1.4/microsoft.rest.clientruntime",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime",
+          "range": "[2.3.20, 3.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netstandard1.4/microsoft.rest.clientruntime.azure",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime.Azure",
+          "range": "[3.3.18, 4.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime.azure/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netstandard1.4/netstandard.library",
+          "@type": "PackageDependency",
+          "id": "NETStandard.Library",
+          "range": "[1.6.1, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/netstandard.library/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netstandard1.4/newtonsoft.json",
+          "@type": "PackageDependency",
+          "id": "Newtonsoft.Json",
+          "range": "[10.0.3, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netstandard1.4/system.net.http",
+          "@type": "PackageDependency",
+          "id": "System.Net.Http",
+          "range": "[4.3.4, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.net.http/index.json"
+         }
+        ],
+        "targetFramework": ".NETStandard1.4"
+       },
+       {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netstandard2.0",
+        "@type": "PackageDependencyGroup",
+        "dependencies": [
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netstandard2.0/microsoft.azure.keyvault.webkey",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Azure.KeyVault.WebKey",
+          "range": "[3.0.5, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault.webkey/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netstandard2.0/microsoft.rest.clientruntime",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime",
+          "range": "[2.3.20, 3.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netstandard2.0/microsoft.rest.clientruntime.azure",
+          "@type": "PackageDependency",
+          "id": "Microsoft.Rest.ClientRuntime.Azure",
+          "range": "[3.3.18, 4.0.0)",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.rest.clientruntime.azure/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netstandard2.0/newtonsoft.json",
+          "@type": "PackageDependency",
+          "id": "Newtonsoft.Json",
+          "range": "[10.0.3, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/index.json"
+         },
+         {
+          "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#dependencygroup/.netstandard2.0/system.net.http",
+          "@type": "PackageDependency",
+          "id": "System.Net.Http",
+          "range": "[4.3.4, )",
+          "registration": "https://api.nuget.org/v3/registration5-gz-semver2/system.net.http/index.json"
+         }
+        ],
+        "targetFramework": ".NETStandard2.0"
+       }
+      ],
+      "deprecation": {
+       "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#deprecation",
+       "@type": "deprecation",
+       "alternatePackage": {
+        "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.35.46/microsoft.azure.keyvault.3.0.5.json#deprecation/alternatePackage",
+        "@type": "alternatePackage",
+        "id": "Azure.Security.KeyVault.Certificates",
+        "range": "*"
+       },
+       "message": "Please note, this package is obsolete as of 3/31/2023 and is no longer maintained or monitored. Microsoft encourages you to upgrade to one of the following replacement packages, depending on your use case:\n    Azure.Security.KeyVault.Certificates\n    Azure.Security.KeyVault.Keys\n    Azure.Security.KeyVault.Secrets\n Refer to the migration guide (https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/keyvault/Azure.Security.KeyVault.Secrets/MigrationGuide.md) for guidance on upgrading. Refer to our deprecation policy (https://aka.ms/azsdk/support-policies) for more details.",
+       "reasons": [
+        "Legacy"
+       ]
+      },
+      "description": "Azure Key Vault enables users to store and use cryptographic keys within the Microsoft Azure environment. Azure Key Vault supports multiple key types and algorithms and enables the use of Hardware Security Modules (HSM) for high value customer keys. In addition, Azure Key Vault allows users to securely store secrets in a Key Vault; secrets are limited size octet objects and Azure Key Vault applies no specific semantics to these objects. A Key Vault may contain a mix of keys and secrets at the same time, and access control for the two types of object is independently controlled. Users, subject to appropriate authorization, may: 1) Manage cryptographic keys using Create, Import, Update, Delete and other operations 2) Manage secrets using Get, Set, Delete and other operations 3) Use cryptographic keys with Sign/Verify, WrapKey/UnwrapKey and Encrypt/Decrypt operations. Operations against Key Vaults are authenticated and authorized using Azure Active Directory. Key Vault now supports certificates, a complex type that makes use of existing key and secret infrastructure for certificate operations. KV certificates also support notification and auto-renewal as well as other management features.\n\nThis library has been replaced by the following new Azure SDKs. You can read about the new Azure SDKs at https://aka.ms/azsdkvalueprop.\n\nThe latest libraries to interact with the Azure KeyVault service are:\n\n*\thttps://www.nuget.org/packages/Azure.Security.KeyVault.Keys\n*\thttps://www.nuget.org/packages/Azure.Security.KeyVault.Secrets\n*\thttps://www.nuget.org/packages/Azure.Security.KeyVault.Certificates\n\nIt is recommended that you move to the new package.",
+      "iconUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/3.0.5/icon",
+      "id": "Microsoft.Azure.KeyVault",
+      "language": "",
+      "licenseExpression": "MIT",
+      "licenseUrl": "https://www.nuget.org/packages/Microsoft.Azure.KeyVault/3.0.5/license",
+      "listed": true,
+      "minClientVersion": "",
+      "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/3.0.5/microsoft.azure.keyvault.3.0.5.nupkg",
+      "projectUrl": "https://github.com/Azure/azure-sdk-for-net/blob/99f52a3417df5d3023d10997cb20e7499207e976/sdk/keyvault/Microsoft.Azure.KeyVault/README.md",
+      "published": "2020-02-03T22:42:08.65+00:00",
+      "requireLicenseAcceptance": true,
+      "summary": "",
+      "tags": [
+       "Microsoft",
+       "Azure",
+       "Key",
+       "Vault",
+       "REST",
+       "HTTP",
+       "client",
+       "azureofficial",
+       "windowsazureofficial"
+      ],
+      "title": "",
+      "version": "3.0.5"
+     },
+     "packageContent": "https://api.nuget.org/v3-flatcontainer/microsoft.azure.keyvault/3.0.5/microsoft.azure.keyvault.3.0.5.nupkg",
+     "registration": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/index.json"
+    }
+   ],
+   "parent": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.azure.keyvault/index.json",
+   "lower": "0.9.0-preview",
+   "upper": "3.0.5"
+  }
+ ],
+ "@context": {
+  "@vocab": "http://schema.nuget.org/schema#",
+  "catalog": "http://schema.nuget.org/catalog#",
+  "xsd": "http://www.w3.org/2001/XMLSchema#",
+  "items": {
+   "@id": "catalog:item",
+   "@container": "@set"
+  },
+  "commitTimeStamp": {
+   "@id": "catalog:commitTimeStamp",
+   "@type": "xsd:dateTime"
+  },
+  "commitId": {
+   "@id": "catalog:commitId"
+  },
+  "count": {
+   "@id": "catalog:count"
+  },
+  "parent": {
+   "@id": "catalog:parent",
+   "@type": "@id"
+  },
+  "tags": {
+   "@id": "tag",
+   "@container": "@set"
+  },
+  "reasons": {
+   "@container": "@set"
+  },
+  "packageTargetFrameworks": {
+   "@id": "packageTargetFramework",
+   "@container": "@set"
+  },
+  "dependencyGroups": {
+   "@id": "dependencyGroup",
+   "@container": "@set"
+  },
+  "dependencies": {
+   "@id": "dependency",
+   "@container": "@set"
+  },
+  "packageContent": {
+   "@type": "@id"
+  },
+  "published": {
+   "@type": "xsd:dateTime"
+  },
+  "registration": {
+   "@type": "@id"
+  }
+ }
+}

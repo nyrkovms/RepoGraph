@@ -1,0 +1,91 @@
+{
+ "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/index.json",
+ "@type": [
+  "catalog:CatalogRoot",
+  "PackageRegistration",
+  "catalog:Permalink"
+ ],
+ "commitId": "bfb175b6-0b6c-4bee-ae54-bc8b4d387633",
+ "commitTimeStamp": "2026-10-25T18:03:53.089054+00:00",
+ "count": 3,
+ "items": [
+  {
+   "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/page/1.0.0-rc1-final/3.1.23.json",
+   "@type": "catalog:CatalogPage",
+   "commitId": "46167694-cbbe-4712-b708-1eaf790e8d16",
+   "commitTimeStamp": "2024-11-12T18:25:14.5991651+00:00",
+   "count": 64,
+   "lower": "1.0.0-rc1-final",
+   "upper": "3.1.23"
+  },
+  {
+   "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/page/3.1.24/9.0.0.json",
+   "@type": "catalog:CatalogPage",
+   "commitId": "46167694-cbbe-4712-b708-1eaf790e8d16",
+   "commitTimeStamp": "2024-11-12T18:25:14.5991651+00:00",
+   "count": 64,
+   "lower": "3.1.24",
+   "upper": "9.0.0"
+  },
+  {
+   "@id": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/page/9.0.1/11.0.0-rc.3.26522.148.json",
+   "@type": "catalog:CatalogPage",
+   "commitId": "bfb175b6-0b6c-4bee-ae54-bc8b4d387633",
+   "commitTimeStamp": "2026-10-25T18:03:53.089054+00:00",
+   "count": 56,
+   "lower": "9.0.1",
+   "upper": "11.0.0-rc.3.26522.148"
+  }
+ ],
+ "@context": {
+  "@vocab": "http://schema.nuget.org/schema#",
+  "catalog": "http://schema.nuget.org/catalog#",
+  "xsd": "http://www.w3.org/2001/XMLSchema#",
+  "items": {
+   "@id": "catalog:item",
+   "@container": "@set"
+  },
+  "commitTimeStamp": {
+   "@id": "catalog:commitTimeStamp",
+   "@type": "xsd:dateTime"
+  },
+  "commitId": {
+   "@id": "catalog:commitId"
+  },
+  "count": {
+   "@id": "catalog:count"
+  },
+  "parent": {
+   "@id": "catalog:parent",
+   "@type": "@id"
+  },
+  "tags": {
+   "@id": "tag",
+   "@container": "@set"
+  },
+  "reasons": {
+   "@container": "@set"
+  },
+  "packageTargetFrameworks": {
+   "@id": "packageTargetFramework",
+   "@container": "@set"
+  },
+  "dependencyGroups": {
+   "@id": "dependencyGroup",
+   "@container": "@set"
+  },
+  "dependencies": {
+   "@id": "dependency",
+   "@container": "@set"
+  },
+  "packageContent": {
+   "@type": "@id"
+  },
+  "published": {
+   "@type": "xsd:dateTime"
+  },
+  "registration": {
+   "@type": "@id"
+  }
+ }
+}
