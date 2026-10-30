@@ -13,6 +13,7 @@ from app.ecosystems.base import NormalizedDependency
 from app.ecosystems.crates.cfg import cfg_of, platform_matches
 
 DEFAULT_TARGET = "x86_64-unknown-linux-gnu"
+ALL_TARGETS = "*"   # every platform, as in Cargo.lock
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,13 +44,14 @@ def _flag(value: object) -> bool:
 
 
 def parse_environment(raw: Mapping[str, object]) -> CratesEnvironment:
-    """`target` (a triple from targets.json; ValueError for others), `features` (a list or comma-separated) and
-    `default_features`; missing values default to x86_64-unknown-linux-gnu with default features."""
+    """`target` (a triple from targets.json, or `*` for every platform; ValueError for others), `features` (a list or
+    comma-separated) and `default_features`; missing values default to x86_64-unknown-linux-gnu with default features."""
     values = {key: value for key, value in raw.items() if value not in (None, "")}
     if not values:
         return CratesEnvironment(specified=False)
     target = str(values.get("target") or DEFAULT_TARGET).strip()
-    cfg_of(target)
+    if target != ALL_TARGETS:
+        cfg_of(target)
     return CratesEnvironment(target, _features(values.get("features")), _flag(values.get("default_features", True)))
 
 
@@ -59,7 +61,7 @@ def dependency_applies(dep: NormalizedDependency, env: CratesEnvironment, includ
     if dep.dependency_type not in ("runtime", "build", "optional"):
         return False
     rust_cfg = (dep.environment_markers or {}).get("rust_cfg")
-    if not platform_matches(rust_cfg if isinstance(rust_cfg, str) else None, env.target):
+    if env.target != ALL_TARGETS and not platform_matches(rust_cfg if isinstance(rust_cfg, str) else None, env.target):
         return False
     if dep.dependency_type != "optional":
         return True

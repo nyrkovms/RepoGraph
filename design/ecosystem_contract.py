@@ -361,6 +361,7 @@ class CatalogVersion:
     tags: Sequence[str] = ()               # dist-tags pointing at it (npm `latest` decides the version picked)
     deprecated: bool = False
     bundled: bool = False                  # npm bundleDependencies: inside the tarball, not resolved from a registry
+    features: Mapping[str, Sequence[str]] | None = None   # Cargo features of the version: name -> what it enables
 
 
 class CatalogAccess(Protocol):
