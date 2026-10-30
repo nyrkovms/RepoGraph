@@ -313,6 +313,33 @@ resolve эталонов.
 
 *Сделано в E4 (2026-10-30, PR #21):* I1–I7. NuGetVersion сверен с NuGet.Versioning 6.11.1 (153 версии попарно, 232 диапазона с FindBestMatch, 0 расхождений; байтовый ключ без ранга). Резолвер повторяет NuGet: лучшее совпадение на каждое ребро, затенение ссылки только прямым объявлением предка на её же пути (понижение — `NU1605`, в .NET SDK ошибка), кузены на любой глубине (побеждает наибольшая версия, иначе `NU1107`), циклы `NU1108`; unlisted-версии участвуют, как в restore. Эталоны `dotnet restore` (8 случаев, среди них кузены на разной глубине, понижение с ошибкой NU1605, плавающая версия, unlisted) совпадают на 100%. Ревью этапа: 1 критичная (первая версия резолвера решала пакет на ближайшем уровне всего графа), 3 серьёзных, 6 мелких — исправлены; известные отличия: NU1608/NU1603 не выдаются, AssetTargetFallback на .NET Framework (вне Q7) — предупреждение `no_framework_group`. API отдаёт `deprecation` версий.
 
+### E5 — Maven (детальный план, 2026-10-30)
+
+**Пробы апстрима (2026-10-30).**
+- `repo1.maven.org/maven2/<group как путь>/<artifact>/maven-metadata.xml`: все версии (`spring-core` — 338), `latest`,
+  `release`, `lastUpdated`; ETag и `Last-Modified`; отсутствующий GA — 404. Дат версий в нём нет.
+- POM версии `…/<v>/<a>-<v>.pom`: ETag, `Last-Modified` = время публикации версии (`spring-core` 6.1.14 — 17.10.2024);
+  дата версии берётся из него (HEAD по каждой версии, как `.info` у Go). Поиск Central (`search.maven.org`) знает не все
+  версии (311 из 338) и не годится для других репозиториев.
+- `.module` (Gradle Module Metadata) лежит рядом с POM у библиотек, собранных Gradle (`spring-core` — есть).
+- Google Maven (`dl.google.com/android/maven2/`) и Gradle Plugin Portal (`plugins.gradle.org/m2/`) отвечают по тому же
+  протоколу `maven2`.
+
+| WP | Содержание | Исполнитель | Готово, когда |
+|---|---|---|---|
+| J1 | **ComparableVersion** (`ecosystems/maven/versions.py`): токены, квалификаторы (`alpha` < `beta` < `milestone` < `rc` = `cr` < `snapshot` < `""` = `ga` = `final` = `release` < `sp`), числа без предела, `bump`; диапазоны `[1.0,2.0)`, `(,1.0]`, `[1.0]`, объединения `[1,2),[3,4)`, голая версия — «мягкая» рекомендация; `sort_key` или ранг (§5.5) | Opus, **ревью** | Векторы `maven-artifact` 3.9.x (`ComparableVersion.compareTo`, `VersionRange.createFromVersionSpec`, `containsVersion`) из контейнера `maven:3.9-eclipse-temurin-21` совпадают на 100% |
+| J2 | **Координаты и purl**: `groupId:artifactId` ↔ `namespace`/`name`, регистр важен, `pkg:maven/org.springframework/spring-core` (qualifier `type`, `classifier`), путь в репозитории; routing `group_patterns` (`androidx.*`) | Sonnet | Unit-тесты |
+| J3 | **POM и effective model** (§7.4): разбор POM, цепочка `<parent>` через канал документов каталога (`source_documents`), интерполяция `${…}` (`project.*`, `<properties>`, наследуемые), `dependencyManagement` с `import` BOM, версии из него, relocation → `deprecation.alternative`, лицензии → SPDX-алиасы; неразрешённое — `details.unresolved_property` | Opus | Unit на записанных POM (spring-core, spring-boot-starter с BOM, jackson с parent-цепочкой, relocated-артефакт) |
+| J4 | **Адаптер `maven2`**: версии из `maven-metadata.xml` (ETag — ревизия), даты из `Last-Modified` POM (параллельно, с ограничением), POM последней версии сразу, остальных лениво, `fetch_document` для parent/BOM, `packaging`, артефакты (`.jar`/`.pom`, `has_metadata_file` при `.module`); детектор — условный GET `maven-metadata.xml` | Sonnet по образцу goproxy | Unit на записанных ответах; интеграция `sync_package` |
+| J5 | **Окружение и резолвер `maven`** (§9.7): `scopes` (по умолчанию `compile,runtime`), `java_version`, `strategy`; nearest wins (на одной глубине — первое объявление), `managed` корня и BOM переопределяют версии и scope, диапазоны — максимальная доступная, exclusions по пути, optional не транзитивны, матрица scope; `emulates = "Maven 3.9"` | Opus, **ревью** | Эталоны `mvn dependency:list` (Maven 3.9, JDK 21) — 3–5 проектов: совпадение 100% |
+| J6 | **Стратегия `gradle`**: highest wins, `managed` как platform/constraints, маркеры плагинов (`id version` → `<id>:<id>.gradle.plugin`), предупреждение «Gradle Module Metadata не учтена» при `.module` (Q15) | Opus | Эталоны `gradle dependencies --configuration runtimeClasspath` (Gradle 8) — 2–3 проекта: совпадение 100% или явные расхождения из-за GMM (Q15) |
+| J7 | **Миграция 0012**: стартовый источник `maven-central` (`maven2`, `https://repo1.maven.org/maven2/`, priority 0) и профиль по умолчанию экосистемы maven (R4); Google Maven и Gradle Plugin Portal — примерами в `registries.example.yaml`; плагин в `BUILTIN_PLUGIN_MODULES` | Opus | `check_migrations.sh` |
+| J8 | **Фикстуры, UI, документация**: запись ответов; UI — Maven в поиске (`group:artifact`), карточка, форма окружения (scopes, strategy); SPEC-MVP-API/README | Sonnet | `make check`, smoke на стенде |
+
+Порядок: J1, J2 и J7 независимы; J3 после J2; J4 после J1–J3; J5 после J4; J6 после J5; J8 в конце. Ревью этапа —
+субагентом, проверка на стенде: seed `org.springframework:spring-core`, `com.fasterxml.jackson.core:jackson-databind`,
+`org.springframework.boot:spring-boot-starter-web`, ежедневное обновление, resolve эталонов.
+
 ### E1–E6 — экосистемы
 
 Состав каждого этапа:
