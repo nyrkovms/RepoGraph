@@ -37,9 +37,11 @@ def _dep(name: str, version: str, scope: str = "compile", optional: bool = False
 
 class Catalog:
     def __init__(self, versions: dict[str, list[CatalogVersion]],
-                 deps: dict[str, list[NormalizedDependency] | None] | None = None) -> None:
+                 deps: dict[str, list[NormalizedDependency] | None] | None = None,
+                 documents: dict[str, str] | None = None) -> None:
         self.data = versions
         self.deps = deps or {}
+        self.documents = documents or {}
 
     async def versions(self, ref: PackageRef, profile: SourceProfile) -> Sequence[CatalogVersion]:
         return self.data.get(ref.name, [])
@@ -51,7 +53,8 @@ class Catalog:
         return False
 
     async def document(self, ref: PackageRef, path: str, profile: SourceProfile) -> FetchedDocument | None:
-        return None
+        content = self.documents.get(path)
+        return FetchedDocument(path, content.encode(), "application/xml") if content is not None else None
 
 
 def _resolve(catalog: Catalog, *roots: tuple[str, str], env: dict | None = None,
@@ -59,7 +62,9 @@ def _resolve(catalog: Catalog, *roots: tuple[str, str], env: dict | None = None,
     request = ResolveRequest(
         roots=[ResolveRoot(ref=_ref(n), constraint=c) for n, c in roots],
         environment=parse_environment(env or {}), profile=PROFILE, strategy=strategy,
-        managed=[ResolveRoot(ref=_ref(n), constraint=c, qualifiers={"scope": s} if s else {}) for n, c, s in managed],
+        managed=[ResolveRoot(ref=_ref(n), constraint=c,
+                             qualifiers={"type": "pom"} if s == "bom" else {"scope": s} if s else {})
+                 for n, c, s in managed],
     )
     return asyncio.run(RESOLVER.resolve(request, catalog))
 
@@ -99,6 +104,36 @@ def test_managed_versions_and_scopes_apply_below_the_roots_only() -> None:
     assert _set(graph) == {("app", "1"), ("b", "3.0")}        # c managed to test scope: not on the runtime classpath
     graph = _resolve(catalog, ("app", "1"), env={"scopes": ["compile", "runtime", "test"]}, managed=[("c", "1", "test")])
     assert _scopes(graph)["c"] == "test"
+
+
+def _pom(artifact: str, version: str, managed: str = "", parent: str = "") -> str:
+    return (f"<project><groupId>g</groupId><artifactId>{artifact}</artifactId><version>{version}</version>{parent}"
+            f"<packaging>pom</packaging><dependencyManagement><dependencies>{managed}</dependencies>"
+            "</dependencyManagement></project>")
+
+
+def _managed(artifact: str, version: str) -> str:
+    return f"<dependency><groupId>g</groupId><artifactId>{artifact}</artifactId><version>{version}</version></dependency>"
+
+
+def test_a_bom_among_the_managed_entries_is_imported_in_place() -> None:
+    catalog = Catalog({"app": _v("1"), "b": _v("1.0", "2.0", "3.0"), "c": _v("1.0", "2.0")},
+                      {"app@1": [_dep("b", "1.0"), _dep("c", "1.0")]},
+                      {"g/bom/5/bom-5.pom": _pom("bom", "5", _managed("b", "2.0") + _managed("c", "${c.version}"),
+                                                "<parent><groupId>g</groupId><artifactId>base</artifactId>"
+                                                "<version>1</version></parent>"),
+                       "g/base/1/base-1.pom": _pom("base", "1").replace(
+                           "<packaging>", "<properties><c.version>2.0</c.version></properties><packaging>")})
+    # An entry before the BOM wins over the BOM's own; the BOM's parent gives its property.
+    graph = _resolve(catalog, ("app", "1"), managed=[("b", "3.0", None), ("bom", "5", "bom")])
+    assert _set(graph) == {("app", "1"), ("b", "3.0"), ("c", "2.0")}
+    graph = _resolve(catalog, ("app", "1"), managed=[("bom", "6", "bom")])
+    assert graph.warnings == [{"code": "unresolvable", "message": "BOM g:bom:6 not found"}]
+
+
+def test_a_root_asked_for_with_a_star_takes_the_highest_release() -> None:
+    catalog = Catalog({"app": _v("1.0", "2.0", "3.0-RC1")})
+    assert _set(_resolve(catalog, ("app", "*"))) == {("app", "2.0")}
 
 
 def test_a_range_takes_the_highest_available_and_a_soft_version_must_exist() -> None:

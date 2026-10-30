@@ -7,9 +7,12 @@
    from its effective model (the POM with parents and BOMs, built by the adapter).
 2. **Nearest wins**: a groupId:artifactId is decided by its nearest occurrence; at one depth the first one wins. Other
    occurrences do not change the version and their subtrees are not walked.
-3. The project's dependencyManagement (`managed`, BOMs included) sets the version and scope of every transitive
-   occurrence of an artifact it names (`ClassicDependencyManager`: depth 2 and below); the roots keep theirs.
-4. A bare version is a soft requirement taken as written; a range takes the highest version available in it.
+3. The project's dependencyManagement (`managed`; an entry with `type=pom` is a BOM whose effective
+   dependencyManagement is imported in its place, read through the catalog's document channel) sets the version and
+   scope of every transitive occurrence of an artifact it names (`ClassicDependencyManager`: depth 2 and below); the
+   roots keep theirs. The first entry for an artifact wins, as in Maven.
+4. A bare version is a soft requirement taken as written; a range takes the highest version available in it; a root
+   asked for with `*` takes the highest release.
 5. A dependency's `test`, `provided` and `system` dependencies and its `optional` ones are not followed; exclusions
    accumulate down a path.
 6. Scopes are settled after the walk: a node's scope is derived from each parent's scope (`JavaScopeDeriver`) and the
@@ -37,7 +40,9 @@ from app.ecosystems.base import (
     ResolveRequest,
     ResolveRoot,
 )
+from app.ecosystems.maven.coordinates import pom_path
 from app.ecosystems.maven.environment import MavenEnvironment, maven_scope
+from app.ecosystems.maven.pom import Pom, PomError, effective_model, parse_pom
 from app.ecosystems.maven.versions import MavenVersionScheme
 
 UNKNOWN_DEPENDENCIES = "dependencies unknown"
@@ -127,7 +132,7 @@ class _Resolve:
         self.fetches = 0
         self.errors: dict[GA, list[str]] = {}
         self.unresolvable: list[str] = []
-        self.managed: dict[GA, ResolveRoot] = {_ga(m.ref): m for m in request.managed}
+        self.managed: dict[GA, ResolveRoot] = {}
         self.roots: dict[GA, ResolveRoot] = {}
         self.chosen: dict[GA, _Chosen] = {}
         self.scopes: dict[GA, str] = {}
@@ -153,6 +158,9 @@ class _Resolve:
 
     async def pick(self, ref: PackageRef, raw: str) -> CatalogVersion | None:
         versions = await self.candidates(ref)
+        if raw == "*":
+            releases = [v for v in versions if v.status == "active" and not _SCHEME.is_prerelease(v.version)]
+            return max(releases or versions, key=lambda v: _SCHEME.sort_key(v.version), default=None)
         try:
             constraint = _SCHEME.constraint(raw)
         except InvalidVersion:
@@ -176,7 +184,33 @@ class _Resolve:
             return occurrence.raw
         return managed.constraint
 
+    async def _pom(self, group: str, artifact: str, version: str) -> Pom | None:
+        ref = PackageRef("maven", group, artifact)
+        try:
+            document = await self.catalog.document(ref, pom_path(ref, version), self.request.profile)
+            return parse_pom(document.content) if document is not None else None
+        except (PomError, ValueError):
+            return None
+
+    async def import_managed(self) -> None:
+        for entry in self.request.managed:
+            if entry.qualifiers.get("type") != "pom":
+                self.managed.setdefault(_ga(entry.ref), entry)
+                continue
+            ga = _ga(entry.ref)
+            bom = await self._pom(ga[0], ga[1], entry.constraint)
+            if bom is None:
+                self.unresolvable.append(f"BOM {ga[0]}:{ga[1]}:{entry.constraint} not found")
+                continue
+            model = await effective_model(bom, self._pom)
+            for dep in model.managed:
+                if dep.version and dep.scope != "import":
+                    self.managed.setdefault((dep.group, dep.artifact), ResolveRoot(
+                        ref=PackageRef("maven", dep.group, dep.artifact), constraint=dep.version,
+                        qualifiers={"scope": dep.scope} if dep.scope else {}))
+
     async def walk(self) -> None:
+        await self.import_managed()
         queue: deque[_Occurrence] = deque()
         for order, root in enumerate(self.request.roots):
             self.roots.setdefault(_ga(root.ref), root)
