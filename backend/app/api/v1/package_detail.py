@@ -17,9 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.packages import _decode_cursor_or_422
 from app.db import get_db_session
 from app.ecosystems import purl as purls
+from app.ecosystems.crates.environment import CratesEnvironment
 from app.ecosystems.npm.environment import NpmEnvironment
 from app.ecosystems.npm.environment import version_allows as npm_version_allows
-from app.ecosystems.base import EcosystemPlugin, PackageRef, RegistryConfig, SourceProfile
+from app.ecosystems.base import EcosystemPlugin, Environment, PackageRef, RegistryConfig, SourceProfile
 from app.ecosystems.registry import UnknownEcosystem, get_plugin
 from app.fetcher import sources
 from app.fetcher.lazy import LazyFetcher
@@ -249,9 +250,13 @@ async def get_dependencies_tree(
     os: str | None = Query(default=None),
     node_version: str | None = Query(default=None),
     cpu: str | None = Query(default=None),
+    target_triple: str | None = Query(default=None, alias="target"),
+    features: str | None = Query(default=None),
+    default_features: bool | None = Query(default=None),
 ) -> DependencyTreeResponse:
     """The tree in the ecosystem's environment: PyPI `python_version`/`os` (markers), npm `node_version`/`os`/`cpu`
-    (optional dependencies whose version does not fit the platform are left out, as npm does)."""
+    (optional dependencies whose version does not fit the platform are left out, as npm does), crates `target`,
+    `features` (comma-separated) and `default_features` (below the root, each edge asks its own features)."""
     target = await _target(db, ecosystem, coordinates)
     version_row = await _version(db, target, version)
     view = _ProfileView(db, await _profile(db, ecosystem, profile))
@@ -259,7 +264,14 @@ async def get_dependencies_tree(
     env = None
     if target.plugin.ecosystem == "npm":
         npm_env = target.plugin.parse_environment({"node_version": node_version, "os": os, "cpu": cpu})
-        view.npm_env = npm_env if isinstance(npm_env, NpmEnvironment) else NpmEnvironment()
+        view.plugin_env = npm_env if isinstance(npm_env, NpmEnvironment) else NpmEnvironment()
+        view.plugin = target.plugin
+    elif target.plugin.ecosystem == "crates":
+        try:
+            view.plugin_env = target.plugin.parse_environment(
+                {"target": target_triple, "features": features, "default_features": default_features})
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         view.plugin = target.plugin
     else:
         env = _build_marker_environment(python_version=python_version, os_name=os)
@@ -561,8 +573,8 @@ class _ProfileView:
     _registries: dict[object, list[RegistryConfig]] = field(default_factory=dict)
     _active: dict[object, list[tuple[str, object]]] = field(default_factory=dict)
     unknown: set[object] = field(default_factory=set)   # versions whose dependencies are unknown
-    npm_env: NpmEnvironment | None = None                 # set for npm: platform rules instead of PEP 508 markers
-    plugin: EcosystemPlugin | None = None                 # with npm_env: decides which dependencies apply
+    plugin_env: Environment | None = None                 # npm, crates: the plugin's rules instead of PEP 508 markers
+    plugin: EcosystemPlugin | None = None                 # with plugin_env: decides which dependencies apply
 
     async def registries(self, package: Package) -> list[RegistryConfig]:
         if package.id not in self._registries:
@@ -635,16 +647,19 @@ async def _build_tree_for_version(
     env: dict | None,
     visited: set[str],
     fetcher: LazyFetcher,
+    plugin_env: Environment | None = None,
 ) -> list[DependencyNode]:
     deps = await view.dependencies(package, version_row)
+    plugin_env = plugin_env or view.plugin_env
 
     visible_deps: list[Dependency] = []
     for dep in deps:
         current_level_include_optional = include_optional and expand_optional_at_current_level
 
-        if view.npm_env is not None and view.plugin is not None:
-            # npm installs optional dependencies at every level and (npm >= 7) peers that are not optional.
-            if not view.plugin.dependency_applies(dependency_from_row(dep), view.npm_env, include_optional):
+        if plugin_env is not None and view.plugin is not None:
+            # npm installs optional dependencies at every level and (npm >= 7) peers that are not optional;
+            # crates: optional ones come with the features asked of this crate.
+            if not view.plugin.dependency_applies(dependency_from_row(dep), plugin_env, include_optional):
                 continue
         elif not _dependency_type_allowed(dep.dependency_type, include_optional=current_level_include_optional):
             continue
@@ -669,8 +684,8 @@ async def _build_tree_for_version(
 
         if child_package and resolved_version_id:
             resolved = await db.scalar(select(PackageVersion).where(PackageVersion.id == resolved_version_id))
-            if resolved and view.npm_env is not None and dep.dependency_type == DependencyType.optional \
-                    and not npm_version_allows(resolved.engines, view.npm_env):
+            if resolved and isinstance(plugin_env, NpmEnvironment) and dep.dependency_type == DependencyType.optional \
+                    and not npm_version_allows(resolved.engines, plugin_env):
                 continue   # not for this platform: npm skips it without an error
             if resolved:
                 resolved_version = resolved.version
@@ -691,6 +706,7 @@ async def _build_tree_for_version(
                             env=env,
                             visited=visited | {resolved_key},
                             fetcher=fetcher,
+                            plugin_env=_child_env(plugin_env, dep),
                         )
                 dependencies_unknown = resolved.id in view.unknown or await view.known_unknown(child_package, resolved)
 
@@ -709,6 +725,16 @@ async def _build_tree_for_version(
         )
 
     return nodes
+
+
+def _child_env(env: Environment | None, dep: Dependency) -> Environment | None:
+    """crates: below an edge, the features that edge asks of its crate (and its default features unless switched off)."""
+    if not isinstance(env, CratesEnvironment):
+        return env
+    details = dep.details or {}
+    listed = details.get("features")
+    return CratesEnvironment(target=env.target, features=tuple(str(f) for f in listed) if isinstance(listed, list) else (),
+                             default_features=details.get("default_features", True) is not False)
 
 
 async def _ensure_dependency_resolved(db: AsyncSession, dep: Dependency, fetcher: LazyFetcher) -> None:
