@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"7bfd4e0482ad27090f8d93b1d7ea03de\"",
+    "last-modified": "Wed, 21 Oct 2026 10:30:38 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/lo/ck/lock_api"
+  },
+  "status": 200
+}

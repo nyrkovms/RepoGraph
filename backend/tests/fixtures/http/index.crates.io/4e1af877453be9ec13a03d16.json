@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"416088f2d32e0b1629f6cde4bd031b89\"",
+    "last-modified": "Fri, 30 Oct 2026 06:15:11 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/we/b-/web-sys"
+  },
+  "status": 200
+}

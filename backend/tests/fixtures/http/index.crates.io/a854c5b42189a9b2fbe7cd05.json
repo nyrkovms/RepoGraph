@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"9b351ecc24c2b214ea27332cb97eb171\"",
+    "last-modified": "Sat, 05 Sep 2026 11:50:38 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ru/st/rustc-hash"
+  },
+  "status": 200
+}

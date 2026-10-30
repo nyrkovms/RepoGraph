@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"d7e579625506b2ad065164d7a1dbdb36\"",
+    "last-modified": "Fri, 30 Oct 2026 06:15:13 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wa/sm/wasm-bindgen-futures"
+  },
+  "status": 200
+}

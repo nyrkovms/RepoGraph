@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"992156a7eb1d128c0b1168d15b788d91\"",
+    "last-modified": "Sun, 01 Feb 2026 13:07:58 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/tr/ac/tracing-core"
+  },
+  "status": 200
+}

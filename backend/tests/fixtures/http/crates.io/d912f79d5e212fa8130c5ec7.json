@@ -1,0 +1,13 @@
+{
+  "headers": {
+    "content-type": "application/json"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://crates.io/api/v1/crates/sync_wrapper"
+  },
+  "status": 200
+}

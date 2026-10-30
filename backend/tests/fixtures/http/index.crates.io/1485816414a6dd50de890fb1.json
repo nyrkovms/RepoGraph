@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"caa2b267eeb76e676c26fa81fd90899a\"",
+    "last-modified": "Mon, 05 Jan 2026 22:14:33 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/3/u/url"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"7a96646fdbefe1f302e008a7f5f2f08d\"",
+    "last-modified": "Wed, 21 Oct 2026 10:30:43 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/pa/rk/parking_lot_core"
+  },
+  "status": 200
+}

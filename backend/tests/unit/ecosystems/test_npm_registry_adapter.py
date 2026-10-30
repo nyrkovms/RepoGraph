@@ -130,7 +130,16 @@ def test_left_pad(serve) -> None:
     assert package.revision == LEFT_PAD_ETAG
     assert package.dist_tags == {"latest": "1.3.0"} and package.deprecation is None
     assert len(package.versions) == 15 and package.versions[0].version == "0.0.3"   # the order of the packument, not sorted
-    assert package.description is None and package.authors is None and package.vulnerabilities is None
+    assert package.vulnerabilities is None
+    # Package-level fields: the top-level copies of the latest package.json (#16).
+    assert (package.description, package.homepage_url, package.repository_url) == (
+        "String left pad", "https://github.com/stevemao/left-pad#readme", "https://github.com/stevemao/left-pad")
+    assert (package.license_raw, package.license_spdx) == ("WTFPL", "WTFPL")
+    assert package.keywords == ["leftpad", "left", "pad", "padding", "string", "repeat"]
+    assert [(a.name, a.email, a.role) for a in package.authors or []] == [
+        ("azer", None, "author"), ("stevemao", "maochenyan@gmail.com", "maintainer"),
+        ("westlac", "cameron.westland@autodesk.com", "maintainer")]
+    assert package.created_at is not None and package.updated_at is not None
 
     latest = package.versions[-1]
     assert latest.version == "1.3.0" and latest.status == "active"
@@ -284,6 +293,53 @@ def test_display_name_is_what_the_registry_calls_the_package() -> None:
 
 
 # --- one version ------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(("value", "url"), [
+    ({"type": "git", "url": "git+https://github.com/expressjs/express.git"}, "https://github.com/expressjs/express"),
+    ({"type": "git", "url": "git+ssh://git@github.com/u/r.git", "directory": "packages/x"}, "https://github.com/u/r"),
+    ("git@gitlab.com:group/sub/r.git", "https://gitlab.com/group/sub/r"),
+    ("git://github.com/u/r.git", "https://github.com/u/r"),
+    ("https://example.org/u/r/", "https://example.org/u/r"),
+    ("github:u/r", "https://github.com/u/r"),
+    ("bitbucket:u/r", "https://bitbucket.org/u/r"),
+    ("u/r", "https://github.com/u/r"),
+    ("", None), ("https://example.org", None), ("file:../local", None), ({"type": "git"}, None), (7, None),
+])
+def test_repository_url(value: object, url: str | None) -> None:
+    assert npm_registry._repository_url(value) == url
+
+
+@pytest.mark.parametrize(("document", "expected"), [
+    ({"license": "MIT OR Apache-2.0"}, ("MIT OR Apache-2.0", "MIT OR Apache-2.0")),
+    ({"license": {"type": "BSD-3-Clause", "url": "https://x"}}, ("BSD-3-Clause", "BSD-3-Clause")),
+    ({"licenses": [{"type": "MIT"}, {"type": "GPL-2.0"}]}, ("MIT OR GPL-2.0", None)),
+    ({"licenses": [{"type": "MIT"}]}, ("MIT", "MIT")),
+    ({"license": "UNLICENSED"}, ("UNLICENSED", None)),
+    ({"license": "SEE LICENSE IN LICENSE.md"}, ("SEE LICENSE IN LICENSE.md", None)),
+    ({"license": " "}, (None, None)), ({"licenses": "MIT"}, (None, None)), ({}, (None, None)),
+])
+def test_license(document: dict, expected: tuple[str | None, str | None]) -> None:
+    assert npm_registry._license(document) == expected
+
+
+def test_people_in_both_forms() -> None:
+    people = npm_registry._people({
+        "author": "TJ Holowaychuk <tj@vision-media.ca> (http://tjholowaychuk.com)",
+        "maintainers": [{"name": "wesleytodd", "email": "wes@wesleytodd.com"}, "solo", {"email": "no@name"}, 3],
+    })
+    assert [(p.name, p.email, p.url, p.role) for p in people] == [
+        ("TJ Holowaychuk", "tj@vision-media.ca", "http://tjholowaychuk.com", "author"),
+        ("wesleytodd", "wes@wesleytodd.com", None, "maintainer"),
+        ("solo", None, None, "maintainer"),
+    ]
+    assert npm_registry._people({}) == []
+
+
+def test_package_fields_that_are_not_what_they_should_be_are_left_out() -> None:
+    document = {"description": 5, "homepage": "", "keywords": "a,b", "time": {"created": "never"}}
+    package = npm_registry.package_from_packument(_ref("x"), "r", document, None)
+    assert (package.description, package.homepage_url, package.keywords, package.created_at) == (None, None, None, None)
 
 
 def test_version_from_entry_details() -> None:

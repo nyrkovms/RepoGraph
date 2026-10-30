@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"d40550ce394981fb80243833a8f817d4\"",
+    "last-modified": "Wed, 30 Sep 2026 13:19:41 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/yo/ke/yoke-derive"
+  },
+  "status": 200
+}

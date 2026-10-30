@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"6080fbc76b90d35eeb6603653b6330ef\"",
+    "last-modified": "Wed, 16 Sep 2026 17:36:12 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/cf/g-/cfg-if"
+  },
+  "status": 200
+}

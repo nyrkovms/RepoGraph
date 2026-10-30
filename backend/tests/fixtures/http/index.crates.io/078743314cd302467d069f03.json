@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"3c5dc58ac194cb552e33a584e4e4bca5\"",
+    "last-modified": "Fri, 30 Oct 2026 10:39:57 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/sm/al/smallvec"
+  },
+  "status": 200
+}

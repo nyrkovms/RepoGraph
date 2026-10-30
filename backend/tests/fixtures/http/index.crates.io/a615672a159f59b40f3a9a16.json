@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"9fc54c564f43ea04bc48697be595c411\"",
+    "last-modified": "Thu, 22 Oct 2026 08:56:11 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ic/u_/icu_collections"
+  },
+  "status": 200
+}

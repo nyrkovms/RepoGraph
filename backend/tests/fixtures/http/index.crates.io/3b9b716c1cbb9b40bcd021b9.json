@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"3551aae3414a9e2af608d5557937845a\"",
+    "last-modified": "Sun, 17 May 2026 18:56:14 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/sh/le/shlex"
+  },
+  "status": 200
+}

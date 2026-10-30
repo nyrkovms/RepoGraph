@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"9ec28cd263220c833a4b3bd4a8f9e91d\"",
+    "last-modified": "Sun, 01 Feb 2026 13:13:14 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wa/si/wasi"
+  },
+  "status": 200
+}

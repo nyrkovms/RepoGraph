@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"857522bb668f43f05145d5f348b07d8d\"",
+    "last-modified": "Tue, 15 Sep 2026 21:39:22 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ze/ro/zerofrom-derive"
+  },
+  "status": 200
+}

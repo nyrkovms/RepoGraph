@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"f9171972d5ef281a37a88c8c19be6e39\"",
+    "last-modified": "Tue, 06 Oct 2026 17:49:22 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ze/ro/zeroize"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"5af7970112b46fef29e7b0cb5611107a\"",
+    "last-modified": "Thu, 22 Oct 2026 08:51:46 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ze/ro/zerovec"
+  },
+  "status": 200
+}

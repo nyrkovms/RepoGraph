@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"48fcd9310b1fbf83e2010ebf1ef28f80\"",
+    "last-modified": "Sun, 01 Feb 2026 12:05:29 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/id/na/idna"
+  },
+  "status": 200
+}

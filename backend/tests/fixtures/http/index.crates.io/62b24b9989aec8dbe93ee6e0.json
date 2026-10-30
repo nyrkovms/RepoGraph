@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"2f227433c3a80beec62d23c34bbed0ae\"",
+    "last-modified": "Thu, 10 Sep 2026 01:11:40 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/bi/tf/bitflags"
+  },
+  "status": 200
+}

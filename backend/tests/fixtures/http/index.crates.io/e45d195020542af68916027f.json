@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"e2caeb3025a0ccd93586ca948cce5fe6\"",
+    "last-modified": "Thu, 22 Oct 2026 08:51:40 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ze/ro/zerovec-derive"
+  },
+  "status": 200
+}

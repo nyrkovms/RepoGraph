@@ -23,7 +23,7 @@ from app.models.enums import Ecosystem, RegistryProtocol
 from app.models.registry import Registry
 from app.models.source_profile import SourceProfile, SourceProfileRegistry
 from app.resolver.service import resolve_graph
-from app.schemas.resolve import GraphResolveRequest
+from app.schemas.resolve import GraphOptions, GraphResolveRequest
 
 load_builtin_plugins()
 CASES = sorted(p.parent for p in (Path(__file__).resolve().parents[1] / "reference").glob("*/*/case.yaml"))
@@ -66,7 +66,7 @@ def test_reference_case(case_dir: Path) -> None:
     ecosystem = case_dir.parent.name
     allowed = {canonicalize_name(d["package"]) for d in case.get("allowed_differences") or []}
 
-    async def run() -> set[tuple[str, str]]:
+    async def run(environment: dict) -> set[tuple[str, str]]:
         engine = create_async_engine(get_settings().async_db_url, poolclass=NullPool)
         async with engine.connect() as conn:
             transaction = await conn.begin()
@@ -74,8 +74,11 @@ def test_reference_case(case_dir: Path) -> None:
             try:
                 profile = await _profile(db, ecosystem, case["sources"])
                 graph = await resolve_graph(db, GraphResolveRequest(
-                    ecosystem=ecosystem, profile=profile, roots=case["roots"], environment=case["environment"],
-                    options={"timeout_s": 120},
+                    ecosystem=ecosystem, profile=profile, roots=case["roots"], environment=environment,
+                    # Recording waits for the crates.io API (1 request/s) once per crate the case reaches: longer
+                    # than the API allows a request to take.
+                    options=GraphOptions.model_construct(timeout_s=900) if os.environ.get("HTTP_RECORD_DIR")
+                    else GraphOptions(timeout_s=120),
                 ))
                 assert graph.error is None, graph.error
                 errors = {node.name: node.errors for node in graph.nodes if node.errors}
@@ -86,15 +89,23 @@ def test_reference_case(case_dir: Path) -> None:
                 await transaction.rollback()
                 await engine.dispose()
 
-    ours = asyncio.run(run())
+    ours = asyncio.run(run(case["environment"]))
+    # crates: the versions for every platform as well, which is what Cargo.lock holds (SPEC §9.4).
+    ours_lock = asyncio.run(run({**case["environment"], "target": "*"})) if "lockfile" in expected else None
     if os.environ.get("HTTP_RECORD_DIR"):
         # scripts/record_fixtures.sh: the upstream answers are recorded now and expected.json is generated right after.
         pytest.skip("recording upstream responses; the expectation is regenerated afterwards")
-    native = {(canonicalize_name(item["name"]), item["version"]) for item in expected["install"]}
+    _compare(ours, expected["install"], allowed, expected["tool"])
+    if ours_lock is not None:
+        _compare(ours_lock, expected["lockfile"], allowed, f"{expected['tool']} (Cargo.lock)")
+
+
+def _compare(ours: set[tuple[str, str]], native_rows: list[dict], allowed: set[str], tool: str) -> None:
+    native = {(canonicalize_name(item["name"]), item["version"]) for item in native_rows}
     ours_cmp = {pair for pair in ours if pair[0] not in allowed}
     native_cmp = {pair for pair in native if pair[0] not in allowed}
     matched = len(ours_cmp & native_cmp) / max(len(native_cmp), 1)
     assert ours_cmp == native_cmp, (
-        f"{matched:.0%} of {expected['tool']}'s answer; only ours: {sorted(ours_cmp - native_cmp)}; "
-        f"only {expected['tool']}: {sorted(native_cmp - ours_cmp)}"
+        f"{matched:.0%} of {tool}'s answer; only ours: {sorted(ours_cmp - native_cmp)}; "
+        f"only {tool}: {sorted(native_cmp - ours_cmp)}"
     )

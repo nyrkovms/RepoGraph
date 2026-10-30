@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"a854d81e3e40dba3f18a925bbb856406\"",
+    "last-modified": "Thu, 13 Aug 2026 23:28:15 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/po/te/potential_utf"
+  },
+  "status": 200
+}

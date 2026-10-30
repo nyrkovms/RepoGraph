@@ -17,8 +17,17 @@ function displayName(item) {
   return decodeURIComponent(item.purl.replace(/^pkg:[^/]+\//, "").replace(/@[^/]*$/, ""));
 }
 
+// The slug of an ecosystem differs from its purl type for crates (`pkg:cargo/...`).
+const PURL_TYPE_ECOSYSTEMS = { cargo: "crates" };
+
+function ecosystemOf(item) {
+  if (item.ecosystem) return item.ecosystem;
+  const type = /^pkg:([^/]+)\//.exec(item.purl || "")?.[1];
+  return PURL_TYPE_ECOSYSTEMS[type] || type || "pypi";
+}
+
 function packageLink(item) {
-  const ecosystem = item.ecosystem || "pypi";
+  const ecosystem = ecosystemOf(item);
   return `/package/${ecosystem}/${displayName(item).split("/").map(encodeURIComponent).join("/")}`;
 }
 

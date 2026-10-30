@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"cc044f7b5453afba18e77a503309c5a6\"",
+    "last-modified": "Sun, 01 Feb 2026 12:36:46 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/pe/rc/percent-encoding"
+  },
+  "status": 200
+}

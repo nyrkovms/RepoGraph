@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"22fa9c8ff9eaafd89d8ae71727314129\"",
+    "last-modified": "Sun, 01 Feb 2026 13:14:58 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wi/nd/windows_x86_64_gnu"
+  },
+  "status": 200
+}

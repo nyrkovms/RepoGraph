@@ -31,6 +31,13 @@ from app.services import visibility
 logger = logging.getLogger(__name__)
 
 
+def _features(raw: object) -> dict[str, list[str]] | None:
+    """package_versions.features as Cargo has it, `{feature: [what it enables]}`; anything else is no features."""
+    if not isinstance(raw, dict):
+        return None
+    return {str(name): [str(item) for item in items] for name, items in raw.items() if isinstance(items, list)}
+
+
 class DbCatalog:
     def __init__(self, db: AsyncSession, plugin: EcosystemPlugin) -> None:
         self.db = db
@@ -52,7 +59,8 @@ class DbCatalog:
         rows = (
             await self.db.execute(
                 select(PackageVersion.id, PackageVersion.version, PackageVersion.engines, PackageVersion.deprecation,
-                       PackageVersion.raw_metadata.has_key("bundleDependencies").label("bundled"))
+                       PackageVersion.raw_metadata.has_key("bundleDependencies").label("bundled"),
+                       PackageVersion.features, PackageVersion.raw_metadata["links"].astext.label("links"))
                 .where(PackageVersion.package_id == package.id, visibility.visible_clause(registries))
             )
         ).all()
@@ -91,6 +99,8 @@ class DbCatalog:
                     tags=tags.get(row.version, ()),
                     deprecated=row.deprecation is not None,
                     bundled=bool(row.bundled),
+                    features=_features(row.features),
+                    links=row.links or None,
                 )
             )
         return result

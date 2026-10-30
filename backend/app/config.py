@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     source_breaker_failures: int = 5
     source_breaker_cooldown_seconds: int = 600
     presence_probe_enabled: bool = True
+    # crates.io API fields in the background (tasks/crates_api.py): a batch a minute stays under 1 request/s.
+    crates_api_enabled: bool = True
+    crates_api_interval_seconds: int = 60
+    crates_api_batch: int = 50
     presence_probe_day_of_week: int = 0      # Sunday
     presence_probe_hour_utc: int = 4
 
@@ -60,6 +64,8 @@ class Settings(BaseSettings):
     sync_pypi_simple_base_url: str = "https://pypi.org/simple"
 
     # Offline tests: record upstream responses / serve them back without network (app/services/http.py).
+    # crates.io answers 403 to clients without a User-Agent of their own (python-httpx/... included).
+    http_user_agent: str = "PackageHub/0.1 (+https://github.com/nyrkovms/RepoGraph)"
     http_record_dir: str | None = None
     http_replay_dir: str | None = None
 

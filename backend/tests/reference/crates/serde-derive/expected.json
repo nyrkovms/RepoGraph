@@ -1,0 +1,72 @@
+{
+  "tool": "cargo 1.86.0",
+  "command": [
+    "cargo",
+    "tree",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "-e",
+    "normal,build"
+  ],
+  "generated_at": "2026-10-30T12:16:01+00:00",
+  "install": [
+    {
+      "name": "proc-macro2",
+      "version": "1.0.107"
+    },
+    {
+      "name": "quote",
+      "version": "1.0.47"
+    },
+    {
+      "name": "serde",
+      "version": "1.0.229"
+    },
+    {
+      "name": "serde_core",
+      "version": "1.0.229"
+    },
+    {
+      "name": "serde_derive",
+      "version": "1.0.229"
+    },
+    {
+      "name": "syn",
+      "version": "3.0.9"
+    },
+    {
+      "name": "unicode-ident",
+      "version": "1.0.27"
+    }
+  ],
+  "lockfile": [
+    {
+      "name": "proc-macro2",
+      "version": "1.0.107"
+    },
+    {
+      "name": "quote",
+      "version": "1.0.47"
+    },
+    {
+      "name": "serde",
+      "version": "1.0.229"
+    },
+    {
+      "name": "serde_core",
+      "version": "1.0.229"
+    },
+    {
+      "name": "serde_derive",
+      "version": "1.0.229"
+    },
+    {
+      "name": "syn",
+      "version": "3.0.9"
+    },
+    {
+      "name": "unicode-ident",
+      "version": "1.0.27"
+    }
+  ]
+}

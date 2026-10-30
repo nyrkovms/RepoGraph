@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"dfef8ce4bd19e425ed25bd74980c5b41\"",
+    "last-modified": "Thu, 16 Jul 2026 14:57:18 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/cf/g_/cfg_aliases"
+  },
+  "status": 200
+}

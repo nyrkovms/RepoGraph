@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"601f322c39066d5c8101d8f9dd12d181\"",
+    "last-modified": "Sun, 01 Feb 2026 13:14:58 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wi/nd/windows_i686_gnullvm"
+  },
+  "status": 200
+}

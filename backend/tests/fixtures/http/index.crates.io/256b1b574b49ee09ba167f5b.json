@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"3493734e19f35430b70d023b1c1ad969\"",
+    "last-modified": "Fri, 16 Oct 2026 22:56:47 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/li/bc/libc"
+  },
+  "status": 200
+}

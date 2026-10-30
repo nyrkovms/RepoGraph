@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"5fa6adde72699f023ed0c7d1967c0b51\"",
+    "last-modified": "Sun, 01 Feb 2026 11:24:32 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/at/om/atomic-waker"
+  },
+  "status": 200
+}

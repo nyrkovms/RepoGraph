@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"47bde869f9ec38f77df26b2ee41dd5e6\"",
+    "last-modified": "Mon, 10 Aug 2026 13:27:43 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/r-/ef/r-efi"
+  },
+  "status": 200
+}

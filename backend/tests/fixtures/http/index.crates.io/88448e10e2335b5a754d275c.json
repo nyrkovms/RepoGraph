@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"6345dba91b87a278f083c01e8898ef22\"",
+    "last-modified": "Sun, 01 Feb 2026 13:07:57 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/tr/ac/tracing"
+  },
+  "status": 200
+}

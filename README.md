@@ -1,6 +1,6 @@
 # PackageHub MVP
 
-PyPI-first MVP: каталог метаданных пакетов, demand-driven sync и dependency resolve.
+PyPI-first MVP: каталог метаданных пакетов, demand-driven sync и dependency resolve. Экосистемы каталога: PyPI, npm и crates.io.
 
 ## Prerequisites
 
@@ -88,6 +88,36 @@ curl -H 'Content-Type: application/json' http://localhost:8000/api/v1/resolve \
 curl -H 'Content-Type: application/json' http://localhost:8000/api/v1/resolve \
   -d '{"ecosystem": "npm", "roots": [{"purl": "pkg:npm/express", "constraint": "^4.18.0"}], "environment": {"node_version": "20.11.0", "os": "linux", "cpu": "x64"}}'
 ```
+
+crates.io: слаг экосистемы `crates`, тип purl `cargo` (`pkg:cargo/serde_json`), имя крейта пишется как опубликовано, без свёртки
+регистра и `-`/`_` (`serde_json`, `Inflector`). Окружение дерева: `target` (целевая тройка Rust, по умолчанию
+`x86_64-unknown-linux-gnu`), `features` (через запятую) и `default_features`:
+
+```bash
+curl http://localhost:8000/api/v1/packages/crates/serde_json/-/                                      # карточка: purl, ссылки
+curl 'http://localhost:8000/api/v1/packages/crates/serde_json/-/versions/1.0.140/dependencies?target=x86_64-pc-windows-msvc&features=std'
+curl 'http://localhost:8000/api/v1/search?q=serde&ecosystem=crates'                                  # поиск только по crates.io
+```
+
+Для resolve укажите `"ecosystem": "crates"`; features корня идут в `extras`, окружение — `target` (`"*"` — все платформы, как в
+`Cargo.lock`), `features`, `default_features`. Граф строит стратегия `cargo-resolver`, один крейт может быть в нескольких версиях
+разных классов совместимости (`rand 0.7` и `rand 0.8`); в `nodes[].details.features` лежат features, с которыми крейт попал в граф:
+
+```bash
+curl -H 'Content-Type: application/json' http://localhost:8000/api/v1/resolve \
+  -d '{"ecosystem": "crates", "roots": [{"purl": "pkg:cargo/serde_json", "constraint": "^1.0", "extras": ["preserve_order"]}], "environment": {"target": "*"}}'
+```
+
+Добавить крейт в каталог можно по purl через admin API. Ввод в другом написании приводится к опубликованному имени
+(`pkg:cargo/serde-json` сохранится как `serde_json`); остальные маршруты ждут точное имя:
+
+```bash
+curl -H "Authorization: Bearer phub_admin_dev" -H 'Content-Type: application/json' http://localhost:8000/api/v1/admin/packages \
+  -d '{"purls": ["pkg:cargo/serde_json", "pkg:cargo/tokio"]}'
+```
+
+В Web UI crates.io выбирается в переключателе экосистем на странице поиска; на странице крейта окружение дерева — target, features и
+default features, а выбранной версии показываются её features.
 
 ## Test stand
 

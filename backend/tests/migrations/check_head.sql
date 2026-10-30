@@ -120,3 +120,15 @@ BEGIN
     RAISE EXCEPTION '0008: default npm profile'; END IF;
   RAISE NOTICE 'ok: 0008 npm starter source';
 END $$;
+
+-- 0009: the crates.io starter source (IMPL R4).
+DO $$
+BEGIN
+  IF (SELECT protocol::text || '/' || priority || '/' || enabled || '/' || base_url || '/' || (config->>'api_url')
+      FROM registries WHERE slug = 'crates-io') <> 'cargo-sparse/0/true/https://index.crates.io//https://crates.io' THEN
+    RAISE EXCEPTION '0009: crates-io source'; END IF;
+  IF (SELECT count(*) FROM source_profile_registries spr JOIN source_profiles sp ON sp.id = spr.profile_id
+      JOIN registries r ON r.id = spr.registry_id WHERE sp.ecosystem = 'crates' AND sp.is_default AND r.slug = 'crates-io') <> 1 THEN
+    RAISE EXCEPTION '0009: default crates profile'; END IF;
+  RAISE NOTICE 'ok: 0009 crates.io starter source';
+END $$;

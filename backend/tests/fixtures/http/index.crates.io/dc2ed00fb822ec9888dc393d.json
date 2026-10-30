@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"8a139c5ab8bf38a5513b4961de82f0cc\"",
+    "last-modified": "Thu, 03 Sep 2026 16:39:04 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wi/nd/windows-link"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"57abd8981cc75e09b284609a5cd25679\"",
+    "last-modified": "Wed, 08 Jul 2026 10:01:30 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/by/te/bytes"
+  },
+  "status": 200
+}

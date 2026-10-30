@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"cc446e44ac599c92746e96f75ae18b81\"",
+    "last-modified": "Sun, 01 Feb 2026 13:00:59 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/st/ab/stable_deref_trait"
+  },
+  "status": 200
+}

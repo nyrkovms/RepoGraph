@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"31e1999240b2c8d0564c19ff15aff234\"",
+    "last-modified": "Fri, 22 May 2026 14:59:13 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/bu/mp/bumpalo"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"83e9eb81a886d432ebee0613fa3e338e\"",
+    "last-modified": "Thu, 22 Oct 2026 08:51:50 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ti/ny/tinystr"
+  },
+  "status": 200
+}

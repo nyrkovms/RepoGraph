@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"c0b46ec3753b70a69e7e87dd206dc8cd\"",
+    "last-modified": "Sun, 01 Feb 2026 13:14:58 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wi/nd/windows_i686_gnu"
+  },
+  "status": 200
+}

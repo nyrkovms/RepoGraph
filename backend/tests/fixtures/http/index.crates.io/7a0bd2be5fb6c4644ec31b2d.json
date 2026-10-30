@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"d71fdb403a177e590c3bd9571ba8a202\"",
+    "last-modified": "Sun, 01 Feb 2026 12:57:35 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/si/gn/signal-hook-registry"
+  },
+  "status": 200
+}

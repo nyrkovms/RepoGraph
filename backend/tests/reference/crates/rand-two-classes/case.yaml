@@ -1,0 +1,12 @@
+description: >
+  rand 0.7 and rand 0.8 side by side: one activation per compatibility class, so both stay, each with its own
+  rand_core and rand_chacha.
+roots:
+  - {purl: pkg:cargo/rand, constraint: "0.7"}
+  - {purl: pkg:cargo/rand, constraint: "0.8"}
+environment: {target: x86_64-unknown-linux-gnu}
+sources:
+  - {slug: crates-io, protocol: cargo-sparse, base_url: "https://index.crates.io/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

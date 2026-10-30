@@ -165,3 +165,15 @@ def test_replay_miss_is_logged_for_ci(tmp_path, caplog) -> None:
         asyncio.run(scenario())
 
     assert any("REPLAY_MISS GET https://pypi.org/pypi/unknown/json" in r.getMessage() for r in caplog.records)
+
+
+def test_make_client_sends_our_user_agent() -> None:
+    async def scenario() -> tuple[str, str]:
+        async with make_client(timeout=5) as client:
+            plain = client.headers["user-agent"]
+        async with make_client(timeout=5, headers={"Accept": "application/json"}) as client:
+            return plain, client.headers["accept"]
+
+    user_agent, accept = asyncio.run(scenario())
+    assert user_agent == get_settings().http_user_agent and user_agent.startswith("PackageHub/")
+    assert accept == "application/json"

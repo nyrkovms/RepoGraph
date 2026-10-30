@@ -1,0 +1,188 @@
+{
+  "tool": "cargo 1.86.0",
+  "command": [
+    "cargo",
+    "tree",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "-e",
+    "normal,build"
+  ],
+  "generated_at": "2026-10-30T12:16:04+00:00",
+  "install": [
+    {
+      "name": "bytes",
+      "version": "1.12.1"
+    },
+    {
+      "name": "cfg-if",
+      "version": "1.0.5"
+    },
+    {
+      "name": "errno",
+      "version": "0.3.14"
+    },
+    {
+      "name": "libc",
+      "version": "0.2.191"
+    },
+    {
+      "name": "lock_api",
+      "version": "0.4.14"
+    },
+    {
+      "name": "mio",
+      "version": "1.2.4"
+    },
+    {
+      "name": "parking_lot",
+      "version": "0.12.5"
+    },
+    {
+      "name": "parking_lot_core",
+      "version": "0.9.12"
+    },
+    {
+      "name": "pin-project-lite",
+      "version": "0.2.17"
+    },
+    {
+      "name": "proc-macro2",
+      "version": "1.0.107"
+    },
+    {
+      "name": "quote",
+      "version": "1.0.47"
+    },
+    {
+      "name": "scopeguard",
+      "version": "1.2.0"
+    },
+    {
+      "name": "signal-hook-registry",
+      "version": "1.4.8"
+    },
+    {
+      "name": "smallvec",
+      "version": "1.16.4"
+    },
+    {
+      "name": "socket2",
+      "version": "0.6.5"
+    },
+    {
+      "name": "syn",
+      "version": "3.0.9"
+    },
+    {
+      "name": "tokio",
+      "version": "1.54.1"
+    },
+    {
+      "name": "tokio-macros",
+      "version": "2.7.2"
+    },
+    {
+      "name": "unicode-ident",
+      "version": "1.0.27"
+    }
+  ],
+  "lockfile": [
+    {
+      "name": "bitflags",
+      "version": "2.13.2"
+    },
+    {
+      "name": "bytes",
+      "version": "1.12.1"
+    },
+    {
+      "name": "cfg-if",
+      "version": "1.0.5"
+    },
+    {
+      "name": "errno",
+      "version": "0.3.14"
+    },
+    {
+      "name": "libc",
+      "version": "0.2.191"
+    },
+    {
+      "name": "lock_api",
+      "version": "0.4.14"
+    },
+    {
+      "name": "mio",
+      "version": "1.2.4"
+    },
+    {
+      "name": "parking_lot",
+      "version": "0.12.5"
+    },
+    {
+      "name": "parking_lot_core",
+      "version": "0.9.12"
+    },
+    {
+      "name": "pin-project-lite",
+      "version": "0.2.17"
+    },
+    {
+      "name": "proc-macro2",
+      "version": "1.0.107"
+    },
+    {
+      "name": "quote",
+      "version": "1.0.47"
+    },
+    {
+      "name": "redox_syscall",
+      "version": "0.5.18"
+    },
+    {
+      "name": "scopeguard",
+      "version": "1.2.0"
+    },
+    {
+      "name": "signal-hook-registry",
+      "version": "1.4.8"
+    },
+    {
+      "name": "smallvec",
+      "version": "1.16.4"
+    },
+    {
+      "name": "socket2",
+      "version": "0.6.5"
+    },
+    {
+      "name": "syn",
+      "version": "3.0.9"
+    },
+    {
+      "name": "tokio",
+      "version": "1.54.1"
+    },
+    {
+      "name": "tokio-macros",
+      "version": "2.7.2"
+    },
+    {
+      "name": "unicode-ident",
+      "version": "1.0.27"
+    },
+    {
+      "name": "wasi",
+      "version": "0.11.1+wasi-snapshot-preview1"
+    },
+    {
+      "name": "windows-link",
+      "version": "0.2.1"
+    },
+    {
+      "name": "windows-sys",
+      "version": "0.61.2"
+    }
+  ]
+}

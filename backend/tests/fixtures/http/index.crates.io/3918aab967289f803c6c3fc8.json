@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"884b0d6dc007486ebd5eaa77b756f9bc\"",
+    "last-modified": "Tue, 28 Jul 2026 13:58:22 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/di/sp/displaydoc"
+  },
+  "status": 200
+}

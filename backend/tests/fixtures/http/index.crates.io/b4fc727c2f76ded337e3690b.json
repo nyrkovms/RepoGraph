@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"adfeb8495192ac9e212b6cd6b8567c67\"",
+    "last-modified": "Sun, 01 Feb 2026 13:14:57 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wi/nd/windows_aarch64_gnullvm"
+  },
+  "status": 200
+}

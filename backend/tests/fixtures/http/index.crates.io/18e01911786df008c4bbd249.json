@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"15fad3a1049375adf99623be463ddf9b\"",
+    "last-modified": "Sun, 20 Sep 2026 18:30:20 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/hy/pe/hyper-rustls"
+  },
+  "status": 200
+}

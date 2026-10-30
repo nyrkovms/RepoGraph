@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"16bfeb5720c0fa24ab99f9b5546d0156\"",
+    "last-modified": "Fri, 30 Oct 2026 06:14:58 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wa/sm/wasm-bindgen-shared"
+  },
+  "status": 200
+}

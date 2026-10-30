@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"c4c50076c5bbf5aa19d1f4f25a000223\"",
+    "last-modified": "Sun, 08 Feb 2026 20:34:05 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/3/r/ryu"
+  },
+  "status": 200
+}

@@ -1,0 +1,11 @@
+description: >
+  tokio with every feature: features2 (`dep:` syntax), platform-specific dependencies (windows-sys, libc, wasm
+  ones) that Cargo.lock keeps for every platform while the linux graph leaves them out.
+roots:
+  - {purl: pkg:cargo/tokio, constraint: "1", extras: [full]}
+environment: {target: x86_64-unknown-linux-gnu}
+sources:
+  - {slug: crates-io, protocol: cargo-sparse, base_url: "https://index.crates.io/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

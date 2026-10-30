@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"971e1a71d7d6afbfc90a23ad91931103\"",
+    "last-modified": "Sat, 18 Jul 2026 23:05:14 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/se/rd/serde"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"8c0d4ea7c8f052a814d576564e5692fd\"",
+    "last-modified": "Wed, 14 Oct 2026 09:54:17 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ru/st/rustls"
+  },
+  "status": 200
+}

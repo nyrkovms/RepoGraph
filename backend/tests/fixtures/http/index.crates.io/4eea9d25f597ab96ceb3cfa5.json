@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"0ac455483c2315b731dfa5b377f297fc\"",
+    "last-modified": "Fri, 30 Oct 2026 06:15:07 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/js/-s/js-sys"
+  },
+  "status": 200
+}

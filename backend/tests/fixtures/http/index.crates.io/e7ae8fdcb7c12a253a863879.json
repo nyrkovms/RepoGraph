@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"36a854bad6b802aeff751f67687b256c\"",
+    "last-modified": "Thu, 13 Aug 2026 23:28:10 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wr/it/writeable"
+  },
+  "status": 200
+}

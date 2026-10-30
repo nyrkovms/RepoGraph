@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"f6f8aea22c386f7e26ae25df69cacd36\"",
+    "last-modified": "Sun, 01 Feb 2026 13:14:55 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wi/nd/windows-sys"
+  },
+  "status": 200
+}

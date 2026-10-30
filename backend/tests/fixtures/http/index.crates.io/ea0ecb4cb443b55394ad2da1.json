@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"bec6f678585c802c3bb5dc43db544e8b\"",
+    "last-modified": "Mon, 19 Oct 2026 07:39:38 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/fi/nd/find-msvc-tools"
+  },
+  "status": 200
+}

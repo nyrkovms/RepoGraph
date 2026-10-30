@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"5be19a8267d5e805331aee354c51bfe2\"",
+    "last-modified": "Sun, 01 Feb 2026 13:07:49 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/to/we/tower-layer"
+  },
+  "status": 200
+}

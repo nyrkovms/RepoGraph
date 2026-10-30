@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"5b27ba183642b9f3ebc465ef53be5e39\"",
+    "last-modified": "Wed, 30 Sep 2026 09:14:24 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/qu/in/quinn-udp"
+  },
+  "status": 200
+}

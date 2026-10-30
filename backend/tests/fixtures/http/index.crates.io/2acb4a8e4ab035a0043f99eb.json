@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"f4aaf808c0a82dc61db108d6c335682f\"",
+    "last-modified": "Tue, 12 May 2026 09:08:20 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ze/ro/zerofrom"
+  },
+  "status": 200
+}

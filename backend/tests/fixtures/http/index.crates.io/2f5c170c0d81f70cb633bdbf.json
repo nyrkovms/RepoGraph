@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"f04c34b1c1393586598a10d8eb5a91c9\"",
+    "last-modified": "Mon, 02 Feb 2026 08:15:04 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/ra/nd/rand_chacha"
+  },
+  "status": 200
+}

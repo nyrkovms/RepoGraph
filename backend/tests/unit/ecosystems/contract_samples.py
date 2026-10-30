@@ -34,4 +34,14 @@ SAMPLES: dict[str, Samples] = {
         prereleases=["0.0.0-20191109021931-daa7c04131f5", "1.0.0-0", "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-beta.2",
                      "1.0.0-beta.11", "1.0.0-rc.1"],
     ),
+    "crates": Samples(
+        # Names as published (Q21): `serde_json` and `Inflector` keep their spelling.
+        names=[("serde", "pkg:cargo/serde"), ("serde_json", "pkg:cargo/serde_json"), ("Inflector", "pkg:cargo/Inflector")],
+        # Checked against the semver crate 1.0.26 (tests/fixtures/crates/semver/expected.json).
+        ordered_versions=["0.0.0-0", "0.1.0", "1.0.0-0", "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-beta.2",
+                          "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0", "1.9.0", "1.10.0", "2.0.0", "18446744073709551615.0.0"],
+        invalid_versions=["1.2", "01.2.3", "v1.2.3", "18446744073709551616.0.0", "latest"],
+        prereleases=["0.0.0-0", "1.0.0-0", "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-beta.2", "1.0.0-beta.11",
+                     "1.0.0-rc.1"],
+    ),
 }

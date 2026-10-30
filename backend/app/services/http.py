@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import tempfile
+from collections.abc import Mapping
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -136,4 +137,6 @@ def make_client(timeout: float, **kwargs: object) -> httpx.AsyncClient:
         transport = ReplayTransport(Path(settings.http_replay_dir))
     elif settings.http_record_dir:
         transport = RecordingTransport(Path(settings.http_record_dir))
-    return httpx.AsyncClient(timeout=timeout, transport=transport, **kwargs)  # type: ignore[arg-type]
+    extra = kwargs.pop("headers", None)
+    headers = {"User-Agent": settings.http_user_agent, **(dict(extra) if isinstance(extra, Mapping) else {})}
+    return httpx.AsyncClient(timeout=timeout, transport=transport, headers=headers, **kwargs)  # type: ignore[arg-type]

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"ea8494d560f1b8174443495b370e272f\"",
+    "last-modified": "Fri, 20 Mar 2026 00:12:38 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/it/oa/itoa"
+  },
+  "status": 200
+}

@@ -6,14 +6,14 @@ moves (E7). Answers are cached by request and checked against the catalog revisi
 
 import asyncio
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
 from packaging.version import InvalidVersion, Version
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ecosystems.base import EcosystemPlugin, ResolveGraph, ResolveRoot, SourceProfile
+from app.ecosystems.base import EcosystemPlugin, Environment, ResolveGraph, ResolveRoot, SourceProfile
 from app.ecosystems.base import ResolveRequest as ContractRequest
 from app.ecosystems.pypi.resolver import NOT_FOUND_PREFIX
 from app.ecosystems.registry import UnknownEcosystem, get_plugin
@@ -60,7 +60,7 @@ async def resolve_graph(db: AsyncSession, payload: GraphResolveRequest) -> Graph
     inc_resolve_cache_miss()
 
     request = ContractRequest(
-        roots=roots, environment=plugin.parse_environment(payload.environment), profile=profile,
+        roots=roots, environment=_environment(plugin, payload.environment), profile=profile,
         include_dev=payload.options.include_dev, include_optional=payload.options.include_optional,
         managed=[_root(plugin, payload.ecosystem, m.purl, m.constraint, m.extras) for m in payload.managed],
         timeout_s=payload.options.timeout_s,
@@ -131,7 +131,7 @@ async def resolve_dependencies(db: AsyncSession, payload: ResolveRequest) -> Res
 
     request = ContractRequest(
         roots=roots,
-        environment=plugin.parse_environment(payload.environment.model_dump()),
+        environment=_environment(plugin, payload.environment.model_dump()),
         profile=profile,
         include_dev=payload.options.include_dev,
     )
@@ -284,7 +284,15 @@ async def _profile(db: AsyncSession, ecosystem: str, slug: str | None) -> Source
 
 
 # How a range pins one version where it is not PEP 440's `==` (a bare version is an exact range in node-semver).
-_PIN = {"npm": "{}"}
+_PIN = {"npm": "{}", "crates": "={}"}
+
+
+def _environment(plugin: EcosystemPlugin, raw: Mapping[str, object]) -> Environment:
+    """An environment the plugin refuses (an unknown Rust target) is the request's fault: 422."""
+    try:
+        return plugin.parse_environment(raw)
+    except ValueError as exc:
+        raise ResolveInvalidRequest(str(exc)) from exc
 
 
 def _root(plugin: EcosystemPlugin, ecosystem: str, purl: str, constraint: str, extras: Sequence[str]) -> ResolveRoot:

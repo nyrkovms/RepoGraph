@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"09288a20c6593aadf91bc6827369b143\"",
+    "last-modified": "Sun, 01 Feb 2026 13:14:57 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wi/nd/windows_aarch64_msvc"
+  },
+  "status": 200
+}

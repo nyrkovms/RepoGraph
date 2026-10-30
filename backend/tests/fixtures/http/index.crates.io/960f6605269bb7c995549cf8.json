@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"acd54781c56cf569348b6bfee6f73d48\"",
+    "last-modified": "Mon, 28 Sep 2026 09:18:12 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/to/ki/tokio-rustls"
+  },
+  "status": 200
+}

@@ -1,0 +1,11 @@
+description: >
+  reqwest without default features, with rustls and json: renamed dependencies, weak `x?/feat` features, a large
+  graph with several versions of one crate in different compatibility classes.
+roots:
+  - {purl: pkg:cargo/reqwest, constraint: "0.12", extras: [rustls-tls, json]}
+environment: {target: x86_64-unknown-linux-gnu, default_features: false}
+sources:
+  - {slug: crates-io, protocol: cargo-sparse, base_url: "https://index.crates.io/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

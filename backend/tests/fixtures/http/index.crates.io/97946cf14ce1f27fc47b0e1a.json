@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"cd1329e3cba23f91cb42461d3c525fd0\"",
+    "last-modified": "Sun, 01 Feb 2026 13:07:50 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/to/we/tower-service"
+  },
+  "status": 200
+}

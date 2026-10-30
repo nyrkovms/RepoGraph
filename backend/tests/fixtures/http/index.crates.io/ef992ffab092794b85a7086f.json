@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain",
+    "etag": "\"69a3f216232fb0f1819ed1794b078928\"",
+    "last-modified": "Fri, 30 Oct 2026 06:15:02 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/wa/sm/wasm-bindgen-macro-support"
+  },
+  "status": 200
+}

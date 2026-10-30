@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/octet-stream",
+    "etag": "\"652b69f181634dbf60fc8c3ec9f776e5\"",
+    "last-modified": "Tue, 12 Mar 2024 07:31:15 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://index.crates.io/config.json"
+  },
+  "status": 200
+}
