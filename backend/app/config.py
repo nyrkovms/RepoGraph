@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     source_breaker_failures: int = 5
     source_breaker_cooldown_seconds: int = 600
     presence_probe_enabled: bool = True
+    # crates.io API fields in the background (tasks/crates_api.py): a batch a minute stays under 1 request/s.
+    crates_api_enabled: bool = True
+    crates_api_interval_seconds: int = 60
+    crates_api_batch: int = 50
     presence_probe_day_of_week: int = 0      # Sunday
     presence_probe_hour_utc: int = 4
 

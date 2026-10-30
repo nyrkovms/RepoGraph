@@ -18,6 +18,7 @@ from app.api.v1.packages import _decode_cursor_or_422
 from app.db import get_db_session
 from app.ecosystems import purl as purls
 from app.ecosystems.crates.environment import CratesEnvironment
+from app.ecosystems.crates.resolver import enabled as crate_features_enabled
 from app.ecosystems.npm.environment import NpmEnvironment
 from app.ecosystems.npm.environment import version_allows as npm_version_allows
 from app.ecosystems.base import EcosystemPlugin, Environment, PackageRef, RegistryConfig, SourceProfile
@@ -651,6 +652,7 @@ async def _build_tree_for_version(
 ) -> list[DependencyNode]:
     deps = await view.dependencies(package, version_row)
     plugin_env = plugin_env or view.plugin_env
+    asks = _crate_asks(plugin_env, version_row, deps)
 
     visible_deps: list[Dependency] = []
     for dep in deps:
@@ -706,7 +708,7 @@ async def _build_tree_for_version(
                             env=env,
                             visited=visited | {resolved_key},
                             fetcher=fetcher,
-                            plugin_env=_child_env(plugin_env, dep),
+                            plugin_env=_child_env(plugin_env, dep, asks),
                         )
                 dependencies_unknown = resolved.id in view.unknown or await view.known_unknown(child_package, resolved)
 
@@ -727,13 +729,26 @@ async def _build_tree_for_version(
     return nodes
 
 
-def _child_env(env: Environment | None, dep: Dependency) -> Environment | None:
-    """crates: below an edge, the features that edge asks of its crate (and its default features unless switched off)."""
+def _crate_asks(env: Environment | None, version_row: PackageVersion, deps: list[Dependency]) -> dict[str, frozenset[str]]:
+    """crates: the features this version's own active features ask of its dependencies (`x/feat`), by local name."""
+    if not isinstance(env, CratesEnvironment):
+        return {}
+    features = {name: [str(v) for v in values] for name, values in (version_row.features or {}).items()
+                if isinstance(values, list)}
+    switched = crate_features_enabled(features, [dependency_from_row(dep) for dep in deps], env.active_features())
+    return dict(switched.asks)
+
+
+def _child_env(env: Environment | None, dep: Dependency, asks: dict[str, frozenset[str]]) -> Environment | None:
+    """crates: below an edge, the features that edge asks of its crate (and its default features unless switched off)
+    and those the parent's features ask of it."""
     if not isinstance(env, CratesEnvironment):
         return env
     details = dep.details or {}
     listed = details.get("features")
-    return CratesEnvironment(target=env.target, features=tuple(str(f) for f in listed) if isinstance(listed, list) else (),
+    features = {str(f) for f in listed} if isinstance(listed, list) else set()
+    features |= asks.get(dep.alias or dep.dependency_name, frozenset())
+    return CratesEnvironment(target=env.target, features=tuple(sorted(features)),
                              default_features=details.get("default_features", True) is not False)
 
 

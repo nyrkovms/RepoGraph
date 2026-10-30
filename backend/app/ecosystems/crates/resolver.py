@@ -3,11 +3,16 @@
 
 Pass 1 chooses versions the way Cargo's dependency resolver does: one activation per (crate, semver-compatibility
 class), so `rand 0.7` and `rand 0.8` can live side by side; the dependency with the fewest candidates goes next;
-candidates newest first, yanked ones only for an `=` pin; a candidate whose class already holds another version, or
-that lacks a feature asked of it, is skipped, and a dependency left without candidates backtracks to the last choice
-that had alternatives. Features asked of an activation by all its dependents are unified, and optional dependencies
+candidates newest first, never a yanked one (Cargo refuses them in a new lock even for an `=` pin); a candidate whose
+class already holds another version, that lacks a feature asked of it, or whose `links` another activation has, is
+skipped. A dependency left without candidates jumps back to the latest choice among those that caused its refusals
+(the activations in the way, the ones asking, and what brought those in), as Cargo's conflict-driven backjumping does,
+and fails at once when no choice can help. Features asked of an activation by all its dependents are unified, and optional dependencies
 come in through them (`dep:x`, `x/feat`, a bare `x`; `x?/feat` does not turn `x` on). Like Cargo.lock it ignores the
 platform: dependencies of every target take part.
+
+`options.include_optional` has no meaning here: optional dependencies come with features, as in Cargo. A dependency from
+another registry (`registry = "..."`) is not in the profile and is reported on its dependent.
 
 Pass 2 walks the chosen versions from the roots again, following only the dependencies that apply on the target and
 recomputing features along those edges, which is what `cargo tree --target <t>` shows. Target `*` is Cargo.lock:
@@ -36,7 +41,7 @@ from app.ecosystems.base import (
 )
 from app.ecosystems.crates.cfg import platform_matches
 from app.ecosystems.crates.environment import ALL_TARGETS, CratesEnvironment
-from app.ecosystems.crates.versions import CargoConstraint, CratesVersionScheme, compatibility, parse
+from app.ecosystems.crates.versions import CratesVersionScheme, compatibility, parse
 
 STRATEGY = "cargo-resolver"
 UNKNOWN_DEPENDENCIES = "dependencies unknown"
@@ -71,9 +76,38 @@ class _State:
     activations: dict[Key, _Activation] = field(default_factory=dict)
     pending: list[_Want] = field(default_factory=list)
     chosen: dict[tuple[Key, int], Key] = field(default_factory=dict)   # (parent, entry) -> activation
+    brought_by: dict[Key, Key] = field(default_factory=dict)           # activation -> the one that first asked for it
+    errors: dict[tuple[Key, str], list[str]] = field(default_factory=dict)   # (activation, version) -> node errors
 
     def copy(self) -> "_State":
-        return _State(dict(self.activations), list(self.pending), dict(self.chosen))
+        return _State(dict(self.activations), list(self.pending), dict(self.chosen), dict(self.brought_by),
+                      {key: list(messages) for key, messages in self.errors.items()})
+
+    def error(self, key: Key, version: str, message: str) -> None:
+        messages = self.errors.setdefault((key, version), [])
+        if message not in messages:
+            messages.append(message)
+
+    def askers(self, key: Key) -> set[Key]:
+        return {parent for (parent, _), child in self.chosen.items() if child == key}
+
+    def causes(self, keys: set[Key]) -> set[Key]:
+        """`keys` and everything that brought them in, up to the roots."""
+        out: set[Key] = set()
+        todo = list(keys)
+        while todo:
+            key = todo.pop()
+            if key not in out:
+                out.add(key)
+                if key in self.brought_by:
+                    todo.append(self.brought_by[key])
+        return out
+
+
+@dataclass(frozen=True, slots=True)
+class _Refusal:
+    reason: str
+    blocking: frozenset[Key] = frozenset()   # activations in the way
 
 
 @dataclass(slots=True)
@@ -81,6 +115,7 @@ class _Frame:
     state: _State                       # before the choice
     want: _Want
     alternatives: list[CatalogVersion]
+    key: Key                            # the activation the choice made
 
 
 class _Aborted(Exception):
@@ -107,9 +142,6 @@ def enabled(features: Mapping[str, Sequence[str]], deps: Sequence[NormalizedDepe
     `weak_switches_on`: Cargo's dependency resolver lets `x?/feat` bring `x` into Cargo.lock although no build uses it
     (rust-lang/cargo#10801); pass 1 asks for that, the build graph does not.
     """
-    by_local: dict[str, list[int]] = {}
-    for index, dep in enumerate(deps):
-        by_local.setdefault(_local(dep), []).append(index)
     optional = {_local(dep) for dep in deps if dep.dependency_type == "optional"}
     explicit_dep = {value[4:] for values in features.values() for value in values if value.startswith("dep:")}
     implicit = {name for name in optional if name not in explicit_dep and name not in features}
@@ -129,15 +161,18 @@ def enabled(features: Mapping[str, Sequence[str]], deps: Sequence[NormalizedDepe
             on.add(value[4:])
         elif "/" in value:
             name, _, feature = value.partition("/")
-            if name.endswith("?") and not weak_switches_on:
-                weak.append((name[:-1], feature))
-            else:
-                name = name.removesuffix("?")
-                if name in optional:
-                    on.add(name)
-                    if name in features and name not in explicit_dep:
-                        todo.append(name)      # old syntax: the feature named after the dependency comes along
-                asks.setdefault(name, set()).add(feature)
+            is_weak = name.endswith("?")
+            name = name.removesuffix("?")
+            if is_weak and not weak_switches_on:
+                weak.append((name, feature))
+                continue
+            if name in optional:
+                on.add(name)
+                # A strong `x/feat` also turns on a feature named `x` if the crate has one (`x = ["dep:x", ...]`),
+                # as Cargo does (rust-lang/cargo#10788, #12130).
+                if not is_weak and name in features:
+                    todo.append(name)
+            asks.setdefault(name, set()).add(feature)
         elif value in features:
             todo.extend(features[value])
         elif value in implicit:
@@ -189,7 +224,6 @@ class _Resolve:
         self.steps = 0
         self.graph = ResolveGraph(strategy=STRATEGY, nodes=[], edges=[], conflicts=[], warnings=[], fetched=[])
         self.refs: dict[Key, PackageRef] = {}
-        self.errors: dict[Key, list[str]] = {}
         self.root_wants: list[_Want] = []
         self._matching: dict[tuple[PackageRef, str], list[CatalogVersion]] = {}
 
@@ -224,55 +258,69 @@ class _Resolve:
         return self.deps[key]
 
     async def matching(self, want: _Want) -> list[CatalogVersion]:
-        """Versions the requirement accepts, newest first; yanked ones only when it pins exactly that version."""
+        """Versions the requirement accepts, newest first, never a yanked one."""
         key = (want.ref, want.constraint)
         if key not in self._matching:
             try:
                 constraint = _SCHEME.constraint(want.constraint)
             except InvalidVersion:
                 constraint = None
-            pinned = constraint.pinned() if isinstance(constraint, CargoConstraint) else None
             self._matching[key] = [] if constraint is None else [
-                v for v in await self.candidates(want.ref) if constraint.contains(v.version)
-                and (v.status == "active" or v.version == pinned)]
+                v for v in await self.candidates(want.ref) if constraint.contains(v.version) and v.status == "active"]
         return self._matching[key]
 
     # --- pass 1: versions ----------------------------------------------------------------------------------------
 
-    def _error(self, key: Key, message: str) -> None:
-        if message not in self.errors.setdefault(key, []):
-            self.errors[key].append(message)
-
-    async def _activate(self, state: _State, want: _Want, version: CatalogVersion) -> bool:
-        """Activate `version` for `want` (or add features to its activation); False if it cannot take them."""
+    async def _activate(self, state: _State, want: _Want, version: CatalogVersion) -> _Refusal | None:
+        """Activate `version` for `want` (or add features to its activation); why not, if it cannot take them.
+        A refusal leaves the state as it was."""
         key = (want.ref.name, compatibility(version.version))
         current = state.activations.get(key)
         if current is not None and current.version.version != version.version:
-            return False
+            return _Refusal(f"{want.ref.name} {current.version.version} is already chosen", frozenset({key}))
+        if version.links and current is None:
+            taken = [k for k, a in state.activations.items() if a.version.links == version.links]
+            if taken:
+                return _Refusal(f"{want.ref.name} {version.version} links {version.links!r} like {taken[0][0]}",
+                                frozenset(taken))
         features = (current.features if current else frozenset()) | want.features
         deps = await self.dependencies(want.ref, version)
         switched = enabled(version.features or {}, deps or [], features,
                            include_dev=self.request.include_dev and want.parent == ROOT, weak_switches_on=True)
         if switched.missing:
-            return False                       # Cargo: "package does not have that feature"
+            # Cargo: "package does not have that feature".
+            return _Refusal(f"{want.ref.name} {version.version} has no feature {', '.join(sorted(switched.missing))}",
+                            frozenset({key}) if current is not None else frozenset())
         if current is not None and current.features == features:
             state.chosen[(want.parent, want.index)] = key
-            return True
+            return None
         if len(state.activations) + (current is None) > self.request.max_nodes:
             raise ResolveLimitExceeded("nodes", self.request.max_nodes)
         state.activations[key] = _Activation(version, features)
         state.chosen[(want.parent, want.index)] = key
+        state.brought_by.setdefault(key, want.parent)
         self.refs[key] = want.ref
         if deps is None:
-            self._error(key, UNKNOWN_DEPENDENCIES)
-            return True
+            state.error(key, version.version, UNKNOWN_DEPENDENCIES)
+            return None
         # Its dependencies come (back) with the features now asked; ones already satisfied are reused at once.
-        state.pending.extend(
-            _Want(key, index, dep.target, dep.constraint, _asked_of(dep, switched.asks), dep.dependency_type,
-                  _rust_cfg(dep))
-            for index, dep in enumerate(deps) if index in switched.entries
-        )
-        return True
+        for index, dep in enumerate(deps):
+            if index not in switched.entries:
+                continue
+            if (dep.details or {}).get("registry"):
+                state.error(key, version.version, f"{dep.target.name} is from another registry")
+                continue
+            state.pending.append(_Want(key, index, dep.target, dep.constraint, _asked_of(dep, switched.asks),
+                                       dep.dependency_type, _rust_cfg(dep)))
+        return None
+
+    def _causes(self, state: _State, want: _Want, refusals: Sequence[_Refusal]) -> set[Key]:
+        """The activations a different choice of which could let `want` through."""
+        keys = {want.parent}
+        for refusal in refusals:
+            for key in refusal.blocking:
+                keys |= {key} | state.askers(key)
+        return state.causes(keys)
 
     async def choose(self) -> _State:
         state = _State()
@@ -294,33 +342,45 @@ class _Resolve:
             options = await self.matching(want)
             if not options:
                 # Nothing matches at all: no choice made earlier can help. A partial graph says why on the node.
-                self._error(want.parent, f"no version of {want.ref.name} matches {want.constraint}")
+                parent_version = state.activations[want.parent].version.version if want.parent != ROOT else ""
+                state.error(want.parent, parent_version, f"no version of {want.ref.name} matches {want.constraint}")
                 continue
             before = state.copy()
-            # A refused candidate leaves the state untouched: _activate changes it only once it accepts.
+            refusals: list[_Refusal] = []
             for tried, version in enumerate(options):
-                if await self._activate(state, want, version):
+                refusal = await self._activate(state, want, version)
+                if refusal is None:
                     if tried + 1 < len(options):
                         before.pending.insert(position, want)
-                        frames.append(_Frame(before, want, options[tried + 1:]))
+                        frames.append(_Frame(before, want, options[tried + 1:], (want.ref.name,
+                                                                               compatibility(version.version))))
                     break
+                refusals.append(refusal)
             else:
-                state = await self._backtrack(frames, want)
+                state = await self._backjump(frames, self._causes(state, want, refusals), want, refusals)
         return state
 
-    async def _backtrack(self, frames: list[_Frame], failed: _Want) -> _State:
+    async def _backjump(self, frames: list[_Frame], causes: set[Key], failed: _Want,
+                        refusals: list[_Refusal]) -> _State:
         while frames:
             frame = frames.pop()
+            if frame.key not in causes:
+                continue                       # a choice that has nothing to do with the failure
             while frame.alternatives:
                 version = frame.alternatives.pop(0)
                 state = frame.state.copy()
                 state.pending.remove(frame.want)
-                if await self._activate(state, frame.want, version):
+                refusal = await self._activate(state, frame.want, version)
+                if refusal is None:
+                    frame.key = (frame.want.ref.name, compatibility(version.version))
                     if frame.alternatives:
                         frames.append(frame)
                     return state
+                causes |= self._causes(frame.state, frame.want, [refusal])
+            causes |= frame.state.causes({frame.want.parent})
+        reasons = "; ".join(dict.fromkeys(r.reason for r in refusals))
         raise _Aborted("resolution_impossible",
-                       f"no versions satisfy every requirement on {failed.ref.name} ({failed.constraint})")
+                       f"no version of {failed.ref.name} ({failed.constraint}) can be chosen: {reasons}")
 
     # --- pass 2: the graph for the target ------------------------------------------------------------------------
 
@@ -375,15 +435,16 @@ class _Resolve:
                 latest = newest[0].version if newest else None
             self.graph.nodes.append(ResolvedNode(
                 id=node_id, ref=self.refs[key], version=activation.version.version,
-                registry_slug=activation.version.registry_slug, depth=depth[key], errors=list(self.errors.get(key, [])),
+                registry_slug=activation.version.registry_slug, depth=depth[key],
+                errors=list(state.errors.get((key, activation.version.version), [])),
                 latest_compatible=latest, details={"features": sorted(features[key])},
             ))
         self.graph.edges = [replace(edge, source="root" if parent == ROOT else ids[parent], target=ids[child])
                             for (parent, _), (child, edge) in edges.items()]
-        for message in self.errors.get(ROOT, []):
+        for message in state.errors.get((ROOT, ""), []):
             self.graph.warnings.append({"code": "unresolvable", "message": message})
-        for key, messages in self.errors.items():
-            if key in ids and UNKNOWN_DEPENDENCIES in messages:
+        for (key, version), messages in state.errors.items():
+            if key in ids and version == state.activations[key].version.version and UNKNOWN_DEPENDENCIES in messages:
                 self.graph.warnings.append({"code": "dependencies_unknown", "node": ids[key],
                                             "message": f"dependencies of {key[0]} "
                                                        f"{state.activations[key].version.version} are unknown"})

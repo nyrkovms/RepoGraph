@@ -275,16 +275,6 @@ class CargoConstraint:
     def raw(self) -> str:
         return self._raw
 
-    def pinned(self) -> str | None:
-        """The version an `=MAJOR.MINOR.PATCH` requirement pins (yanked versions are allowed only then), else None."""
-        if len(self.comparators) != 1:
-            return None
-        c = self.comparators[0]
-        if c.operator != "=" or c.minor is None or c.patch is None:
-            return None
-        pre = ".".join(str(part) for part in c.prerelease)
-        return f"{c.major}.{c.minor}.{c.patch}" + (f"-{pre}" if pre else "")
-
 
 class CratesVersionScheme:
     def validate(self, raw: str) -> None:

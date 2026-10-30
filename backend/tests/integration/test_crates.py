@@ -5,9 +5,11 @@ import asyncio
 import uuid
 
 from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.api.v1 import package_detail as routes
+from app.config import get_settings
 from app.db import loop_local_session
 from app.ecosystems.base import NormalizedDependency, NormalizedPackage, NormalizedVersion, PackageRef
 from app.fetcher import pipeline
@@ -16,7 +18,7 @@ from app.models.package_event import PackageEvent
 from app.models.registry import Registry
 from app.models.run import Run
 from app.models.version import PackageVersion
-from app.tasks import daily_update
+from app.tasks import crates_api, daily_update
 from app.tasks.fetch_packages import _fetch_packages_async
 
 SERDE = PackageRef("crates", "", "serde")
@@ -33,7 +35,7 @@ def test_a_crate_is_read_from_the_index_and_the_api_then_rechecked_by_etag() -> 
             return package, versions
 
     package, versions = asyncio.run(sync())
-    assert package.name == "serde" and package.description and package.license_spdx == "MIT OR Apache-2.0"
+    assert package.name == "serde"
     assert len(versions) > 300 and all(v.release_date for v in versions), "pubtime dates every version"
     latest = max(versions, key=lambda v: v.sort_key)
     assert {"default", "derive", "std"} <= set(latest.features or {})
@@ -51,6 +53,31 @@ def test_a_crate_is_read_from_the_index_and_the_api_then_rechecked_by_etag() -> 
     # The replayed index file answers 304 to the stored ETag: nothing changed.
     assert result["status"] == "success" and result["changed"] == 0
     assert result["per_registry"]["crates-io"]["changed"] == 0
+
+
+def test_api_fields_are_filled_in_the_background() -> None:
+    """Q22: the index alone makes the crate; the task reads the API for crates synced since their last API read."""
+    async def prepare() -> None:
+        async with loop_local_session() as db:
+            await pipeline.sync_package(db, SERDE, origin=PackageOrigin.manual)
+            package = await pipeline.find_package(db, SERDE)
+            package.description = package.license_raw = package.license_spdx = None
+            package.raw_metadata = {k: v for k, v in (package.raw_metadata or {}).items() if k != crates_api.MARK}
+            await db.commit()
+
+    async def read() -> object:
+        async with loop_local_session() as db:
+            return await pipeline.find_package(db, SERDE)
+
+    asyncio.run(prepare())
+    assert asyncio.run(crates_api._run(limit=500))["filled"] >= 1
+    package = asyncio.run(read())
+    assert package.description == "A generic serialization/deserialization framework"
+    assert (package.license_spdx, package.repository_url) == ("MIT OR Apache-2.0", "https://github.com/serde-rs/serde")
+    assert crates_api.MARK in package.raw_metadata
+    asyncio.run(crates_api._run(limit=500))   # a marked crate is not read again: its mark stays as it was
+    again = asyncio.run(read())
+    assert again.raw_metadata[crates_api.MARK] == package.raw_metadata[crates_api.MARK]
 
 
 def test_a_crate_asked_for_in_another_spelling_is_stored_under_its_published_name() -> None:
@@ -83,11 +110,17 @@ def test_the_tree_follows_target_and_features() -> None:
     crates = pipeline.plugin_for("crates")
 
     async def check() -> None:
-        async with loop_local_session() as db:
+        # One outer transaction, rolled back: the pipeline's commits stay inside it.
+        engine = create_async_engine(get_settings().async_db_url, poolclass=NullPool)
+        async with engine.connect() as conn:
+            transaction = await conn.begin()
+            db = AsyncSession(bind=conn, expire_on_commit=False, join_transaction_mode="create_savepoint")
             try:
                 await _tree_cases(db, crates)
             finally:
-                await db.rollback()
+                await db.close()
+                await transaction.rollback()
+        await engine.dispose()
 
     asyncio.run(check())
 
@@ -111,6 +144,14 @@ async def _tree_cases(db: AsyncSession, crates: object) -> None:
     await write(shared, [_dep(deep, "optional", enabled_by=["more"])])
     await write(root, [_dep(win, target="cfg(windows)"), _dep(extra, "optional", enabled_by=["default", "extra"]),
                        _dep(shared, features=["more"])])
+    # `via` asks `more` of shared through its own feature map (`default = ["shared/more"]`), not on the edge.
+    via = f"via-{suffix}"
+    snapshot = NormalizedPackage(
+        ref=PackageRef("crates", "", via), registry_id=str(crates_io.id), display_name=via, revision="1",
+        versions=[NormalizedVersion(version="1.0.0", status="active", features={"default": [f"{shared}/more"]},
+                                    dependencies=[_dep(shared)])])
+    await pipeline.write_package(db, crates, [snapshot], missing_registry_ids=(), origin=PackageOrigin.seed)  # type: ignore[arg-type]
+    await db.flush()
 
     async def tree(target: str | None, features: str | None = None, default_features: bool | None = None) -> list[str]:
         response = await routes.get_dependencies_tree(
@@ -129,6 +170,14 @@ async def _tree_cases(db: AsyncSession, crates: object) -> None:
     assert await tree("x86_64-pc-windows-msvc") == sorted(["extra", "shared", "win", "  deep"])
     assert await tree("x86_64-unknown-linux-gnu", default_features=False) == sorted(["shared", "  deep"])
     assert await tree(None, features="extra", default_features=False) == sorted(["extra", "shared", "  deep"])
+    response = await routes.get_dependencies_tree(
+        "crates", via, "1.0.0", db, profile=None, depth=3, include_optional=False, python_version=None, os=None,
+        node_version=None, cpu=None, target_triple=None, features=None, default_features=None)
+    assert [c.name for c in response.dependencies[0].children] == [deep]
+    response = await routes.get_dependencies_tree(
+        "crates", via, "1.0.0", db, profile=None, depth=3, include_optional=False, python_version=None, os=None,
+        node_version=None, cpu=None, target_triple=None, features=None, default_features=False)
+    assert response.dependencies[0].children == []
     try:
         await tree("plan9")
     except routes.HTTPException as exc:

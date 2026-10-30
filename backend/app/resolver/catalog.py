@@ -60,7 +60,7 @@ class DbCatalog:
             await self.db.execute(
                 select(PackageVersion.id, PackageVersion.version, PackageVersion.engines, PackageVersion.deprecation,
                        PackageVersion.raw_metadata.has_key("bundleDependencies").label("bundled"),
-                       PackageVersion.features)
+                       PackageVersion.features, PackageVersion.raw_metadata["links"].astext.label("links"))
                 .where(PackageVersion.package_id == package.id, visibility.visible_clause(registries))
             )
         ).all()
@@ -100,6 +100,7 @@ class DbCatalog:
                     deprecated=row.deprecation is not None,
                     bundled=bool(row.bundled),
                     features=_features(row.features),
+                    links=row.links or None,
                 )
             )
         return result

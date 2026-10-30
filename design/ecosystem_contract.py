@@ -362,6 +362,7 @@ class CatalogVersion:
     deprecated: bool = False
     bundled: bool = False                  # npm bundleDependencies: inside the tarball, not resolved from a registry
     features: Mapping[str, Sequence[str]] | None = None   # Cargo features of the version: name -> what it enables
+    links: str | None = None               # Cargo `links`: one activation per native library
 
 
 class CatalogAccess(Protocol):

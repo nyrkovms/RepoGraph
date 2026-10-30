@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Sequence
+from dataclasses import replace
 
 import pytest
 
@@ -120,10 +121,12 @@ def test_a_wide_requirement_takes_the_newest_class() -> None:
     assert _set(_resolve(catalog, ("app", "1"))) == {("app", "1.0.0"), ("log", "0.4.22")}
 
 
-def test_yanked_versions_only_for_an_exact_pin_and_prereleases_only_when_named() -> None:
+def test_yanked_versions_are_never_chosen_and_prereleases_only_when_named() -> None:
+    # Cargo 1.86 refuses a yanked version in a new lock even for an exact pin ("version 1.0.95 is yanked").
     catalog = Catalog({"a": [_v("1.0.0"), _v("1.1.0", "yanked"), _v("1.2.0-rc.1")]})
     assert _set(_resolve(catalog, ("a", "1"))) == {("a", "1.0.0")}
-    assert _set(_resolve(catalog, ("a", "=1.1.0"))) == {("a", "1.1.0")}
+    pinned = _resolve(catalog, ("a", "=1.1.0"))
+    assert pinned.nodes == [] and pinned.warnings == [{"code": "unresolvable", "message": "no version of a matches =1.1.0"}]
     assert _set(_resolve(catalog, ("a", "^1.2.0-rc.1"))) == {("a", "1.2.0-rc.1")}
     assert _resolve(catalog, ("a", "1")).nodes[0].latest_compatible == "1.0.0"
 
@@ -136,6 +139,7 @@ def test_resolution_impossible_and_nothing_matching() -> None:
     )
     graph = _resolve(catalog, ("app", "1"))
     assert graph.error is not None and graph.error["code"] == "resolution_impossible"
+    assert "s 1.0.1 is already chosen" in graph.error["message"] or "s 1.0.2 is already chosen" in graph.error["message"]
     catalog.deps["q@1.0.0"] = [_dep("s", ">=1.0.1")]
     graph = _resolve(catalog, ("app", "1"))
     assert ("s", "1.0.1") in _set(graph)
@@ -265,3 +269,55 @@ def test_weak_features_bring_their_dependency_into_the_lock_but_not_the_build() 
     assert next(n for n in lock.nodes if n.ref.name == "quinn").details == {"features": ["default", "ring"]}
     assert enabled({"tls": ["quinn?/ring"]}, catalog.deps["app@1.0.0"], frozenset({"tls"}),  # type: ignore[arg-type]
                    weak_switches_on=True).entries == {0}
+
+
+def test_a_strong_dependency_feature_also_turns_on_the_feature_named_after_the_dependency() -> None:
+    # `serde = ["dep:serde", "chrono/serde"]` and `derive = ["serde/derive"]`: derive brings chrono/serde along.
+    deps = [_dep("serde", "1", "optional"), _dep("chrono", "0.4", "optional")]
+    features = {"serde": ["dep:serde", "chrono?/serde"], "derive": ["serde/derive"], "time": ["dep:chrono"]}
+    on = enabled(features, deps, frozenset({"derive", "time"}))
+    assert on.entries == {0, 1} and on.asks == {"serde": {"derive"}, "chrono": {"serde"}}
+    assert enabled(features, deps, frozenset({"derive"})).asks == {"serde": {"derive"}}   # chrono stays off: weak
+
+
+def test_a_feature_no_choice_can_give_fails_at_once() -> None:
+    # `b` has no feature `f` in any version; trying every combination of an unrelated chain would never end.
+    chain = {name: [_v(f"1.0.{i}") for i in range(15)] for name in ("c", "d", "e")}
+    deps = {f"{n}@1.0.{i}": [_dep(m, "1")] for n, m in (("c", "d"), ("d", "e")) for i in range(15)}
+    catalog = Catalog({"a": [_v("1.0.0", f=[])], "b": [_v("1.0.0"), _v("1.1.0")], **chain},
+                      {"a@1.0.0": [_dep("c", "1")], **deps})
+    graph = _resolve(catalog, ("a", "1"), ("b", "1"), env={"features": ["f"]})
+    assert graph.error is not None and graph.error["code"] == "resolution_impossible"
+    assert "b 1.1.0 has no feature f" in graph.error["message"]
+
+
+def test_one_activation_per_links_value() -> None:
+    # Two classes of a -sys crate linking one native library cannot both be built: the older dependent is used.
+    sys_v = lambda v: CatalogVersion(version=v, registry_id="r", registry_slug="crates-io", status="active",  # noqa: E731
+                                     links="git2")
+    catalog = Catalog(
+        {"app": [_v("1.0.0")], "git2": [_v("0.18.0"), _v("0.19.0")], "other": [_v("1.0.0")],
+         "libgit2-sys": [sys_v("0.16.2"), sys_v("0.17.0")]},
+        {"app@1.0.0": [_dep("git2", ">=0.18"), _dep("other", "1")], "git2@0.19.0": [_dep("libgit2-sys", "0.17")],
+         "git2@0.18.0": [_dep("libgit2-sys", "0.16")], "other@1.0.0": [_dep("libgit2-sys", "0.16")]},
+    )
+    assert _set(_resolve(catalog, ("app", "1"))) == {
+        ("app", "1.0.0"), ("other", "1.0.0"), ("git2", "0.18.0"), ("libgit2-sys", "0.16.2")}
+
+
+def test_node_errors_of_an_abandoned_version_do_not_stay() -> None:
+    # p 1.5.0 needs a crate nobody has and q =1.1.0; the root pins q =1.0.0, so p goes back to 1.4.0.
+    catalog = Catalog(
+        {"app": [_v("1.0.0")], "p": [_v("1.4.0"), _v("1.5.0")], "q": [_v("1.0.0"), _v("1.1.0")]},
+        {"app@1.0.0": [_dep("p", "1"), _dep("q", "=1.0.0")], "p@1.5.0": [_dep("ghost", "1"), _dep("q", "=1.1.0")]},
+    )
+    graph = _resolve(catalog, ("app", "1"))
+    assert _set(graph) == {("app", "1.0.0"), ("p", "1.4.0"), ("q", "1.0.0")}
+    assert all(not n.errors for n in graph.nodes)
+
+
+def test_a_dependency_from_another_registry_is_reported_not_resolved() -> None:
+    dep = replace(_dep("corp-lib", "1"), details={"registry": "https://corp.example/index"})
+    catalog = Catalog({"app": [_v("1.0.0")], "corp-lib": [_v("1.0.0")]}, {"app@1.0.0": [dep]})
+    graph = _resolve(catalog, ("app", "1"))
+    assert _set(graph) == {("app", "1.0.0")} and graph.nodes[0].errors == ["corp-lib is from another registry"]

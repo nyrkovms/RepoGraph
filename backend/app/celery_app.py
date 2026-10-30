@@ -9,6 +9,7 @@ settings = get_settings()
 
 # Task modules are listed explicitly: autodiscover_tasks(["app.tasks"]) looked for app.tasks.tasks and found nothing (#8).
 TASK_MODULES = [
+    "app.tasks.crates_api",
     "app.tasks.daily_update",
     "app.tasks.fetch_deps",
     "app.tasks.fetch_packages",
@@ -35,6 +36,12 @@ if settings.presence_probe_enabled:
         "task": "app.tasks.presence_probe.run_presence_probe",
         "schedule": crontab(day_of_week=settings.presence_probe_day_of_week, hour=settings.presence_probe_hour_utc,
                             minute=0),
+    }
+
+if settings.crates_api_enabled:
+    beat_schedule["crates-api"] = {
+        "task": "app.tasks.crates_api.fill_crates_api_fields",
+        "schedule": settings.crates_api_interval_seconds,
     }
 
 celery_app.conf.update(

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from app.ecosystems.base import InvalidVersion
-from app.ecosystems.crates.versions import CargoConstraint, CratesVersionScheme, compatibility, parse
+from app.ecosystems.crates.versions import CratesVersionScheme, compatibility, parse
 
 EXPECTED = json.loads(
     (Path(__file__).resolve().parents[2] / "fixtures" / "crates" / "semver" / "expected.json").read_text())
@@ -67,12 +67,3 @@ def test_prerelease_bump_and_fallback_key() -> None:
     ("1.2.3", "1"), ("1.0.0-alpha", "1"), ("0.3.9", "0.3"), ("0.0.3", "0.0.3"), ("0.0.0", "0.0.0"), ("10.0.0", "10")])
 def test_compatibility_classes(version: str, group: str) -> None:
     assert compatibility(version) == group
-
-
-@pytest.mark.parametrize(("requirement", "pinned"), [
-    ("=1.2.3", "1.2.3"), ("= 1.2.3-beta.2", "1.2.3-beta.2"), ("=1.2", None), ("1.2.3", None), ("=1.2.3, <2", None),
-    ("*", None)])
-def test_pinned(requirement: str, pinned: str | None) -> None:
-    constraint = SCHEME.constraint(requirement)
-    assert isinstance(constraint, CargoConstraint) and constraint.pinned() == pinned
-    assert constraint.raw() == requirement and not constraint.contains("junk")

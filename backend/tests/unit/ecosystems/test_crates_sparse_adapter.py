@@ -124,6 +124,14 @@ def _fetch(adapter: CratesSparseAdapter, raw: str) -> NormalizedPackage | None:
     return asyncio.run(adapter.fetch_package(_ref(raw), NO_LOOKUP))  # type: ignore[arg-type]
 
 
+def _fetch_with_api(adapter: CratesSparseAdapter, raw: str) -> NormalizedPackage | None:
+    """The index, then the API fields as the background task (tasks/crates_api.py) asks for them."""
+    package = _fetch(adapter, raw)
+    if package is not None:
+        asyncio.run(adapter.fetch_api_fields(package))
+    return package
+
+
 def _deps(adapter: CratesSparseAdapter, raw: str, version: str):
     return asyncio.run(adapter.fetch_version_dependencies(_ref(raw), version, NO_LOOKUP))  # type: ignore[arg-type]
 
@@ -161,7 +169,7 @@ def test_adapter_basics() -> None:
 
 def test_serde(serve, turns) -> None:
     upstream = serve({f"{BASE}se/rd/serde": _index("serde", SERDE_ETAG), f"{API}/api/v1/crates/serde": _api("api-serde.json")})
-    package = _fetch(_adapter(), "serde")
+    package = _fetch_with_api(_adapter(), "serde")
 
     assert sorted(upstream.urls) == sorted(SERDE_URLS)
     assert package is not None
@@ -220,7 +228,7 @@ def test_the_license_with_a_slash_is_an_or(serve) -> None:
     document = json.loads(_text("api-serde.json"))
     document["crate"]["default_version"] = "1.0.91"
     serve({f"{BASE}se/rd/serde": _index("serde"), f"{API}/api/v1/crates/serde": httpx.Response(200, json=document)})
-    package = _fetch(_adapter(), "serde")
+    package = _fetch_with_api(_adapter(), "serde")
     assert package is not None
     assert (package.license_raw, package.license_spdx) == ("MIT/Apache-2.0", "MIT OR Apache-2.0")
 
@@ -303,9 +311,9 @@ def test_tokio_optional_dependencies_know_what_enables_them(serve) -> None:
     assert bytes_.details == {"enabled_by": ["bytes", "full", "io-util", "process"]} and bytes_.extra_name == "bytes"
     # `dep:` in features2 hides the implicit feature: no `backtrace` feature, and so no extra_name.
     backtrace = _dep(version, "backtrace", kind="normal")
-    assert backtrace.details == {"enabled_by": ["taskdump"]} and backtrace.extra_name is None
+    assert backtrace.details == {"enabled_by": ["taskdump"]} and backtrace.extra_name == "taskdump"   # dep: only
     slab = _dep(version, "slab")
-    assert slab.details == {"enabled_by": ["io-uring"]} and slab.extra_name is None
+    assert slab.details == {"enabled_by": ["io-uring"]} and slab.extra_name == "io-uring"
     # `mio/os-poll` turns on the optional dependency `mio`; `libc` is a bare name in an old-syntax feature list.
     assert _dep(version, "mio", nth=0).details == {
         "default_features": False, "enabled_by": ["full", "io-uring", "mio", "net", "process", "signal"]}
@@ -341,7 +349,7 @@ def test_reqwest_renamed_dependencies(serve) -> None:
     assert renamed.raw_spec == 'native-tls-crate = { package = "native-tls", version = "^0.2.16" }'
     assert renamed.constraint == "^0.2.16" and renamed.dependency_type == "optional"
     # The implicit feature is named after the local name, which `dep:native-tls-crate` hides.
-    assert renamed.extra_name is None
+    assert renamed.extra_name == "__native-tls"   # no implicit feature: the first that turns it on
     assert renamed.environment_markers == {
         "rust_cfg": 'cfg(not(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none"))))'}
     assert renamed.details is not None and "native-tls-vendored" in renamed.details["enabled_by"]
@@ -370,7 +378,7 @@ def test_reqwest_a_weak_feature_does_not_turn_the_dependency_on(serve) -> None:
 def test_reqwest_a_feature_and_a_dependency_with_one_name(serve) -> None:
     # `rustls` is a feature (it includes `__rustls`) and the dependency `rustls` (`dep:rustls` in `__rustls`).
     rustls = _dep(_version(_reqwest(serve), "0.13.5"), "rustls")
-    assert rustls.extra_name is None
+    assert rustls.extra_name == "__rustls"
     assert rustls.details == {
         "features": ["std", "tls12"], "default_features": False,
         "enabled_by": ["__rustls", "default", "default-tls", "http3", "rustls", "rustls-no-provider"]}
@@ -529,9 +537,13 @@ def test_a_missing_crate_is_none_and_asks_nothing_else(serve, turns) -> None:
                                     httpx.Response(200, text="<html>"), httpx.Response(200, json=[1])])
 def test_a_failing_api_leaves_the_package_fields_empty(serve, caplog, answer) -> None:
     serve({f"{BASE}se/rd/serde": _index("serde", SERDE_ETAG), f"{API}/api/v1/crates/serde": answer})
+    adapter = _adapter()
+    package = _fetch(adapter, "serde")
+    assert package is not None
     with caplog.at_level(logging.WARNING):
-        package = _fetch(_adapter(), "serde")
-    assert package is not None and len(package.versions) == 13 and package.revision == SERDE_ETAG
+        answered = asyncio.run(adapter.fetch_api_fields(package))
+    assert answered is (answer.status_code == 404)   # a crate the API does not know is an answer; a failure is not
+    assert len(package.versions) == 13 and package.revision == SERDE_ETAG
     assert (package.description, package.homepage_url, package.repository_url, package.documentation_url) == (None,) * 4
     assert (package.license_raw, package.license_spdx, package.keywords) == (None, None, None)
     assert (package.downloads_total, package.downloads_recent, package.created_at, package.updated_at) == (None,) * 4
@@ -549,7 +561,7 @@ def test_the_api_is_retried_and_waits_its_turn_each_time(serve, turns) -> None:
     upstream = serve({f"{BASE}se/rd/serde": _index("serde"), f"{API}/api/v1/crates/serde": flaky})
     adapter = _adapter()
     adapter.max_retries, adapter.retry_base_seconds, adapter.retry_jitter_seconds = 3, 0.0, 0.0
-    package = _fetch(adapter, "serde")
+    package = _fetch_with_api(adapter, "serde")
     assert package is not None and package.description is not None
     assert upstream.urls.count(f"{API}/api/v1/crates/serde") == 3
     assert turns == [("crates-io:api", 1.0)] * 3   # one turn per request that reached the API
@@ -559,7 +571,7 @@ def test_the_api_gives_up_after_the_retries(serve, turns) -> None:
     upstream = serve({f"{BASE}se/rd/serde": _index("serde"), f"{API}/api/v1/crates/serde": httpx.Response(500)})
     adapter = _adapter()
     adapter.max_retries, adapter.retry_base_seconds, adapter.retry_jitter_seconds = 2, 0.0, 0.0
-    package = _fetch(adapter, "serde")
+    package = _fetch_with_api(adapter, "serde")
     assert package is not None and package.description is None
     assert upstream.urls.count(f"{API}/api/v1/crates/serde") == 3 and len(turns) == 3
 
@@ -576,8 +588,28 @@ def test_the_index_is_not_rate_limited(serve, turns) -> None:
 def test_without_api_url_there_is_no_api_request(serve, turns) -> None:
     upstream = serve({f"{BASE}se/rd/serde": _index("serde")})
     for registry in (_registry(), _registry(api_url=""), _registry(api_url=None)):
-        assert _fetch(_adapter(registry), "serde") is not None
+        adapter = _adapter(registry)
+        package = _fetch(adapter, "serde")
+        assert package is not None and asyncio.run(adapter.fetch_api_fields(package)) is False
     assert all(url.startswith(BASE) for url in upstream.urls) and turns == []
+
+
+def test_reading_a_crate_asks_no_api(serve, turns) -> None:
+    # Lazy fetch inside a resolve must not wait for API turns (Q22): the index alone.
+    upstream = serve({f"{BASE}se/rd/serde": _index("serde"), f"{API}/api/v1/crates/serde": _api("api-serde.json")})
+    package = _fetch(_adapter(), "serde")
+    assert package is not None and package.description is None
+    assert all(url.startswith(BASE) for url in upstream.urls) and turns == []
+
+
+@pytest.mark.parametrize("asked", ["SERDE", "Serde"])
+def test_another_spelling_than_the_published_one_is_not_the_crate(serve, asked: str) -> None:
+    # The index serves the lowercased path, so `Serde` answers with serde's file: storing it would duplicate serde.
+    serve({f"{BASE}se/rd/serde": _index("serde")})
+    adapter = _adapter()
+    assert _fetch(adapter, asked) is None
+    assert asyncio.run(adapter.exists(_ref(asked))) is False
+    assert asyncio.run(adapter.exists(_ref("serde"))) is True
 
 
 def test_the_config_is_read_once_per_adapter(serve) -> None:

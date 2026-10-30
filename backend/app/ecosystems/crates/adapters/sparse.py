@@ -7,9 +7,12 @@ nothing is fetched lazily: the dependencies of every version are in the same doc
 package's revision.
 
 Description, links, keywords, downloads and the license are not in the index. crates.io has them in its API, which
-allows one request per second for everyone: the adapter asks it once per `fetch_package` (the pipeline calls that when a
-package is added or its ETag changed), through the shared limiter, and a registry without `config.api_url` is read
-from the index alone. A failing API never fails the package: the fields stay empty until the next change.
+allows one request per second for everyone: `fetch_package` reads the index alone, so adding a crate (lazily, inside a
+resolve) costs no API turn, and `fetch_api_fields` is called in the background for crates added or changed since
+(tasks/crates_api.py, SPEC Q22). A registry without `config.api_url` has no such fields.
+
+The index serves a crate under its lowercased name, so `Serde` would find serde: an answer for another spelling than
+the published one is no answer, and adding a package maps the spelling through the API instead (Q21).
 """
 
 import asyncio
@@ -117,6 +120,8 @@ def enabled_by(features: Mapping[str, Sequence[str]], optional: Collection[str])
                 target = value.partition("/")[0]
                 if not target.endswith("?") and target in optional:
                     turns_on[feature].add(target)
+                    if target in defined:
+                        includes[feature].add(target)   # Cargo turns on a feature named after the dependency too
             elif value in defined:
                 includes[feature].add(value)
             elif value in optional:
@@ -137,6 +142,13 @@ def enabled_by(features: Mapping[str, Sequence[str]], optional: Collection[str])
 
 
 # --- one version ------------------------------------------------------------------------------------
+
+
+def _extra_name(local: str, implicit: Collection[str], activated_by: Mapping[str, Sequence[str]]) -> str | None:
+    """The feature that turns an optional dependency on (§7.2): its implicit feature, else the first that does."""
+    if local in implicit:
+        return local
+    return next(iter(activated_by.get(local, ())), None)
 
 
 def _raw_spec(local: str, package: str | None, req: str) -> str:
@@ -188,7 +200,7 @@ def normalize_dependencies(entry: Mapping[str, object]) -> list[NormalizedDepend
         result.append(NormalizedDependency(
             target=target, constraint=req, dependency_type=dependency_type, raw_spec=_raw_spec(local, package, req),
             scope=kind if isinstance(kind, str) else None, alias=local if package else None,
-            extra_name=local if dependency_type == "optional" and local in implicit else None,
+            extra_name=_extra_name(local, implicit, activated_by) if dependency_type == "optional" else None,
             environment_markers={"rust_cfg": cfg} if cfg else None, details=details or None,
         ))
     return result
@@ -311,6 +323,11 @@ def _index_lines(response: httpx.Response) -> list[Mapping[str, object]]:
     return [line for line in lines if isinstance(line, dict)]
 
 
+def _published_name(lines: Sequence[Mapping[str, object]]) -> str | None:
+    name = next((line["name"] for line in lines if isinstance(line.get("name"), str)), None)
+    return str(name) if name else None
+
+
 class CratesSparseAdapter:
     def __init__(self, registry: RegistryConfig) -> None:
         self.registry = registry
@@ -350,30 +367,33 @@ class CratesSparseAdapter:
         if _is_missing(response):
             return None
         lines = _index_lines(response)
+        name = _published_name(lines)
+        if name is not None and name != ref.name:
+            logger.info("%s in %s is published as %s", ref.name, self.registry.slug, name)
+            return None
         dl = await self._download_base()
         versions = [version for line in lines if (version := version_from_entry(line, dl)) is not None]
-        name = next((line["name"] for line in lines if isinstance(line.get("name"), str)), None)
-        package = NormalizedPackage(
-            ref=ref, registry_id=self.registry.id,
-            display_name=str(name) if name else _COORDINATES.display(ref),
-            revision=response.headers.get("etag"),
-            versions=versions,
+        return NormalizedPackage(
+            ref=ref, registry_id=self.registry.id, display_name=name or _COORDINATES.display(ref),
+            revision=response.headers.get("etag"), versions=versions,
         )
-        await self._add_api_fields(package)
-        return package
 
-    async def _add_api_fields(self, package: NormalizedPackage) -> None:
+    async def fetch_api_fields(self, package: NormalizedPackage) -> bool:
+        """Fill the package-level fields from the API. True when the API answered (a crate it does not know included),
+        False when there is no API or it failed: the caller tries again later."""
         url = self.api_crate_url(package.ref.name)
         if url is None:
-            return
+            return False
         try:
             response = await self.get(url, {"Accept": "application/json"}, api=True)
             if _is_missing(response):
                 logger.warning("crates.io API does not know %s in %s", package.ref.name, self.registry.slug)
-                return
+                return True
             apply_api_document(package, _json_object(response))
-        except Exception:  # noqa: BLE001 - the description is not worth the package: it comes with the next change
+            return True
+        except Exception:  # noqa: BLE001 - one crate failing must not stop the others
             logger.warning("crates.io API failed for %s in %s", package.ref.name, self.registry.slug, exc_info=True)
+            return False
 
     async def fetch_version_dependencies(self, ref: PackageRef, version: str, lookup: SourceLookup) -> VersionDependencies:
         response = await self.get(self.index_url(ref), {})
@@ -386,7 +406,11 @@ class CratesSparseAdapter:
 
     async def exists(self, ref: PackageRef) -> bool:
         # A full GET: the file is what is fetched next, and a CDN in front of the index may not answer HEAD.
-        return not _is_missing(await self.get(self.index_url(ref), {}))
+        response = await self.get(self.index_url(ref), {})
+        if _is_missing(response):
+            return False
+        name = _published_name(_index_lines(response))
+        return name is None or name == ref.name
 
     async def test_connection(self) -> None:
         await self._config()
