@@ -842,4 +842,235 @@ describe("PackagePage", () => {
       }
     });
   });
+
+  describe("go", () => {
+    const MODULE = "github.com/BurntSushi/toml";
+
+    function renderApp(path) {
+      render(
+        <MemoryRouter initialEntries={[path]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <App />
+        </MemoryRouter>
+      );
+    }
+
+    function mockModule(overrides = {}) {
+      api.fetchPackage.mockResolvedValue({
+        ecosystem: "go",
+        name: MODULE,
+        normalized_name: MODULE,
+        namespace: "",
+        purl: "pkg:golang/github.com/BurntSushi/toml",
+        description: null,
+        homepage_url: null,
+        repository_url: null,
+        documentation_url: null,
+        license_raw: null,
+        license_spdx: null,
+        latest_version: "v1.4.0",
+        sources: [],
+        ...overrides,
+      });
+      api.fetchVersions.mockResolvedValue({
+        data: [
+          { version: "v1.4.1-0.20261014143641-f0251eb4aa3e", status: "active", release_date: "2026-10-14T14:36:41Z" },
+          { version: "v1.4.0", status: "active", release_date: "2026-03-01T10:00:00Z" },
+          { version: "v1.3.0", status: "yanked", status_reason: "wrong tag, use v1.3.1", release_date: "2026-02-01T10:00:00Z" },
+          { version: "v2.0.0+incompatible", status: "active", release_date: "2025-12-01T10:00:00Z" },
+          { version: "v0.0.0-20261014143641-f0251eb4aa3e", status: "active", release_date: "2025-11-01T10:00:00Z" },
+        ],
+        cursor: null,
+        has_more: false,
+      });
+      api.fetchVersion.mockResolvedValue({
+        name: MODULE,
+        purl: "pkg:golang/github.com/BurntSushi/toml@v1.4.0",
+        version: "v1.4.0",
+        status: "active",
+        features: null,
+        dependencies_state: "hydrated",
+        sources: [],
+      });
+      api.fetchDependencies.mockResolvedValue({
+        package: MODULE,
+        version: "v1.4.0",
+        depth: 1,
+        dependencies: [
+          {
+            name: "github.com/BurntSushi/toml-test",
+            constraint: "v1.0.0",
+            dependency_type: "runtime",
+            extra_name: null,
+            environment_markers: null,
+            details: {},
+            resolved_version: "v1.0.0",
+            cycle: false,
+            children: [],
+          },
+          {
+            name: "golang.org/x/sys",
+            constraint: "v0.20.0",
+            dependency_type: "runtime",
+            extra_name: null,
+            environment_markers: null,
+            details: { indirect: true },
+            resolved_version: "v0.20.0",
+            cycle: false,
+            children: [],
+          },
+        ],
+      });
+    }
+
+    it("opens a module by a multi-segment route, keeping the path and its case", async () => {
+      mockModule();
+      renderApp(`/package/go/${MODULE}`);
+
+      expect(await screen.findByText("pkg:golang/github.com/BurntSushi/toml")).toBeInTheDocument();
+      expect(screen.getByText("Go", { selector: ".eco-badge" })).toBeInTheDocument();
+      expect(api.fetchPackage).toHaveBeenCalledWith("go", MODULE);
+      expect(api.fetchVersions).toHaveBeenCalledWith("go", MODULE, { limit: 30 });
+      expect(api.fetchVulnerabilities).toHaveBeenCalledWith("go", MODULE);
+      await waitFor(() => expect(api.fetchVersion).toHaveBeenCalledWith("go", MODULE, "v1.4.0"));
+    });
+
+    it("opens a module with a major version suffix", async () => {
+      mockModule({ name: "github.com/redis/go-redis/v9", normalized_name: "github.com/redis/go-redis/v9" });
+      renderApp("/package/go/github.com/redis/go-redis/v9");
+
+      await screen.findByText("pkg:golang/github.com/BurntSushi/toml");
+      expect(api.fetchPackage).toHaveBeenCalledWith("go", "github.com/redis/go-redis/v9");
+    });
+
+    it("shows no empty description, license or link blocks", async () => {
+      mockModule();
+      renderApp(`/package/go/${MODULE}`);
+
+      await screen.findByText("pkg:golang/github.com/BurntSushi/toml");
+      expect(screen.queryByText("No description")).not.toBeInTheDocument();
+      expect(screen.queryByText(/License/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Homepage/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Repo/)).not.toBeInTheDocument();
+      expect(screen.queryByText("n/a")).not.toBeInTheDocument();
+      expect(screen.getByText(/Latest/)).toBeInTheDocument();
+    });
+
+    it("shows the license and links of a module when the catalog has them", async () => {
+      mockModule({ license_spdx: "MIT", repository_url: "https://github.com/BurntSushi/toml" });
+      renderApp(`/package/go/${MODULE}`);
+
+      await screen.findByText("pkg:golang/github.com/BurntSushi/toml");
+      expect(screen.getByText((content) => content.includes("MIT"))).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "https://github.com/BurntSushi/toml" })).toBeInTheDocument();
+      expect(screen.queryByText(/Homepage/)).not.toBeInTheDocument();
+    });
+
+    it("marks pseudo-versions and retracted versions with their reason, and keeps +incompatible as is", async () => {
+      mockModule();
+      renderApp(`/package/go/${MODULE}`);
+
+      await screen.findByText("pkg:golang/github.com/BurntSushi/toml");
+      const items = [...document.querySelectorAll(".inline-list > li")];
+      const row = (version) => items.find((item) => item.textContent.startsWith(version));
+
+      expect(within(row("v1.4.1-0.20261014143641-f0251eb4aa3e")).getByText("pseudo-version")).toBeInTheDocument();
+      expect(within(row("v0.0.0-20261014143641-f0251eb4aa3e")).getByText("pseudo-version")).toBeInTheDocument();
+      expect(within(row("v1.4.0")).queryByText("pseudo-version")).not.toBeInTheDocument();
+
+      const retracted = row("v1.3.0");
+      expect(within(retracted).getByText("retracted")).toHaveClass("warn");
+      expect(within(retracted).getByText("wrong tag, use v1.3.1")).toBeInTheDocument();
+
+      expect(within(row("v2.0.0+incompatible")).queryByText("pseudo-version")).not.toBeInTheDocument();
+      expect(screen.getAllByText("v2.0.0+incompatible").length).toBeGreaterThan(0);
+      expect(screen.getByText("2026-10-14", { exact: false })).toBeInTheDocument();
+    });
+
+    it("shows a deprecation banner only when the module is deprecated", async () => {
+      mockModule({ deprecation: { message: "use github.com/pelletier/go-toml/v2 instead" } });
+      renderApp(`/package/go/${MODULE}`);
+
+      const banner = await screen.findByRole("alert");
+      expect(banner).toHaveTextContent("Deprecated: use github.com/pelletier/go-toml/v2 instead");
+    });
+
+    it("shows no deprecation banner for a module that is not deprecated", async () => {
+      mockModule({ deprecation: null });
+      renderApp(`/package/go/${MODULE}`);
+
+      await screen.findByText("pkg:golang/github.com/BurntSushi/toml");
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("has no environment form and sends no tree parameters", async () => {
+      mockModule();
+      renderApp(`/package/go/${MODULE}`);
+
+      await screen.findByText("golang.org/x/sys");
+      expect(screen.queryByLabelText("Python version")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Node.js version")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Target")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("OS")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("CPU")).not.toBeInTheDocument();
+      expect(screen.queryByText("include optional")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Version")).toBeInTheDocument();
+      expect(api.fetchDependencies).toHaveBeenCalledWith("go", MODULE, "v1.4.0", {});
+    });
+
+    it("tags indirect requirements", async () => {
+      mockModule();
+      renderApp(`/package/go/${MODULE}`);
+
+      await screen.findByText("golang.org/x/sys");
+      const direct = screen.getByText("github.com/BurntSushi/toml-test").closest(".dep-tree-item");
+      const indirect = screen.getByText("golang.org/x/sys").closest(".dep-tree-item");
+      expect(within(indirect).getByText("indirect")).toBeInTheDocument();
+      expect(within(direct).queryByText("indirect")).not.toBeInTheDocument();
+    });
+
+    it("opens the version of the URL and sends it to the tree", async () => {
+      mockModule();
+      render(
+        <MemoryRouter
+          initialEntries={[`/package/go/${MODULE}?version=v1.3.0`]}
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        >
+          <Routes>
+            <Route path="/package/:ecosystem/*" element={<PackagePage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => expect(api.fetchDependencies).toHaveBeenCalledWith("go", MODULE, "v1.3.0", {}));
+    });
+
+    it("shows the retraction reason of the selected version", async () => {
+      mockModule();
+      api.fetchVersion.mockResolvedValue({
+        name: MODULE,
+        purl: "pkg:golang/github.com/BurntSushi/toml@v1.3.0",
+        version: "v1.3.0",
+        status: "yanked",
+        status_reason: "wrong tag, use v1.3.1",
+        dependencies_state: "hydrated",
+        sources: [],
+      });
+      renderApp(`/package/go/${MODULE}?version=v1.3.0`);
+
+      expect(await screen.findByText("Retracted: wrong tag, use v1.3.1")).toBeInTheDocument();
+    });
+
+    it("does not call a yanked version of another ecosystem retracted", async () => {
+      api.fetchVersions.mockResolvedValue({
+        data: [{ version: "3.1.3", status: "yanked", status_reason: "broken", release_date: "2026-02-01T10:00:00Z" }],
+        cursor: null,
+        has_more: false,
+      });
+      renderApp("/package/flask");
+
+      expect(await screen.findByText("yanked", { selector: ".tag" })).toBeInTheDocument();
+      expect(screen.queryByText("retracted")).not.toBeInTheDocument();
+      expect(screen.queryByText("broken")).not.toBeInTheDocument();
+    });
+  });
 });

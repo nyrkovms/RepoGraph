@@ -17,8 +17,8 @@ function displayName(item) {
   return decodeURIComponent(item.purl.replace(/^pkg:[^/]+\//, "").replace(/@[^/]*$/, ""));
 }
 
-// The slug of an ecosystem differs from its purl type for crates (`pkg:cargo/...`).
-const PURL_TYPE_ECOSYSTEMS = { cargo: "crates" };
+// The slug of an ecosystem differs from its purl type for crates (`pkg:cargo/...`) and Go (`pkg:golang/...`).
+const PURL_TYPE_ECOSYSTEMS = { cargo: "crates", golang: "go" };
 
 function ecosystemOf(item) {
   if (item.ecosystem) return item.ecosystem;

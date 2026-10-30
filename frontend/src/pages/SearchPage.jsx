@@ -11,6 +11,7 @@ const ECOSYSTEM_OPTIONS = [
   { value: "pypi", label: "PyPI" },
   { value: "npm", label: "npm" },
   { value: "crates", label: "crates.io" },
+  { value: "go", label: "Go" },
 ];
 
 function ecosystemLabel(ecosystem) {

@@ -301,6 +301,22 @@ button:disabled {
   margin-left: 8px;
 }
 
+.version-reason {
+  margin-left: 8px;
+  font-size: 13px;
+}
+
+.banner {
+  margin: 8px 0 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.banner.warn {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .feature-list {
   margin: 8px 0;
 }

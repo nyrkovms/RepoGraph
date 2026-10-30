@@ -68,4 +68,19 @@ describe("package routes", () => {
     await fetchDependencies("crates", "serde_json", "1.0.140", { target: "wasm32-wasip1", features: "", default_features: true });
     expect(Object.fromEntries(lastUrl().searchParams)).toEqual({ target: "wasm32-wasip1", default_features: "true" });
   });
+
+  it("builds the routes of a Go module: the slashes of the path stay, the case stays, versions are encoded", async () => {
+    await fetchPackage("go", "github.com/BurntSushi/toml");
+    expect(lastUrl().pathname).toBe("/api/v1/packages/go/github.com/BurntSushi/toml/-/");
+
+    await fetchVersions("go", "github.com/redis/go-redis/v9", { limit: 30 });
+    expect(lastUrl().pathname).toBe("/api/v1/packages/go/github.com/redis/go-redis/v9/-/versions");
+
+    await fetchVersion("go", "github.com/gin-gonic/gin", "v2.0.0+incompatible");
+    expect(lastUrl().pathname).toBe("/api/v1/packages/go/github.com/gin-gonic/gin/-/versions/v2.0.0%2Bincompatible");
+
+    await fetchDependencies("go", "github.com/gin-gonic/gin", "v1.10.0", {});
+    expect(lastUrl().pathname).toBe("/api/v1/packages/go/github.com/gin-gonic/gin/-/versions/v1.10.0/dependencies");
+    expect(lastUrl().search).toBe("");
+  });
 });
