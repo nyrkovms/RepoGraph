@@ -61,6 +61,11 @@ def list_revision(versions: Collection[str]) -> str:
     return hashlib.sha256("\n".join(sorted(versions)).encode()).hexdigest()
 
 
+# A module without tags has an empty list; its revision is the pseudo-version `@latest` names, so a new commit asked
+# for through the proxy shows up (the index detector reads pseudo-versions for such modules only).
+TAGLESS = "latest:"
+
+
 def _is_missing(response: httpx.Response) -> bool:
     return response.status_code in _MISSING
 
@@ -162,22 +167,24 @@ class GoProxyAdapter:
         response = await self.get(self.list_url(ref))
         listed = [] if _is_missing(response) else _list_lines(response)
         known: dict[str, datetime | None] = {}
+        # `@latest` is the proxy's answer to `go get path@latest`: it skips +incompatible tags above a module's real
+        # latest (go-sqlite3 v2.0.3+incompatible) and takes them when nothing newer has a go.mod (docker v28).
+        latest = await self.get(self.latest_url(ref))
+        document = None if _is_missing(latest) else _json_object(latest)
+        named = document.get("Version") if document is not None else None
         if listed:
             raw_versions = listed
         else:
             # No tags (or not a module): the only version is whatever `@latest` says.
-            latest = await self.get(self.latest_url(ref))
-            if _is_missing(latest):
-                return None
-            document = _json_object(latest)
-            version = document.get("Version")
-            if not isinstance(version, str):
+            if not isinstance(named, str):
+                if document is None:
+                    return None
                 raise ValueError(f"{latest.url}: the answer has no Version")
-            raw_versions, known = [version], {version: _date(document.get("Time"))}
+            raw_versions, known = [named], {named: _date(document.get("Time") if document else None)}
 
         versions = self._valid_versions(ref, raw_versions)
         dates = await self._release_dates(ref, versions, known)
-        top = _pick_latest(versions)
+        top = named if isinstance(named, str) and named in versions else _pick_latest(versions)
         go_mod = await self._latest_go_mod(ref, top) if top is not None else None
 
         normalized: list[NormalizedVersion] = []
@@ -193,7 +200,7 @@ class GoProxyAdapter:
             ))
         return NormalizedPackage(
             ref=ref, registry_id=self.registry.id, display_name=_COORDINATES.display(ref),
-            revision=list_revision(listed), versions=normalized,
+            revision=list_revision(listed) if listed else f"{TAGLESS}{raw_versions[0]}", versions=normalized,
             deprecation={"message": go_mod.deprecated} if go_mod is not None and go_mod.deprecated else None,
         )
 
@@ -341,14 +348,20 @@ class GoListChangeDetector:
             try:
                 async with semaphore:
                     response = await self.adapter.get(self.adapter.list_url(package.ref))
+                listed = [] if _is_missing(response) else _list_lines(response)
+                latest = None
+                if not listed:
+                    async with semaphore:
+                        latest = await self.adapter.get(self.adapter.latest_url(package.ref))
             except Exception:  # noqa: BLE001 - one module failing must not fail the whole source for the day
                 logger.warning("Change check of %s in %s failed", package.ref.name, self.adapter.registry.slug,
                                exc_info=True)
                 return package, "same", None
-            if _is_missing(response):
+            if not listed and (latest is None or _is_missing(latest)):
                 # Already known to be unavailable: nothing new to report until it comes back.
                 return package, "same" if package.unavailable else "missing", None
-            revision = list_revision(_list_lines(response))
+            named = _json_object(latest).get("Version") if latest is not None else None
+            revision = list_revision(listed) if listed else f"{TAGLESS}{named}"
             if revision == package.revision:
                 return package, "changed" if package.unavailable else "same", revision
             return package, "changed", revision

@@ -217,15 +217,16 @@ def test_retract_interval_covers_incompatible_versions_inclusively() -> None:
     assert retraction(go_mod, "v1.14.0") is None and retraction(go_mod, "v2.0.8+incompatible") is None
 
 
-def test_the_highest_version_is_the_latest_even_when_it_is_incompatible(serve) -> None:
-    """Task H3 picks the latest by the scheme alone, so go-sqlite3's v2.0.3+incompatible (retracted by the go.mod of
-    v1.14.52, which Go itself would call the latest) is the one whose go.mod is read and its retract goes unseen.
-    Reported to the owner; this test only pins the behaviour as it is."""
+def test_the_latest_is_what_the_proxy_says_not_an_incompatible_tag_above_it(serve) -> None:
+    """go-sqlite3 has v2.0.x+incompatible tags above its real latest v1.14.52 (what `go get @latest` takes and the
+    proxy's `@latest` names); the go.mod of v1.14.52 retracts them."""
     upstream = serve()
     package = _fetch("github.com/mattn/go-sqlite3")
     assert package is not None
-    assert [url for url in upstream.urls if url.endswith(".mod")] == [f"{BASE}github.com/mattn/go-sqlite3/@v/v2.0.3+incompatible.mod"]
-    assert {v.status for v in package.versions} == {"active"}
+    assert [url for url in upstream.urls if url.endswith(".mod")] == [f"{BASE}github.com/mattn/go-sqlite3/@v/v1.14.52.mod"]
+    retracted = {v.version for v in package.versions if v.status == "yanked"}
+    assert retracted and all(v.startswith("v2.0.") and v.endswith("+incompatible") for v in retracted)
+    assert _version(package, "v1.14.52").dependencies is not None
 
 
 def test_an_interval_retract_marks_every_listed_version_in_it(serve) -> None:
@@ -278,7 +279,7 @@ def test_a_module_without_tags_has_its_latest_pseudo_version_as_the_only_version
     assert version.version == "v0.0.0-20261014143641-f0251eb4aa3e"
     assert version.release_date == datetime(2026, 10, 14, 14, 36, 41, tzinfo=UTC)
     assert version.status == "active"
-    assert package.revision == hashlib.sha256(b"").hexdigest()
+    assert package.revision == "latest:v0.0.0-20261014143641-f0251eb4aa3e"   # a new commit changes it
     assert version.dependencies is not None and {d.target.name for d in version.dependencies} >= {"golang.org/x/mod"}
     assert [d.details for d in version.dependencies if d.target.name == "golang.org/x/sync"] == [{"indirect": True}]
     assert version.engines == {"go": "1.26.0"}
@@ -676,9 +677,9 @@ def test_detector_reports_changed_and_missing_by_the_hash_of_the_list(serve) -> 
         ("example.com/grown", list_revision(["v1.0.0", "v1.1.0", "v1.2.0"])),
         ("example.com/never-synced", None),
         ("example.com/back", unchanged),
-        ("example.com/emptied", list_revision([])),
     ]
-    assert [p.ref.name for p in result.missing] == ["example.com/gone", "example.com/gone2"]
+    # An empty list asks `@latest`; with no answer either, the module is gone.
+    assert [p.ref.name for p in result.missing] == ["example.com/gone", "example.com/gone2", "example.com/emptied"]
     assert result.cursor == {} and not result.reconcile_all
     assert all("if-none-match" not in request.headers for request in upstream.requests)   # the list has no ETag
     assert not any("never-synced" in url for url in upstream.urls)   # nothing stored: it is simply reported as changed
@@ -722,3 +723,14 @@ def test_detector_survives_one_failing_package(serve, caplog) -> None:
     assert [(p.ref.name, revision) for p, revision in result.changed] == [
         ("example.com/ok", list_revision(["v1.0.0", "v1.1.0"]))]
     assert result.missing == [] and "example.com/broken" in caplog.text
+
+
+def test_detector_follows_the_latest_pseudo_version_of_a_module_without_tags(serve) -> None:
+    serve()
+    package = _fetch("golang.org/x/exp")
+    assert package is not None
+    same = [_tracked("golang.org/x/exp", package.revision)]
+    assert asyncio.run(_adapter().change_detector().detect(same, {})).changed == []
+    older = [_tracked("golang.org/x/exp", "latest:v0.0.0-20250101000000-aaaaaaaaaaaa")]
+    result = asyncio.run(_adapter().change_detector().detect(older, {}))
+    assert [(p.ref.name, revision) for p, revision in result.changed] == [("golang.org/x/exp", package.revision)]

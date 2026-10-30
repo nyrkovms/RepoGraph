@@ -125,3 +125,10 @@ def test_the_weekly_check_goes_through_the_reconciler(monkeypatch) -> None:
     _serve(monkeypatch, {"2026-10-29T00:00:00Z": []})
     _detect([quote], {"since": T0.isoformat(), **FRESH}, reconciler=reconciler)
     assert reconciler.asked == 1
+
+
+def test_pseudo_versions_count_for_a_module_without_tags(monkeypatch) -> None:
+    _serve(monkeypatch, {"2026-10-29T00:00:00Z": [_line("golang.org/x/exp", "v0.0.0-20261029000100-abcdefabcdef", 1)]})
+    tagless = _tracked("golang.org/x/exp", "latest:v0.0.0-20261001000000-aaaaaaaaaaaa")
+    result = _detect([tagless], {"since": T0.isoformat(), **FRESH})
+    assert [p.ref.name for p, _ in result.changed] == ["golang.org/x/exp"]

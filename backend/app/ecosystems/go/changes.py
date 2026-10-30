@@ -2,9 +2,8 @@
 
 `<index_url>?since=<RFC3339>&limit=<n>` lists `{"Path", "Version", "Timestamp"}` for every version proxy.golang.org
 served first since then, oldest first. The cursor is the timestamp of the last entry read. Pages are read up to the
-time the run started, each filtered by the module paths of the catalog. Pseudo-versions are left out: `@v/list` does
-not show them, so they change no tracked revision (a module with tags only gets a pseudo-version when someone asks for
-a commit). The first run, a cursor the index refuses and the weekly check go through every tracked module with the
+time the run started, each filtered by the module paths of the catalog. Pseudo-versions count only for modules without
+tags (revision `latest:<version>`): `@v/list` does not show them, so for a tagged module they change nothing. The first run, a cursor the index refuses and the weekly check go through every tracked module with the
 list detector given as `reconciler` (without one the run re-reads them all, `reconcile_all`).
 """
 
@@ -17,6 +16,9 @@ import httpx
 
 from app.ecosystems.base import CHANGED_SINCE, ChangeDetector, ChangeSet, RegistryConfig, TrackedPackage
 from app.ecosystems.go.versions import is_pseudo
+
+# A module without tags: its revision is its latest pseudo-version, so the index's pseudo-versions count for it.
+TAGLESS = "latest:"
 from app.services.http import make_client
 
 logger = logging.getLogger(__name__)
@@ -99,7 +101,9 @@ class GoIndexChangesDetector:
                         last = stamp
                     version = entry.get("Version")
                     package = by_path.get(str(entry.get("Path")))
-                    if package is not None and isinstance(version, str) and not is_pseudo(version):
+                    if package is None or not isinstance(version, str):
+                        continue
+                    if not is_pseudo(version) or (package.revision or "").startswith(TAGLESS):
                         changed[package.package_id] = package
                 if len(entries) < self.page_size or last <= since:
                     since = max(last, since)
