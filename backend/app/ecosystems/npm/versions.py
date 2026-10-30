@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from app.ecosystems.base import Bump, Constraint, InvalidVersion
-from app.ecosystems.versions_common import encode_number, fallback_sort_key
+from app.ecosystems.versions_common import fallback_sort_key, semver_key
 
 MAX_SAFE_INTEGER = 2**53 - 1
 _NUM = r"0|[1-9]\d*"
@@ -78,16 +78,7 @@ def parse(raw: str) -> SemVer:
 
 
 def _key(version: SemVer) -> bytes:
-    out = b"".join(encode_number(str(n)) for n in version.triple)
-    if not version.prerelease:
-        return out + b"\x02"                       # a release sorts after every prerelease of it
-    out += b"\x01"
-    for ident in version.prerelease:
-        if isinstance(ident, int):
-            out += b"\x01" + encode_number(str(ident))
-        else:
-            out += b"\x02" + ident.encode() + b"\x00"
-    return out + b"\x00"                           # fewer identifiers sort first
+    return semver_key(version.triple, version.prerelease)
 
 
 # --- ranges ----------------------------------------------------------------------------------------------------
