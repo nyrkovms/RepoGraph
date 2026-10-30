@@ -117,15 +117,13 @@ class GoCoordinates:
         parsed = parse(purl)
         if parsed.type != "golang":
             raise ValueError(f"not a golang purl: {purl}")
-        if not parsed.namespace:
-            raise ValueError(f"golang purls have a namespace (the module path without its last element): {purl}")
-        return self.parse(f"{parsed.namespace}/{parsed.name}"), parsed.version
+        # A module path of one element (`go4.org`, `tailscale.com`) has no namespace.
+        path = f"{parsed.namespace}/{parsed.name}" if parsed.namespace else parsed.name
+        return self.parse(path), parsed.version
 
     def to_purl(self, ref: PackageRef, version: str | None = None) -> str:
-        namespace, slash, name = ref.name.rpartition("/")
-        if not slash:
-            raise ValueError(f"a module path of one element has no purl namespace: {ref.name!r}")
-        return Purl(type="golang", namespace=namespace, name=name, version=version).to_string()
+        namespace, _, name = ref.name.rpartition("/")
+        return Purl(type="golang", namespace=namespace or None, name=name, version=version).to_string()
 
     def display(self, ref: PackageRef) -> str:
         return ref.name

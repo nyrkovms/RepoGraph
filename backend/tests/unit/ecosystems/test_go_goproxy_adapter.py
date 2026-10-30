@@ -297,7 +297,10 @@ def test_incompatible_versions_are_kept_and_the_highest_release_is_the_latest(se
     assert any(v.version.endswith("+incompatible") for v in package.versions)
     assert _version(package, "v28.5.2+incompatible").dependencies == []   # go.mod is one line: no requirements, no go
     assert _version(package, "v28.5.2+incompatible").engines is None
-    assert [url for url in upstream.urls if url.endswith(".mod")] == [f"{BASE}github.com/docker/docker/@v/v28.5.2+incompatible.mod"]
+    # @latest names v28.5.2+incompatible; retractions are also looked for in the highest compatible tag's go.mod.
+    assert [url for url in upstream.urls if url.endswith(".mod")] == [
+        f"{BASE}github.com/docker/docker/@v/v28.5.2+incompatible.mod", f"{BASE}github.com/docker/docker/@v/v1.13.1.mod"]
+    assert package.dist_tags == {"latest": "v28.5.2+incompatible"}
     assert _version(package, "v28.5.2+incompatible").release_date == datetime.fromisoformat(
         json.loads(_recorded("github.com/docker/docker/@v/v28.5.2+incompatible.info"))["Time"])
     assert {v.version for v in package.versions if v.dependencies is not None} == {"v28.5.2+incompatible"}
@@ -734,3 +737,22 @@ def test_detector_follows_the_latest_pseudo_version_of_a_module_without_tags(ser
     older = [_tracked("golang.org/x/exp", "latest:v0.0.0-20250101000000-aaaaaaaaaaaa")]
     result = asyncio.run(_adapter().change_detector().detect(older, {}))
     assert [(p.ref.name, revision) for p, revision in result.changed] == [("golang.org/x/exp", package.revision)]
+
+
+def test_a_newest_tag_that_retracts_itself_is_seen_although_latest_names_an_older_one(serve) -> None:
+    # The documented pattern: v1.0.1 retracts [v1.0.0, v1.0.1]; @latest then names v0.9.0, whose go.mod says nothing.
+    serve({
+        **_answer(f"{BASE}example.com/m/@v/list", "v0.9.0\nv1.0.0\nv1.0.1\n"),
+        **_answer(f"{BASE}example.com/m/@latest", json.dumps({"Version": "v0.9.0", "Time": "2026-01-01T00:00:00Z"})),
+        **_answer(f"{BASE}example.com/m/@v/v0.9.0.mod", "module example.com/m\n"),
+        **_answer(f"{BASE}example.com/m/@v/v1.0.1.mod", "module example.com/m\n\nretract [v1.0.0, v1.0.1] // broken\n"),
+    })
+    package = _fetch("example.com/m")
+    assert package is not None and package.dist_tags == {"latest": "v0.9.0"}
+    assert {v.version: v.status for v in package.versions} == {"v0.9.0": "active", "v1.0.0": "yanked", "v1.0.1": "yanked"}
+
+
+def test_a_failing_latest_does_not_lose_a_listed_module(serve) -> None:
+    serve({**_answer(f"{BASE}example.com/m/@v/list", "v1.0.0\n"), f"{BASE}example.com/m/@latest": httpx.Response(503)})
+    package = _fetch("example.com/m")
+    assert package is not None and [v.version for v in package.versions] == ["v1.0.0"] and package.dist_tags is None

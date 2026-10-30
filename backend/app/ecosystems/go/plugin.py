@@ -26,7 +26,8 @@ from app.ecosystems.routing import route
 
 
 def _path_matches(ref: PackageRef, pattern: str) -> bool:
-    """Rules list module path prefixes, like GOPRIVATE: `corp.example.com/*` or `github.com/corp` and below."""
+    """Rules list module path prefixes: `corp.example.com/*` or `github.com/corp` and everything below (GOPRIVATE-like,
+    without its glob patterns)."""
     prefix = pattern.strip().rstrip("/").removesuffix("/*")
     return ref.name == prefix or ref.name.startswith(prefix + "/")
 

@@ -108,7 +108,7 @@ def test_purl_namespace_is_the_path_without_its_last_element() -> None:
 
 @pytest.mark.parametrize("purl", [
     "pkg:npm/golang.org/x/net", "pkg:cargo/serde",
-    "pkg:golang/net",                                                     # no namespace
+    "pkg:golang/net",                                                     # one element without a dot
     "pkg:golang/golang.org/x/Net%20x", "pkg:golang/foo/bar",              # not module paths
     "pkg:golang/github.com/foo/v1", "pkg:golang/GitHub.com/x",
 ])
@@ -117,7 +117,12 @@ def test_purls_that_are_not_modules(purl: str) -> None:
         COORDINATES.from_purl(purl)
 
 
-def test_a_one_element_path_has_no_purl() -> None:
-    assert COORDINATES.parse("example.com") == _ref("example.com")
+def test_a_one_element_path_is_a_purl_without_namespace() -> None:
+    # go4.org, tailscale.com and gotest.tools are real modules: a graph holding one must still have purls.
+    assert COORDINATES.parse("go4.org") == _ref("go4.org")
+    assert COORDINATES.to_purl(_ref("go4.org"), "v0.0.0-20230225012048-214862532bf5") == \
+        "pkg:golang/go4.org@v0.0.0-20230225012048-214862532bf5"
+    assert COORDINATES.from_purl("pkg:golang/gotest.tools@v2.2.0%2Bincompatible") == (
+        _ref("gotest.tools"), "v2.2.0+incompatible")
     with pytest.raises(ValueError):
-        COORDINATES.to_purl(_ref("example.com"))
+        COORDINATES.from_purl("pkg:golang/nodot")

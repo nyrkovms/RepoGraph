@@ -5,11 +5,12 @@ The module graph is read the way Go 1.17+ reads it (modload `readModGraph`): the
 each root's go.mod is read; a module whose go.mod says `go >= 1.17` contributes its requirements but their go.mod files
 are not read; below a module on an older go (or one reached that way) every go.mod is read. Minimal version selection
 then takes, for every module path, the highest version any read go.mod (or the main module) requires, whether or not
-the module that requires it ends up selected.
+the module that requires it ends up selected. When MVS raises a root above the version asked for, the graph is read
+again from the selected version, as Go's `expandGraph` does, until every root is selected.
 
-go.mod files come through the catalog's document channel (source_documents), so modules MVS only reads do not enter the
-catalog. `replace` and `exclude` are the main module's, from the environment; an excluded version is skipped for the
-next higher one the proxy lists.
+go.mod files come through the catalog's document channel (source_documents); neither they nor the build list enter the
+catalog (Q24). `replace` and `exclude` are the main module's, from the environment; a requirement on an excluded
+version is dropped, as Go does since 1.16. A go.mod that declares another module path is reported on its node.
 """
 
 import time
@@ -30,9 +31,10 @@ from app.ecosystems.base import (
 from app.ecosystems.go.coordinates import escape_path, escape_version
 from app.ecosystems.go.environment import GoEnvironment
 from app.ecosystems.go.gomod import GoMod, GoModError, parse_go_mod
-from app.ecosystems.go.versions import GoVersionScheme, compare, is_pseudo
+from app.ecosystems.go.versions import GoVersionScheme, compare
 
 STRATEGY = "go-mvs"
+MAX_EXPANSIONS = 20
 NO_GO_MOD = "go.mod not found"
 _SCHEME = GoVersionScheme()
 
@@ -56,7 +58,7 @@ def _go_at_least(go: str | None, wanted: str) -> bool:
         for piece in text.split(".")[:3]:
             digits = "".join(ch for ch in piece if ch.isdigit())
             numbers.append(int(digits) if digits else 0)
-        return tuple(numbers)
+        return tuple(numbers + [0] * (3 - len(numbers)))   # `1.23` is `1.23.0`
 
     return parts(go or "1.16") >= parts(wanted)
 
@@ -107,22 +109,22 @@ class _Resolve:
                 _ref(module[0]), f"{escape_path(path)}/@v/{escape_version(version)}.mod", self.request.profile)
             if document is None:
                 self.reads[module] = _Read(None, [NO_GO_MOD])
-            else:
-                try:
-                    self.reads[module] = _Read(parse_go_mod(document.content.decode("utf-8", "replace")))
-                except GoModError as exc:
-                    self.reads[module] = _Read(None, [f"go.mod cannot be read: {exc}"])
+                return self.reads[module]
+            try:
+                mod = parse_go_mod(document.content.decode("utf-8", "replace"))
+            except GoModError as exc:
+                self.reads[module] = _Read(None, [f"go.mod cannot be read: {exc}"])
+                return self.reads[module]
+            if mod.module not in (module[0], path):
+                # Go refuses such a module ("declares its path as"); a replacement may declare either path.
+                self.reads[module] = _Read(None, [f"go.mod declares its path as {mod.module}"])
+                return self.reads[module]
+            read = _Read(mod)
+            for require in mod.requires:
+                if not _SCHEME.is_valid(require.version):
+                    read.errors.append(f"{require.path} {require.version} is not a module version")
+            self.reads[module] = read
         return self.reads[module]
-
-    async def _not_excluded(self, path: str, version: str) -> str:
-        """Go's rule for an excluded requirement: the next higher version the proxy lists that is not excluded."""
-        excluded = {v for p, v in self.env.exclude if p == path}
-        if version not in excluded:
-            return version
-        higher = sorted((v.version for v in await self.versions(path)
-                         if v.version not in excluded and compare(v.version, version) > 0 and not is_pseudo(v.version)),
-                        key=_SCHEME.sort_key)
-        return higher[0] if higher else version
 
     def _select(self, path: str, version: str) -> None:
         current = self.selected.get(path)
@@ -130,6 +132,8 @@ class _Resolve:
             self.selected[path] = version
 
     async def read_graph(self, roots: list[Module]) -> None:
+        self.selected, self.requires = {}, {}
+        excluded = set(self.env.exclude)
         loaded: set[tuple[Module, bool]] = set()   # (module, read unpruned)
         queue: deque[tuple[Module, bool]] = deque((root, False) for root in roots)   # the main module is pruned
         for path, version in roots:
@@ -144,14 +148,10 @@ class _Resolve:
                 continue
             requires: list[tuple[Module, bool]] = []
             for require in read.mod.requires:
-                try:
-                    _SCHEME.validate(require.version)
-                except InvalidVersion:
-                    read.errors.append(f"{require.path} {require.version} is not a module version")
-                    continue
-                version = await self._not_excluded(require.path, require.version)
-                requires.append(((require.path, version), require.indirect))
-                self._select(require.path, version)
+                if not _SCHEME.is_valid(require.version) or (require.path, require.version) in excluded:
+                    continue   # an excluded version is dropped, not replaced by another (Go >= 1.16)
+                requires.append(((require.path, require.version), require.indirect))
+                self._select(require.path, require.version)
             self.requires[module] = requires
             if len(self.selected) > self.request.max_nodes:
                 raise ResolveLimitExceeded("nodes", self.request.max_nodes)
@@ -178,9 +178,7 @@ class _Resolve:
             errors = list(read.errors) if read else []
             latest = None
             if path in root_paths:
-                releases = [v.version for v in await self.versions(path)
-                            if v.status == "active" and not _SCHEME.is_prerelease(v.version)]
-                latest = max(releases, key=_SCHEME.sort_key) if releases else None
+                latest = _latest(await self.versions(path))
             listed = next((v for v in self.listed.get(path, []) if v.version == version), None)
             if listed is None and self.request.profile.registries:
                 slug = self.request.profile.registries[0].slug
@@ -224,7 +222,13 @@ class GoResolver:
                 state.graph.error = {"code": "not_found", "packages": missing,
                                      "message": f"no source of the profile has a version of {', '.join(missing)}"}
                 return state.graph
-            await state.read_graph(roots)
+            # Go's expandGraph: a root MVS raised is read again from the selected version, until none is raised.
+            for _ in range(MAX_EXPANSIONS):
+                await state.read_graph(roots)
+                selected = [(path, state.selected[path]) for path, _ in roots]
+                if selected == roots:
+                    break
+                roots = selected
             await state.build(roots)
         except ResolveLimitExceeded as exc:
             state.graph.error = {"code": "resolve_limit_exceeded", "message": str(exc), "limit": exc.limit,
@@ -246,9 +250,18 @@ async def _root_version(state: _Resolve, path: str, constraint: str) -> str | No
         return constraint
     except InvalidVersion:
         pass
-    versions = [v for v in await state.versions(path) if v.status == "active"]
-    releases = [v.version for v in versions if not _SCHEME.is_prerelease(v.version)]
-    pool = releases or [v.version for v in versions]
+    return _latest(await state.versions(path), prereleases=True)
+
+
+def _latest(versions: list[CatalogVersion], prereleases: bool = False) -> str | None:
+    """The version the proxy's `@latest` names (the `latest` tag the adapter stores): it skips +incompatible tags above
+    a module's real latest; without the tag, the highest active release (else prerelease, when allowed)."""
+    tagged = next((v.version for v in versions if "latest" in v.tags), None)
+    if tagged is not None:
+        return tagged
+    active = [v.version for v in versions if v.status == "active"]
+    releases = [v for v in active if not _SCHEME.is_prerelease(v)]
+    pool = releases or (active if prereleases else [])
     return max(pool, key=_SCHEME.sort_key) if pool else None
 
 

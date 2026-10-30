@@ -113,9 +113,13 @@ def test_constraint_is_a_minimum_version_as_go_compares() -> None:
 
 
 def test_constraint_rejects_what_is_not_a_module_version() -> None:
-    for raw in ("v1", "v1.2", "1.2.3", ">=v1.2.3", "latest", "", "v1.2.3-"):
+    for raw in ("v1", "v1.2", "1.2.3", ">=v1.2.3", "latest", "v1.2.3-"):
         with pytest.raises(InvalidVersion):
             SCHEME.constraint(raw)
+    # A root asked without a version (`go get path@latest`): any module version.
+    for raw in ("", "*", " * "):
+        anything = SCHEME.constraint(raw)
+        assert anything.contains("v0.0.1") and anything.contains("v2.0.0+incompatible") and not anything.contains("x")
     constraint = SCHEME.constraint("v1.2.3")
     assert not constraint.contains("v1.2") and not constraint.contains("junk")
     assert constraint.contains("v1.2.3+incompatible") and constraint.contains("v2.0.0")

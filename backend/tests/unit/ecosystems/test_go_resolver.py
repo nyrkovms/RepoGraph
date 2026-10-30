@@ -120,8 +120,8 @@ def test_replace_and_exclude_of_the_main_module() -> None:
     }, versions={"example.com/x": ["v1.1.0", "v1.2.0", "v1.3.0-rc.1"]})
     graph = _resolve(catalog, ("example.com/app", "v1.0.0"), env={
         "replace": [{"old": "example.com/a", "new": "example.com/fork@v1.0.1"}], "exclude": ["example.com/x@v1.1.0"]})
-    assert _set(graph) == {("example.com/app", "v1.0.0"), ("example.com/a", "v1.0.0"), ("example.com/b", "v1.0.0"),
-                           ("example.com/x", "v1.2.0")}
+    # Since Go 1.16 a requirement on an excluded version is dropped, not moved to the next listed version.
+    assert _set(graph) == {("example.com/app", "v1.0.0"), ("example.com/a", "v1.0.0"), ("example.com/b", "v1.0.0")}
     a = next(n for n in graph.nodes if n.ref.name == "example.com/a")
     assert a.details == {"replaced_by": "example.com/fork@v1.0.1"}
 
@@ -160,3 +160,37 @@ def test_environment_parsing() -> None:
             continue
         raise AssertionError(f"{bad} should be refused")
     assert parse_environment({}).specified is False
+
+
+def test_a_root_raised_by_mvs_is_read_again_from_the_selected_version() -> None:
+    # Go's expandGraph: z needs x v1.1.0, whose go.mod brings w; reading only x v1.0.0 would miss w.
+    catalog = Catalog({
+        "example.com/x@v1.0.0": _mod("example.com/x", "1.21"),
+        "example.com/x@v1.1.0": _mod("example.com/x", "1.21", "example.com/w v1.0.0"),
+        "example.com/z@v1.0.0": _mod("example.com/z", "1.21", "example.com/x v1.1.0"),
+    })
+    assert _set(_resolve(catalog, ("example.com/x", "v1.0.0"), ("example.com/z", "v1.0.0"))) == {
+        ("example.com/x", "v1.1.0"), ("example.com/z", "v1.0.0"), ("example.com/w", "v1.0.0")}
+
+
+def test_a_go_mod_declaring_another_path_is_refused_and_the_go_line_is_compared_by_patch() -> None:
+    catalog = Catalog({"example.com/app@v1.0.0": _mod("example.com/app", "1.23.0", "example.com/moved v1.0.0"),
+                       "example.com/moved@v1.0.0": _mod("example.com/elsewhere", "1.21", "example.com/q v1.0.0")})
+    graph = _resolve(catalog, ("example.com/moved", "v1.0.0"), ("example.com/app", "v1.0.0"))
+    moved = next(n for n in graph.nodes if n.ref.name == "example.com/moved")
+    assert moved.errors == ["go.mod declares its path as example.com/elsewhere"]
+    assert ("example.com/q", "v1.0.0") not in _set(graph)
+    assert graph.warnings == []   # go 1.23.0 needs nothing beyond the environment's 1.23
+
+
+def test_the_latest_tag_is_the_root_for_star_and_the_latest_compatible() -> None:
+    catalog = Catalog({"example.com/m@v1.5.0": _mod("example.com/m", "1.21")}, versions={})
+    tagged = [CatalogVersion(version=v, registry_id="r", registry_slug="proxy-golang-org", status="active", tags=t)
+              for v, t in (("v1.5.0", ("latest",)), ("v2.0.0+incompatible", ()))]
+
+    async def versions(ref, profile):
+        return tagged
+
+    catalog.versions = versions  # type: ignore[method-assign]
+    graph = _resolve(catalog, ("example.com/m", "*"))
+    assert _set(graph) == {("example.com/m", "v1.5.0")} and graph.nodes[0].latest_compatible == "v1.5.0"

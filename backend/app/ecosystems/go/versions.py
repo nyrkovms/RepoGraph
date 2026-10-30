@@ -133,6 +133,17 @@ def major(raw: str) -> int:
 # --- requirements ----------------------------------------------------------------------------------------------
 
 
+ANY = ("", "*")
+
+
+def is_valid(version: str) -> bool:
+    try:
+        parse(version)
+    except InvalidVersion:
+        return False
+    return True
+
+
 @dataclass(frozen=True, slots=True)
 class MinimumVersion:
     """`require path v1.2.3`: at least that version. Whether the major version path matches is the caller's concern."""
@@ -140,6 +151,8 @@ class MinimumVersion:
     _raw: str
 
     def contains(self, version: str) -> bool:
+        if self._raw in ANY:
+            return is_valid(version)
         try:
             return compare(version, self._raw) >= 0
         except InvalidVersion:
@@ -150,6 +163,9 @@ class MinimumVersion:
 
 
 class GoVersionScheme:
+    def is_valid(self, raw: str) -> bool:
+        return is_valid(raw)
+
     def validate(self, raw: str) -> None:
         parse(raw)
 
@@ -183,5 +199,7 @@ class GoVersionScheme:
         return "patch"
 
     def constraint(self, raw: str) -> Constraint:
-        parse(raw)
-        return MinimumVersion(raw)
+        """A version (the minimum MVS starts from), or `*`/empty for a root asked without one (`go get path@latest`)."""
+        if raw.strip() not in ANY:
+            parse(raw)
+        return MinimumVersion(raw.strip())

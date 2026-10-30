@@ -3,7 +3,10 @@
 The grammar follows golang.org/x/mod/modfile: directives are `verb args` lines or `verb ( ... )` blocks, `//` starts a
 comment, arguments are bare words or "interpreted" / `raw` strings. Versions are kept as written, the version scheme
 judges them. Directives this reader has no use for (`godebug`, `tool`, `ignore`, anything newer) are skipped, so a
-newer Go file does not break it; a line of a directive it does read that is malformed raises `GoModError`.
+newer Go file does not break it. Every go.mod read here is a dependency's, so it is read the way Go's ParseLax reads
+one: a `replace`, `exclude` or `toolchain` line that cannot be read is skipped, a loose `go 1.13.x` is go 1.13 and a
+short requirement version (`v1.2`) is canonical (`v1.2.0`); a malformed `module`, `require` or `retract` line raises
+`GoModError`.
 """
 
 import re
@@ -13,6 +16,8 @@ from dataclasses import dataclass, field
 PRUNING_FROM = (1, 17)
 _NO_GO_LINE = (1, 16)
 _GO_VERSION = re.compile(r"(\d+)\.(\d+)(?:\.\d+)?(?:(?:rc|beta|alpha)\d+)?")
+_LAX_GO_VERSION = re.compile(r"v?([1-9][0-9]*\.(?:0|[1-9][0-9]*))[^0-9]")
+_SHORT_VERSION = re.compile(r"v(0|[1-9][0-9]*)(?:\.(0|[1-9][0-9]*))?")
 _ESCAPES = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\", "'": "'"}
 _PUNCT = frozenset("()[],")
 
@@ -170,6 +175,8 @@ def parse_go_mod(text: str) -> GoMod:
                 block = None
             else:
                 _directive(state, block, tokens, comment, above, number)
+        elif tokens[1:] == ["(", ")"]:
+            pass                       # `require ()`: an empty block on one line
         elif tokens[-1] == "(" and len(tokens) >= 2:
             if len(tokens) != 2:
                 raise GoModError(number, "unexpected tokens before '('")
@@ -196,26 +203,41 @@ def _directive(state: _State, verb: str, args: list[str], comment: str | None, a
         state.module = args[0]
         state.deprecated = _deprecation(above, comment)
     elif verb == "go":
-        if len(args) != 1 or _GO_VERSION.fullmatch(args[0]) is None:
+        # Go reads a dependency's go line leniently (laxGoVersionRE): `go 1.13.x` is go 1.13.
+        lax = _LAX_GO_VERSION.match(args[0]) if len(args) == 1 else None
+        if len(args) == 1 and _GO_VERSION.fullmatch(args[0]):
+            state.go = args[0]
+        elif lax is not None:
+            state.go = lax.group(1)
+        else:
             raise GoModError(number, "go takes one version such as 1.21 or 1.21.3")
-        state.go = args[0]
     elif verb == "toolchain":
-        if len(args) != 1:
-            raise GoModError(number, "toolchain takes one name")
-        state.toolchain = args[0]
+        if len(args) == 1:
+            state.toolchain = args[0]
     elif verb == "require":
         if len(args) != 2:
             raise GoModError(number, "require takes a path and a version")
-        state.requires.append(Require(args[0], args[1], _is_indirect(comment)))
+        state.requires.append(Require(args[0], _canonical(args[1]), _is_indirect(comment)))
     elif verb == "exclude":
-        if len(args) != 2:
-            raise GoModError(number, "exclude takes a path and a version")
-        state.excludes.append((args[0], args[1]))
+        if len(args) == 2:
+            state.excludes.append((args[0], _canonical(args[1])))
     elif verb == "replace":
-        state.replaces.append(_replace(args, number))
+        # Go ignores replace and exclude of a dependency's go.mod (ParseLax): one it cannot read is skipped.
+        try:
+            state.replaces.append(_replace(args, number))
+        except GoModError:
+            pass
     elif verb == "retract":
         state.retracts.append(_retract(args, comment, above, number))
     # Anything else (godebug, tool, ignore, ...) is not ours.
+
+
+def _canonical(version: str) -> str:
+    """`v1.2` is `v1.2.0` and `v1` is `v1.0.0` in a requirement, as Go canonicalizes them."""
+    short = _SHORT_VERSION.fullmatch(version)
+    if short is None:
+        return version
+    return f"v{short.group(1)}.{short.group(2) or '0'}.0"
 
 
 def _replace(args: list[str], number: int) -> Replace:

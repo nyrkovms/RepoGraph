@@ -38,10 +38,12 @@ from app.ecosystems.base import (
     TrackedPackage,
     VersionDependencies,
 )
-from app.ecosystems.go.changes import GoIndexChangesDetector
+# A module without tags has an empty list; its revision is the pseudo-version `@latest` names (`latest:<version>`),
+# so a new commit asked for through the proxy shows up; the index detector counts pseudo-versions for it alone.
+from app.ecosystems.go.changes import TAGLESS, GoIndexChangesDetector
 from app.ecosystems.go.coordinates import GoCoordinates, escape_path, escape_version
 from app.ecosystems.go.gomod import GoMod, GoModError, Retract, parse_go_mod
-from app.ecosystems.go.versions import GoVersionScheme, compare
+from app.ecosystems.go.versions import GoVersionScheme, compare, is_incompatible
 from app.services.http import make_client
 from app.services.retry_policy import compute_backoff_delay_seconds, is_retryable_upstream_error
 
@@ -61,10 +63,6 @@ def list_revision(versions: Collection[str]) -> str:
     """The revision of a package: the list has no ETag, so a hash of the sorted versions stands for it."""
     return hashlib.sha256("\n".join(sorted(versions)).encode()).hexdigest()
 
-
-# A module without tags has an empty list; its revision is the pseudo-version `@latest` names, so a new commit asked
-# for through the proxy shows up (the index detector reads pseudo-versions for such modules only).
-TAGLESS = "latest:"
 
 
 def _is_missing(response: httpx.Response) -> bool:
@@ -170,8 +168,15 @@ class GoProxyAdapter:
         known: dict[str, datetime | None] = {}
         # `@latest` is the proxy's answer to `go get path@latest`: it skips +incompatible tags above a module's real
         # latest (go-sqlite3 v2.0.3+incompatible) and takes them when nothing newer has a go.mod (docker v28).
-        latest = await self.get(self.latest_url(ref))
-        document = None if _is_missing(latest) else _json_object(latest)
+        document: Mapping[str, object] | None = None
+        try:
+            latest = await self.get(self.latest_url(ref))
+            document = None if _is_missing(latest) else _json_object(latest)
+        except (httpx.HTTPError, ValueError):
+            if not listed:
+                raise
+            # The list is enough to know the module; the latest falls back to the scheme's highest.
+            logger.warning("@latest of %s in %s failed", ref.name, self.registry.slug, exc_info=True)
         named = document.get("Version") if document is not None else None
         if listed:
             raw_versions = listed
@@ -180,17 +185,24 @@ class GoProxyAdapter:
             if not isinstance(named, str):
                 if document is None:
                     return None
-                raise ValueError(f"{latest.url}: the answer has no Version")
+                raise ValueError(f"{self.latest_url(ref)}: the answer has no Version")
             raw_versions, known = [named], {named: _date(document.get("Time") if document else None)}
 
         versions = self._valid_versions(ref, raw_versions)
         dates = await self._release_dates(ref, versions, known)
         top = named if isinstance(named, str) and named in versions else _pick_latest(versions)
         go_mod = await self._latest_go_mod(ref, top) if top is not None else None
+        # Go takes retractions from the highest version, retracted or not (a newest tag may retract itself, and then
+        # `@latest` names an older one whose go.mod knows nothing of it): read both.
+        highest = _pick_latest([v for v in versions if not is_incompatible(v)]) or top
+        retracting = [go_mod] if go_mod is not None else []
+        if highest is not None and highest != top:
+            extra = await self._latest_go_mod(ref, highest)
+            retracting += [extra] if extra is not None else []
 
         normalized: list[NormalizedVersion] = []
         for version in versions:
-            reason = retraction(go_mod, version) if go_mod is not None else None
+            reason = next((r for mod in retracting if (r := retraction(mod, version)) is not None), None)
             is_top = version == top and go_mod is not None
             normalized.append(NormalizedVersion(
                 version=version, status="yanked" if reason else "active", status_reason=reason,
@@ -202,6 +214,7 @@ class GoProxyAdapter:
         return NormalizedPackage(
             ref=ref, registry_id=self.registry.id, display_name=_COORDINATES.display(ref),
             revision=list_revision(listed) if listed else f"{TAGLESS}{raw_versions[0]}", versions=normalized,
+            dist_tags={"latest": top} if top is not None and top == named else None,
             deprecation={"message": go_mod.deprecated} if go_mod is not None and go_mod.deprecated else None,
         )
 
@@ -365,7 +378,11 @@ class GoListChangeDetector:
             if not listed and (latest is None or _is_missing(latest)):
                 # Already known to be unavailable: nothing new to report until it comes back.
                 return package, "same" if package.unavailable else "missing", None
-            named = _json_object(latest).get("Version") if latest is not None else None
+            try:
+                named = _json_object(latest).get("Version") if latest is not None else None
+            except ValueError:
+                logger.warning("@latest of %s in %s is not JSON", package.ref.name, self.adapter.registry.slug)
+                return package, "same", None
             revision = list_revision(listed) if listed else f"{TAGLESS}{named}"
             if revision == package.revision:
                 return package, "changed" if package.unavailable else "same", revision

@@ -16,12 +16,12 @@ import httpx
 
 from app.ecosystems.base import CHANGED_SINCE, ChangeDetector, ChangeSet, RegistryConfig, TrackedPackage
 from app.ecosystems.go.versions import is_pseudo
-
-# A module without tags: its revision is its latest pseudo-version, so the index's pseudo-versions count for it.
-TAGLESS = "latest:"
 from app.services.http import make_client
 
 logger = logging.getLogger(__name__)
+
+# A module without tags: its revision is its latest pseudo-version, so the index's pseudo-versions count for it.
+TAGLESS = "latest:"
 
 PAGE_SIZE = 2000          # the most the index returns
 TIMEOUT_SECONDS = 60.0

@@ -246,12 +246,8 @@ def test_recorded_go_mod_that_is_only_a_module_line() -> None:
     ("module example.com/m\nrequire \"example.com/a v1.0.0\n", 2),
     ("module example.com/m\nrequire `example.com/a v1.0.0\n", 2),
     ('module example.com/m\nrequire "a\\qb" v1.0.0\n', 2),
-    ("module example.com/m\nreplace example.com/a v1.0.0\n", 2),
-    ("module example.com/m\nreplace example.com/a => example.com/b\n", 2),
-    ("module example.com/m\nreplace a => b => c\n", 2),
     ("module example.com/m\nretract [v1.0.0, v1.1.0\n", 2),
     ("module example.com/m\nretract\n", 2),
-    ("module example.com/m\nexclude example.com/a\n", 2),
     ("module a b\n", 1),
     ("module example.com/m\n)\n", 2),
     ("module example.com/m\n\n\nrequire (\n\texample.com/a v1.0.0\n", 4),
@@ -268,3 +264,27 @@ def test_a_file_without_a_module_directive_is_not_a_go_mod() -> None:
         parse_go_mod("go 1.20\nrequire example.com/a v1.0.0\n")
     with pytest.raises(GoModError):
         parse_go_mod("")
+
+
+def test_a_dependency_go_mod_is_read_leniently_like_go_parse_lax() -> None:
+    # Go ignores replace/exclude/toolchain of a dependency and reads its go line loosely: one bad line there must
+    # not cost the requirements and retractions of the whole file.
+    text = """module example.com/m
+
+go 1.13.x
+toolchain
+require ()
+require (
+	example.com/a v1.2
+	example.com/b v1
+)
+replace example.com/a v1.0.0
+replace example.com/a => example.com/b
+replace a => b => c
+exclude example.com/a
+exclude example.com/c v2
+"""
+    mod = parse_go_mod(text)
+    assert (mod.go, mod.toolchain, mod.pruned) == ("1.13", None, False)
+    assert [(r.path, r.version) for r in mod.requires] == [("example.com/a", "v1.2.0"), ("example.com/b", "v1.0.0")]
+    assert mod.replaces == [] and mod.excludes == [("example.com/c", "v2.0.0")]
