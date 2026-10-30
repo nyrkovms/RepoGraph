@@ -15,16 +15,18 @@ from app.connectors.base import PackageNotFound
 from app.ecosystems.base import (
     CatalogVersion,
     EcosystemPlugin,
+    FetchedDocument,
     NormalizedDependency,
     PackageRef,
     SourceProfile,
     VersionStatus,
 )
 from app.fetcher.discovery import NegativeCache
-from app.fetcher.pipeline import dependency_from_row, find_package, source_dependencies, sync_package
+from app.fetcher.pipeline import dependency_from_row, find_package, source_dependencies, store_documents, sync_package
 from app.models.artifact import Artifact, DistTag
 from app.models.enums import PackageOrigin
 from app.models.package_registry import PackageRegistry
+from app.models.source_document import SourceDocument
 from app.models.version import PackageVersion
 from app.services import visibility
 
@@ -151,6 +153,31 @@ class DbCatalog:
                 if registry.id not in now_linked:
                     await cache.remember_absent(registry, purl)
         return found and any(r.id in now_linked for r in unlinked)
+
+    async def document(self, ref: PackageRef, path: str, profile: SourceProfile) -> FetchedDocument | None:
+        """From source_documents when a source of the profile already gave it, else from the first source that has it
+        (adapters with `fetch_document`), kept for next time. Documents under one path do not change (a go.mod of a
+        published version), so a stored one is not checked again."""
+        registries = list(self.plugin.sources_for(ref, profile))
+        stored = (await self.db.execute(
+            select(SourceDocument).where(SourceDocument.path == path,
+                                         SourceDocument.registry_id.in_([uuid.UUID(r.id) for r in registries]))
+        )).scalars().all()
+        by_registry = {str(row.registry_id): row for row in stored}
+        for registry in registries:
+            row = by_registry.get(registry.id)
+            if row is not None:
+                return FetchedDocument(path=row.path, content=row.content, content_type=row.content_type, etag=row.etag)
+        for registry in registries:
+            fetch = getattr(self.plugin.adapter(registry), "fetch_document", None)
+            if fetch is None:
+                continue
+            document = await fetch(path)
+            if document is not None:
+                await store_documents(self.db, registry.id, [document])
+                await self.db.commit()
+                return cast(FetchedDocument, document)
+        return None
 
     async def _sync(self, ref: PackageRef, **kwargs: Any) -> bool:
         try:

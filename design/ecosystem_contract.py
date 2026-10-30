@@ -381,6 +381,12 @@ class CatalogAccess(Protocol):
         """Lazy fetch into the catalog with origin=discovered; False if no source has it."""
         ...
 
+    async def document(self, ref: PackageRef, path: str, profile: SourceProfile) -> FetchedDocument | None:
+        """An upstream document of a package that need not be in the catalog (Go: the go.mod of a module MVS reads;
+        Maven: a parent POM): `path` relative to the base_url of the package's sources in the profile, tried in order;
+        kept in source_documents, so it is fetched once. None if no source has it."""
+        ...
+
 
 class Resolver(Protocol):
     emulates: str                          # native tool and version the behaviour follows: "npm 10", "Maven 3.9", "pip 24"
