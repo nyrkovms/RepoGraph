@@ -7,6 +7,8 @@
 # not the environment markers, and narrow manylinux tags hide older-tagged wheels (nvidia-* are manylinux2014).
 # crates: `cargo generate-lockfile` of a project depending on the roots (every platform, as Cargo.lock is) and
 # `cargo tree --target <environment.target> -e normal,build` (what is built there), in the rust image below.
+# go: `go list -m all` of a main module (go 1.23) that requires the roots, with module graph pruning as Go does it,
+# in the golang image below.
 # Needs docker and the live network. Usage: scripts/generate_resolver_references.sh [case-dir ...]
 set -euo pipefail
 
@@ -16,6 +18,7 @@ cd "$ROOT"
 PIP_VERSION="24.3.1"
 IMAGE="python:3.12-slim"
 RUST_IMAGE="rust:1.86-slim"
+GO_IMAGE="golang:1.23"
 CASES=("$@")
 if [[ ${#CASES[@]} -eq 0 ]]; then
   # No mapfile: macOS ships bash 3.
@@ -91,8 +94,46 @@ PY
   rm -rf "$work"
 }
 
+go_case() {
+  local case_dir="$1" platform="$2" requires
+  requires="$(python3 -c '
+import sys, yaml
+case = yaml.safe_load(open(sys.argv[1]))
+for root in case["roots"]:
+    path = root["purl"].split("/", 1)[1].rsplit("@", 1)[0]
+    print("-require=" + path + "@" + root["constraint"])
+' "$case_dir/case.yaml" | tr '\n' ' ')"
+  docker run --rm --platform "${platform:-linux/amd64}" -v "$ROOT/${case_dir}:/case" -w /work -e GOFLAGS=-mod=mod \
+    "$GO_IMAGE" sh -c "
+    set -e
+    go mod init reference.case >/dev/null 2>&1
+    go mod edit -go=1.23 $requires
+    go list -m all > /tmp/all.txt
+    go version > /tmp/tool.txt
+    tail -n +2 /tmp/all.txt > /case/.all.txt
+    cp /tmp/tool.txt /case/.tool.txt
+  "
+  python3 - "$case_dir" <<'PY'
+import datetime, json, sys
+from pathlib import Path
+case = Path(sys.argv[1])
+rows = [line.split()[:2] for line in (case / ".all.txt").read_text().splitlines() if line.strip()]
+tool = " ".join((case / ".tool.txt").read_text().split()[:3])
+out = {"tool": tool, "command": ["go", "list", "-m", "all"],
+       "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+       "install": [{"name": name, "version": version} for name, version in sorted(rows)]}
+(case / "expected.json").write_text(json.dumps(out, indent=2) + "\n")
+(case / ".all.txt").unlink(); (case / ".tool.txt").unlink()
+print(len(rows), "modules")
+PY
+}
+
 for case_dir in "${CASES[@]}"; do
   echo "== ${case_dir}"
+  if [[ "$(basename "$(dirname "$case_dir")")" == "go" ]]; then
+    go_case "$case_dir" "$(sed -n 's/^  platform: *\([^ #]*\).*/\1/p' "${case_dir}/case.yaml")"
+    continue
+  fi
   if [[ "$(basename "$(dirname "$case_dir")")" == "crates" ]]; then
     crates_case "$case_dir" "$(sed -n 's/^  platform: *\([^ #]*\).*/\1/p' "${case_dir}/case.yaml")"
     continue

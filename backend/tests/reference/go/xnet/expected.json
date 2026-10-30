@@ -1,0 +1,32 @@
+{
+  "tool": "go version go1.23.12",
+  "command": [
+    "go",
+    "list",
+    "-m",
+    "all"
+  ],
+  "generated_at": "2026-10-30T14:42:22+00:00",
+  "install": [
+    {
+      "name": "golang.org/x/crypto",
+      "version": "v0.28.0"
+    },
+    {
+      "name": "golang.org/x/net",
+      "version": "v0.30.0"
+    },
+    {
+      "name": "golang.org/x/sys",
+      "version": "v0.26.0"
+    },
+    {
+      "name": "golang.org/x/term",
+      "version": "v0.25.0"
+    },
+    {
+      "name": "golang.org/x/text",
+      "version": "v0.19.0"
+    }
+  ]
+}

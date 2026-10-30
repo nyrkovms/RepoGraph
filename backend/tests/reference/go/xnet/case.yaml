@@ -1,0 +1,10 @@
+description: >
+  golang.org/x/net: a small graph of golang.org/x modules.
+roots:
+  - {purl: "pkg:golang/golang.org/x/net@v0.30.0", constraint: "v0.30.0"}
+environment: {go_version: "1.23"}
+sources:
+  - {slug: proxy-golang-org, protocol: goproxy, base_url: "https://proxy.golang.org/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []
