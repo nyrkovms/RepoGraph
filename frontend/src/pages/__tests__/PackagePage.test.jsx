@@ -1073,4 +1073,238 @@ describe("PackagePage", () => {
       expect(screen.queryByText("broken")).not.toBeInTheDocument();
     });
   });
+
+  describe("nuget", () => {
+    const ID = "newtonsoft.json";
+
+    function renderApp(path) {
+      render(
+        <MemoryRouter initialEntries={[path]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <App />
+        </MemoryRouter>
+      );
+    }
+
+    function mockPackage(overrides = {}) {
+      api.fetchPackage.mockResolvedValue({
+        ecosystem: "nuget",
+        name: "Newtonsoft.Json",
+        normalized_name: ID,
+        namespace: "",
+        purl: "pkg:nuget/newtonsoft.json",
+        description: "Json.NET is a popular high-performance JSON framework for .NET",
+        homepage_url: "https://www.newtonsoft.com/json",
+        repository_url: null,
+        documentation_url: null,
+        license_raw: "MIT",
+        license_spdx: "MIT",
+        latest_version: "13.0.3",
+        sources: [],
+        ...overrides,
+      });
+      api.fetchVersions.mockResolvedValue({
+        data: [
+          { version: "13.0.3", status: "active", release_date: "2023-03-08T10:00:00Z" },
+          { version: "13.0.3-beta1", status: "unlisted", release_date: null },
+          { version: "13.0.2", status: "unlisted", release_date: "2023-02-01T10:00:00Z" },
+          { version: "12.0.3.1", status: "active", release_date: "2019-11-09T10:00:00Z", deprecation: { message: "use 12.0.4" } },
+          { version: "1.0.0-BETA", status: "active", release_date: "2011-01-01T10:00:00Z" },
+        ],
+        cursor: null,
+        has_more: false,
+      });
+      api.fetchVersion.mockResolvedValue({
+        name: "Newtonsoft.Json",
+        purl: "pkg:nuget/newtonsoft.json@13.0.3",
+        version: "13.0.3",
+        status: "active",
+        features: null,
+        dependencies_state: "hydrated",
+        sources: [],
+      });
+      api.fetchDependencies.mockResolvedValue({
+        package: ID,
+        version: "13.0.3",
+        depth: 1,
+        dependencies: [
+          {
+            name: "microsoft.csharp",
+            constraint: "4.3.0",
+            dependency_type: "runtime",
+            extra_name: null,
+            environment_markers: { dotnet_target_framework: ".NETStandard2.0" },
+            details: { groups: [".NETStandard2.0"] },
+            resolved_version: "4.3.0",
+            cycle: false,
+            children: [],
+          },
+          {
+            name: "system.memory",
+            constraint: "[4.5.5, )",
+            dependency_type: "runtime",
+            extra_name: null,
+            environment_markers: null,
+            resolved_version: "4.5.5",
+            cycle: false,
+            children: [],
+          },
+        ],
+      });
+    }
+
+    it("opens a package by its lowercase id and shows the purl, the license and the registry's spelling", async () => {
+      mockPackage();
+      renderApp(`/package/nuget/${ID}`);
+
+      expect(await screen.findByText("pkg:nuget/newtonsoft.json")).toBeInTheDocument();
+      expect(screen.getByText("NuGet", { selector: ".eco-badge" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Package: Newtonsoft.Json");
+      expect(screen.getByText((content) => content.includes("MIT"))).toBeInTheDocument();
+      expect(api.fetchPackage).toHaveBeenCalledWith("nuget", ID);
+      expect(api.fetchVersions).toHaveBeenCalledWith("nuget", ID, { limit: 30 });
+      expect(api.fetchVulnerabilities).toHaveBeenCalledWith("nuget", ID);
+      await waitFor(() => expect(api.fetchVersion).toHaveBeenCalledWith("nuget", ID, "13.0.3"));
+    });
+
+    it("shows a license URL as a link when the package has no expression", async () => {
+      mockPackage({ license_spdx: null, license_raw: "https://licenses.nuget.org/MIT" });
+      renderApp(`/package/nuget/${ID}`);
+
+      await screen.findByText("pkg:nuget/newtonsoft.json");
+      expect(screen.getByText((content) => content.includes("https://licenses.nuget.org/MIT"))).toBeInTheDocument();
+    });
+
+    it("marks unlisted versions, shows four-part versions and dates as is", async () => {
+      mockPackage();
+      renderApp(`/package/nuget/${ID}`);
+
+      await screen.findByText("pkg:nuget/newtonsoft.json");
+      const items = [...document.querySelectorAll(".inline-list > li")];
+      const row = (version) => items.find((item) => item.textContent.startsWith(version));
+
+      expect(within(row("13.0.2")).getByText("unlisted")).toBeInTheDocument();
+      expect(within(row("13.0.2")).getByText("2023-02-01")).toBeInTheDocument();
+      // An unlisted version may have no date.
+      expect(within(row("13.0.3-beta1")).getByText("unlisted")).toBeInTheDocument();
+      expect(row("13.0.3-beta1").querySelector(".version-date")).toBeNull();
+      expect(within(row("13.0.3")).queryByText("unlisted")).not.toBeInTheDocument();
+      expect(within(row("13.0.3")).getByText("2023-03-08")).toBeInTheDocument();
+      expect(within(row("12.0.3.1")).getByText("active")).toBeInTheDocument();
+      expect(row("1.0.0-BETA")).toBeTruthy();
+      expect(screen.getByRole("option", { name: "12.0.3.1" })).toBeInTheDocument();
+    });
+
+    it("marks a deprecated version with its message when the version data carries it", async () => {
+      mockPackage();
+      renderApp(`/package/nuget/${ID}`);
+
+      await screen.findByText("pkg:nuget/newtonsoft.json");
+      const deprecated = [...document.querySelectorAll(".inline-list > li")].find((item) => item.textContent.startsWith("12.0.3.1"));
+      expect(within(deprecated).getByText("deprecated")).toBeInTheDocument();
+      expect(within(deprecated).getByText("use 12.0.4")).toBeInTheDocument();
+      const plain = document.querySelector(".inline-list > li");
+      expect(plain.textContent.startsWith("13.0.3active")).toBe(true);
+      expect(within(plain).queryByText("deprecated")).not.toBeInTheDocument();
+    });
+
+    it("shows a deprecation banner only when the package is deprecated", async () => {
+      mockPackage({ deprecation: { message: "Legacy, CriticalBugs" } });
+      renderApp(`/package/nuget/${ID}`);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("Deprecated: Legacy, CriticalBugs");
+    });
+
+    it("shows no deprecation banner for a package that is not deprecated", async () => {
+      mockPackage({ deprecation: null });
+      renderApp(`/package/nuget/${ID}`);
+
+      await screen.findByText("pkg:nuget/newtonsoft.json");
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("explains an unlisted selected version and shows the deprecation of the selected version", async () => {
+      mockPackage();
+      api.fetchVersion.mockResolvedValue({
+        name: "Newtonsoft.Json",
+        purl: "pkg:nuget/newtonsoft.json@12.0.3.1",
+        version: "12.0.3.1",
+        status: "unlisted",
+        deprecation: { message: "use 12.0.4" },
+        dependencies_state: "hydrated",
+        sources: [],
+      });
+      renderApp(`/package/nuget/${ID}?version=12.0.3.1`);
+
+      expect(await screen.findByText(/^Unlisted:/)).toBeInTheDocument();
+      expect(screen.getByText("Deprecated: use 12.0.4", { selector: "p" })).toBeInTheDocument();
+    });
+
+    it("shows a target framework selector with net8.0 selected and sends only target_framework", async () => {
+      mockPackage();
+      renderApp(`/package/nuget/${ID}`);
+
+      await screen.findByText("system.memory");
+      const select = screen.getByLabelText("Target framework");
+      expect(select).toHaveValue("net8.0");
+      const options = within(select).getAllByRole("option").map((option) => option.value);
+      expect(options).toEqual(
+        expect.arrayContaining(["net5.0", "net8.0", "net11.0", "netstandard1.0", "netstandard1.6", "netstandard2.0", "netstandard2.1"])
+      );
+      expect(options).not.toContain("net48");
+      expect(screen.queryByLabelText("Python version")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Node.js version")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Target")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("OS")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("CPU")).not.toBeInTheDocument();
+      expect(screen.queryByText("include optional")).not.toBeInTheDocument();
+      expect(api.fetchDependencies).toHaveBeenCalledWith("nuget", ID, "13.0.3", { target_framework: "net8.0" });
+    });
+
+    it("reloads the tree for another target framework", async () => {
+      mockPackage();
+      const user = userEvent.setup();
+      renderApp(`/package/nuget/${ID}`);
+
+      await screen.findByText("system.memory");
+      await user.selectOptions(screen.getByLabelText("Target framework"), "netstandard2.0");
+      await waitFor(() =>
+        expect(api.fetchDependencies).toHaveBeenLastCalledWith("nuget", ID, "13.0.3", { target_framework: "netstandard2.0" })
+      );
+    });
+
+    it("reads the target framework from the query", async () => {
+      mockPackage();
+      renderApp(`/package/nuget/${ID}?target_framework=net6.0`);
+      await waitFor(() =>
+        expect(api.fetchDependencies).toHaveBeenCalledWith("nuget", ID, "13.0.3", { target_framework: "net6.0" })
+      );
+      expect(screen.getByLabelText("Target framework")).toHaveValue("net6.0");
+    });
+
+    it("falls back to net8.0 for an unknown target framework in the query", async () => {
+      mockPackage();
+      renderApp(`/package/nuget/${ID}?target_framework=net48`);
+      await waitFor(() =>
+        expect(api.fetchDependencies).toHaveBeenCalledWith("nuget", ID, "13.0.3", { target_framework: "net8.0" })
+      );
+    });
+
+    it("shows the framework group of an edge", async () => {
+      mockPackage();
+      renderApp(`/package/nuget/${ID}`);
+
+      await screen.findByText("system.memory");
+      const grouped = screen.getByText("microsoft.csharp").closest(".dep-tree-item");
+      const ungrouped = screen.getByText("system.memory").closest(".dep-tree-item");
+      expect(within(grouped).getByText(".NETStandard2.0")).toHaveClass("cond");
+      expect(within(ungrouped).queryByText(/NET/)).not.toBeInTheDocument();
+    });
+
+    it("sends no target_framework for the other ecosystems", async () => {
+      renderApp("/package/flask");
+      await screen.findByText("werkzeug");
+      expect(screen.queryByLabelText("Target framework")).not.toBeInTheDocument();
+      expect(api.fetchDependencies.mock.calls[0][3]).not.toHaveProperty("target_framework");
+    });
+  });
 });

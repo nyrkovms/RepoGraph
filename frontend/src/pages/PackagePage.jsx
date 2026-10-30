@@ -5,7 +5,7 @@ import { fetchDependencies, fetchPackage, fetchVersion, fetchVersions, fetchVuln
 import { getPackageDescriptionParagraphs } from "../lib/packageDescription";
 import { OS_OPTIONS, PYTHON_VERSIONS } from "../lib/runtimeEnv";
 
-const ECOSYSTEM_LABELS = { pypi: "PyPI", npm: "npm", crates: "crates.io", go: "Go" };
+const ECOSYSTEM_LABELS = { pypi: "PyPI", npm: "npm", crates: "crates.io", go: "Go", nuget: "NuGet" };
 
 // npm environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): Node.js version, os and cpu as npm names them.
 const NPM_NODE_VERSIONS = ["22.0.0", "20.0.0", "18.0.0"];
@@ -42,10 +42,31 @@ const CRATES_TARGETS = [
   "wasm32-wasip1",
   "wasm32-wasip2",
 ];
+// NuGet environment (SPEC-MULTI-ECOSYSTEM.md section 7.3, Q7): the project's target framework, net5.0 and newer or
+// netstandard1.0-2.1; any other value is a 422 of the API.
+const NUGET_FRAMEWORKS = [
+  "net11.0",
+  "net10.0",
+  "net9.0",
+  "net8.0",
+  "net7.0",
+  "net6.0",
+  "net5.0",
+  "netstandard2.1",
+  "netstandard2.0",
+  "netstandard1.6",
+  "netstandard1.5",
+  "netstandard1.4",
+  "netstandard1.3",
+  "netstandard1.2",
+  "netstandard1.1",
+  "netstandard1.0",
+];
 const DEFAULTS = {
   pypi: { python: "3.12", os: "linux" },
   npm: { node: "20.0.0", os: "linux", cpu: "x64" },
   crates: { target: "x86_64-unknown-linux-gnu" },
+  nuget: { framework: "net8.0" },
 };
 // Go has no tree environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): every `require` of a go.mod applies.
 // A pseudo-version (`v0.0.0-20261014143641-f0251eb4aa3e`, `v1.2.4-0.2026...-abc`, `v1.2.4-pre.0.2026...-abc`) is a
@@ -73,10 +94,13 @@ function normalizeFeatures(text) {
 }
 
 // Query of the dependency tree request: PyPI `python_version` and `os`, npm `node_version`, `os` and `cpu`,
-// crates `target`, `features` and `default_features`, Go none.
+// crates `target`, `features` and `default_features`, NuGet `target_framework`, Go none.
 function treeParams(ecosystem, env, includeOptional) {
   if (ecosystem === "go") {
     return {};
+  }
+  if (ecosystem === "nuget") {
+    return { target_framework: env.framework };
   }
   if (ecosystem === "npm") {
     return { include_optional: includeOptional, node_version: env.node, os: env.os, cpu: env.cpu };
@@ -148,6 +172,11 @@ function collectDependencyConditions(node) {
   // Go: a requirement the module's go.mod marks `// indirect`.
   if (node.details?.indirect) {
     labels.push("indirect");
+  }
+
+  // NuGet: the dependency group (target framework, as the registration writes it) the edge is taken from.
+  if (typeof node.environment_markers?.dotnet_target_framework === "string") {
+    labels.push(node.environment_markers.dotnet_target_framework);
   }
 
   if (node.extra_name) {
@@ -240,7 +269,7 @@ function FeaturesBlock({ version, features }) {
   );
 }
 
-// Module-level deprecation (`// Deprecated:` in go.mod) of a package or version: {message, ...}.
+// Deprecation of a package or version: {message, ...} (Go `// Deprecated:` in go.mod, npm, NuGet).
 function deprecationMessage(deprecation) {
   if (!deprecation) {
     return "";
@@ -251,11 +280,16 @@ function deprecationMessage(deprecation) {
 function VersionStatus({ version, isGo }) {
   // A Go module's author retracts a version in go.mod with a rationale; the catalog keeps it as yanked.
   const retracted = isGo && version.status === "yanked";
+  // A NuGet version is unlisted by its author: hidden from search, still restorable, so it stays in the list.
+  const statusClass = version.status === "yanked" ? "tag warn" : version.status === "unlisted" ? "tag muted-tag" : "tag";
+  const deprecation = version.deprecation ? deprecationMessage(version.deprecation) : "";
   return (
     <>
-      <span className={version.status === "yanked" ? "tag warn" : "tag"}>{retracted ? "retracted" : version.status}</span>
+      <span className={statusClass}>{retracted ? "retracted" : version.status}</span>
       {isGoPseudoVersion(version.version) ? <span className="tag cond">pseudo-version</span> : null}
       {retracted && version.status_reason ? <span className="muted version-reason">{version.status_reason}</span> : null}
+      {version.deprecation ? <span className="tag warn">deprecated</span> : null}
+      {deprecation ? <span className="muted version-reason">{deprecation}</span> : null}
     </>
   );
 }
@@ -355,6 +389,7 @@ export default function PackagePage() {
   const isNpm = ecosystem === "npm";
   const isCrates = ecosystem === "crates";
   const isGo = ecosystem === "go";
+  const isNuget = ecosystem === "nuget";
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [pkg, setPkg] = useState(null);
@@ -365,6 +400,7 @@ export default function PackagePage() {
   const [cpu, setCpu] = useState(() => searchParams.get("cpu") || DEFAULTS.npm.cpu);
   const [os, setOs] = useState(() => searchParams.get("os") || DEFAULTS.pypi.os);
   const [target, setTarget] = useState(() => searchParams.get("target") || DEFAULTS.crates.target);
+  const [framework, setFramework] = useState(() => searchParams.get("target_framework") || DEFAULTS.nuget.framework);
   // The features field is applied (and the tree reloaded) on Enter or blur, not on every keystroke.
   const [features, setFeatures] = useState(() => normalizeFeatures(searchParams.get("features")));
   const [featuresInput, setFeaturesInput] = useState(() => normalizeFeatures(searchParams.get("features")));
@@ -382,8 +418,9 @@ export default function PackagePage() {
   // `os` is one URL parameter for both ecosystems, but PyPI calls Windows "windows" and npm "win32".
   const treeOs = isNpm ? pickOption(os, NPM_OS_OPTIONS.map((item) => item.value), DEFAULTS.npm.os) : os;
   const treeTarget = pickOption(target, CRATES_TARGETS, DEFAULTS.crates.target);
+  const treeFramework = pickOption(framework, NUGET_FRAMEWORKS, DEFAULTS.nuget.framework);
   const latestVersion = useMemo(() => selectedVersion || pkg?.latest_version || versions?.[0]?.version, [selectedVersion, pkg, versions]);
-  // `deprecation.message` of the package (Go: the `// Deprecated:` paragraph of go.mod), `true` when it has no text.
+  // `deprecation.message` of the package (Go: the `// Deprecated:` paragraph of go.mod; NuGet: the message or the reasons), `true` when it has no text.
   const deprecated = useMemo(() => {
     if (!pkg?.deprecation) {
       return "";
@@ -407,6 +444,7 @@ export default function PackagePage() {
     setCpu(searchParams.get("cpu") || DEFAULTS.npm.cpu);
     setOs(searchParams.get("os") || DEFAULTS.pypi.os);
     setTarget(searchParams.get("target") || DEFAULTS.crates.target);
+    setFramework(searchParams.get("target_framework") || DEFAULTS.nuget.framework);
     setFeatures(normalizeFeatures(searchParams.get("features")));
     setFeaturesInput(normalizeFeatures(searchParams.get("features")));
     setDefaultFeatures(searchParams.get("default_features") !== "0");
@@ -441,17 +479,21 @@ export default function PackagePage() {
       if (!defaultFeatures) {
         next.set("default_features", "0");
       }
+    } else if (isNuget) {
+      if (framework && framework !== DEFAULTS.nuget.framework) {
+        next.set("target_framework", framework);
+      }
     } else if (!isGo && pythonVersion && pythonVersion !== DEFAULTS.pypi.python) {
       next.set("python", pythonVersion);
     }
-    if (!isCrates && !isGo && os && os !== DEFAULTS.pypi.os) {
+    if (!isCrates && !isGo && !isNuget && os && os !== DEFAULTS.pypi.os) {
       next.set("os", os);
     }
-    if (includeOptional && !isGo) {
+    if (includeOptional && !isGo && !isNuget) {
       next.set("include_optional", "1");
     }
     setSearchParams(next, { replace: true });
-  }, [isNpm, isCrates, isGo, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, features, defaultFeatures, includeOptional, setSearchParams]);
+  }, [isNpm, isCrates, isGo, isNuget, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, features, defaultFeatures, includeOptional, setSearchParams]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -459,7 +501,7 @@ export default function PackagePage() {
     }
     loadDependencies(name, selectedVersion);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ecosystem, name, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, features, defaultFeatures, includeOptional]);
+  }, [ecosystem, name, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, features, defaultFeatures, includeOptional]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -524,7 +566,7 @@ export default function PackagePage() {
         version,
         treeParams(
           ecosystem,
-          { python: pythonVersion, node: nodeVersion, cpu, os: treeOs, target: treeTarget, features, defaultFeatures },
+          { python: pythonVersion, node: nodeVersion, cpu, os: treeOs, target: treeTarget, framework: treeFramework, features, defaultFeatures },
           includeOptional
         )
       );
@@ -581,7 +623,7 @@ export default function PackagePage() {
   return (
     <section>
       <h2>
-        Package: {name}
+        Package: {isNuget && pkg?.name ? pkg.name : name}
         <span className="tag eco-badge">{ECOSYSTEM_LABELS[ecosystem] || ecosystem}</span>
       </h2>
       {error ? <p className="error">{error}</p> : null}
@@ -733,7 +775,23 @@ export default function PackagePage() {
                   </select>
                 </label>
               </>
-            ) : isGo ? null : isCrates ? (
+            ) : isGo ? null : isNuget ? (
+              <label>
+                Target framework
+                <select
+                  aria-label="Target framework"
+                  value={treeFramework}
+                  onChange={(e) => setFramework(e.target.value)}
+                  disabled={loading || depsLoading}
+                >
+                  {NUGET_FRAMEWORKS.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : isCrates ? (
               <>
                 <label>
                   Target
@@ -810,7 +868,7 @@ export default function PackagePage() {
                 </label>
               </>
             )}
-            {isGo ? null : (
+            {isGo || isNuget ? null : (
               <label>
                 <input
                   type="checkbox"
@@ -850,6 +908,15 @@ export default function PackagePage() {
               {isGo && versionDetail.status === "yanked" ? (
                 <p className="muted">
                   Retracted{versionDetail.status_reason ? `: ${versionDetail.status_reason}` : ""}
+                </p>
+              ) : null}
+              {isNuget && versionDetail.status === "unlisted" ? (
+                <p className="muted">Unlisted: the author hid this version from search, it can still be restored.</p>
+              ) : null}
+              {versionDetail.deprecation ? (
+                <p className="muted">
+                  Deprecated
+                  {deprecationMessage(versionDetail.deprecation) ? `: ${deprecationMessage(versionDetail.deprecation)}` : ""}
                 </p>
               ) : null}
             </div>

@@ -83,4 +83,16 @@ describe("package routes", () => {
     expect(lastUrl().pathname).toBe("/api/v1/packages/go/github.com/gin-gonic/gin/-/versions/v1.10.0/dependencies");
     expect(lastUrl().search).toBe("");
   });
+
+  it("builds the routes of a NuGet package: dots stay, a four-part version is a segment, target_framework is the query", async () => {
+    await fetchPackage("nuget", "newtonsoft.json");
+    expect(lastUrl().pathname).toBe("/api/v1/packages/nuget/newtonsoft.json/-/");
+
+    await fetchVersion("nuget", "newtonsoft.json", "12.0.3.1-Beta");
+    expect(lastUrl().pathname).toBe("/api/v1/packages/nuget/newtonsoft.json/-/versions/12.0.3.1-Beta");
+
+    await fetchDependencies("nuget", "newtonsoft.json", "13.0.3", { target_framework: "netstandard2.0" });
+    expect(lastUrl().pathname).toBe("/api/v1/packages/nuget/newtonsoft.json/-/versions/13.0.3/dependencies");
+    expect(Object.fromEntries(lastUrl().searchParams)).toEqual({ target_framework: "netstandard2.0" });
+  });
 });
