@@ -144,3 +144,15 @@ BEGIN
     RAISE EXCEPTION '0010: default go profile'; END IF;
   RAISE NOTICE 'ok: 0010 Go starter source';
 END $$;
+
+-- 0011: the NuGet starter source (IMPL R4).
+DO $$
+BEGIN
+  IF (SELECT protocol::text || '/' || priority || '/' || enabled || '/' || base_url || '/' || (config->>'catalog_url')
+      FROM registries WHERE slug = 'nuget-org') <> 'nuget-v3/0/true/https://api.nuget.org/v3/index.json/https://api.nuget.org/v3/catalog0/index.json' THEN
+    RAISE EXCEPTION '0011: nuget-org source'; END IF;
+  IF (SELECT count(*) FROM source_profile_registries spr JOIN source_profiles sp ON sp.id = spr.profile_id
+      JOIN registries r ON r.id = spr.registry_id WHERE sp.ecosystem = 'nuget' AND sp.is_default AND r.slug = 'nuget-org') <> 1 THEN
+    RAISE EXCEPTION '0011: default nuget profile'; END IF;
+  RAISE NOTICE 'ok: 0011 NuGet starter source';
+END $$;
