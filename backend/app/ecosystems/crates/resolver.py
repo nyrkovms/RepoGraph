@@ -10,7 +10,8 @@ come in through them (`dep:x`, `x/feat`, a bare `x`; `x?/feat` does not turn `x`
 platform: dependencies of every target take part.
 
 Pass 2 walks the chosen versions from the roots again, following only the dependencies that apply on the target and
-recomputing features along those edges, which is what `cargo tree --target <t>` shows. Target `*` keeps every platform.
+recomputing features along those edges, which is what `cargo tree --target <t>` shows. Target `*` is Cargo.lock:
+every platform, and weak features bring their dependency in as pass 1 does.
 
 The identity of a dependency (which class it lands in) is known only once a candidate is picked: `>=0.9` matches 0.9.x
 and 1.x alike. That is why this is a search of its own, as Cargo's is, rather than resolvelib with fixed identities.
@@ -100,8 +101,12 @@ def _local(dep: NormalizedDependency) -> str:
 
 
 def enabled(features: Mapping[str, Sequence[str]], deps: Sequence[NormalizedDependency], asked: frozenset[str],
-            include_dev: bool = False) -> _Enabled:
-    """Which dependency entries `asked` features switch on, and the features they ask of each dependency."""
+            include_dev: bool = False, weak_switches_on: bool = False) -> _Enabled:
+    """Which dependency entries `asked` features switch on, and the features they ask of each dependency.
+
+    `weak_switches_on`: Cargo's dependency resolver lets `x?/feat` bring `x` into Cargo.lock although no build uses it
+    (rust-lang/cargo#10801); pass 1 asks for that, the build graph does not.
+    """
     by_local: dict[str, list[int]] = {}
     for index, dep in enumerate(deps):
         by_local.setdefault(_local(dep), []).append(index)
@@ -124,9 +129,10 @@ def enabled(features: Mapping[str, Sequence[str]], deps: Sequence[NormalizedDepe
             on.add(value[4:])
         elif "/" in value:
             name, _, feature = value.partition("/")
-            if name.endswith("?"):
+            if name.endswith("?") and not weak_switches_on:
                 weak.append((name[:-1], feature))
             else:
+                name = name.removesuffix("?")
                 if name in optional:
                     on.add(name)
                     if name in features and name not in explicit_dep:
@@ -246,7 +252,7 @@ class _Resolve:
         features = (current.features if current else frozenset()) | want.features
         deps = await self.dependencies(want.ref, version)
         switched = enabled(version.features or {}, deps or [], features,
-                           include_dev=self.request.include_dev and want.parent == ROOT)
+                           include_dev=self.request.include_dev and want.parent == ROOT, weak_switches_on=True)
         if switched.missing:
             return False                       # Cargo: "package does not have that feature"
         if current is not None and current.features == features:
@@ -351,7 +357,7 @@ class _Resolve:
                 continue
             is_root = any(state.chosen.get((ROOT, w.index)) == key for w in self.root_wants)
             switched = enabled(activation.version.features or {}, deps, features[key],
-                               include_dev=self.request.include_dev and is_root)
+                               include_dev=self.request.include_dev and is_root, weak_switches_on=all_targets)
             for index in sorted(switched.entries):
                 dep = deps[index]
                 rust_cfg = _rust_cfg(dep)

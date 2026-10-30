@@ -251,3 +251,17 @@ def test_dev_dependencies_only_of_the_roots_and_on_request() -> None:
                       {"app@1.0.0": [_dep("t", "1", "dev"), _dep("lib", "1")], "lib@1.0.0": [_dep("u", "1", "dev")]})
     assert _set(_resolve(catalog, ("app", "1"))) == {("app", "1.0.0"), ("lib", "1.0.0")}
     assert _set(_resolve(catalog, ("app", "1"), include_dev=True)) == {("app", "1.0.0"), ("lib", "1.0.0"), ("t", "1.0.0")}
+
+
+def test_weak_features_bring_their_dependency_into_the_lock_but_not_the_build() -> None:
+    # reqwest's `quinn?/ring`: Cargo.lock holds quinn (rust-lang/cargo#10801), cargo tree does not build it.
+    catalog = Catalog(
+        {"app": [_v("1.0.0", tls=["quinn?/ring"])], "quinn": [_v("0.11.0", ring=[])]},
+        {"app@1.0.0": [_dep("quinn", "0.11", "optional")]},
+    )
+    assert _set(_resolve(catalog, ("app", "1", ["tls"]))) == {("app", "1.0.0")}
+    lock = _resolve(catalog, ("app", "1", ["tls"]), env={"target": "*"})
+    assert _set(lock) == {("app", "1.0.0"), ("quinn", "0.11.0")}
+    assert next(n for n in lock.nodes if n.ref.name == "quinn").details == {"features": ["default", "ring"]}
+    assert enabled({"tls": ["quinn?/ring"]}, catalog.deps["app@1.0.0"], frozenset({"tls"}),  # type: ignore[arg-type]
+                   weak_switches_on=True).entries == {0}
