@@ -1,0 +1,10 @@
+description: >
+  Newtonsoft.Json 13.0.3: the net6.0 group (no dependencies) is the nearest for a net8.0 project.
+roots:
+  - {purl: "pkg:nuget/Newtonsoft.Json@13.0.3", constraint: "13.0.3"}
+environment: {target_framework: net8.0}
+sources:
+  - {slug: nuget-org, protocol: nuget-v3, base_url: "https://api.nuget.org/v3/index.json", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

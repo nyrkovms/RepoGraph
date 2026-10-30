@@ -1,0 +1,10 @@
+description: >
+  Microsoft.Extensions.Logging 8.0.0: lowest applicable versions of the Microsoft.Extensions family through the net8.0 group.
+roots:
+  - {purl: "pkg:nuget/Microsoft.Extensions.Logging@8.0.0", constraint: "8.0.0"}
+environment: {target_framework: net8.0}
+sources:
+  - {slug: nuget-org, protocol: nuget-v3, base_url: "https://api.nuget.org/v3/index.json", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []
