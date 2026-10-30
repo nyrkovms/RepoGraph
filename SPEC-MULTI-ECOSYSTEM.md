@@ -163,7 +163,7 @@ rpm_worker/                   — Dockerfile, worker.py, modules.py, solver.py
 | maven | groupId | artifactId | Без изменений, регистр важен | `pkg:maven/org.springframework/spring-core` |
 | nuget | — | id | `normalized_name` lowercase, `name` — исходное написание | `pkg:nuget/Newtonsoft.Json` |
 | go | — | module path | Без изменений; в URL к proxy заглавные экранируются (`!x`). Мажорные версии `/v2` — **другой** модуль | `pkg:golang/github.com/redis/go-redis/v9` |
-| crates | — | crate | lowercase, `-` и `_` эквивалентны | `pkg:cargo/serde` |
+| crates | — | crate | Нет: имя как опубликовано (`serde_json`, `Inflector`). crates.io не допускает двух крейтов, отличающихся только регистром или `-`/`_`; ввод `serde-json` приводится к каноническому имени через API (Q21) | `pkg:cargo/serde_json` |
 | rpm | дистрибутив и мажорный релиз: `rhel-9`, `rocky-9`, `epel-9`, `fedora-41` | имя бинарного пакета | Без изменений | `pkg:rpm/redhat/openssl?distro=rhel-9` |
 
 - Источник, из которого взята версия, в purl можно указать qualifier'ом `repository_url`. Например, `pkg:pypi/torch@2.5.1%2Bcu121?repository_url=https:%2F%2Fdownload.pytorch.org%2Fwhl%2Fcu121` (каноническая форма purl кодирует `/` в значениях qualifiers; на входе принимается и некодированная).
@@ -762,6 +762,7 @@ GET /api/v1/packages/{ecosystem}/{coordinates}/-/vulnerabilities          — п
 | Q18 | Индекс отвечает 403, а не 404, на отсутствующий проект (download.pytorch.org — S3 AccessDenied) | Отсутствие — только 404; поведение конкретного хостинга в код не закладываем (в корпоративном контуре доступ к репозиториям будет устроен иначе). Такие индексы подключаются с routing, ограничивающим их своими пакетами (решение владельца, 2026-10-29) |
 | Q19 | Даты релизов npm (в abbreviated packument их нет) | Всегда читаем полный packument (`Accept: application/json`): даты из `time`, его ETag — ревизия пакета. Трафик на изменение в 2–3 раза больше (решение владельца, 2026-10-30) |
 | Q20 | Резолвер npm: логическое дерево без hoisting (как было в §9.3) или дерево npm 10 | Дерево npm 10 (arborist): dedupe и hoisting, эталоны совпадают на 100% (решение владельца, 2026-10-30) |
+| Q21 | Имена crates: свёртка регистра и `-`/`_` (как PyPI) или имя как опубликовано | Как опубликовано: индекс crates.io отдаёт крейт только по точному имени (`serde-json` — 404), purl и OSV используют опубликованное имя. Дублей нет: crates.io сам запрещает имена, отличающиеся регистром или `-`/`_`. Ввод в другом написании приводится к каноническому имени запросом к API при добавлении (решение владельца, 2026-10-30) |
 
 ### 16.2 Открыто
 
