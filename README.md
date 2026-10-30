@@ -1,6 +1,6 @@
 # PackageHub MVP
 
-PyPI-first MVP: каталог метаданных пакетов, demand-driven sync и dependency resolve. Экосистемы каталога: PyPI, npm, crates.io, Go и NuGet.
+PyPI-first MVP: каталог метаданных пакетов, demand-driven sync и dependency resolve. Экосистемы каталога: PyPI, npm, crates.io, Go, NuGet и Maven.
 
 ## Prerequisites
 
@@ -191,6 +191,50 @@ curl -H "Authorization: Bearer phub_admin_dev" -H 'Content-Type: application/jso
 с датами (скрытые автором версии помечены `unlisted`, четырёхчастные версии показываются как есть), баннер deprecation пакета и
 пометка deprecated у версии, если API её отдаёт. Окружение дерева — выбор платформы (`target_framework`, по умолчанию `net8.0`), у
 каждого ребра показана его группа платформ.
+
+Maven: слаг экосистемы `maven`, тип purl `maven` (`pkg:maven/org.springframework/spring-core`: `groupId` — namespace, `artifactId` — имя).
+Пакет — пара `groupId:artifactId`, регистр значим; в путях, в `name` и в поиске она пишется через двоеточие
+(`org.springframework:spring-core`). Версии сравниваются как Maven ComparableVersion (`6.1.14`, `33.3.1-jre`, `6.2.0-RC1`), все они
+`active`: релизы Maven не удаляют, дату версии даёт `Last-Modified` её POM. Если новейший POM переносит артефакт
+(`<relocation>`), пакет несёт `deprecation.alternative` (`<groupId>:<artifactId>`). Зависимости версии берутся из effective model
+(родительские POM, `dependencyManagement` и BOM применены); окружение дерева — `scopes` (по умолчанию `compile,runtime`; ещё `provided`,
+`system`, `test`), у ребра в `details` бывают `exclusions`, `type` и `classifier`:
+
+```bash
+curl http://localhost:8000/api/v1/packages/maven/org.springframework:spring-core/-/                          # карточка: purl, лицензия, релокация
+curl http://localhost:8000/api/v1/packages/maven/org.springframework:spring-core/-/versions                  # версии с датами
+curl 'http://localhost:8000/api/v1/packages/maven/org.springframework:spring-core/-/versions/6.1.14/dependencies?scopes=compile,runtime,test'
+curl 'http://localhost:8000/api/v1/search?q=org.springframework:spring&ecosystem=maven'                      # поиск group:artifact
+```
+
+Для resolve укажите `"ecosystem": "maven"`; `constraint` корня — версия (мягкая, как её берёт Maven), диапазон `[1.0,2.0)` или `*` (последний
+релиз), версия в purl без `constraint` закрепляет её. `managed` — `dependencyManagement` проекта: purl с `?type=pom` — BOM, который
+импортируется на своё место. Окружение — `scopes`, `strategy` и `java_version`. Стратегия `maven` (по умолчанию, ответ `maven-nearest-wins`,
+`Maven 3.9`) берёт ближайшее объявление, множество `(groupId:artifactId, версия)` в ответе равно `mvn dependency:list -DincludeScope=runtime`;
+стратегия `gradle` (`gradle-highest-wins`) при разных версиях берёт наибольшую. Gradle Module Metadata (`.module`) не читается, результат
+`gradle` строится по POM и неполон там, где POM упрощён (Kotlin Multiplatform, часть AndroidX, platform через constraints); узлы несут
+`details.scope`:
+
+```bash
+curl -H 'Content-Type: application/json' http://localhost:8000/api/v1/resolve \
+  -d '{"ecosystem": "maven", "roots": [{"purl": "pkg:maven/org.springframework/spring-core", "constraint": "6.1.14"}], "managed": [{"purl": "pkg:maven/org.springframework.boot/spring-boot-dependencies?type=pom", "constraint": "3.3.5"}], "environment": {"scopes": ["compile", "runtime"], "strategy": "maven"}}'
+```
+
+Добавить артефакт в каталог можно по purl через admin API (с `groupId` в namespace; регистр значим). Стартовый источник — Maven Central
+(`maven-central`); у него нет ленты изменений, поэтому ежедневное обновление условным запросом проверяет `maven-metadata.xml` каждого
+известного артефакта по ETag. Другие репозитории (Google Maven, Gradle Plugin Portal, корпоративные Nexus и Artifactory) подключаются как
+источники `maven2` через admin API или `registries.yaml` (пример в `backend/registries.example.yaml`), артефакты по источникам
+раскладываются правилом `group_patterns`, например `androidx.*` для Google Maven:
+
+```bash
+curl -H "Authorization: Bearer phub_admin_dev" -H 'Content-Type: application/json' http://localhost:8000/api/v1/admin/packages \
+  -d '{"purls": ["pkg:maven/org.springframework/spring-core", "pkg:maven/com.google.guava/guava"]}'
+```
+
+В Web UI Maven выбирается в переключателе экосистем на странице поиска (ввод `group:artifact`); страница артефакта —
+`/package/maven/<groupId>:<artifactId>`: purl, `groupId` и `artifactId`, лицензия, версии с датами, баннер переезда артефакта со ссылкой на
+новое место, упаковка версии (`jar`, `pom`, `aar`), если API её отдаёт. Окружение дерева — выбор scopes (`compile` и `runtime` по умолчанию),
+у ребра показаны его scope (`test` и `provided`; остальные, когда API их отдаёт), exclusions, classifier и тип. Ссылки из дайджеста ведут на страницу артефакта.
 
 ## Test stand
 

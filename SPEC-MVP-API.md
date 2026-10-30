@@ -3,14 +3,14 @@
 > Source of truth для контрактов HTTP API MVP.
 
 **Source of truth:** [SPEC-MVP.md](./SPEC-MVP.md); адресация по purl, источники и формат resolve — [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §9.1, §11  
-**Версия:** 1.8-api  
+**Версия:** 1.9-api  
 **Дата:** 2026-10-30
 
 ## 1. Область и правила владения
 
 - Этот документ владеет только HTTP-контрактами.
 - Он не меняет продуктовые требования и SLA; SLA берутся только из `SPEC-MVP.md`.
-- Описывает API, каким он стал после этапов E0-C, E1, E2, E3 и E4: пакеты адресуются по purl, маршруты `/packages/pypi/{name}/…` остаются deprecated-алиасами до конца E7 (§3.4), resolve отдаёт граф (§4); в каталоге есть PyPI, npm, crates.io, Go и NuGet.
+- Описывает API, каким он стал после этапов E0-C, E1, E2, E3, E4 и E5: пакеты адресуются по purl, маршруты `/packages/pypi/{name}/…` остаются deprecated-алиасами до конца E7 (§3.4), resolve отдаёт граф (§4); в каталоге есть PyPI, npm, crates.io, Go, NuGet и Maven.
 
 `Decisions fixed`
 - Все request/response/error контракты описываются только здесь.
@@ -24,8 +24,8 @@
 
 - Base path: `/api/v1`.
 - Формат: `application/json` для request/response, кроме health без тела.
-- Экосистемы: в каталоге плагины `pypi`, `npm`, `crates`, `go` и `nuget`. Пути и фильтры принимают `ecosystem` (`pypi`, `npm`, `maven`, `go`, `crates`, `nuget`, `rpm`), остальные плагины появятся по планам SPEC-MULTI-ECOSYSTEM; для экосистемы без плагина пакетные маршруты отвечают `404`.
-- Пакет в ответах называет его purl (`pkg:pypi/flask`), версия — purl с `@версия` (`pkg:pypi/flask@3.0.0`). Правила записи — [purl-spec](https://github.com/package-url/purl-spec), по ним строит purl плагин экосистемы. Scope npm — namespace purl с `@`, закодированным как `%40`: `@angular/core` — `pkg:npm/%40angular/core`, `left-pad` — `pkg:npm/left-pad`. Тип purl для crates.io — `cargo`, а слаг экосистемы — `crates`: `serde_json` — `pkg:cargo/serde_json`. Имя крейта записано как опубликовано, без свёртки регистра и `-`/`_` (`serde_json`, `Inflector`), namespace нет. Тип purl для Go — `golang`, слаг экосистемы — `go`: путь модуля без последнего элемента — namespace purl, последний элемент — имя, `github.com/gin-gonic/gin` — `pkg:golang/github.com/gin-gonic/gin`, `github.com/redis/go-redis/v9` — `pkg:golang/github.com/redis/go-redis/v9`. Идентичность Go — путь модуля как написан: регистр значим (`github.com/BurntSushi/toml`), суффикс мажорной версии `/v2` и выше делает другой модуль. Тип purl для NuGet — `nuget`, namespace нет: `Newtonsoft.Json` — `pkg:nuget/newtonsoft.json`. Id NuGet не различает регистр, поэтому каталог хранит и адресует его строчными буквами (`normalized_name`), а написание реестра (`Newtonsoft.Json`) отдаёт как `name`; `pkg:nuget/Newtonsoft.Json` и `pkg:nuget/newtonsoft.json` — один пакет.
+- Экосистемы: в каталоге плагины `pypi`, `npm`, `crates`, `go`, `nuget` и `maven`. Пути и фильтры принимают `ecosystem` (`pypi`, `npm`, `maven`, `go`, `crates`, `nuget`, `rpm`), остальные плагины появятся по планам SPEC-MULTI-ECOSYSTEM; для экосистемы без плагина пакетные маршруты отвечают `404`.
+- Пакет в ответах называет его purl (`pkg:pypi/flask`), версия — purl с `@версия` (`pkg:pypi/flask@3.0.0`). Правила записи — [purl-spec](https://github.com/package-url/purl-spec), по ним строит purl плагин экосистемы. Scope npm — namespace purl с `@`, закодированным как `%40`: `@angular/core` — `pkg:npm/%40angular/core`, `left-pad` — `pkg:npm/left-pad`. Тип purl для crates.io — `cargo`, а слаг экосистемы — `crates`: `serde_json` — `pkg:cargo/serde_json`. Имя крейта записано как опубликовано, без свёртки регистра и `-`/`_` (`serde_json`, `Inflector`), namespace нет. Тип purl для Go — `golang`, слаг экосистемы — `go`: путь модуля без последнего элемента — namespace purl, последний элемент — имя, `github.com/gin-gonic/gin` — `pkg:golang/github.com/gin-gonic/gin`, `github.com/redis/go-redis/v9` — `pkg:golang/github.com/redis/go-redis/v9`. Идентичность Go — путь модуля как написан: регистр значим (`github.com/BurntSushi/toml`), суффикс мажорной версии `/v2` и выше делает другой модуль. Тип purl для NuGet — `nuget`, namespace нет: `Newtonsoft.Json` — `pkg:nuget/newtonsoft.json`. Id NuGet не различает регистр, поэтому каталог хранит и адресует его строчными буквами (`normalized_name`), а написание реестра (`Newtonsoft.Json`) отдаёт как `name`; `pkg:nuget/Newtonsoft.Json` и `pkg:nuget/newtonsoft.json` — один пакет. Тип purl для Maven — `maven`, слаг экосистемы тоже `maven`: `groupId` — namespace purl, `artifactId` — имя, `org.springframework:spring-core` — `pkg:maven/org.springframework/spring-core`. Идентичность Maven — пара `groupId:artifactId` (GA), регистр значим и ничего не приводится; версия, упаковка (`type`) и `classifier` в идентичность не входят. Qualifiers `type` и `classifier` в purl допустимы (`pkg:maven/org.springframework.boot/spring-boot-dependencies@3.3.5?type=pom` — BOM в `managed` resolve, §4.1.5), остальные игнорируются. Координаты пакета в путях, в `name` ответов и во вводе поиска пишутся `groupId:artifactId`.
 
 ### 2.2 Аутентификация
 
@@ -130,7 +130,7 @@ Cursor-based ответ для списков:
 }
 ```
 
-- `namespace` — пустая строка, если у экосистемы нет пространства имён (PyPI, crates, Go, NuGet, npm-пакет без scope). У npm это scope без `@`, а `name` — имя без scope: `@angular/core` приходит как `namespace: "angular"`, `name: "core"`. `latest_version` может быть `null` (проект без релизов).
+- `namespace` — пустая строка, если у экосистемы нет пространства имён (PyPI, crates, Go, NuGet, npm-пакет без scope). У npm это scope без `@`, а `name` — имя без scope: `@angular/core` приходит как `namespace: "angular"`, `name: "core"`. У Maven `namespace` — `groupId`, `normalized_name` — `artifactId`, а `name` — пара целиком: `namespace: "org.springframework"`, `normalized_name: "spring-core"`, `name: "org.springframework:spring-core"`. `latest_version` может быть `null` (проект без релизов).
 - Errors: `422/500`
 
 ## 3.2 `GET /api/v1/search`
@@ -197,6 +197,18 @@ GET /api/v1/purl/pkg:nuget/newtonsoft.json                            # 307 на
 ```
 
 NuGet принимает id по правилам `PackageIdValidator` (буквы, цифры, `_`, а `.` и `-` только между ними, до 100 знаков); id с пробелом или с `..` даёт `404`. Ответ несёт `normalized_name` строчными и `name` в написании реестра (`Newtonsoft.Json`). В Web UI путь страницы — `/package/nuget/{id}` (ссылки UI строятся по строчному `normalized_name`).
+
+Примеры для Maven (`groupId:artifactId` через двоеточие, оно в пути остаётся как есть; версия пишется как опубликована):
+
+```
+GET /api/v1/packages/maven/org.springframework:spring-core/-/
+GET /api/v1/packages/maven/org.springframework:spring-core/-/versions
+GET /api/v1/packages/maven/com.google.guava:guava/-/versions/33.3.1-jre
+GET /api/v1/packages/maven/org.springframework:spring-core/-/versions/6.1.14/dependencies?scopes=compile,runtime,test
+GET /api/v1/purl/pkg:maven/org.springframework/spring-core    # 307 на /api/v1/packages/maven/org.springframework:spring-core/-/
+```
+
+Maven принимает `groupId` и `artifactId` из букв, цифр, `_`, `.` и `-` (без `..`, `groupId` не начинается и не заканчивается точкой); координаты без двоеточия, с тремя и более частями или с версией (`g:a:1.0`) дают `404`. Регистр значим: `org.springframework:Spring-Core` — другой пакет. В Web UI путь страницы — `/package/maven/{groupId}:{artifactId}`.
 
 Общее для всех маршрутов:
 
@@ -304,6 +316,7 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
 - `features` — данные версии, зависящие от экосистемы. У crates это карта features Cargo: имя feature → список того, что она включает (другие features, `dep:крейт`, `крейт/feature`), например `{"default": ["std"], "std": ["serde/std"], "preserve_order": ["dep:indexmap", "std"]}`. Служебный ключ `dependencies_hydrated`, если он есть, features не является: клиент его пропускает.
 - Go: версия — SemVer с `v`: релиз (`v1.10.0`), версия модуля до v2 без тега в виде псевдоверсии (`v0.0.0-20261014143641-f0251eb4aa3e`, `v1.2.4-0.20261014143641-f0251eb4aa3e`) или `+incompatible` (`v2.0.0+incompatible`, равна `v2.0.0` при сравнении). Псевдоверсия — обычный prerelease (`is_prerelease`). В каталоге она есть только у модуля без тегов: его `@v/list` пуст, и единственная версия — псевдоверсия из `@latest`, а лента index.golang.org (§5.8) обновляет её. У модуля с тегами `@v/list` псевдоверсий не показывает, и каталог их не хранит; в resolve они встречаются в узлах как требования `go.mod`. В `versions` псевдоверсия не отличается от прочих версий, узнают её по виду. Отозванная (`retract` в go.mod) версия приходит со `status: "yanked"`; текст из комментария к `retract` приходит в `status_reason` версии (в списке версий и в карточке версии), объявление `// Deprecated:` — в `deprecation` карточки пакета (`{"message": ...}`; так же устаревший пакет npm). Описания, лицензии и авторов у Go нет (SPEC-MULTI-ECOSYSTEM Q11): `description`, `license_raw`, `license_spdx`, `homepage_url` — `null`.
 - NuGet: версия — NuGetVersion: SemVer 2 с необязательной четвёртой частью (`13.0.3`, `12.0.3.1`, `1.0.0-beta.2`); метки prerelease сравниваются без учёта регистра (`1.0.0-BETA` = `1.0.0-beta`), `+метаданные` не влияют на порядок. Версия приходит в нормализованной записи NuGet (`1.0` как `1.0.0`). Скрытая автором (unlisted) версия не удаляется: она остаётся в `versions` со `status: "unlisted"`, потому что lock-файл может её закреплять (resolve выбирает такую версию, только когда подходящих листед-версий нет), у неё может не быть `release_date` (`null`). Deprecation версии (причины `Legacy`, `CriticalBugs`, `Other`, сообщение, пакет-замена) каталог сохраняет, события `release_deprecated` попадают в ленту (§6.3); в ответах карточки версии и списка версий оно пока не отдаётся (клиент читает `deprecation` версии). Если deprecated новейшая из листед-версий, `deprecation` пакета (`{"message": ...}`) несёт сообщение или перечень причин. Лицензия пакета — `license_spdx` (выражение `licenseExpression`) и `license_raw` (то же выражение; когда у пакета только `licenseUrl` — ссылка, а `license_spdx` — `null`); описание, `homepage_url` (`projectUrl`), авторы и теги берутся из записи новейшей листед-версии.
+- Maven: версия — как её пишет репозиторий (`6.1.14`, `33.3.1-jre`, `6.2.0-RC1`, `2.0.0.Final`), сравнение — Maven ComparableVersion (SPEC-MULTI-ECOSYSTEM §5.5). Prerelease — квалификаторы `alpha`, `beta`, `milestone`, `rc` и `snapshot` в любом написании (`-M1`, `-RC1`, `-alpha`, `-b2`); `-jre`, `-android` и `.Final` prerelease не делают. SNAPSHOT-версии каталог не хранит: snapshot-репозитории не подключаются. Релизы Maven не удаляют и не отзывают, поэтому у каждой версии `status: "active"`, а событий `release_removed` и `release_yanked` у Maven не бывает. `release_date` — `Last-Modified` POM версии (один HEAD на версию); если источник его не отдал, `null`. Порядок ComparableVersion не транзитивен, и `sort` по версии — его линейное приближение: у версий с квалификатором между точками (`1.0.sp.2`) против вложенных (`1-1`) бывают расхождения; выбор версии в resolve повторяет Maven точно. Релокация (`<distributionManagement><relocation>`) новейшей версии приходит в `deprecation` пакета: `{"message": "...", "alternative": "<groupId>:<artifactId>[:<версия>]"}`, `message` — текст из POM, без него `relocated`; `alternative` — пакет (и версия), куда переехал артефакт. Лицензия пакета — `license_raw` (названия лицензий из `<licenses>` POM, а без названия адрес; несколько — через ` OR `) и `license_spdx` (то же, приведённое к SPDX; `null`, если хоть одну лицензию не узнали); описание, `homepage_url` и авторы — из POM новейшей версии. Упаковка версии (`jar`, `pom`, `aar`, `war`…) хранится у каталога (`raw_metadata.packaging` новейшей версии), но карточка и список версий её пока не отдают: основной файл версии виден в `artifacts` (§3.3.6), у версии с упаковкой `pom` он один — сам POM; клиент читает `packaging` версии, если оно появится.
 - `engines` — требования к среде в нативной записи экосистемы (PyPI: `python`); может быть `null`. `requires_python` — алиас `engines.python`, сохраняется до конца E7.
 - `dependencies_state` — состояние зависимостей версии (`pending` — ещё не загружены, `hydrated`, `unavailable` — зависимости неизвестны).
 - `sources` — все источники версии (без фильтра по профилю) и статус версии в каждом.
@@ -320,6 +333,7 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
   - `node_version`, `cpu: string?` (npm)
   - `target: string?`, `features: string?`, `default_features: bool?` (crates)
   - `target_framework: string?` (NuGet)
+  - `scopes: string?` (Maven; через запятую из `compile`, `runtime`, `provided`, `system`, `test`)
 - Semantics:
   - Level 1 дерево на основе `resolved_version_id`;
   - если зависимости выбранной версии ещё не гидратированы, backend выполняет lazy hydrate этой версии;
@@ -330,6 +344,7 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
   - crates: окружение — `target` (целевая тройка Rust; по умолчанию `x86_64-unknown-linux-gnu`; неизвестная даёт `422`, а `*` значит все платформы), `features` (через запятую) и `default_features` (по умолчанию `true`); `python_version` и `os` не действуют. В дерево входят runtime- и build-зависимости, применимые к `target`; у платформенной зависимости в `environment_markers` стоит `{"rust_cfg": "cfg(windows)"}`. Optional-зависимость входит, если её включает feature окружения (`default` включена, пока `default_features` не `false`) или при `include_optional=true`. `dependency_type` узла: `runtime`, `build` или `optional`; dev-зависимости в дерево не входят. Features задают только корень: ниже корня каждое ребро просит у крейта свои features, а `features` и `default_features` на них не действуют.
   - Go: окружения у дерева нет, `python_version`, `os` и остальные параметры не действуют. Каждое ребро — `require` из `go.mod` версии (`dependency_type: "runtime"`), `// indirect` тоже входит: это требования сборки. `name` узла — путь модуля, `constraint` и `resolved_version` — версия из `require`. Пометка `// indirect` приходит в `details.indirect = true` узла (`details` узла — подробности зависимости: у crates features и registry, у npm `optional` peer-зависимости); resolve отдаёт её в `edges[].details.indirect` (§4.1.3). Дерево показывает версии, которые требует `go.mod` как есть; выбор Minimal Version Selection делает только resolve. `replace` и `exclude` зависимостей не применяются (Go учитывает их только в главном модуле).
   - NuGet: окружение — `target_framework` (платформа проекта, по умолчанию `net8.0`; допустимы `net5.0`…`net11.0` и `netstandard1.0`…`netstandard2.1`, другое значение, включая .NET Framework (`net48`) и платформенные (`net8.0-windows`), даёт `422`); `python_version`, `os` и остальные параметры не действуют. У версии NuGet зависимости собраны в группы по платформам, и проект берёт ближайшую группу своей платформы (`net8.0` — группу `net8.0`, иначе ближайшую меньшую `net`, затем `netcoreapp3.1` и ниже, затем `netstandard2.1` и ниже; группа без платформы подходит всем): дерево показывает рёбра только этой группы, на каждом уровне свою для каждой версии. Ребро — `dependency_type: "runtime"`, `constraint` — диапазон версий NuGet как в пакете (`4.3.0` значит `>= 4.3.0`, `[1.0, 2.0)`, `[4.5.5, )`), `name` узла — id строчными. Группа ребра приходит в `environment_markers` как `{"dotnet_target_framework": ".NETStandard2.0"}` (написание реестра; у зависимости из группы без платформы поля нет), все группы версии — в `details.groups`, `exclude` и `include` зависимости — в `details`. `include_optional` у NuGet не действует: опциональных зависимостей нет. Окружение целиком действует в resolve (§4.1.4).
+  - Maven: окружение — `scopes` (области, рёбра которых входят в дерево; по умолчанию `compile,runtime`, то есть runtime-classpath; допустимы `compile`, `runtime`, `provided`, `system`, `test`, другое значение даёт `422`, пустое — значение по умолчанию); `python_version`, `os` и остальные параметры не действуют. Зависимости версии берутся из её effective model (SPEC-MULTI-ECOSYSTEM §7.4): родительские POM, `dependencyManagement` и BOM применены, версии подставлены, свойства `${...}` раскрыты; у версии, чей POM ещё не читали, он читается при первом запросе. Дерево — слой рёбер, объявленных POM версии на каждом уровне, без выбора версий: nearest wins делает только resolve. `name` узла — `groupId:artifactId`, `constraint` — версия или диапазон как в POM (`6.1.14`, `[1.0,2.0)`, после подстановки из `dependencyManagement`), `resolved_version` — подходящая версия каталога. `dependency_type` ребра: `runtime` (scope `compile` и `runtime`), `dev` (`test`), `provided` (`provided` и `system`) или `optional` (`<optional>true</optional>`, при любом scope; такие рёбра входят только при `include_optional=true`). Различить `compile` и `runtime`, `provided` и `system` по `dependency_type` нельзя: само имя scope ребра дерево пока не отдаёт (resolve отдаёт, §4.1.5). В `details` ребра, когда есть: `exclusions` (`[{"group": "...", "artifact": "..."}]`), `type` (упаковка зависимости, если не `jar`, например `pom` или `test-jar`), `classifier`, `unresolved_property` (имена свойств, которые не удалось раскрыть: системные, `env.*`). Зависимость, чей `groupId` или `artifactId` не раскрылся, в дерево не входит. Окружение целиком действует в resolve (§4.1.5).
 - Response `200`:
 
 ```json
@@ -457,10 +472,10 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
 | `profile` | slug профиля источников; без него профиль экосистемы по умолчанию |
 | `input_mode` | `requirements` (по умолчанию) или `lock`; `freeze` — алиас `lock` |
 | `roots` | 1..500 корней: `purl`, `constraint` (по умолчанию `*`, синтаксис экосистемы), `extras`. Версия в purl без `constraint` закрепляет её (`==версия`) |
-| `environment` | окружение в терминах экосистемы; PyPI: имена PEP 508 (`python_version`, `sys_platform`, `os_name`, `platform_machine`, `platform_system`, `implementation_name`) или короткая форма `python_version` + `os`. npm: `node_version`, `os`, `cpu` (§4.1.1). crates: `target`, `features`, `default_features` (§4.1.2). Go: `go_version`, `replace`, `exclude` (§4.1.3). NuGet: `target_framework` (§4.1.4). Пустое окружение — как у pip по умолчанию (Python 3.12, linux) |
+| `environment` | окружение в терминах экосистемы; PyPI: имена PEP 508 (`python_version`, `sys_platform`, `os_name`, `platform_machine`, `platform_system`, `implementation_name`) или короткая форма `python_version` + `os`. npm: `node_version`, `os`, `cpu` (§4.1.1). crates: `target`, `features`, `default_features` (§4.1.2). Go: `go_version`, `replace`, `exclude` (§4.1.3). NuGet: `target_framework` (§4.1.4). Maven: `scopes`, `strategy`, `java_version` (§4.1.5). Пустое окружение — как у pip по умолчанию (Python 3.12, linux) |
 | `options.include_dev` / `include_optional` | включать dev- и optional-зависимости; для PyPI `include_optional` не действует: extras задаются в корне явно |
 | `options.timeout_s` | срок resolve, `0 < timeout_s <= 120`, по умолчанию 30 |
-| `managed` | корни `dependencyManagement` (Maven); для PyPI не используется |
+| `managed` | корни `dependencyManagement` проекта (Maven, §4.1.5): `purl` и `constraint`, purl с `?type=pom` — BOM; для остальных экосистем не используется |
 
 - В `input_mode=lock` корни, которых достигают зависимости других корней, приходят с `hidden: true` (вход трактуется как snapshot окружения).
 - Response `200`:
@@ -723,6 +738,57 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
 {"code": "NU1605", "message": "detected package downgrade: microsoft.extensions.logging.abstractions from 9.0.0 to 8.0.0 (reference from microsoft.extensions.logging)", "packages_seen": 7}
 ```
 
+### 4.1.5 Resolve для Maven
+
+Тело и ответ те же, что в §4.1; отличается следующее.
+
+- Запрос: `"ecosystem": "maven"`, корни — purl `maven` (`pkg:maven/org.springframework/spring-core`). Версия в purl без `constraint` закрепляет её как «мягкую» версию Maven: она берётся как написана, пока не победила более близкая. `constraint` — версия или диапазон Maven: `6.1.14` (мягкая версия), `[1.0,2.0)`, `(,1.0]`, `[1.5]` (ровно эта); из диапазона берётся наибольшая доступная версия. `*` или отсутствие `constraint` у корня — наибольший релиз (snapshot и prerelease не берутся, пока есть релизы). Неверный диапазон даёт `422`.
+- `managed` — `dependencyManagement` проекта: `[{"purl": "...", "constraint": "..."}]`. Запись задаёт версию каждого транзитивного вхождения этого `groupId:artifactId`, корни сохраняют свою; scope записи берётся из `dependencyManagement` импортированного BOM. Запись с `?type=pom` в purl — BOM: его `dependencyManagement` подставляется на место записи, как у `<scope>import</scope>` (версия BOM — в `constraint` или в purl). Первая запись артефакта побеждает, как в Maven.
+
+```json
+{
+  "ecosystem": "maven",
+  "roots": [
+    {"purl": "pkg:maven/org.springframework/spring-core", "constraint": "6.1.14"},
+    {"purl": "pkg:maven/com.fasterxml.jackson.core/jackson-databind", "constraint": "*"}
+  ],
+  "managed": [
+    {"purl": "pkg:maven/org.springframework.boot/spring-boot-dependencies?type=pom", "constraint": "3.3.5"}
+  ],
+  "environment": {"scopes": ["compile", "runtime"], "strategy": "maven"}
+}
+```
+
+- `environment`: `scopes` (список или строка через запятую из `compile`, `runtime`, `provided`, `system`, `test`; по умолчанию `compile,runtime`: в граф входят узлы, чей итоговый scope в этом списке), `strategy` (`maven` по умолчанию или `gradle`), `java_version` (принимается, на результат пока не влияет). Неизвестный scope или стратегия дают `422`.
+- `strategy` ответа: `maven-nearest-wins` (`emulates`: `Maven 3.9`) или `gradle-highest-wins`. Правила `maven` (SPEC-MULTI-ECOSYSTEM §9.7): (1) обход в ширину от корней, зависимости каждой версии — из её effective model; (2) для `groupId:artifactId` побеждает ближайшее к корню объявление, на одной глубине — первое, поддеревья остальных не обходятся; (3) `managed` переопределяет версию и scope транзитивных вхождений (с глубины 2); (4) `test`-, `provided`- и `system`-зависимости зависимости и её `optional`-зависимости не транзитивны, exclusions накапливаются по пути; (5) итоговый scope узла выводится из scope родителей по стандартной матрице Maven, побеждает самый широкий (`compile`, `runtime`, `provided`, `test`), корень сохраняет свой. `gradle`: тот же обход, но при разных версиях одного артефакта побеждает наибольшая, где бы она ни была объявлена, а `managed` действует как constraints: поднимает версию, не понижает.
+- Равенство с Maven: множество пар `(groupId:artifactId, версия)` в `nodes` равно `mvn dependency:list -DincludeScope=runtime` для проекта, зависящего от корней (для `scopes` без `test`/`provided`; цель — 100% совпадений, SPEC-MULTI-ECOSYSTEM §9.7). Для `gradle` эталон — `gradle dependencies --configuration runtimeClasspath`.
+- Ограничения `gradle` (Q15). Метаданные берутся из POM: Gradle Module Metadata (`.module`: варианты, capabilities, атрибуты, constraints) не читается, хотя Gradle при сборке предпочитает её. Результат по POM неполон там, где POM упрощён: Kotlin Multiplatform (`kotlinx-coroutines`, `ktor`: в POM корневого артефакта нет зависимостей платформ `-jvm` и `-android`), часть AndroidX и библиотеки с `api`/`implementation` (разделение compile и runtime в POM неточно), platform и BOM через constraints Gradle (в POM их нет). Предупреждение «результат по POM» для версий с `.module` (`artifacts[].has_metadata_file`, SPEC-MULTI-ECOSYSTEM §9.7) в `warnings` пока не выдаётся; признак `has_metadata_file` есть у POM-артефакта версии в `artifacts` (§3.3.6). Корень-плагин Gradle задаётся маркером `<id>:<id>.gradle.plugin` (`pkg:maven/org.springframework.boot/org.springframework.boot.gradle.plugin`), он лежит в Gradle Plugin Portal.
+- `nodes[].name` — `groupId:artifactId`, `version` — выбранная версия, `latest_compatible` у корней — наибольший релиз без prerelease (в источниках профиля), у прочих узлов `null`; `details.scope` узла — итоговый scope. `edges[].constraint` — версия или диапазон как в POM, `type` — `runtime`, `details.scope` — scope ребра как объявлено в POM (с учётом `dependencyManagement`). Узел, у версии которого нет данных о зависимостях (POM не читается), остаётся в итоге с `errors: ["dependencies unknown"]`.
+- `warnings[]`: `unresolvable` (`{code, message}`) — зависимость не разрешилась (нет версии под требование, не найден BOM из `managed`), а граф всё равно построен. `conflicts[]` пуст: у Maven версий-конфликтов нет, ближайшее объявление выигрывает. Неудача resolve приходит в `error`: `not_found` (источники профиля не знают корня; `packages` — список `groupId:artifactId`), `resolve_limit_exceeded`, `resolve_timeout` или `upstream_error`.
+
+```json
+{
+  "ecosystem": "maven",
+  "profile": "default",
+  "strategy": "maven-nearest-wins",
+  "emulates": "Maven 3.9",
+  "nodes": [
+    {"id": "n1", "purl": "pkg:maven/org.springframework/spring-core@6.1.14", "name": "org.springframework:spring-core",
+     "version": "6.1.14", "registry": "maven-central", "depth": 1, "root": true, "hidden": false, "latest_compatible": "6.2.0",
+     "errors": [], "details": {"scope": "compile"}},
+    {"id": "n2", "purl": "pkg:maven/org.springframework/spring-jcl@6.1.14", "name": "org.springframework:spring-jcl",
+     "version": "6.1.14", "registry": "maven-central", "depth": 2, "root": false, "hidden": false, "latest_compatible": null,
+     "errors": [], "details": {"scope": "compile"}}
+  ],
+  "edges": [
+    {"from": "root", "to": "n1", "constraint": "6.1.14", "type": "runtime", "details": {}},
+    {"from": "n1", "to": "n2", "constraint": "6.1.14", "type": "runtime", "details": {"scope": "compile"}}
+  ],
+  "warnings": [],
+  "error": null
+}
+```
+
 ## 4.2 `POST /api/v1/resolve`: вложенный формат (алиас до конца E7)
 
 - Request body:
@@ -853,6 +919,8 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
 
 Для NuGet purl записывается с типом `nuget`: `pkg:nuget/newtonsoft.json`. Регистр id не важен (`pkg:nuget/Newtonsoft.Json` добавит тот же пакет), каталог хранит его строчными, а написание реестра — как `name`; purl с namespace (`pkg:nuget/a/b`) неверен, и тогда не запускается ничего.
 
+Для Maven purl записывается с типом `maven` и обязательным namespace (`groupId`): `pkg:maven/org.springframework/spring-core`. Регистр значим; версия, `type` и `classifier` в purl идентичность не меняют (пакет — пара `groupId:artifactId`, версии каталог читает из `maven-metadata.xml` сам). purl без namespace (`pkg:maven/spring-core`) или с недопустимыми знаками неверен, и тогда не запускается ничего. Пакет ищется в источниках профиля по умолчанию с учётом routing (`group_patterns`, §5.8).
+
 ## 5.4 `POST /api/v1/admin/retry-failed`
 
 - Auth: `admin`
@@ -890,7 +958,7 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
 - Response `202`, `operation: "presence_probe"`.
 - Errors: `401/422` (нет плагина экосистемы)`/500`
 
-Для npm: `{"ecosystem": "npm"}`, для crates: `{"ecosystem": "crates"}`, для Go: `{"ecosystem": "go"}`, для NuGet: `{"ecosystem": "nuget"}`. Проверка идёт по источникам профиля экосистемы по умолчанию (стартовые — `npmjs`, `crates-io`, `proxy-golang-org` и `nuget-org`, §5.8). Без тела проверяется PyPI.
+Для npm: `{"ecosystem": "npm"}`, для crates: `{"ecosystem": "crates"}`, для Go: `{"ecosystem": "go"}`, для NuGet: `{"ecosystem": "nuget"}`, для Maven: `{"ecosystem": "maven"}`. Проверка идёт по источникам профиля экосистемы по умолчанию (стартовые — `npmjs`, `crates-io`, `proxy-golang-org`, `nuget-org` и `maven-central`, §5.8); у Maven — по тем из них, чей routing (`group_patterns`) подходит `groupId` пакета. Без тела проверяется PyPI.
 
 ## 5.7 `GET /api/v1/admin/sync/status`
 
@@ -1052,6 +1120,21 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
 }
 ```
 
+Стартовый источник Maven — `maven-central` (миграция этапа E5), он входит в профиль `default` экосистемы maven. `base_url` — корень репозитория в раскладке Maven 2 (`https://repo1.maven.org/maven2/`), протокол `maven2`. Пакет — это `<groupId с / вместо точек>/<artifactId>/maven-metadata.xml` (версии), версия — `<версия>/<artifactId>-<версия>.pom`; дату версии даёт `Last-Modified` POM. У Maven Central нет ленты изменений, поэтому ежедневное обновление (детектор `maven2`) делает условный `GET` `maven-metadata.xml` каждого известного пакета с `If-None-Match`: ревизия пакета — ETag метаданных (нет ETag — `lastUpdated`, нет и его — хеш списка версий), `304` значит «без изменений», `404` — пакет пропал из источника. Дайджест связан с этой экосистемой через `item.ecosystem` (`maven`). Остальные репозитории (Google Maven, Gradle Plugin Portal, JBoss, Spring, корпоративные Nexus и Artifactory) подключаются как источники с протоколом `maven2` через admin API или `registries.yaml` (пример — `backend/registries.example.yaml`; источник создаётся выключенным, после проверки подключения его включают). Маршрутизация пакетов по источникам — правило `group_patterns` (как `includeGroup` в Gradle): `androidx.*` — группа `androidx` и все под ней (`androidx.core`, но не `androidxyz`), `com.android.tools` — только она, `*` — любая; регистр значим. Google Maven, например, держит только свои группы: `{"mode": "allow", "group_patterns": ["androidx.*", "com.android.*", "com.google.android.*"]}`. `<repositories>` из POM зависимостей не используются: источники задаёт только профиль. Snapshot-репозитории не подключаются.
+
+```json
+{
+  "slug": "maven-central",
+  "name": "Maven Central",
+  "ecosystem": "maven",
+  "protocol": "maven2",
+  "base_url": "https://repo1.maven.org/maven2/",
+  "priority": 0,
+  "enabled": true,
+  "config": {}
+}
+```
+
 Список источников приходит как `{"data": [...]}`, профилей — как `{"data": [{"slug": "default", "name": "PyPI", "ecosystem": "pypi", "is_default": true, "registries": [{"slug": "pypi", "routing_override": null}]}]}`.
 
 ### Изменения (`admin`)
@@ -1133,7 +1216,7 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
   - `kind: enum?` — можно повторять;
   - `ecosystem: enum?` — можно повторять;
   - `registry: string?` — slug источника, в котором есть пакет (у событий нет собственного источника);
-  - `package: string?` — purl (`pkg:pypi/flask`, `pkg:golang/github.com/gin-gonic/gin`, `pkg:nuget/newtonsoft.json`) или голое имя PyPI;
+  - `package: string?` — purl (`pkg:pypi/flask`, `pkg:golang/github.com/gin-gonic/gin`, `pkg:nuget/newtonsoft.json`, `pkg:maven/org.springframework/spring-core`) или голое имя PyPI;
   - `limit: int=50 (max 200)`, `cursor: string?`
 - Виды событий (`kind`): `tracking_started`, `release_added`, `release_yanked`, `release_unyanked`, `release_removed`, `release_restored`, `release_deprecated`, `vulnerability_added`, `vulnerability_withdrawn`, `project_unavailable`, `project_restored`, `source_added`. `release_deprecated` — версия объявлена deprecated, `source_added` — пакет появился в ещё одном источнике (его slug в `details.registry`).
 - Response `200`:
@@ -1258,6 +1341,7 @@ NuGet принимает id по правилам `PackageIdValidator` (букв
 
 ## 8. Изменения
 
+- **1.9-api (2026-10-31), этап E5.** Каталог содержит Maven. Слаг экосистемы `maven`, тип purl `maven`, идентичность — `groupId:artifactId` (регистр значим), namespace purl — `groupId`; в путях, в `name` и в поиске координаты пишутся `groupId:artifactId` (§2.1, §3.1, §3.3). Версии Maven: ComparableVersion, prerelease по квалификаторам, все версии `active`, дата — `Last-Modified` POM, релокация артефакта в `deprecation.alternative` пакета, лицензия из POM (§3.3.4). Дерево зависимостей Maven принимает `scopes` (по умолчанию `compile,runtime`), показывает рёбра effective model, у ребра `details.exclusions`, `type`, `classifier` (§3.3.5). Resolve для Maven: `ecosystem: "maven"`, `managed` (`dependencyManagement`, BOM — purl с `?type=pom`), окружение `scopes` / `strategy` / `java_version`, стратегии `maven-nearest-wins` (`Maven 3.9`, результат равен `mvn dependency:list`) и `gradle-highest-wins` (Gradle Module Metadata не читается, Q15), `details.scope` узлов и рёбер (§4.1.5). Раздел 4.1.4 (NuGet) перенесён из §5.3 в §4.1 без изменений. `/admin/packages` принимает purl `maven` (§5.3), `/admin/presence-probe` — `ecosystem: "maven"` (§5.6); стартовый источник `maven-central`, ежедневное обновление по ETag `maven-metadata.xml`, routing `group_patterns` (§5.8).
 - **1.8-api (2026-10-30), этап E4.** Каталог содержит NuGet. Слаг экосистемы `nuget`, тип purl `nuget`, id без учёта регистра: каталог хранит и адресует его строчными (`normalized_name`), написание реестра приходит как `name` (§2.1, §3.3). Версии NuGet: три или четыре части, prerelease без учёта регистра, скрытые автором версии со статусом `unlisted`, `deprecation` пакета (§3.3.4); дерево зависимостей NuGet в окружении `target_framework` (по умолчанию `net8.0`), группа платформы ребра в `environment_markers.dotnet_target_framework` (§3.3.5). Resolve для NuGet: `ecosystem: "nuget"`, диапазоны версий NuGet, окружение `target_framework`, стратегия `nuget-nearest-wins` (`.NET SDK 8 (NuGet 6.x)`), результат равен `dotnet restore`, предупреждение `NU1605`, ошибка `NU1107` (§4.1.4). `/admin/packages` принимает purl `nuget` (§5.3), `/admin/presence-probe` — `ecosystem: "nuget"` (§5.6); стартовый источник `nuget-org` с лентой Catalog (§5.8).
 - **1.7-api (2026-10-30), этап E3.** Каталог содержит Go. Слаг экосистемы `go`, тип purl `golang`, путь модуля как написан (регистр значим, `/vN` — другой модуль), namespace purl — путь без последнего элемента (§2.1, §3.3). Версии Go: релизы, псевдоверсии (prerelease), `+incompatible`, отозванные версии со статусом `yanked` (§3.3.4); дерево зависимостей Go без окружения, `// indirect` входит (§3.3.5). Resolve для Go: `ecosystem: "go"`, окружение `go_version` / `replace` / `exclude`, стратегия `go-mvs` (`Go 1.23 (MVS with module graph pruning)`), результат равен `go list -m all`, `details.replaced_by` узлов, `details.indirect` рёбер, предупреждение `go_version` (§4.1.3). `/admin/packages` принимает purl `golang` (§5.3), `/admin/presence-probe` — `ecosystem: "go"` (§5.6); стартовый источник `proxy-golang-org` с лентой index.golang.org (§5.8).
 - **1.6-api (2026-10-30), этап E2.** Каталог содержит crates.io. Слаг экосистемы `crates`, тип purl `cargo`, имена как опубликовано (`serde_json`, `Inflector`), без namespace (§2.1, §3.1, §3.3); ввод в другом написании приводится к опубликованному только в `POST /admin/packages` (§5.3). Карта features Cargo в `features` версии (§3.3.4). Дерево зависимостей crates принимает `target`, `features` и `default_features`, показывает runtime-, build- и optional-зависимости, платформенные помечает `environment_markers.rust_cfg` (§3.3.5). Resolve для crates: `ecosystem: "crates"`, окружение `target` (в том числе `*`) / `features` / `default_features`, features корня в `extras`, стратегия `cargo-resolver` (`Cargo 1.86 (resolver v2)`), несколько версий крейта в разных классах совместимости, `details.features` узлов, `details.rust_cfg` рёбер (§4.1.2). `/admin/presence-probe` принимает `ecosystem: "crates"` (§5.6); стартовый источник `crates-io` (§5.8).
