@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain; charset=UTF-8",
+    "etag": "\"16c6dfc0eb58eb3c9113ce197d460c6725c647e4688ac26d31c8ed69f1ebbc68\"",
+    "last-modified": "Wed, 18 Sep 2019 21:12:34 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://proxy.golang.org/github.com/spf13/pflag/@v/v1.0.5.mod"
+  },
+  "status": 200
+}

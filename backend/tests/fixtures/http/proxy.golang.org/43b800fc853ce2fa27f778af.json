@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain; charset=UTF-8",
+    "etag": "\"1c1b15911aa8a0bd5cd0f6670ec23d1086496f3615fdf53306aff2b476ce9be1\"",
+    "last-modified": "Tue, 29 Nov 2022 17:52:19 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://proxy.golang.org/github.com/inconshreveable/mousetrap/@v/v1.1.0.mod"
+  },
+  "status": 200
+}

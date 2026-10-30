@@ -1,0 +1,13 @@
+{
+  "headers": {
+    "content-type": "application/json"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://proxy.golang.org/google.golang.org/grpc/@v/v1.5.1.info"
+  },
+  "status": 200
+}

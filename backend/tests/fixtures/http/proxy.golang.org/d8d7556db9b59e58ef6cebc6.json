@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain; charset=UTF-8",
+    "etag": "\"cefeec472544b4affa46dcf08a02af961f421f57d4514373713a2d7fd54dcaed\"",
+    "last-modified": "Tue, 27 Oct 2026 09:28:18 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://proxy.golang.org/google.golang.org/grpc/@v/v1.85.0.mod"
+  },
+  "status": 200
+}

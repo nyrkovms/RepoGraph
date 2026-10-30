@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/plain; charset=UTF-8",
+    "etag": "\"14c3afa2ef623555c1b4834d1f88b14df77549afee85e5750c19102465b78aba\"",
+    "last-modified": "Tue, 10 Oct 2023 18:10:42 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://proxy.golang.org/github.com/cpuguy83/go-md2man/v2/@v/v2.0.3.mod"
+  },
+  "status": 200
+}
