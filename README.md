@@ -1,6 +1,6 @@
 # PackageHub MVP
 
-PyPI-first MVP: каталог метаданных пакетов, demand-driven sync и dependency resolve. Экосистемы каталога: PyPI, npm, crates.io и Go.
+PyPI-first MVP: каталог метаданных пакетов, demand-driven sync и dependency resolve. Экосистемы каталога: PyPI, npm, crates.io, Go и NuGet.
 
 ## Prerequisites
 
@@ -154,6 +154,43 @@ curl -H "Authorization: Bearer phub_admin_dev" -H 'Content-Type: application/jso
 
 В Web UI crates.io выбирается в переключателе экосистем на странице поиска; на странице крейта окружение дерева — target, features и
 default features, а выбранной версии показываются её features.
+
+NuGet: слаг экосистемы `nuget`, тип purl `nuget` (`pkg:nuget/newtonsoft.json`). Id не различает регистр: каталог хранит и адресует
+его строчными (`newtonsoft.json`), а написание реестра (`Newtonsoft.Json`) отдаёт как `name`. Версии — три или четыре части
+(`13.0.3`, `12.0.3.1`), скрытая автором версия приходит со статусом `unlisted`, а объявленный deprecated пакет несёт `deprecation`.
+Зависимости версии собраны по платформам, окружение дерева — `target_framework` (`net5.0`…`net11.0` и `netstandard1.0`…`netstandard2.1`,
+по умолчанию `net8.0`); ребро помечено группой, из которой взято (`environment_markers.dotnet_target_framework`):
+
+```bash
+curl http://localhost:8000/api/v1/packages/nuget/newtonsoft.json/-/                                    # карточка: purl, лицензия
+curl http://localhost:8000/api/v1/packages/nuget/newtonsoft.json/-/versions                             # версии с датами, unlisted отмечены
+curl 'http://localhost:8000/api/v1/packages/nuget/newtonsoft.json/-/versions/13.0.3/dependencies?target_framework=netstandard2.0'
+curl 'http://localhost:8000/api/v1/search?q=serilog&ecosystem=nuget'                                   # поиск только по NuGet
+```
+
+Для resolve укажите `"ecosystem": "nuget"`; `constraint` корня — диапазон NuGet (`1.0` значит `>= 1.0`, `[1.0,2.0)`, плавающий `1.*`),
+окружение — `target_framework`. Граф строит стратегия `nuget-nearest-wins` (`.NET SDK 8 (NuGet 6.x)`): берётся самая низкая подходящая
+версия, побеждает ближайшая к проекту ссылка (более глубокая, которой нужна версия выше, даёт предупреждение `NU1605`), родственные
+ссылки берут самую низкую версию, которую допускают все диапазоны, иначе ошибка `NU1107`; результат равен `dotnet restore`:
+
+```bash
+curl -H 'Content-Type: application/json' http://localhost:8000/api/v1/resolve \
+  -d '{"ecosystem": "nuget", "roots": [{"purl": "pkg:nuget/newtonsoft.json", "constraint": "[12.0.1,14.0)"}], "environment": {"target_framework": "net8.0"}}'
+```
+
+Добавить пакет в каталог можно по purl через admin API (регистр id не важен). Новые версии известных пакетов с nuget.org ежедневное
+обновление находит по ленте Catalog (источник `nuget-org`, адрес ленты в `config.catalog_url`); другие фиды NuGet проверяются по ETag
+Registration:
+
+```bash
+curl -H "Authorization: Bearer phub_admin_dev" -H 'Content-Type: application/json' http://localhost:8000/api/v1/admin/packages \
+  -d '{"purls": ["pkg:nuget/newtonsoft.json", "pkg:nuget/serilog"]}'
+```
+
+В Web UI NuGet выбирается в переключателе экосистем на странице поиска; страница пакета — `/package/nuget/<id>`: purl, лицензия, версии
+с датами (скрытые автором версии помечены `unlisted`, четырёхчастные версии показываются как есть), баннер deprecation пакета и
+пометка deprecated у версии, если API её отдаёт. Окружение дерева — выбор платформы (`target_framework`, по умолчанию `net8.0`), у
+каждого ребра показана его группа платформ.
 
 ## Test stand
 

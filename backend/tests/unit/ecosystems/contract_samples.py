@@ -57,4 +57,14 @@ SAMPLES: dict[str, Samples] = {
         prereleases=["v0.0.0-20191109021931-daa7c04131f5", "v1.0.0-0", "v1.0.0-alpha", "v1.0.0-rc.1",
                      "v1.10.1-0.20240101000000-abcdefabcdef"],
     ),
+    "nuget": Samples(
+        # Ids are case-insensitive: stored lowercase, the registry's spelling is the display name.
+        names=[("newtonsoft.json", "pkg:nuget/newtonsoft.json"), ("serilog", "pkg:nuget/serilog"),
+               ("microsoft.extensions.logging", "pkg:nuget/microsoft.extensions.logging")],
+        # Checked against NuGet.Versioning 6.11.1 (tests/fixtures/nuget/versioning/expected.json).
+        ordered_versions=["0.1.0", "1.0.0-alpha", "1.0.0-Beta", "1.0.0-rc.1", "1.0.0", "1.0.0.1", "1.0.1", "1.9.0",
+                          "1.10.0", "2.0.0"],
+        invalid_versions=["1.0.0-01", "a.b.c", "latest", ""],
+        prereleases=["1.0.0-alpha", "1.0.0-Beta", "1.0.0-rc.1"],
+    ),
 }

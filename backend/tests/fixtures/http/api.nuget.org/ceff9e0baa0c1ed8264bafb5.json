@@ -1,0 +1,14 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "last-modified": "Wed, 08 Jan 2025 01:22:54 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://api.nuget.org/v3/index.json"
+  },
+  "status": 200
+}

@@ -1,0 +1,11 @@
+description: >
+  FileProviders.Abstractions 8.0.0 wants Primitives >= 8.0.0 at depth 2, Logging 9.0.0 wants Primitives >= 9.0.0 at depth 3 through Options: references from different subgraphs are cousins whatever their depth, the highest wins.
+roots:
+  - {purl: "pkg:nuget/Microsoft.Extensions.FileProviders.Abstractions", constraint: "8.0.0"}
+  - {purl: "pkg:nuget/Microsoft.Extensions.Logging", constraint: "9.0.0"}
+environment: {target_framework: net8.0}
+sources:
+  - {slug: nuget-org, protocol: nuget-v3, base_url: "https://api.nuget.org/v3/index.json", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

@@ -12,6 +12,7 @@ const ECOSYSTEM_OPTIONS = [
   { value: "npm", label: "npm" },
   { value: "crates", label: "crates.io" },
   { value: "go", label: "Go" },
+  { value: "nuget", label: "NuGet" },
 ];
 
 function ecosystemLabel(ecosystem) {

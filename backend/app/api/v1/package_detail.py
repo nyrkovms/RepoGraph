@@ -201,6 +201,7 @@ async def list_versions(
             release_date=row.release_date,
             status=(visibility.effective_status(statuses.get(row.id, [])) or row.status).value,
             status_reason=row.status_reason,
+            deprecation=row.deprecation,
             requires_python=_requires_python(row),
         )
         for row in data_rows
@@ -229,6 +230,7 @@ async def get_version(
         release_date=row.release_date,
         status=row.status.value,
         status_reason=row.status_reason,
+        deprecation=row.deprecation,
         requires_python=_requires_python(row),
         engines=row.engines,
         features=row.features,
@@ -257,10 +259,12 @@ async def get_dependencies_tree(
     target_triple: str | None = Query(default=None, alias="target"),
     features: str | None = Query(default=None),
     default_features: bool | None = Query(default=None),
+    target_framework: str | None = Query(default=None),
 ) -> DependencyTreeResponse:
     """The tree in the ecosystem's environment: PyPI `python_version`/`os` (markers), npm `node_version`/`os`/`cpu`
     (optional dependencies whose version does not fit the platform are left out, as npm does), crates `target`,
-    `features` (comma-separated) and `default_features` (below the root, each edge asks its own features)."""
+    `features` (comma-separated) and `default_features` (below the root, each edge asks its own features), NuGet
+    `target_framework` (each version's nearest dependency group)."""
     target = await _target(db, ecosystem, coordinates)
     version_row = await _version(db, target, version)
     view = _ProfileView(db, await _profile(db, ecosystem, profile))
@@ -269,6 +273,12 @@ async def get_dependencies_tree(
     if target.plugin.ecosystem == "npm":
         npm_env = target.plugin.parse_environment({"node_version": node_version, "os": os, "cpu": cpu})
         view.plugin_env = npm_env if isinstance(npm_env, NpmEnvironment) else NpmEnvironment()
+        view.plugin = target.plugin
+    elif target.plugin.ecosystem == "nuget":
+        try:
+            view.plugin_env = target.plugin.parse_environment({"target_framework": target_framework or "net8.0"})
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         view.plugin = target.plugin
     elif target.plugin.ecosystem == "crates":
         try:

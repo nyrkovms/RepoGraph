@@ -1,0 +1,14 @@
+{
+  "tool": "dotnet 8.0.427",
+  "command": [
+    "dotnet",
+    "restore"
+  ],
+  "generated_at": "2026-10-30T19:09:41+00:00",
+  "install": [
+    {
+      "name": "Newtonsoft.Json",
+      "version": "13.0.3"
+    }
+  ]
+}

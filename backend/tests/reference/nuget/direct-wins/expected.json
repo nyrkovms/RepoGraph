@@ -1,0 +1,34 @@
+{
+  "tool": "dotnet 8.0.427",
+  "command": [
+    "dotnet",
+    "restore"
+  ],
+  "generated_at": "2026-10-30T19:09:12+00:00",
+  "install": [
+    {
+      "name": "Microsoft.Extensions.DependencyInjection",
+      "version": "8.0.0"
+    },
+    {
+      "name": "Microsoft.Extensions.DependencyInjection.Abstractions",
+      "version": "8.0.0"
+    },
+    {
+      "name": "Microsoft.Extensions.Logging",
+      "version": "8.0.0"
+    },
+    {
+      "name": "Microsoft.Extensions.Logging.Abstractions",
+      "version": "8.0.0"
+    },
+    {
+      "name": "Microsoft.Extensions.Options",
+      "version": "8.0.2"
+    },
+    {
+      "name": "Microsoft.Extensions.Primitives",
+      "version": "8.0.0"
+    }
+  ]
+}

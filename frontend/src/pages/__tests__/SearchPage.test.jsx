@@ -360,4 +360,63 @@ describe("SearchPage", () => {
     );
     expect(screen.getAllByText("Go", { selector: ".eco-badge" })).toHaveLength(3);
   });
+
+  it("switches to NuGet and links packages by their lowercase id, showing the registry's spelling", async () => {
+    const packages = {
+      data: [
+        {
+          ecosystem: "nuget",
+          namespace: "",
+          name: "Newtonsoft.Json",
+          normalized_name: "newtonsoft.json",
+          purl: "pkg:nuget/newtonsoft.json",
+          description: "Json.NET",
+          license_spdx: "MIT",
+          latest_version: "13.0.3",
+          has_vulnerabilities: false,
+        },
+        {
+          ecosystem: "nuget",
+          namespace: "",
+          name: "Serilog.Sinks.File",
+          normalized_name: "serilog.sinks.file",
+          purl: "pkg:nuget/serilog.sinks.file",
+          description: null,
+          license_spdx: "Apache-2.0",
+          latest_version: "6.0.0",
+          has_vulnerabilities: false,
+        },
+      ],
+      cursor: null,
+      has_more: false,
+    };
+    api.fetchPackages.mockResolvedValue(packages);
+    api.searchPackages.mockResolvedValue(packages);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <SearchPage />
+      </MemoryRouter>
+    );
+    await screen.findByRole("link", { name: "Newtonsoft.Json" });
+
+    expect(screen.getByRole("option", { name: "NuGet" })).toHaveValue("nuget");
+    await user.selectOptions(screen.getByLabelText("Ecosystem"), "nuget");
+    await waitFor(() => {
+      expect(api.fetchPackages).toHaveBeenLastCalledWith({ limit: 20, sort: "name", ecosystem: "nuget" });
+    });
+
+    await user.type(screen.getByLabelText("Search query"), "json");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => {
+      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "json", limit: 20, sort: "name", ecosystem: "nuget" });
+    });
+
+    expect(screen.getByRole("link", { name: "Newtonsoft.Json" })).toHaveAttribute("href", "/package/nuget/newtonsoft.json");
+    expect(screen.getByRole("link", { name: "Serilog.Sinks.File" })).toHaveAttribute(
+      "href",
+      "/package/nuget/serilog.sinks.file"
+    );
+    expect(screen.getAllByText("NuGet", { selector: ".eco-badge" })).toHaveLength(2);
+  });
 });

@@ -1,0 +1,10 @@
+description: >
+  Serilog.Sinks.Console 5.0.1: a dependency range resolved to its lowest applicable version.
+roots:
+  - {purl: "pkg:nuget/Serilog.Sinks.Console@5.0.1", constraint: "5.0.1"}
+environment: {target_framework: net8.0}
+sources:
+  - {slug: nuget-org, protocol: nuget-v3, base_url: "https://api.nuget.org/v3/index.json", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

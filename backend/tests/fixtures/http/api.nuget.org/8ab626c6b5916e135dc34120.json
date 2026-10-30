@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "0x8DE9696A6D096D4",
+    "last-modified": "Fri, 10 Apr 2026 00:18:12 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://api.nuget.org/v3/registration5-gz-semver2/runtime.opensuse.13.2-x64.runtime.native.system.security.cryptography.openssl/index.json"
+  },
+  "status": 200
+}

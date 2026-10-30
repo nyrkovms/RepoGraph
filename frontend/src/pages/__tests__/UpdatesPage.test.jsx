@@ -269,4 +269,26 @@ describe("UpdatesPage links by ecosystem", () => {
     const link = await screen.findByRole("link", { name: "github.com/redis/go-redis/v9" });
     expect(link).toHaveAttribute("href", "/package/go/github.com/redis/go-redis/v9");
   });
+
+  it("links a NuGet entry to its NuGet package page by the lowercase id", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      packages: [
+        { ...SUMMARY.packages[0], ecosystem: "nuget", name: "Newtonsoft.Json", purl: "pkg:nuget/newtonsoft.json" },
+      ],
+    });
+    renderPage();
+    const link = await screen.findByRole("link", { name: "newtonsoft.json" });
+    expect(link).toHaveAttribute("href", "/package/nuget/newtonsoft.json");
+  });
+
+  it("takes the NuGet ecosystem of an entry without one from the nuget purl type", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      packages: [{ ...SUMMARY.packages[0], ecosystem: undefined, name: "Serilog", purl: "pkg:nuget/serilog.sinks.file" }],
+    });
+    renderPage();
+    const link = await screen.findByRole("link", { name: "serilog.sinks.file" });
+    expect(link).toHaveAttribute("href", "/package/nuget/serilog.sinks.file");
+  });
 });

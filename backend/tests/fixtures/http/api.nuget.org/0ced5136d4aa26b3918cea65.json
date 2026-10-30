@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "0x8DF315A9A00D985",
+    "last-modified": "Fri, 23 Oct 2026 23:08:51 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://api.nuget.org/v3/registration5-gz-semver2/serilog/page/4.3.0-dev-02360/4.4.1-dev-02453.json"
+  },
+  "status": 200
+}

@@ -1,0 +1,334 @@
+{
+  "tool": "dotnet 8.0.427",
+  "command": [
+    "dotnet",
+    "restore"
+  ],
+  "generated_at": "2026-10-30T19:10:09+00:00",
+  "install": [
+    {
+      "name": "Microsoft.Azure.KeyVault",
+      "version": "2.3.1"
+    },
+    {
+      "name": "Microsoft.Azure.KeyVault.WebKey",
+      "version": "2.0.7"
+    },
+    {
+      "name": "Microsoft.CSharp",
+      "version": "4.0.1"
+    },
+    {
+      "name": "Microsoft.NETCore.Platforms",
+      "version": "1.1.0"
+    },
+    {
+      "name": "Microsoft.NETCore.Targets",
+      "version": "1.1.0"
+    },
+    {
+      "name": "Microsoft.Rest.ClientRuntime",
+      "version": "2.3.8"
+    },
+    {
+      "name": "Microsoft.Rest.ClientRuntime.Azure",
+      "version": "3.3.7"
+    },
+    {
+      "name": "Microsoft.Win32.Primitives",
+      "version": "4.3.0"
+    },
+    {
+      "name": "NETStandard.Library",
+      "version": "1.6.1"
+    },
+    {
+      "name": "Newtonsoft.Json",
+      "version": "9.0.1"
+    },
+    {
+      "name": "runtime.debian.8-x64.runtime.native.System.Security.Cryptography.OpenSsl",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.fedora.23-x64.runtime.native.System.Security.Cryptography.OpenSsl",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.fedora.24-x64.runtime.native.System.Security.Cryptography.OpenSsl",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.native.System",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.native.System.IO.Compression",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.native.System.Net.Http",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.native.System.Security.Cryptography.Apple",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.native.System.Security.Cryptography.OpenSsl",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.opensuse.13.2-x64.runtime.native.System.Security.Cryptography.OpenSsl",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.opensuse.42.1-x64.runtime.native.System.Security.Cryptography.OpenSsl",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.osx.10.10-x64.runtime.native.System.Security.Cryptography.Apple",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.osx.10.10-x64.runtime.native.System.Security.Cryptography.OpenSsl",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.rhel.7-x64.runtime.native.System.Security.Cryptography.OpenSsl",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.ubuntu.14.04-x64.runtime.native.System.Security.Cryptography.OpenSsl",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.ubuntu.16.04-x64.runtime.native.System.Security.Cryptography.OpenSsl",
+      "version": "4.3.0"
+    },
+    {
+      "name": "runtime.ubuntu.16.10-x64.runtime.native.System.Security.Cryptography.OpenSsl",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.AppContext",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Buffers",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Collections",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Collections.Concurrent",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Console",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Diagnostics.Debug",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Diagnostics.DiagnosticSource",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Diagnostics.Tools",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Diagnostics.Tracing",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Dynamic.Runtime",
+      "version": "4.0.11"
+    },
+    {
+      "name": "System.Globalization",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Globalization.Calendars",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Globalization.Extensions",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.IO",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.IO.Compression",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.IO.Compression.ZipFile",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.IO.FileSystem",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.IO.FileSystem.Primitives",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Linq",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Linq.Expressions",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Net.Http",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Net.Primitives",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Net.Sockets",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.ObjectModel",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Reflection",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Reflection.Emit",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Reflection.Emit.ILGeneration",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Reflection.Emit.Lightweight",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Reflection.Extensions",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Reflection.Primitives",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Reflection.TypeExtensions",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Resources.ResourceManager",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Runtime",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Runtime.Extensions",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Runtime.Handles",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Runtime.InteropServices",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Runtime.InteropServices.RuntimeInformation",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Runtime.Numerics",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Runtime.Serialization.Primitives",
+      "version": "4.1.1"
+    },
+    {
+      "name": "System.Security.Cryptography.Algorithms",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Security.Cryptography.Cng",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Security.Cryptography.Csp",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Security.Cryptography.Encoding",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Security.Cryptography.OpenSsl",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Security.Cryptography.Primitives",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Security.Cryptography.X509Certificates",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Text.Encoding",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Text.Encoding.Extensions",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Text.RegularExpressions",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Threading",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Threading.Tasks",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Threading.Tasks.Extensions",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Threading.Timer",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Xml.ReaderWriter",
+      "version": "4.3.0"
+    },
+    {
+      "name": "System.Xml.XDocument",
+      "version": "4.3.0"
+    }
+  ]
+}

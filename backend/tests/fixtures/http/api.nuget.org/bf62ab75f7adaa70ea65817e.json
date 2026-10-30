@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "0x8DF17C9E7600112",
+    "last-modified": "Mon, 21 Sep 2026 10:20:04 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/index.json"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "0x8DE9A51564207A4",
+    "last-modified": "Tue, 14 Apr 2026 18:12:06 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://api.nuget.org/v3/registration5-gz-semver2/system.diagnostics.diagnosticsource/page/4.0.0-beta-23516/7.0.0-preview.3.22175.4.json"
+  },
+  "status": 200
+}

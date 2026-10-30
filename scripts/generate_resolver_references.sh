@@ -9,6 +9,7 @@
 # `cargo tree --target <environment.target> -e normal,build` (what is built there), in the rust image below.
 # go: `go list -m all` of a main module (go 1.23) that requires the roots, with module graph pruning as Go does it,
 # in the golang image below.
+# nuget: `dotnet restore` of a net8.0 project (.NET SDK 8) referencing the roots, packages from project.assets.json.
 # Needs docker and the live network. Usage: scripts/generate_resolver_references.sh [case-dir ...]
 set -euo pipefail
 
@@ -19,6 +20,7 @@ PIP_VERSION="24.3.1"
 IMAGE="python:3.12-slim"
 RUST_IMAGE="rust:1.86-slim"
 GO_IMAGE="golang:1.23"
+DOTNET_IMAGE="mcr.microsoft.com/dotnet/sdk:8.0"
 CASES=("$@")
 if [[ ${#CASES[@]} -eq 0 ]]; then
   # No mapfile: macOS ships bash 3.
@@ -128,8 +130,46 @@ print(len(rows), "modules")
 PY
 }
 
+nuget_case() {
+  local case_dir="$1" platform="$2" work
+  work="$(mktemp -d)"
+  python3 - "$case_dir/case.yaml" "$work" <<'PY'
+import sys, yaml
+case = yaml.safe_load(open(sys.argv[1]))
+tfm = (case.get("environment") or {}).get("target_framework") or "net8.0"
+refs = "".join(
+    '    <PackageReference Include="{}" Version="{}" />\n'.format(r["purl"].split("/", 1)[1].split("@")[0], r["constraint"])
+    for r in case["roots"])
+open(f"{sys.argv[2]}/case.csproj", "w").write(
+    f'<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup><TargetFramework>{tfm}</TargetFramework></PropertyGroup>\n'
+    f'  <ItemGroup>\n{refs}  </ItemGroup>\n</Project>\n')
+PY
+  docker run --rm --platform "${platform:-linux/amd64}" -v "$work:/w" -w /w -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    -e DOTNET_NOLOGO=1 "$DOTNET_IMAGE" sh -c 'dotnet restore -v q >/dev/null; dotnet --version > tool.txt'
+  python3 - "$work" "$case_dir/expected.json" <<'PY'
+import datetime, json, sys
+work, out = sys.argv[1], sys.argv[2]
+assets = json.load(open(f"{work}/obj/project.assets.json"))
+rows = sorted(({"name": key.split("/")[0], "version": key.split("/")[1]}
+               for key, lib in assets["libraries"].items() if lib.get("type") == "package"),
+              key=lambda r: r["name"].lower())
+# A restore that fails (NU1605, NU1107) still writes the assets file; its error codes are part of the answer.
+errors = sorted({log["code"] for log in assets.get("logs") or [] if log.get("level") == "Error"})
+json.dump({"tool": "dotnet " + open(f"{work}/tool.txt").read().strip(), "command": ["dotnet", "restore"],
+           "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+           "install": rows, **({"errors": errors} if errors else {})}, open(out, "w"), indent=2)
+open(out, "a").write("\n")
+print(len(rows), "packages", errors or "")
+PY
+  rm -rf "$work"
+}
+
 for case_dir in "${CASES[@]}"; do
   echo "== ${case_dir}"
+  if [[ "$(basename "$(dirname "$case_dir")")" == "nuget" ]]; then
+    nuget_case "$case_dir" "$(sed -n 's/^  platform: *\([^ #]*\).*/\1/p' "${case_dir}/case.yaml")"
+    continue
+  fi
   if [[ "$(basename "$(dirname "$case_dir")")" == "go" ]]; then
     go_case "$case_dir" "$(sed -n 's/^  platform: *\([^ #]*\).*/\1/p' "${case_dir}/case.yaml")"
     continue

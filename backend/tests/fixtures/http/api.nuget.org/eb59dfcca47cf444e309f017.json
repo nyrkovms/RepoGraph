@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "0x8DE9696EEFA4E96",
+    "last-modified": "Fri, 10 Apr 2026 00:20:13 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://api.nuget.org/v3/registration5-gz-semver2/runtime.osx.10.10-x64.runtime.native.system.security.cryptography.apple/index.json"
+  },
+  "status": 200
+}

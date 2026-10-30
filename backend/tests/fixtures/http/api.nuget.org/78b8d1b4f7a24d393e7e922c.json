@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "0x8DE9696A5A7ABE6",
+    "last-modified": "Fri, 10 Apr 2026 00:18:10 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://api.nuget.org/v3/registration5-gz-semver2/system.threading.tasks/index.json"
+  },
+  "status": 200
+}
