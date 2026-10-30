@@ -545,8 +545,8 @@ resolvelib (backtracking), PEP 508 markers, extras — без изменений
 - Идентичность в решателе — `(crate, класс совместимости)`: `1.x`, `0.3.x`, `0.0.3`. Поэтому `rand 0.7` и `rand 0.8` могут сосуществовать, как в Cargo.
 - Реализация — resolvelib. Кандидаты от новой версии к старой, yanked исключены.
 - **Features** объединяются по идентичности. Optional-зависимости включаются через `dep:` и `feature = ["crate/feature"]`, `default-features` учитывается.
-- `cfg(...)` вычисляется по `environment.target`. Dev-зависимости — только у корня и при `include_dev`.
-- Эталон — `cargo generate-lockfile`.
+- Версии выбираются для всех платформ, как в `Cargo.lock`: он не зависит от платформы. `cfg(...)` вычисляется по `environment.target` и отсекает неприменимые узлы графа. Dev-зависимости — только у корня и при `include_dev`.
+- Эталон — `cargo generate-lockfile` (множество для всех платформ) и `cargo tree --target <t> -e normal,build` (граф для платформы).
 
 ### 9.5 Go — Minimal Version Selection
 
