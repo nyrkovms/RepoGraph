@@ -16,6 +16,7 @@ from app.models.enums import PackageOrigin
 from app.models.registry import Registry
 from app.models.run import Run
 from app.models.sync_state import SyncState
+from app.models.version import PackageVersion
 from app.tasks import daily_update
 
 MS = PackageRef("npm", "", "ms")
@@ -58,6 +59,15 @@ def test_npm_packages_are_rechecked_through_the_feed(monkeypatch) -> None:
             await db.commit()
 
     asyncio.run(seed())
+
+    async def release_dates() -> list[datetime | None]:
+        async with loop_local_session() as db:
+            package = await pipeline.find_package(db, MS)
+            return list((await db.scalars(select(PackageVersion.release_date)
+                                          .where(PackageVersion.package_id == package.id))).all())
+
+    dates = asyncio.run(release_dates())
+    assert dates and all(dates), "the full packument's `time` dates every version (Q19)"
     slept: list[float] = []
 
     async def no_wait(seconds: float) -> None:

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"4ba161016ce13de8a39dcdf2180ac7cd\"",
+    "last-modified": "Sun, 23 Jul 2023 04:49:39 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/loose-envify"
+  },
+  "status": 200
+}

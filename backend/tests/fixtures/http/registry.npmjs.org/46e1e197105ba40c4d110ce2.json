@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"16221c0b74c2e7e4dfee37b1aac9b3e6\"",
+    "last-modified": "Thu, 16 Jun 2022 05:43:35 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/ee-first"
+  },
+  "status": 200
+}

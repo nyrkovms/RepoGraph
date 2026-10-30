@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"de10c144b1e2a348f8275e1f19310a20\"",
+    "last-modified": "Thu, 16 Nov 2023 17:38:20 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/escape-html"
+  },
+  "status": 200
+}

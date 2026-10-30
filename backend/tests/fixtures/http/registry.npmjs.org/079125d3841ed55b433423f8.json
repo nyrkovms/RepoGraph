@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"96354dfb4666f1df5f5e0589c794047d\"",
+    "last-modified": "Tue, 27 Oct 2026 16:26:34 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/glob-parent"
+  },
+  "status": 200
+}

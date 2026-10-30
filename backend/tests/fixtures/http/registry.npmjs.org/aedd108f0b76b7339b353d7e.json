@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"505431b9243d52fec85a3f750c18d147\"",
+    "last-modified": "Mon, 16 May 2022 10:23:01 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/safer-buffer"
+  },
+  "status": 200
+}

@@ -12,6 +12,7 @@ Trimming only dropped versions (and the dist-tags pointing at them) and the `dis
 import asyncio
 import json
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -22,12 +23,12 @@ from app.ecosystems.npm.changes import NpmChangesDetector
 from app.ecosystems.base import NormalizedDependency, PackageRef, RegistryConfig, TrackedPackage
 from app.ecosystems.npm.adapters import NpmRegistryAdapter, normalize_dependencies
 from app.ecosystems.npm.adapters import registry as npm_registry
-from app.ecosystems.npm.adapters.registry import ACCEPT, NpmEtagChangeDetector, version_from_entry
+from app.ecosystems.npm.adapters.registry import ACCEPT, NpmEtagChangeDetector, package_from_packument, version_from_entry
 from app.ecosystems.npm.coordinates import NpmCoordinates
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "npm"
 BASE = "https://registry.npmjs.org/"
-LEFT_PAD_ETAG = '"d55da66914f07e31d1e5bc94558d8912"'
+LEFT_PAD_ETAG = '"e83879f942df342315ccdeff2139a89a"'
 ANGULAR_ETAG = '"8b6338342d5b1f849413fc3a16cbc832"'
 NO_LOOKUP = None  # the adapter does not use the lookup
 
@@ -133,9 +134,10 @@ def test_left_pad(serve) -> None:
 
     latest = package.versions[-1]
     assert latest.version == "1.3.0" and latest.status == "active"
-    assert latest.release_date is None
+    assert latest.release_date == datetime(2018, 4, 9, 1, 10, 45, 796000, tzinfo=UTC)   # `time` of the full packument
+    assert all(v.release_date is not None for v in package.versions)
     assert latest.deprecation == {"message": "use String.prototype.padStart()"}
-    assert latest.engines is None and latest.raw_metadata == {}
+    assert latest.engines is None and latest.raw_metadata == {"_hasShrinkwrap": False}
     assert [_summary(d) for d in latest.dependencies or []] == [
         ("benchmark", "^2.1.0", "dev", "benchmark@^2.1.0", None),
         ("fast-check", "0.0.8", "dev", "fast-check@0.0.8", None),
@@ -305,9 +307,17 @@ def test_version_from_entry_details() -> None:
     assert version_from_entry("1.0.0", {"engines": {"node": ">=18", "npm": 9}}, with_dependencies=False).engines == {"node": ">=18"}
 
 
-def test_release_date_is_a_seam_for_the_source_of_dates() -> None:
-    from datetime import UTC, datetime
+def test_release_dates_come_from_time() -> None:
+    document = {"versions": {"1.0.0": {}, "2.0.0": {}, "3.0.0": {}},
+                "time": {"created": "2020-01-01T00:00:00.000Z", "modified": "2021-01-01T00:00:00.000Z",
+                         "1.0.0": "2020-01-01T00:00:00.000Z", "2.0.0": "not a date"}}
+    package = package_from_packument(_ref("a"), "r", document, None)
+    assert [v.release_date for v in package.versions] == [datetime(2020, 1, 1, tzinfo=UTC), None, None]
+    # The abbreviated packument has no `time`: no dates, nothing fails.
+    assert package_from_packument(_ref("a"), "r", {"versions": {"1.0.0": {}}}, None).versions[0].release_date is None
 
+
+def test_release_date_reaches_the_version() -> None:
     date = datetime(2024, 1, 2, tzinfo=UTC)
     assert version_from_entry("1.0.0", {}, with_dependencies=False, release_date=date).release_date == date
     assert version_from_entry("1.0.0", {}, with_dependencies=False).release_date is None

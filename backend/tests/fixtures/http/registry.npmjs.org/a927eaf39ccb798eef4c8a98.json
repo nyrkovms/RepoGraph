@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"b0b7a07d14c7b9dc5bfc8c46b350a473\"",
+    "last-modified": "Fri, 17 Nov 2023 16:22:02 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/merge-descriptors"
+  },
+  "status": 200
+}

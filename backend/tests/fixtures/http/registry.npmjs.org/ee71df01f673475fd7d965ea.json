@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"bce1a5f546dcef09cd62f32eb35ae21c\"",
+    "last-modified": "Tue, 04 Aug 2026 13:22:41 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/ipaddr.js"
+  },
+  "status": 200
+}

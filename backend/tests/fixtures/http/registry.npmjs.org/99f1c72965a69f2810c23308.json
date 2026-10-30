@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"3b7700f8d8a187c006ebf11e3214755b\"",
+    "last-modified": "Tue, 30 Sep 2025 16:34:36 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/get-intrinsic"
+  },
+  "status": 200
+}

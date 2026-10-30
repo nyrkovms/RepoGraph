@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"d5b209a3b68b485d7350d86a772533eb\"",
+    "last-modified": "Fri, 22 May 2026 14:40:05 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/es-object-atoms"
+  },
+  "status": 200
+}

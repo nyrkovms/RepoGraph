@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"56a77067fa0832d773bb33499c842568\"",
+    "last-modified": "Thu, 19 Dec 2024 05:58:11 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/math-intrinsics"
+  },
+  "status": 200
+}

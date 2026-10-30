@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"dc5a2ec47853044a4000d63a73067b19\"",
+    "last-modified": "Wed, 28 Oct 2026 23:41:49 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/qs"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"c09521f6e0f950119a2ea227f79ba5ed\"",
+    "last-modified": "Thu, 20 Aug 2026 16:45:06 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/negotiator"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"f775b6e835de2833fb6f35fd4b288171\"",
+    "last-modified": "Tue, 17 Dec 2024 02:12:48 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/dunder-proto"
+  },
+  "status": 200
+}

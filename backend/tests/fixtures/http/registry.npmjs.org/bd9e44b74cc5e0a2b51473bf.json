@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"1c15e4e1c9edf3c0f61875733dd8cdc2\"",
+    "last-modified": "Thu, 22 Jun 2023 16:32:27 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/is-glob"
+  },
+  "status": 200
+}

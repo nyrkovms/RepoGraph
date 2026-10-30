@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"b604e8672fbc966b6e2417b5a2fa4d63\"",
+    "last-modified": "Sat, 04 Mar 2023 04:01:47 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/normalize-path"
+  },
+  "status": 200
+}

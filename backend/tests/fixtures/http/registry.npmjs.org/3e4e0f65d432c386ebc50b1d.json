@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"c386c05c3257c75130560b63acf9561f\"",
+    "last-modified": "Tue, 03 Feb 2026 04:12:38 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/unpipe"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"91cd30876e38a2c8d99b61c17c1aec72\"",
+    "last-modified": "Thu, 06 Aug 2026 06:26:40 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/readdirp"
+  },
+  "status": 200
+}

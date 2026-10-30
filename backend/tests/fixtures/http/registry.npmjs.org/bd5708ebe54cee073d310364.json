@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"243e0988139d8bd3047b23556f903d0f\"",
+    "last-modified": "Wed, 14 May 2025 14:56:02 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/mime-db"
+  },
+  "status": 200
+}

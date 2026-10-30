@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"1e5839b1f5b14be001181bec3d5fb372\"",
+    "last-modified": "Thu, 29 Oct 2026 16:28:57 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/scheduler"
+  },
+  "status": 200
+}

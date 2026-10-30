@@ -1,7 +1,6 @@
 {
   "headers": {
-    "content-type": "application/json",
-    "last-modified": "Thu, 29 Oct 2026 17:29:27 GMT"
+    "content-type": "application/json"
   },
   "request": {
     "headers": {

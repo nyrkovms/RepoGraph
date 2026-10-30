@@ -380,7 +380,7 @@ rpm_worker/                   — Dockerfile, worker.py, modules.py, solver.py
 |---|---|---|---|---|
 | `pypi-warehouse` | JSON API `/pypi/{name}/json` | `/pypi/{name}/{ver}/json` (лениво) | classifiers и `license` | Есть |
 | `pypi-simple` | Страница проекта (файлы, даты, yanked) | PEP 658 `.metadata` файла версии. Если его нет — `dependencies_state=unavailable` (Q14): в основном это старые сборки. В карточке, дереве и resolve такая версия помечается «зависимости неизвестны» | — | Описание и лицензию даёт `merge` из pypi.org, если пакет там есть |
-| `npm-registry` | abbreviated packument: версии, зависимости, engines, deprecated, dist-tags | Там же | Из полного документа версии `/{name}/{ver}` | Храним все версии, зависимости — у latest и лениво (Q9) |
+| `npm-registry` | Полный packument (Q19): версии, зависимости, engines, deprecated, dist-tags, даты релизов из `time` | Там же | Из полного документа версии `/{name}/{ver}` | Храним все версии, зависимости — у latest и лениво (Q9) |
 | `maven2` | `maven-metadata.xml` | POM + effective model (§7.4) | `<licenses>` из POM → SPDX-алиасы | Gradle Module Metadata (`.module`) пока не читаем (Q15) |
 | `nuget-v3` | Registration index | Там же: группы по TFM, deprecation | `licenseExpression` или `licenseUrl` | `vulnerabilities` не сохраняем (D6) |
 | `goproxy` | `@v/list`, `@latest`, `.info` | `.mod` | **Нет.** В первой волне пусто, лицензии даст будущий классификатор (Q11) | Описаний и авторов нет |
@@ -760,6 +760,7 @@ GET /api/v1/packages/{ecosystem}/{coordinates}/-/vulnerabilities          — п
 | Q16 | Список внешних источников | Источники добавляем вручную: admin API, CLI, проверка подключения (§6.3) |
 | Q17 | Разные метаданные одной версии в разных источниках | Берём приоритетный источник, расхождение видно в карточке (§6.5) |
 | Q18 | Индекс отвечает 403, а не 404, на отсутствующий проект (download.pytorch.org — S3 AccessDenied) | Отсутствие — только 404; поведение конкретного хостинга в код не закладываем (в корпоративном контуре доступ к репозиториям будет устроен иначе). Такие индексы подключаются с routing, ограничивающим их своими пакетами (решение владельца, 2026-10-29) |
+| Q19 | Даты релизов npm (в abbreviated packument их нет) | Всегда читаем полный packument (`Accept: application/json`): даты из `time`, его ETag — ревизия пакета. Трафик на изменение в 2–3 раза больше (решение владельца, 2026-10-30) |
 
 ### 16.2 Открыто
 

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"7c31750b7639c3a5a62ed361bdbdb404\"",
+    "last-modified": "Tue, 03 Feb 2026 04:12:46 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/destroy"
+  },
+  "status": 200
+}

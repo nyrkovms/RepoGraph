@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"e047e828ff919b5d5131943b1b98f23b\"",
+    "last-modified": "Thu, 22 Jun 2023 16:32:25 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/is-extglob"
+  },
+  "status": 200
+}

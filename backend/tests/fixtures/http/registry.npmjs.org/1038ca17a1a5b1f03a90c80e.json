@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"ec66596843c6c78b6f5159f53f80cb54\"",
+    "last-modified": "Wed, 14 May 2025 14:56:20 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/fresh"
+  },
+  "status": 200
+}

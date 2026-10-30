@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"6d7590930fb0da0bde49cee713f5ccf0\"",
+    "last-modified": "Wed, 14 May 2025 14:56:13 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/accepts"
+  },
+  "status": 200
+}

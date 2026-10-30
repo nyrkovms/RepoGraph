@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"0f3907f2e1fd91f0f8ca3831f8f15f00\"",
+    "last-modified": "Wed, 12 Feb 2025 19:24:58 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/call-bind-apply-helpers"
+  },
+  "status": 200
+}

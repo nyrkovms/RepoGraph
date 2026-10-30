@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"112affe4b429596002b3a6edb7ab5b05\"",
+    "last-modified": "Mon, 19 Oct 2026 20:52:43 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/chokidar"
+  },
+  "status": 200
+}

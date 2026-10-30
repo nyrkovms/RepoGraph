@@ -1,10 +1,10 @@
 """`npm-registry` source adapter: registry.npmjs.org and other registries that speak the npm registry API
 (SPEC-MULTI-ECOSYSTEM.md §6.1, §7.1, §7.2).
 
-The package is read from the abbreviated packument (`application/vnd.npm.install-v1+json`): every version with its
-dependencies, engines, `deprecated` and `dist`, plus `dist-tags`. It carries no dates (`time` is only in the full
-document). All versions are stored; dependencies are filled in for the version `latest` points at and fetched
-lazily from `/<name>/<version>` for the others (Q9).
+The package is read from the full packument (`application/json`, Q19): every version with its dependencies, engines,
+`deprecated` and `dist`, `dist-tags`, and `time` with the release date of each version, which the abbreviated
+document (`application/vnd.npm.install-v1+json`) lacks. All versions are stored; dependencies are filled in for the
+version `latest` points at and fetched lazily from `/<name>/<version>` for the others (Q9).
 
 `test_connection` reads `/-/ping`: answered with 200 by registry.npmjs.org (`{}`), registry.npmmirror.com,
 registry.yarnpkg.com, npm.jsr.io and npm.pkg.github.com (empty body), which is what was seen; a registry that answers
@@ -42,7 +42,10 @@ from app.services.retry_policy import compute_backoff_delay_seconds, is_retryabl
 
 logger = logging.getLogger(__name__)
 
-ACCEPT = "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
+# The full packument, for its `time`; its ETag is the package's revision, so the change check asks for it too.
+ACCEPT = "application/json"
+# The abbreviated one, where only the answer matters.
+ACCEPT_ABBREVIATED = "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8"
 
 _COORDINATES = NpmCoordinates()
 
@@ -180,11 +183,23 @@ def _artifact(entry: Mapping[str, object]) -> NormalizedArtifact | None:
     )
 
 
+def _release_dates(document: Mapping[str, object]) -> dict[str, datetime]:
+    """`time`: `{version: ISO date}` next to `created`/`modified`; a date that does not parse is left out."""
+    dates: dict[str, datetime] = {}
+    for version, value in _mapping(document.get("time")).items():
+        if version in ("created", "modified", "unpublished") or not isinstance(value, str):
+            continue
+        try:
+            dates[version] = datetime.fromisoformat(value)
+        except ValueError:
+            continue
+    return dates
+
+
 def version_from_entry(
     version: str, entry: Mapping[str, object], *, with_dependencies: bool, release_date: datetime | None = None
 ) -> NormalizedVersion:
-    """One version of the packument. `release_date` is the seam for whatever source of dates is chosen: the
-    abbreviated packument has none."""
+    """One version of the packument; its release date comes from the packument's `time`."""
     deprecated = entry.get("deprecated")
     artifact = _artifact(entry)
     return NormalizedVersion(
@@ -205,6 +220,7 @@ def package_from_packument(
 ) -> NormalizedPackage:
     tags = {tag: target for tag, target in _mapping(document.get("dist-tags")).items() if isinstance(target, str)}
     latest = tags.get("latest")
+    dates = _release_dates(document)
     name = document.get("name")
     return NormalizedPackage(
         ref=ref, registry_id=registry_id,
@@ -212,7 +228,7 @@ def package_from_packument(
         revision=revision,
         # The dependencies of the other versions are fetched lazily.
         versions=[
-            version_from_entry(version, entry, with_dependencies=version == latest)
+            version_from_entry(version, entry, with_dependencies=version == latest, release_date=dates.get(version))
             for version, entry in _mapping(document.get("versions")).items()
             if isinstance(entry, Mapping)
         ],
@@ -269,7 +285,7 @@ class NpmRegistryAdapter:
 
     async def exists(self, ref: PackageRef) -> bool:
         # A full GET: not every registry in front of npm answers HEAD, and the packument is what is fetched next.
-        return not _is_missing(await self.get(self.package_url(ref), {"Accept": ACCEPT}))
+        return not _is_missing(await self.get(self.package_url(ref), {"Accept": ACCEPT_ABBREVIATED}))
 
     async def test_connection(self) -> None:
         (await self.get(f"{self.root}-/ping", {})).raise_for_status()

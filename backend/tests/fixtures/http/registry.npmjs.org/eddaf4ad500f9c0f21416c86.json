@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"22c3a32a5986af75d4aaa7417d35e39d\"",
+    "last-modified": "Fri, 24 Apr 2026 23:31:11 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/vary"
+  },
+  "status": 200
+}

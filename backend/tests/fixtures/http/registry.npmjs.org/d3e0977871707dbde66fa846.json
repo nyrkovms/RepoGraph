@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "W/\"53ac285eac84b18158059f113994102c\"",
+    "last-modified": "Mon, 10 Jul 2023 23:16:23 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "application/json"
+    },
+    "method": "GET",
+    "url": "https://registry.npmjs.org/safe-buffer"
+  },
+  "status": 200
+}
