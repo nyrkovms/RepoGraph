@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "0x8DD4ACA56E2F655",
+    "last-modified": "Tue, 11 Feb 2025 18:31:45 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging.abstractions/page/3.1.24/9.0.0-preview.4.24266.19.json"
+  },
+  "status": 200
+}

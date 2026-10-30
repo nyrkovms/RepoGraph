@@ -65,8 +65,9 @@ def test_reference_case(case_dir: Path) -> None:
     case = yaml.safe_load((case_dir / "case.yaml").read_text())
     expected = json.loads(expected_file.read_text())
     ecosystem = case_dir.parent.name
-    # PyPI names compare normalized (PEP 503); elsewhere the spelling is the identity (Go paths, crates names).
-    name = canonicalize_name if ecosystem == "pypi" else str
+    # PyPI names compare normalized (PEP 503), NuGet ids case-insensitively; elsewhere the spelling is the identity
+    # (Go paths, crates names).
+    name = {"pypi": canonicalize_name, "nuget": str.lower}.get(ecosystem, str)
     allowed = {name(d["package"]) for d in case.get("allowed_differences") or []}
 
     async def run(environment: dict) -> set[tuple[str, str]]:

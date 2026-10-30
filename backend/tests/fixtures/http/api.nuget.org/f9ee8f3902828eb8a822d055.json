@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "application/json",
+    "etag": "0x8DF32C236A26F09",
+    "last-modified": "Sun, 25 Oct 2026 18:03:03 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.dependencyinjection.abstractions/page/9.0.4/11.0.0-rc.3.26522.148.json"
+  },
+  "status": 200
+}
