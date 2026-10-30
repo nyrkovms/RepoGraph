@@ -113,9 +113,11 @@ curl -fsS "${BASE_URL}/updates/summary" | python3 -c 'import json,sys; d=json.lo
 
 echo "[19/${TOTAL}] metrics"
 METRICS="$(curl -fsS "${BASE_URL}/metrics")"
-echo "${METRICS}" | grep -q "packagehub_api_latency_seconds"
-echo "${METRICS}" | grep -q "packagehub_resolve_latency_seconds"
-echo "${METRICS}" | grep -q "packagehub_sync_duration_seconds"
+# A here-string, not `echo | grep -q`: grep -q exits at the first match and, under pipefail, a still-writing echo
+# would fail the step with a broken pipe once the metrics outgrow the pipe buffer.
+grep -q "packagehub_api_latency_seconds" <<< "${METRICS}"
+grep -q "packagehub_resolve_latency_seconds" <<< "${METRICS}"
+grep -q "packagehub_sync_duration_seconds" <<< "${METRICS}"
 echo "metrics keys present"
 
 echo "ACCEPTANCE_SMOKE: PASS"
