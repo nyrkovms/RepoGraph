@@ -54,7 +54,8 @@ Route = httpx.Response | Callable[[httpx.Request], httpx.Response]
 SPRING = "org.springframework:spring-core"
 JACKSON = "com.fasterxml.jackson.core:jackson-databind"
 SPRING_METADATA = "org/springframework/spring-core/maven-metadata.xml"
-SPRING_RELEASE = "7.1.0-RC1"
+SPRING_RELEASE = "7.1.0-RC1"      # `<release>`: the last deployed, here a release candidate
+SPRING_LATEST = "7.0.10"          # the highest release: what the catalog calls the latest
 JACKSON_POM = "com/fasterxml/jackson/core/jackson-databind/2.17.2/jackson-databind-2.17.2.pom"
 JACKSON_PARENTS = [
     "com/fasterxml/jackson/jackson-base/2.17.2/jackson-base-2.17.2.pom",
@@ -234,12 +235,11 @@ def test_revision_is_the_etag_then_last_updated_then_a_hash() -> None:
     assert metadata_revision(None, bare, ["1.0", "2.0"]) == metadata_revision(None, bare, ["2.0", "1.0"])
 
 
-def test_the_latest_is_the_release_else_the_highest_release_else_the_highest() -> None:
-    assert pick_latest("1.0", ["1.0", "2.0"]) == "1.0"
-    assert pick_latest("3.0", ["1.0", "2.0", "2.1-beta-1"]) == "2.0"          # <release> is not among the versions
-    assert pick_latest(None, ["1.0", "1.10", "1.9"]) == "1.10"
-    assert pick_latest(None, ["1.0-rc1", "1.0-rc2"]) == "1.0-rc2"
-    assert pick_latest(None, []) is None
+def test_the_latest_is_the_highest_release_else_the_highest() -> None:
+    assert pick_latest(["1.0", "2.0", "2.1-beta-1"]) == "2.0"
+    assert pick_latest(["1.0", "1.10", "1.9"]) == "1.10"
+    assert pick_latest(["1.0-rc1", "1.0-rc2"]) == "1.0-rc2"
+    assert pick_latest([]) is None
 
 
 @pytest.mark.parametrize("variant", ["etag", "last_updated", "hash"])
@@ -264,7 +264,8 @@ def test_spring_core_versions_latest_and_package_fields(serve) -> None:
     assert [v.version for v in package.versions] == listed
     assert package.revision == HEADERS[SPRING_METADATA]["etag"]
     assert package.display_name == SPRING and package.registry_id == "reg-central"
-    assert package.dist_tags == {"latest": SPRING_RELEASE}
+    # <release> is a release candidate: not the latest, and no tag claims it.
+    assert package.dist_tags is None
     assert package.description == "Spring Core"
     assert package.homepage_url == package.repository_url == "https://github.com/spring-projects/spring-framework"
     assert package.license_raw == "Apache License, Version 2.0" and package.license_spdx == "Apache-2.0"
@@ -279,19 +280,19 @@ def test_spring_core_latest_has_dependencies_and_artifacts_the_others_are_lazy(s
     serve()
     package = _fetch(SPRING)
     assert package is not None
-    latest = _version(package, SPRING_RELEASE)
+    latest = _version(package, SPRING_LATEST)
     assert [(d.target.namespace + ":" + d.target.name, d.constraint, d.dependency_type, d.scope, d.raw_spec)
             for d in latest.dependencies or []] == [
         ("commons-logging:commons-logging", "1.3.5", "runtime", "compile", "commons-logging:commons-logging:1.3.5"),
         ("org.jspecify:jspecify", "1.0.1", "runtime", "compile", "org.jspecify:jspecify:1.0.1"),
     ]
-    jar = BASE + "org/springframework/spring-core/7.1.0-RC1/spring-core-7.1.0-RC1"
+    jar = BASE + "org/springframework/spring-core/7.0.10/spring-core-7.0.10"
     assert [(a.filename, a.artifact_type, a.download_url) for a in latest.artifacts] == [
-        ("spring-core-7.1.0-RC1.pom", "pom", jar + ".pom"), ("spring-core-7.1.0-RC1.jar", "jar", jar + ".jar")]
+        ("spring-core-7.0.10.pom", "pom", jar + ".pom"), ("spring-core-7.0.10.jar", "jar", jar + ".jar")]
     assert all(v.dependencies is None and v.raw_metadata == {} for v in package.versions if v is not latest)
     other = _version(package, "6.1.14")
-    # Without their POM the packaging of the other versions is unknown: a .pom and a .jar.
-    assert [a.artifact_type for a in other.artifacts] == ["pom", "jar"]
+    # Without their POM the packaging of the other versions is unknown: the .pom alone, no guessed .jar.
+    assert [a.artifact_type for a in other.artifacts] == ["pom"]
     assert not any(a.has_metadata_file for a in other.artifacts)
 
 
@@ -299,7 +300,7 @@ def test_spring_core_latest_raw_metadata_and_the_gradle_marker(serve) -> None:
     serve()
     package = _fetch(SPRING)
     assert package is not None
-    latest = _version(package, SPRING_RELEASE)
+    latest = _version(package, SPRING_LATEST)
     assert latest.raw_metadata == {"packaging": "jar", "managed": [], "gradle_metadata": True}
     assert [(a.artifact_type, a.has_metadata_file) for a in latest.artifacts] == [("pom", True), ("jar", False)]
 
@@ -308,9 +309,9 @@ def test_only_the_latest_version_is_dated_at_once_from_its_pom(serve) -> None:
     serve()
     package = _fetch(SPRING)
     assert package is not None
-    assert _version(package, SPRING_RELEASE).release_date == datetime(2026, 10, 22, 7, 46, 54, tzinfo=UTC)
+    assert _version(package, SPRING_LATEST).release_date == datetime(2026, 10, 22, 7, 46, 54, tzinfo=UTC)
     # The others are dated in the background (tasks/maven_dates.py): a HEAD each would make a lazy fetch slow.
-    assert {v.version for v in package.versions if v.release_date is not None} == {SPRING_RELEASE}
+    assert {v.version for v in package.versions if v.release_date is not None} == {SPRING_LATEST}
     assert len(package.versions) == 338
 
 
@@ -341,7 +342,7 @@ def test_the_release_is_the_latest_only_when_it_is_among_the_versions(serve) -> 
     assert package is not None
     assert [v.version for v in package.versions] == ["1.0", "1.5", "2.0-rc1"]
     # <release> was dropped as a SNAPSHOT: the highest release stands in, and no tag says "release".
-    assert package.dist_tags is None and _version(package, "1.5").artifacts[-1].artifact_type == "jar"
+    assert package.dist_tags is None and _version(package, "1.5").artifacts[-1].artifact_type == "pom"
 
 
 def test_an_artifact_with_no_versions_still_exists(serve) -> None:
@@ -379,7 +380,7 @@ def test_a_missing_latest_pom_keeps_the_versions_without_its_data(serve, caplog)
         package = _fetch("g:a")
     assert package is not None and [v.version for v in package.versions] == ["1.0", "1.1"]
     assert all(v.dependencies is None and v.raw_metadata == {} for v in package.versions)
-    assert [a.artifact_type for a in _version(package, "1.1").artifacts] == ["pom", "jar"]
+    assert [a.artifact_type for a in _version(package, "1.1").artifacts] == ["pom"]
     assert package.description is None and package.license_raw is None and package.authors is None
     assert package.dist_tags == {"latest": "1.1"} and "g:a@1.1 has no POM" in caplog.text
 
@@ -615,7 +616,10 @@ def test_a_relocation_is_a_deprecation(serve) -> None:
         "message": "MySQL Connector/J artifacts moved to reverse-DNS compliant Maven 2+ coordinates.",
         "alternative": "com.mysql:mysql-connector-j"}
     latest = _version(package, version)
-    assert latest.dependencies == [] and latest.raw_metadata == {"packaging": "jar", "managed": []}   # no marker
+    # Its one dependency is its target, marked: Maven puts it in the artifact's place (SPEC §9.7).
+    assert [(d.target.namespace, d.target.name, d.constraint, d.details) for d in latest.dependencies or []] == [
+        ("com.mysql", "mysql-connector-j", "8.0.33", {"relocation": True})]
+    assert latest.raw_metadata == {"packaging": "jar", "managed": []}                                # no marker
     assert [a.has_metadata_file for a in latest.artifacts] == [False, False]
 
 

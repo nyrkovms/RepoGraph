@@ -176,10 +176,9 @@ def _looks_like_etag(revision: str) -> bool:
     return revision.startswith(('"', 'W/"'))
 
 
-def pick_latest(release: str | None, versions: Sequence[str]) -> str | None:
-    """`<release>` when it is among the kept versions, else the highest release, else the highest prerelease."""
-    if release is not None and release in versions:
-        return release
+def pick_latest(versions: Sequence[str]) -> str | None:
+    """The highest release, else the highest prerelease. Not `<release>`: that is the last version deployed, which
+    can be a release candidate or a maintenance release of an older line."""
     releases = [v for v in versions if not _SCHEME.is_prerelease(v)]
     return max(releases or list(versions), key=_SCHEME.sort_key, default=None)
 
@@ -188,6 +187,22 @@ def pick_latest(release: str | None, versions: Sequence[str]) -> str | None:
 
 
 def dependencies_of(model: EffectiveModel) -> list[NormalizedDependency]:
+    """The version's dependencies (SPEC §7.2). A relocated artifact has one: its new coordinates, marked
+    `details.relocation`, which Maven puts in its place and Gradle follows as a dependency."""
+    relocation = model.relocation
+    if relocation is not None and (relocation.group or relocation.artifact or relocation.version):
+        group, artifact = relocation.group or model.group, relocation.artifact or model.artifact
+        version = relocation.version or model.version
+        if (group, artifact, version) != (model.group, model.artifact, model.version):
+            try:
+                target = _COORDINATES.parse(f"{group}:{artifact}")
+            except ValueError:
+                logger.warning("Relocation of %s:%s to %s:%s is not Maven coordinates", model.group, model.artifact,
+                               group, artifact)
+            else:
+                return [NormalizedDependency(target=target, constraint=version, scope="compile",
+                                             dependency_type="runtime", raw_spec=f"{group}:{artifact}:{version}",
+                                             details={"relocation": True})]
     result: list[NormalizedDependency] = []
     for dep in model.dependencies:
         try:
@@ -204,9 +219,18 @@ def dependencies_of(model: EffectiveModel) -> list[NormalizedDependency]:
             target=target, constraint=version, scope=scope,
             dependency_type="optional" if dep.optional else _DEPENDENCY_TYPES.get(scope, "runtime"),
             raw_spec=f"{dep.group}:{dep.artifact}:{version}" + (f":{scope}" if scope != "compile" else ""),
-            details=_dependency_details(dep),
+            details=_dependency_details(dep), environment_markers=_jdk_markers(dep),
         ))
     return result
+
+
+def _jdk_markers(dep: Dependency) -> dict[str, object] | None:
+    """A jdk-activated profile's dependency, or an active-by-default one that such a profile would turn off (§7.3)."""
+    if dep.jdk:
+        return {"jdk": dep.jdk}
+    if dep.unless_jdk:
+        return {"unless_jdk": list(dep.unless_jdk)}
+    return None
 
 
 def _dependency_details(dep: Dependency) -> dict[str, object] | None:
@@ -274,8 +298,10 @@ type _Fetch = Callable[[str], Awaitable[FetchedDocument | None]]
 
 
 class _PomLoader:
-    """`load` of the effective model for one fetch: this repository first, then the other repositories the lookup
-    names for the parent's group. The POMs read from this repository are collected as documents."""
+    """`load` of the effective model for one fetch: the repositories the lookup names for the parent's own group, in
+    its order (routing decides, so an `exclusive` or `block` rule keeps a parent from being read where it must not
+    come from); without a lookup, this repository alone. The POMs read from this repository are collected as
+    documents."""
 
     def __init__(self, adapter: "Maven2Adapter", lookup: SourceLookup | None) -> None:
         self.adapter = adapter
@@ -291,15 +317,12 @@ class _PomLoader:
         except ValueError:
             logger.warning("Not loading %s:%s:%s: not Maven coordinates", group, artifact, version)
             return None
-        own = await self._own(path)
-        if own is not None:
-            pom = self._parse(own, f"{group}:{artifact}:{version}")
-            if pom is not None:
-                self.documents.setdefault(path, own)
-                return pom
-        for other in self._others(ref):
-            document = await self._other(other, path)
+        for source in self._sources(ref):
+            own = source is self.adapter
+            document = await (self._own(path) if own else self._other(source, path))
             if document is not None and (pom := self._parse(document, f"{group}:{artifact}:{version}")) is not None:
+                if own:
+                    self.documents.setdefault(path, document)
                 return pom
         return None
 
@@ -329,11 +352,11 @@ class _PomLoader:
             _POM_CACHE.put((base, path), document.content, document.etag)
         return document
 
-    def _others(self, ref: PackageRef) -> list[object]:
+    def _sources(self, ref: PackageRef) -> list[object]:
         if self.lookup is None:
-            return []
-        return [a for a in self.lookup.adapters_for(ref)
-                if a.registry.id != self.adapter.registry.id and hasattr(a, "fetch_document")]
+            return [self.adapter]
+        return [self.adapter if a.registry.id == self.adapter.registry.id else a
+                for a in self.lookup.adapters_for(ref) if hasattr(a, "fetch_document")]
 
     @staticmethod
     def _parse(document: FetchedDocument, label: str) -> Pom | None:
@@ -393,7 +416,7 @@ class Maven2Adapter:
             return None
         metadata = parse_metadata(response.content, url)
         versions = kept_versions(metadata.versions, ref)
-        latest = pick_latest(metadata.release, versions)
+        latest = pick_latest(versions)
         read = await self._read_version(ref, latest, _PomLoader(self, lookup)) if latest is not None else None
         model, content, latest_date = read if read is not None else (None, b"", None)
         gradle = _GRADLE_MARKER.search(content) is not None
@@ -488,10 +511,8 @@ class Maven2Adapter:
         self, ref: PackageRef, version: str, model: EffectiveModel | None, gradle: bool,
     ) -> list[NormalizedArtifact]:
         artifacts = [self._artifact(ref, version, "pom", has_metadata_file=gradle)]
-        if model is None:
-            # Without their POM the packaging of the other versions is unknown: `jar` is the usual one.
-            artifacts.append(self._artifact(ref, version, "jar"))
-        elif model.packaging != "pom":
+        # Without its POM a version's packaging is unknown: no guessed `.jar` (a `pom` or `aar` artifact has none).
+        if model is not None and model.packaging != "pom":
             artifacts.append(self._artifact(ref, version, _main_extension(model.packaging)))
         return artifacts
 
