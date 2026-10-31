@@ -118,3 +118,52 @@ def test_answers_recorded_once_replay_without_the_network(served, tmp_path, monk
     server.httpd.shutdown()
     assert worker.fetch_package(_source(server.url), "openssl") == recorded
     assert list(record.glob("127.0.0.1/*.json"))
+
+
+def _certificates(directory: Path) -> None:
+    """A CA, a server certificate for 127.0.0.1 and a client certificate, as an entitlement would be."""
+    import subprocess
+
+    def run(*args: str) -> None:
+        subprocess.run(["openssl", *args], cwd=str(directory), check=True, capture_output=True)
+
+    run("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2", "-subj", "/CN=test-ca", "-keyout", "ca.key",
+        "-out", "ca.crt")
+    (directory / "san.cnf").write_text("subjectAltName=IP:127.0.0.1\n")
+    for name, extra in (("server", ["-extfile", "san.cnf"]), ("client", [])):
+        run("req", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=%s" % name, "-keyout", "%s.key" % name,
+            "-out", "%s.csr" % name)
+        run("x509", "-req", "-in", "%s.csr" % name, "-CA", "ca.crt", "-CAkey", "ca.key", "-CAcreateserial",
+            "-days", "2", "-out", "%s.crt" % name, *extra)
+
+
+def test_a_client_certificate_opens_the_repository_and_its_absence_is_a_source_error(tmp_path, monkeypatch) -> None:
+    import shutil
+    import ssl
+
+    import httpx
+
+    certs = tmp_path / "certs"
+    certs.mkdir()
+    _certificates(certs)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(str(certs / "server.crt"), str(certs / "server.key"))
+    context.load_verify_locations(str(certs / "ca.crt"))
+    context.verify_mode = ssl.CERT_REQUIRED
+    secrets = tmp_path / "secrets"
+    secrets.mkdir()
+    for suffix, source in ((".crt", "client.crt"), (".key", "client.key"), (".ca", "ca.crt")):
+        shutil.copy(str(certs / source), str(secrets / ("rhel-entitlement" + suffix)))
+    monkeypatch.setenv("SECRETS_DIR", str(secrets))
+    root = tmp_path / "mirror"
+    write_repo(root / "x86_64" / "os", [BASH])
+    with Server(root, tls=context) as server:
+        source = _source(server.url, auth_type="tls_client_cert", credentials_ref="rhel-entitlement")
+        assert worker.fetch_package(source, "bash") is not None
+        # Without the client certificate the handshake fails: an error of the source, never "no such package".
+        (secrets / "rhel-entitlement.crt").unlink()
+        with pytest.raises(http.SourceAuthError):
+            worker.fetch_package(dict(source, id="33333333-3333-3333-3333-333333333333"), "bash")
+        anonymous = dict(_source(server.url), id="44444444-4444-4444-4444-444444444444")
+        with pytest.raises((httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError)):
+            worker.fetch_package(anonymous, "bash")

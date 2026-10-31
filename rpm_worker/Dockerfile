@@ -2,7 +2,7 @@
 # 9's system Python with the distribution's bindings.
 FROM rockylinux:9
 
-RUN dnf -y install python3 python3-pip python3-solv python3-libmodulemd python3-gobject-base createrepo_c \
+RUN dnf -y install python3 python3-pip python3-solv python3-libmodulemd python3-gobject-base createrepo_c openssl \
     && dnf clean all
 
 WORKDIR /app

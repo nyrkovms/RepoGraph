@@ -79,8 +79,8 @@ def write_repo(directory: Path, packages: List[Mapping[str, Any]], modules: Opti
 class Server:
     """Serves a directory tree; ETag = sha256 of the file; counts requests; optional basic auth."""
 
-    def __init__(self, root: Path, credentials: Optional[Tuple[str, str]] = None) -> None:
-        self.root, self.credentials = root, credentials
+    def __init__(self, root: Path, credentials: Optional[Tuple[str, str]] = None, tls: Optional[Any] = None) -> None:
+        self.root, self.credentials, self.tls = root, credentials, tls
         self.requests: List[Tuple[str, str, int]] = []
         server = self
 
@@ -99,6 +99,8 @@ class Server:
                 self.wfile.write(body)
 
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        if tls is not None:                       # an ssl.SSLContext: HTTPS, with client certificates if it asks
+            self.httpd.socket = tls.wrap_socket(self.httpd.socket, server_side=True)
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
 
     def answer(self, path: str, headers: Dict[str, str]) -> Tuple[int, Dict[str, str], bytes]:
@@ -117,7 +119,7 @@ class Server:
 
     @property
     def url(self) -> str:
-        return "http://127.0.0.1:%d/" % self.httpd.server_address[1]
+        return "%s://127.0.0.1:%d/" % ("https" if self.tls is not None else "http", self.httpd.server_address[1])
 
     def __enter__(self) -> "Server":
         self.thread.start()
