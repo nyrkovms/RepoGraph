@@ -735,10 +735,11 @@ async def _build_tree_for_version(
 
         nodes.append(
             DependencyNode(
-                name=dep.dependency_name,
+                name=_dependency_display(dep),
                 constraint=dep.version_constraint,
                 dependency_type=dep.dependency_type.value,
                 extra_name=dep.extra_name,
+                scope=dep.scope,
                 environment_markers=dep.environment_markers,
                 details=dep.details,
                 resolved_version=resolved_version,
@@ -774,10 +775,22 @@ def _child_env(env: Environment | None, dep: Dependency, asks: dict[str, frozens
                              default_features=details.get("default_features", True) is not False)
 
 
+def _dependency_ref(dep: Dependency) -> PackageRef:
+    return PackageRef(ecosystem=dep.dependency_ecosystem.value, namespace=dep.dependency_namespace or "",
+                      name=dep.dependency_name)
+
+
+def _dependency_display(dep: Dependency) -> str:
+    """The name as the ecosystem writes it: npm `@scope/name`, Maven `group:artifact` (the row keeps the parts)."""
+    ref = _dependency_ref(dep)
+    try:
+        return get_plugin(ref.ecosystem).coordinates.display(ref)
+    except UnknownEcosystem:
+        return dep.dependency_name
+
+
 async def _ensure_dependency_resolved(db: AsyncSession, dep: Dependency, fetcher: LazyFetcher) -> None:
-    package = await fetcher.ensure_package(
-        PackageRef(ecosystem=dep.dependency_ecosystem.value, namespace=dep.dependency_namespace or "", name=dep.dependency_name)
-    )
+    package = await fetcher.ensure_package(_dependency_ref(dep))
     if not package:
         return
     await resolve_dependency_links(db, [dep.version_id])

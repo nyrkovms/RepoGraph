@@ -96,6 +96,7 @@ class DependencyNode(BaseModel):
     constraint: str
     dependency_type: str
     extra_name: str | None
+    scope: str | None = None               # the ecosystem's own scope: Maven compile/runtime/test/provided/system
     environment_markers: dict | None = None
     details: dict | None = None            # Go `indirect`, Cargo features and registry, npm peer `optional`
     resolved_version: str | None
