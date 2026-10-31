@@ -126,6 +126,7 @@ class ArtifactItem(BaseModel):
     checksum_sha256: str | None
     checksum_md5: str | None
     registry: str | None = None
+    arch: str | None = None                # RPM: the build's arch (x86_64, noarch, ...)
 
 
 class ArtifactListResponse(BaseModel):

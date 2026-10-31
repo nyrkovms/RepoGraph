@@ -356,6 +356,7 @@ async def list_artifacts(
                 checksum_sha256=row.checksum_sha256,
                 checksum_md5=row.checksum_md5,
                 registry=slug,
+                arch=row.arch,
             )
             for row, slug in rows
         ]

@@ -109,6 +109,8 @@ def test_the_tree_finds_the_package_behind_each_capability() -> None:
                 assert ("libssl.so.3()(64bit)", "rocky-9/openssl-libs", "1:3.0.7-27.el9") in found
                 assert ("/bin/sh", "rocky-9/bash", "5.1.8-9.el9") in found
                 assert all(n.dependency_type == "runtime" for n in tree.dependencies)   # recommends on request only
+                artifacts = await routes.list_artifacts("rpm", "rocky-9/openssl", "1:3.0.7-27.el9", db)
+                assert {(a.arch, a.artifact_type) for a in artifacts.data} == {("x86_64", "rpm"), ("aarch64", "rpm")}
             finally:
                 await db.close()
                 await transaction.rollback()
