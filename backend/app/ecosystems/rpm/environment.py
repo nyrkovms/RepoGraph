@@ -52,5 +52,5 @@ def dependency_applies(dep: NormalizedDependency, env: RpmEnvironment, include_o
     """For the tree: weak dependencies only on request (and with weak_deps), arch-specific ones for their arch."""
     if dep.dependency_type == "optional" and not (include_optional and env.weak_deps):
         return False
-    arches = (dep.environment_markers or {}).get("arch")
+    arches = (dep.environment_markers or {}).get("rpm_arch")
     return not isinstance(arches, list) or env.arch in arches or "noarch" in arches

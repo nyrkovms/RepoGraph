@@ -83,7 +83,7 @@ def test_builds_become_versions_with_superseded_status_artifacts_and_arch_marker
     assert old.artifacts[0].checksums == {"sha256": "ab" * 32} and old.release_date == datetime.fromtimestamp(1700000000, UTC)
     deps = {(d.target.name, d.constraint): d for d in old.dependencies or []}
     assert deps[("libc.so.6()(64bit)", "")].environment_markers is None
-    assert deps[("openssl-libs", "= 1:3.0.7-27.el9")].environment_markers == {"arch": ["x86_64"]}
+    assert deps[("openssl-libs", "= 1:3.0.7-27.el9")].environment_markers == {"rpm_arch": ["x86_64"]}
     weak = [d for d in versions["1:3.0.7-28.el9"].dependencies or [] if d.dependency_type == "optional"]
     assert [(d.target.name, d.scope, d.details) for d in weak] == [
         ("crypto-policies-scripts", "recommends", {"kind": "recommends"})]
@@ -142,8 +142,86 @@ def test_environment_and_dependency_filter() -> None:
             parse_environment(bad)
     weak = NormalizedDependency(target=OPENSSL, constraint="", dependency_type="optional", raw_spec="x")
     x86 = NormalizedDependency(target=OPENSSL, constraint="", dependency_type="runtime", raw_spec="x",
-                               environment_markers={"arch": ["x86_64"]})
+                               environment_markers={"rpm_arch": ["x86_64"]})
     assert not dependency_applies(weak, RpmEnvironment(), include_optional=False)
     assert dependency_applies(weak, RpmEnvironment(), include_optional=True)
     assert not dependency_applies(weak, RpmEnvironment(weak_deps=False), include_optional=True)
     assert dependency_applies(x86, RpmEnvironment(), False) and not dependency_applies(x86, RpmEnvironment(arch="aarch64"), False)
+
+
+def test_superseded_compares_within_a_module_stream_and_counts_noarch_against_every_arch(worker) -> None:
+    _, answers = worker
+    node = lambda evr, arch="x86_64", **extra: dict(_build(evr, arch), name="nodejs", **extra)  # noqa: E731
+    answers["rpm.fetch_package"] = {"revision": "r", "builds": [
+        node("1:18.20.4-1.module+el8.10.0+1"), node("1:18.20.2-1.module+el8.9.0+1"),
+        node("1:20.16.0-1.module+el8.10.0+2"), node("1:10.24.0-1.el8"),
+    ], "modules": {"nodejs-1:18.20.4-1.module+el8.10.0+1.x86_64": ["nodejs:18"],
+                   "nodejs-1:18.20.2-1.module+el8.9.0+1.x86_64": ["nodejs:18"],
+                   "nodejs-1:20.16.0-1.module+el8.10.0+2.x86_64": ["nodejs:20"]}}
+    package = asyncio.run(RepodataAdapter(_registry()).fetch_package(PackageRef("rpm", "rocky-9", "nodejs"), None))  # type: ignore[arg-type]
+    assert package is not None and {v.version: v.status for v in package.versions} == {
+        "1:10.24.0-1.el8": "active", "1:18.20.2-1.module+el8.9.0+1": "superseded",
+        "1:18.20.4-1.module+el8.10.0+1": "active", "1:20.16.0-1.module+el8.10.0+2": "active"}
+    assert package.versions[2].raw_metadata["modules"] == ["nodejs:18"]
+    # The newest build turned noarch: it supersedes the older x86_64 one, which dnf would no longer pick.
+    answers["rpm.fetch_package"] = {"revision": "r", "modules": {}, "builds": [
+        _build("1.0-1.el9", "x86_64"), _build("2.0-1.el9", "noarch", repo_arches=["x86_64", "aarch64"])]}
+    turned = asyncio.run(RepodataAdapter(_registry()).fetch_package(OPENSSL, None))  # type: ignore[arg-type]
+    assert turned is not None and {v.version: v.status for v in turned.versions} == {
+        "1.0-1.el9": "superseded", "2.0-1.el9": "active"}
+
+
+def test_the_detector_skips_comparisons_only_while_the_source_config_is_unchanged(worker) -> None:
+    calls, answers = worker
+    answers["rpm.detect_changes"] = {"changed": {}, "missing": [], "revisions": {"x86_64": "r1"}}
+    detector = RepodataAdapter(_registry()).change_detector()
+    package = TrackedPackage(ref=OPENSSL, package_id="p", revision="rev-1", etag=None, unavailable=False)
+    first = asyncio.run(detector.detect([package], {}))
+    assert calls[-1][1][2] == {} and first.cursor["revisions"] == {"x86_64": "r1"}
+    asyncio.run(detector.detect([package], first.cursor))
+    assert calls[-1][1][2] == {"x86_64": "r1"}
+    moved = RepodataAdapter(_registry("rocky-9-baseos-mirror")).change_detector()
+    asyncio.run(moved.detect([package], first.cursor))
+    assert calls[-1][1][2] == {}                                         # another configuration: compare again
+
+
+def test_the_provider_comes_with_the_evr_of_its_newest_build(worker) -> None:
+    calls, answers = worker
+    answers["rpm.whatprovides"] = [{"name": "python3-libs", "evr": "3.9.19-1.el9", "arch": "x86_64"},
+                                   {"name": "python3-libs", "evr": "3.9.18-3.el9", "arch": "x86_64"}]
+    dep = NormalizedDependency(target=PackageRef("rpm", "rocky-9", "python(abi)"), constraint="= 3.9",
+                               dependency_type="runtime", raw_spec="python(abi) = 3.9")
+    profile = SourceProfile(ecosystem="rpm", slug="default", registries=[_registry()])
+    found = asyncio.run(PLUGIN.provider(dep, parse_environment({}), profile))
+    assert found == (PackageRef("rpm", "rocky-9", "python3-libs"), "3.9.19-1.el9")
+    assert calls[-1][1][2] == "python(abi) = 3.9"                       # the constraint goes to libsolv with the name
+
+
+def test_waiting_on_the_worker_is_allowed_inside_a_celery_task(monkeypatch) -> None:
+    """The daily update, fetch_packages and seed run in the backend's Celery worker, where a bare result.get() raises
+    'Never call result.get() within a task!' (C1 of the E6 review)."""
+    from celery import _state
+    from celery.result import assert_will_not_block
+
+    class Result:
+        def get(self, timeout: float, propagate: bool = True, disable_sync_subtasks: bool = True) -> Any:
+            if disable_sync_subtasks:
+                assert_will_not_block()
+            return {"revision": "r"}
+
+        def forget(self) -> None:
+            pass
+
+    class App:
+        def send_task(self, name: str, args: list, queue: str) -> Result:
+            assert queue == ("rpm-batch" if name == "rpm.detect_changes" else "rpm")
+            return Result()
+
+    import app.celery_app as celery_module
+    monkeypatch.setattr(celery_module, "celery_app", App())
+    _state._set_task_join_will_block(True)
+    try:
+        assert asyncio.run(client.call("rpm.test_connection", {})) == {"revision": "r"}
+        assert asyncio.run(client.call("rpm.detect_changes", {}, {}, {})) == {"revision": "r"}
+    finally:
+        _state._set_task_join_will_block(False)

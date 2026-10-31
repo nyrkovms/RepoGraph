@@ -711,7 +711,9 @@ async def _build_tree_for_version(
         child_package = (
             await db.scalar(select(Package).where(Package.id == dep.resolved_package_id)) if dep.resolved_package_id else None
         )
-        resolved_version_id = await view.pick(child_package, dep.version_constraint, dep.resolved_version_id) if child_package else None
+        # An RPM constraint is on the capability (`python(abi) = 3.9`), not on the provider's versions.
+        constraint = None if dep.dependency_ecosystem.value == "rpm" else dep.version_constraint
+        resolved_version_id = await view.pick(child_package, constraint, dep.resolved_version_id) if child_package else None
 
         if child_package and resolved_version_id:
             resolved = await db.scalar(select(PackageVersion).where(PackageVersion.id == resolved_version_id))
@@ -812,11 +814,18 @@ async def _ensure_dependency_resolved(db: AsyncSession, dep: Dependency, fetcher
                                       view: _ProfileView | None = None) -> None:
     ref = _dependency_ref(dep)
     if ref.ecosystem == "rpm" and view is not None and view.plugin is not None and view.plugin_env is not None:
-        # An RPM dependency names a capability: rpm-worker knows which package provides it (SPEC §2.2).
-        target = await view.plugin.dependency_target(dependency_from_row(dep), view.plugin_env, view.profile)
-        provider = await fetcher.ensure_package(target) if target is not None else None
-        if provider is not None:
-            dep.resolved_package_id, dep.resolved_version_id = provider.id, None
+        # An RPM dependency names a capability: rpm-worker knows which package (and build) provides it (SPEC §2.2).
+        find = getattr(view.plugin, "provider", None)
+        try:
+            found = await find(dependency_from_row(dep), view.plugin_env, view.profile) if find else None
+        except Exception:  # noqa: BLE001 - the worker or a source failing leaves the edge unresolved, not the tree
+            logger.warning("No provider for %s", dep.dependency_name, exc_info=True)
+            return
+        provider = await fetcher.ensure_package(found[0]) if found is not None else None
+        if provider is not None and found is not None:
+            dep.resolved_package_id = provider.id
+            dep.resolved_version_id = await db.scalar(select(PackageVersion.id).where(
+                PackageVersion.package_id == provider.id, PackageVersion.version == found[1]))
             await db.flush()
         return
     package = await fetcher.ensure_package(ref)

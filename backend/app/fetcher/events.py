@@ -43,9 +43,11 @@ def diff_package(
     latest_version: str | None,
     registry_slugs: Mapping[str, str] | None = None,
     frozen_versions: Set[str] = frozenset(),
+    vanished: str = "removed",
 ) -> list[EventDraft]:
     """Compare stored state with freshly merged metadata and describe what changed. `frozen_versions` are kept by
-    sources that were not asked (disabled): their absence from `after` is not a removal."""
+    sources that were not asked (disabled): their absence from `after` is not a removal. `vanished` is the status of
+    a version gone from every source: RPM's `superseded` has no event (Q3, §8.3)."""
     if before is None:
         return [EventDraft(kind=PackageEventKind.tracking_started, details={"latest_version": latest_version})]
 
@@ -83,6 +85,9 @@ def diff_package(
                     "previous_version": previous,
                     "bump": scheme.bump(previous_stable, version.version),
                     "prerelease": prerelease,
+                    # RPM: the module stream of a modular build, `nodejs 18.20.4 (nodejs:18)` (§8.3).
+                    **({"modules": list(version.raw_metadata["modules"])}
+                       if isinstance(version.raw_metadata.get("modules"), list) else {}),
                 },
             )
         )
@@ -108,7 +113,7 @@ def diff_package(
             continue
         old_status = before.version_statuses[name]
         new_merged = incoming.get(name)
-        new_status = PackageVersionStatus(new_merged.version.status) if new_merged else PackageVersionStatus.removed
+        new_status = PackageVersionStatus(new_merged.version.status) if new_merged else PackageVersionStatus(vanished)
         if old_status == new_status:
             continue
         reason = new_merged.version.status_reason if new_merged else None

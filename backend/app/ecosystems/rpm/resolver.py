@@ -1,9 +1,10 @@
 """RPM resolve through rpm-worker's libsolv (SPEC-MULTI-ECOSYSTEM.md §9.8): the pool is the profile's sources of the
 request's distro (`environment.distro`, else the roots' namespace; `environment.repos` narrows it), the job installs
 the roots by name or capability, and the answer is the transaction: one node per NEVRA, an edge per capability
-requirement met inside it. Packages the transaction brings in are queued for the catalog as `discovered`.
+requirement met inside it. Packages of the transaction the catalog lacks are queued for it as `discovered`.
 """
 
+import asyncio
 import logging
 from collections import deque
 from collections.abc import Mapping, Sequence
@@ -119,7 +120,10 @@ class RpmResolver:
                 dependency_type="runtime" if edge.get("kind") == "requires" else "optional",
                 details={"capability": edge["capability"], "kind": edge.get("kind")}))
         graph.details = {"modules": dict(answer.get("modules") or {}), "distro": distro, "arch": env.arch}
-        _queue_discovered(sorted({_COORDINATES.to_purl(PackageRef("rpm", distro, str(n["name"]))) for n in nodes}))
+        # Packages of the transaction the catalog does not have yet: queued for it as `discovered`, off the loop.
+        refs = sorted({PackageRef("rpm", distro, str(n["name"])) for n in nodes}, key=lambda r: r.name)
+        unknown = [r for r in refs if not await catalog.versions(r, request.profile)]
+        await asyncio.to_thread(_queue_discovered, [_COORDINATES.to_purl(r) for r in unknown])
         return graph
 
 

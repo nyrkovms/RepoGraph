@@ -33,6 +33,7 @@ def _namespace(registry: RegistryConfig) -> str:
 class RpmPlugin:
     ecosystem: Ecosystem = "rpm"
     purl_type: str = "rpm"
+    vanished_status: str = "superseded"            # a build that left the repository (Q3): kept, no event
 
     def __init__(self) -> None:
         self.coordinates: Coordinates = RpmCoordinates()
@@ -63,18 +64,26 @@ class RpmPlugin:
     async def dependency_target(
         self, dep: NormalizedDependency, env: Environment, profile: SourceProfile
     ) -> PackageRef | None:
-        """The package providing the capability in the profile's sources of its distro (§2.2): the worker knows the
-        whole repositories. A capability that names a package provided by itself resolves to that package."""
+        found = await self.provider(dep, env, profile)
+        return found[0] if found is not None else None
+
+    async def provider(
+        self, dep: NormalizedDependency, env: Environment, profile: SourceProfile
+    ) -> tuple[PackageRef, str] | None:
+        """The package providing the capability (with its constraint: `openssl-libs(x86-64) = 1:3.0.7-27.el9`) in the
+        profile's sources of its distro, and the EVR of its newest providing build (§2.2: the worker knows the whole
+        repositories). A capability named like a package it is provided by resolves to that package."""
         rpm_env = env if isinstance(env, RpmEnvironment) else parse_environment(env.as_dict())
         registries = [r for r in profile.registries if _namespace(r) == dep.target.namespace]
         if not registries:
             return None
         providers = await client.whatprovides(registries, rpm_env.arch, dep.raw_spec or dep.target.name)
-        names = [str(p["name"]) for p in providers]
-        if not names:
+        if not providers:
             return None
-        chosen = dep.target.name if dep.target.name in names else sorted(names)[0]
-        return PackageRef("rpm", dep.target.namespace, chosen)
+        names = [str(p["name"]) for p in providers]
+        chosen = dep.target.name if dep.target.name in names else sorted(set(names))[0]
+        newest = next(p for p in providers if p["name"] == chosen)          # the worker answers newest first
+        return PackageRef("rpm", dep.target.namespace, chosen), str(newest["evr"])
 
     def resolver(self) -> Resolver:
         from app.ecosystems.rpm.resolver import RESOLVER   # K6

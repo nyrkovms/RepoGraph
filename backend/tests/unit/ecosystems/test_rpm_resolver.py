@@ -49,6 +49,13 @@ def worker(monkeypatch):
     return sent, answer, queued
 
 
+class Catalog:
+    """glibc is in the catalog already: only the others are queued as discovered."""
+
+    async def versions(self, ref: PackageRef, profile: SourceProfile) -> list[str]:
+        return ["2.28-251.el8"] if ref.name == "glibc" else []
+
+
 def _request(env: dict | None = None, *roots: str) -> ResolveRequest:
     return ResolveRequest(roots=[ResolveRoot(ref=PackageRef("rpm", "rocky-8", r), constraint="*") for r in roots or ("nodejs",)],
                           environment=parse_environment(env or {"module_streams": {"nodejs": "18"}}), profile=PROFILE,
@@ -57,7 +64,7 @@ def _request(env: dict | None = None, *roots: str) -> ResolveRequest:
 
 def test_the_transaction_becomes_nodes_by_depth_and_capability_edges(worker) -> None:
     sent, _, queued = worker
-    graph = asyncio.run(resolver.RESOLVER.resolve(_request(), None))  # type: ignore[arg-type]
+    graph = asyncio.run(resolver.RESOLVER.resolve(_request(), Catalog()))  # type: ignore[arg-type]
     assert graph.error is None and graph.strategy == "libsolv" and resolver.RESOLVER.emulates == "dnf 4"
     assert [(n.id, n.ref.name, n.depth, n.registry_slug) for n in graph.nodes] == [
         ("n1", "nodejs", 1, "rocky-8-appstream"), ("n2", "openssl-libs", 2, "rocky-8-baseos"),
@@ -70,8 +77,7 @@ def test_the_transaction_becomes_nodes_by_depth_and_capability_edges(worker) -> 
     assert task == "rpm.resolve" and timeout == 45
     assert [s["slug"] for s in payload["sources"]] == ["rocky-8-baseos", "rocky-8-appstream"]   # not epel-8
     assert payload["roots"] == [{"spec": "nodejs", "constraint": ""}] and payload["module_streams"] == {"nodejs": "18"}
-    assert queued == [["pkg:rpm/rocky/glibc?distro=rocky-8", "pkg:rpm/rocky/nodejs?distro=rocky-8",
-                       "pkg:rpm/rocky/openssl-libs?distro=rocky-8"]]
+    assert queued == [["pkg:rpm/rocky/nodejs?distro=rocky-8", "pkg:rpm/rocky/openssl-libs?distro=rocky-8"]]
 
 
 def test_repos_narrow_the_pool_and_problems_become_the_error(worker) -> None:

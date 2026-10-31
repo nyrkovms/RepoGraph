@@ -2,12 +2,16 @@
 which holds the repository metadata (§2.2).
 
 A package is every build of a binary package name in the source, in every arch of `config.arch`. A version is an EVR;
-its builds per arch are its artifacts. A build older than another build of the same arch in the source is `superseded`
-(Q3: no event), a version is superseded when all its builds are. Dependencies are capabilities: Requires → runtime,
+its builds per arch are its artifacts. A build is `superseded` (Q3: no event) when a newer build competes with it in
+the source: same module stream (non-modular builds are a stream of their own), and the same arch or noarch on either
+side (dnf would take the newer one); a version is superseded when all its builds are. A build that left the source
+is superseded too (the plugin's `vanished_status`). Dependencies are capabilities: Requires → runtime,
 Recommends/Suggests/Supplements/Enhances → optional with `details.kind`; the capability is the target's name (§7.2),
-and a dependency only some arches have is marked `environment_markers.arch`.
+and a dependency only some arches have is marked `environment_markers.rpm_arch`.
 """
 
+import hashlib
+import json
 import logging
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -68,7 +72,8 @@ def _dependencies(namespace: str, builds: Sequence[Build]) -> list[NormalizedDep
     result: list[NormalizedDependency] = []
     for kind, capability in order:
         name, constraint = split_capability(capability)
-        markers = {"arch": sorted(seen[(kind, capability)])} if len(arches) > 1 and seen[(kind, capability)] != set(arches) else None
+        markers = ({"rpm_arch": sorted(seen[(kind, capability)])}
+                   if len(arches) > 1 and seen[(kind, capability)] != set(arches) else None)
         result.append(NormalizedDependency(
             target=PackageRef("rpm", namespace, name), constraint=constraint, raw_spec=capability,
             dependency_type="runtime" if kind == "requires" else "optional", scope=kind,
@@ -77,19 +82,38 @@ def _dependencies(namespace: str, builds: Sequence[Build]) -> list[NormalizedDep
     return result
 
 
+def _config_hash(registry: RegistryConfig) -> str:
+    payload = json.dumps(client.source_payload(registry), sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
 def _release_date(build: Build) -> datetime | None:
     stamp = build.get("buildtime")
     return datetime.fromtimestamp(int(stamp), UTC) if isinstance(stamp, int) and stamp > 0 else None
 
 
-def _newest(builds: Sequence[Build]) -> dict[str, str]:
-    """The newest EVR per arch."""
-    newest: dict[str, str] = {}
+def _nevra(build: Build) -> str:
+    return f"{build['name']}-{build['evr']}.{build['arch']}"
+
+
+def _current(builds: Sequence[Build], streams: Mapping[str, Any]) -> set[str]:
+    """NEVRAs no other build of the source supersedes: within its module stream, the newest for some arch it covers,
+    counting noarch builds as covering every arch."""
+    def stream(build: Build) -> str:
+        found = streams.get(_nevra(build)) or []
+        return ",".join(sorted(str(s) for s in found))
+
+    def arches(build: Build) -> set[str]:
+        return {str(a) for a in build.get("repo_arches") or []} if build["arch"] == "noarch" else {str(build["arch"])}
+
+    current: set[str] = set()
     for build in builds:
-        arch, evr = str(build["arch"]), str(build["evr"])
-        if arch not in newest or _SCHEME.sort_key(evr) > _SCHEME.sort_key(newest[arch]):
-            newest[arch] = evr
-    return newest
+        for arch in arches(build):
+            rivals = [b for b in builds if stream(b) == stream(build) and arch in arches(b)]
+            if all(_SCHEME.sort_key(str(b["evr"])) <= _SCHEME.sort_key(str(build["evr"])) for b in rivals):
+                current.add(_nevra(build))
+                break
+    return current
 
 
 class RepodataAdapter:
@@ -117,14 +141,14 @@ class RepodataAdapter:
     def normalize(self, ref: PackageRef, answer: Mapping[str, Any]) -> NormalizedPackage:
         builds: list[Build] = list(answer.get("builds") or [])
         streams: Mapping[str, Any] = answer.get("modules") or {}
-        newest = _newest(builds)
+        current_builds = _current(builds, streams)
         by_evr: dict[str, list[Build]] = {}
         for build in builds:
             by_evr.setdefault(str(build["evr"]), []).append(build)
         versions: list[NormalizedVersion] = []
         for evr in sorted(by_evr, key=_SCHEME.sort_key):
             group = by_evr[evr]
-            current = any(newest.get(str(b["arch"])) == evr for b in group)
+            current = any(_nevra(b) in current_builds for b in group)
             nevras = [f"{b['name']}-{b['evr']}.{b['arch']}" for b in group]
             module = sorted({s for n in nevras for s in streams.get(n, [])})
             raw: dict[str, Any] = {"provides": sorted({p for b in group for p in b.get("provides") or []}),
@@ -190,7 +214,13 @@ class RpmChangeDetector:
     async def detect(self, tracked: Sequence[TrackedPackage], cursor: Mapping[str, object]) -> ChangeSet:
         mine = [p for p in tracked if self.adapter._serves(p.ref)]
         names = {p.ref.name: p for p in mine}
-        answer = await client.detect_changes(self.adapter.registry, {n: p.revision for n, p in names.items()})
+        # §8.1, after Pulp: an unchanged repository skips the comparison, except after a change of the source's
+        # configuration (base_url, arches, auth), which the cursor remembers.
+        config = _config_hash(self.adapter.registry)
+        revisions = cursor.get("revisions")
+        known = revisions if isinstance(revisions, dict) and cursor.get("config") == config else None
+        answer = await client.detect_changes(self.adapter.registry, {n: p.revision for n, p in names.items()},
+                                             known)
         changed_names: Mapping[str, str] = answer.get("changed") or {}
         missing_names = set(answer.get("missing") or [])
         changed: list[tuple[TrackedPackage, str | None]] = []
@@ -207,4 +237,5 @@ class RpmChangeDetector:
                 changed.append((package, changed_names.get(name, package.revision)))
             elif outcome == "missing":
                 missing.append(package)
-        return ChangeSet(changed=changed, missing=missing, cursor={"revisions": answer.get("revisions") or {}})
+        return ChangeSet(changed=changed, missing=missing,
+                         cursor={"revisions": answer.get("revisions") or {}, "config": config})

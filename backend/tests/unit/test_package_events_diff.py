@@ -180,3 +180,17 @@ def test_unavailable_package_is_restored() -> None:
     events = diff_package(before, _package([_version("1.0")]))
 
     assert _kinds(events) == [(PackageEventKind.project_restored, None)]
+
+
+def test_a_vanished_rpm_build_is_superseded_without_an_event_and_a_modular_release_names_its_stream() -> None:
+    before = _snapshot({"1.0": "active", "2.0": "active"}, latest="2.0")
+    merged = merge_by_priority([to_contract(_package([_version("2.0")]), "reg-rpm")])
+    # Default: a version gone from every source is removed, with an event.
+    assert _kinds(_diff(before, merged, PyPIVersionScheme(), "2.0")) == [(PackageEventKind.release_removed, "1.0")]
+    # RPM (Q3, §8.3): superseded, no event.
+    assert _diff(before, merged, PyPIVersionScheme(), "2.0", vanished="superseded") == []
+    modular = _version("3.0")
+    modular.raw_metadata = {"modules": ["nodejs:18"]}
+    added = _diff(before, merge_by_priority([to_contract(_package([_version("1.0"), _version("2.0"), modular]),
+                                                         "reg-rpm")]), PyPIVersionScheme(), "3.0")
+    assert added[0].kind == PackageEventKind.release_added and added[0].details["modules"] == ["nodejs:18"]

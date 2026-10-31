@@ -4,13 +4,20 @@ import asyncio
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+import httpx
+
 from app.ecosystems.base import RegistryConfig
 
-TIMEOUT_S = 300.0
+TIMEOUT_S = 600.0
+DETECT_TIMEOUT_S = 3600.0
+# The daily work has its own queue and worker in rpm-worker: it never waits in front of what a person waits on.
+_QUEUES = {"rpm.detect_changes": "rpm-batch", "rpm.sync_repo": "rpm-batch"}
 
 
-class WorkerError(Exception):
-    """rpm-worker failed the task (a source error: authorization, network, broken repodata) or did not answer."""
+class WorkerError(httpx.TransportError):
+    """rpm-worker failed the task (a source error: authorization, network, broken repodata) or did not answer. An
+    httpx transport error, so discovery and the daily update record it as the source failing, like a network error
+    of any other adapter."""
 
 
 def source_payload(registry: RegistryConfig) -> dict[str, Any]:
@@ -22,9 +29,11 @@ async def call(task: str, *args: Any, timeout: float = TIMEOUT_S) -> Any:
     from app.celery_app import celery_app      # the app's broker; imported late so plugins load without Celery
 
     def run() -> Any:
-        result = celery_app.send_task(task, args=list(args), queue="rpm")
+        result = celery_app.send_task(task, args=list(args), queue=_QUEUES.get(task, "rpm"))
         try:
-            return result.get(timeout=timeout, propagate=True)
+            # Inside the backend's own Celery tasks (daily update, fetch_packages, seed) Celery forbids waiting on
+            # another task; this one runs elsewhere (rpm-worker), so waiting cannot deadlock the pool.
+            return result.get(timeout=timeout, propagate=True, disable_sync_subtasks=False)
         except Exception as exc:  # noqa: BLE001 - every failure of the worker is a source error to the caller
             raise WorkerError(f"{task}: {type(exc).__name__}: {exc}") from exc
         finally:
@@ -38,8 +47,10 @@ async def fetch_package(registry: RegistryConfig, name: str) -> Mapping[str, Any
     return result if isinstance(result, dict) else None
 
 
-async def detect_changes(registry: RegistryConfig, tracked: Mapping[str, str | None]) -> Mapping[str, Any]:
-    result = await call("rpm.detect_changes", source_payload(registry), dict(tracked))
+async def detect_changes(registry: RegistryConfig, tracked: Mapping[str, str | None],
+                         known_revisions: Mapping[str, str] | None = None) -> Mapping[str, Any]:
+    result = await call("rpm.detect_changes", source_payload(registry), dict(tracked), dict(known_revisions or {}),
+                        timeout=DETECT_TIMEOUT_S)
     return result if isinstance(result, dict) else {}
 
 
@@ -49,5 +60,5 @@ async def whatprovides(registries: Sequence[RegistryConfig], arch: str, capabili
 
 
 async def test_connection(registry: RegistryConfig) -> Mapping[str, Any]:
-    result = await call("rpm.test_connection", source_payload(registry), timeout=60.0)
+    result = await call("rpm.test_connection", source_payload(registry), timeout=120.0)
     return result if isinstance(result, dict) else {}

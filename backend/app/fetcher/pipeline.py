@@ -235,7 +235,9 @@ async def write_package(
     version_rows, metadata_moved = await _upsert_versions(db, plugin, package.id, merged.versions)
     version_ids = {version: row.id for version, row in version_rows.items()}
     await _write_version_sources(db, package.id, version_ids, merged.versions, source_versions, registry_rows.keys(), now)
-    await _mark_missing_versions_removed(db, package.id, [*version_ids.keys(), *frozen])
+    # RPM: a build that left the repository was superseded, not removed (Q3), and makes no event.
+    vanished = PackageVersionStatus(getattr(plugin, "vanished_status", "removed"))
+    await _mark_missing_versions_removed(db, package.id, [*version_ids.keys(), *frozen], vanished)
     for merged_version in merged.versions:
         row = version_rows[merged_version.version.version]
         await _write_dependencies(db, row, merged_version, source_versions, merged_version.version.version in metadata_moved)
@@ -255,7 +257,8 @@ async def write_package(
         await _link_dependents(db, package)
 
     slugs = {registry_id: row.slug for registry_id, row in registry_rows.items()}
-    await _record_events(db, package.id, diff_package(snapshot, merged, plugin.versions, latest, slugs, frozen), run_id, now)
+    await _record_events(db, package.id, diff_package(snapshot, merged, plugin.versions, latest, slugs, frozen,
+                                                         vanished=getattr(plugin, "vanished_status", "removed")), run_id, now)
     for registry_id in [*by_registry, *missing_registry_ids]:
         await _upsert_sync_state(db, registry_id, now)
 
@@ -598,15 +601,16 @@ async def _frozen_versions(
     return {version for version in rows if version not in incoming}
 
 
-async def _mark_missing_versions_removed(db: AsyncSession, package_id, present_versions: Iterable[str]) -> None:
+async def _mark_missing_versions_removed(db: AsyncSession, package_id, present_versions: Iterable[str],
+                                        status: PackageVersionStatus = PackageVersionStatus.removed) -> None:
     await db.execute(
         update(PackageVersion)
         .where(
             PackageVersion.package_id == package_id,
             PackageVersion.version.not_in(list(present_versions)),
-            PackageVersion.status != PackageVersionStatus.removed,
+            PackageVersion.status.not_in([PackageVersionStatus.removed, status]),
         )
-        .values(status=PackageVersionStatus.removed)
+        .values(status=status)
     )
 
 
