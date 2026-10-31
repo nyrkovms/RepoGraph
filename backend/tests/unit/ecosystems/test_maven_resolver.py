@@ -13,7 +13,7 @@ from app.ecosystems.base import (
     ResolveRoot,
     SourceProfile,
 )
-from app.ecosystems.maven.environment import parse_environment
+from app.ecosystems.maven.environment import jdk_activates, parse_environment
 from app.ecosystems.maven.resolver import RESOLVER, UNKNOWN_DEPENDENCIES, derived_scope, widest
 
 PROFILE = SourceProfile(ecosystem="maven", slug="default", registries=[])
@@ -28,11 +28,15 @@ def _v(*versions: str) -> list[CatalogVersion]:
 
 
 def _dep(name: str, version: str, scope: str = "compile", optional: bool = False,
-         exclusions: Sequence[tuple[str, str]] = ()) -> NormalizedDependency:
-    details = {"exclusions": [{"group": g, "artifact": a} for g, a in exclusions]} if exclusions else None
+         exclusions: Sequence[tuple[str, str]] = (), markers: dict | None = None,
+         relocation: bool = False) -> NormalizedDependency:
+    details: dict | None = {"exclusions": [{"group": g, "artifact": a} for g, a in exclusions]} if exclusions else None
+    if relocation:
+        details = {"relocation": True}
     kind = "optional" if optional else {"test": "dev", "provided": "provided", "system": "provided"}.get(scope, "runtime")
     return NormalizedDependency(target=_ref(name), constraint=version, dependency_type=kind,  # type: ignore[arg-type]
-                                raw_spec=f"g:{name}:{version}", scope=scope, details=details)
+                                raw_spec=f"g:{name}:{version}", scope=scope, details=details,
+                                environment_markers=markers)
 
 
 class Catalog:
@@ -259,3 +263,63 @@ def test_gradle_plugins_resolve_through_their_marker_and_gradle_metadata_is_flag
     assert {(n.ref.name, n.version) for n in graph.nodes} == {(marker.name, "1.2"), ("impl", "1")}
     assert [w["code"] for w in graph.warnings] == ["gradle_module_metadata"]
     assert graph.warnings[0]["package"] == "g:impl"
+
+
+def test_a_versionless_root_takes_its_managed_version_and_explicit_entries_beat_boms() -> None:
+    catalog = Catalog({"app": _v("1.0", "2.0"), "b": _v("1.0", "2.0", "3.0")}, {"app@1.0": [_dep("b", "1.0")]},
+                      {"g/bom/5/bom-5.pom": _pom("bom", "5", _managed("app", "1.0") + _managed("b", "2.0"))})
+    # The BOM gives app (a versionless project dependency) its 1.0; b listed after the BOM still wins with 3.0.
+    graph = _resolve(catalog, ("app", "*"), managed=[("bom", "5", "bom"), ("b", "3.0", None)])
+    assert _set(graph) == {("app", "1.0"), ("b", "3.0")}
+    assert _set(_resolve(catalog, ("app", "*"))) == {("app", "2.0")}                     # not managed: the highest
+    assert _set(_resolve(catalog, ("app", "2.0"), managed=[("app", "1.0", None)])) == {("app", "2.0")}
+    gradle = _resolve(catalog, ("app", "*"), managed=[("bom", "5", "bom"), ("b", "3.0", None)], strategy="gradle")
+    assert _set(gradle) == {("app", "1.0"), ("b", "3.0")}
+
+
+def test_maven_puts_a_relocation_target_in_place_and_gradle_follows_it() -> None:
+    catalog = Catalog({"app": _v("1"), "old": _v("8"), "new": _v("8"), "proto": _v("3")},
+                      {"app@1": [_dep("old", "8")], "old@8": [_dep("new", "8", relocation=True)],
+                       "new@8": [_dep("proto", "3")]})
+    graph = _resolve(catalog, ("app", "1"))
+    assert _set(graph) == {("app", "1"), ("new", "8"), ("proto", "3")}
+    nodes = {n.ref.name: n for n in graph.nodes}
+    assert nodes["new"].depth == 2 and ("n1", nodes["new"].id) in {(e.source, e.target) for e in graph.edges}
+    root = _resolve(catalog, ("old", "8"))                                   # a relocated root: its target is the root
+    assert _set(root) == {("new", "8"), ("proto", "3")} and root.nodes[0].latest_compatible == "8"
+    assert _set(_resolve(catalog, ("app", "1"), strategy="gradle")) == {
+        ("app", "1"), ("old", "8"), ("new", "8"), ("proto", "3")}
+
+
+def test_a_managed_scope_is_kept_as_set() -> None:
+    catalog = Catalog({n: _v("1") for n in ("app", "r", "c")},
+                      {"app@1": [_dep("r", "1", "runtime")], "r@1": [_dep("c", "1")]})
+    graph = _resolve(catalog, ("app", "1"), managed=[("c", "1", "compile")])
+    assert _scopes(graph)["c"] == "compile"                                   # derived it would be runtime
+    assert _scopes(_resolve(catalog, ("app", "1")))["c"] == "runtime"
+
+
+def test_gradle_keeps_a_module_some_path_does_not_exclude_whatever_the_pattern() -> None:
+    catalog = Catalog({n: _v("1") for n in ("app", "p", "q", "z")},
+                      {"app@1": [_dep("p", "1", exclusions=[("g", "z")]), _dep("q", "1", exclusions=[("*", "z")])],
+                       "p@1": [_dep("z", "1")], "q@1": [_dep("z", "1")]})
+    assert ("z", "1") not in _set(_resolve(catalog, ("app", "1"), strategy="gradle"))
+    catalog.deps["app@1"] = [_dep("p", "1", exclusions=[("g", "z")]), _dep("q", "1", exclusions=[("*", "other")])]
+    assert ("z", "1") in _set(_resolve(catalog, ("app", "1"), strategy="gradle"))
+
+
+def test_gradle_lets_a_fixed_version_inside_a_range_satisfy_it() -> None:
+    catalog = Catalog({"app": _v("1"), "x": _v("1"), "b": _v("1.0", "1.5", "1.9", "2.0")},
+                      {"app@1": [_dep("b", "1.5"), _dep("x", "1")], "x@1": [_dep("b", "[1.0,2.0)")]})
+    assert ("b", "1.5") in _set(_resolve(catalog, ("app", "1"), strategy="gradle"))
+    catalog.deps["x@1"] = [_dep("b", "[1.6,2.0)")]                            # 1.5 is outside: the range's highest
+    assert ("b", "1.9") in _set(_resolve(catalog, ("app", "1"), strategy="gradle"))
+
+
+def test_jdk_profiles_follow_the_java_version() -> None:
+    catalog = Catalog({n: _v("1") for n in ("app", "jaxb", "legacy")},
+                      {"app@1": [_dep("jaxb", "1", markers={"jdk": "[9,)"}),
+                                 _dep("legacy", "1", markers={"unless_jdk": ["[9,)"]})]})
+    assert _set(_resolve(catalog, ("app", "1"))) == {("app", "1"), ("jaxb", "1")}          # java 21 by default
+    assert _set(_resolve(catalog, ("app", "1"), env={"java_version": "1.8"})) == {("app", "1"), ("legacy", "1")}
+    assert jdk_activates("1.8", "1.8.0_392") and jdk_activates("!1.8", "21") and not jdk_activates("[1.6,1.9)", "21")

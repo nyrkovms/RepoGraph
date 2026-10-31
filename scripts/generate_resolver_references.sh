@@ -177,14 +177,26 @@ maven_case() {
   python3 - "$case_dir/case.yaml" "$work" <<'PY'
 import sys, yaml
 case = yaml.safe_load(open(sys.argv[1]))
-deps = ""
-for r in case["roots"]:
-    coords, _, version = r["purl"].split("/", 1)[1].partition("@")
+def coordinates(item):
+    coords, _, version = item["purl"].split("/", 1)[1].partition("@")
     group, artifact = coords.split("/")
-    deps += f"<dependency><groupId>{group}</groupId><artifactId>{artifact}</artifactId><version>{r['constraint'] or version}</version></dependency>"
+    version, _, qualifiers = version.partition("?")
+    constraint = item.get("constraint") or version
+    return group, artifact, "" if constraint == "*" else constraint, "type=pom" in qualifiers
+
+deps = managed = ""
+for r in case["roots"]:
+    group, artifact, version, _ = coordinates(r)
+    version = f"<version>{version}</version>" if version else ""   # versionless: from dependencyManagement
+    deps += f"<dependency><groupId>{group}</groupId><artifactId>{artifact}</artifactId>{version}</dependency>"
+for m in case.get("managed") or []:
+    group, artifact, version, bom = coordinates(m)
+    extra = "<type>pom</type><scope>import</scope>" if bom else ""
+    managed += f"<dependency><groupId>{group}</groupId><artifactId>{artifact}</artifactId><version>{version}</version>{extra}</dependency>"
 open(f"{sys.argv[2]}/pom.xml", "w").write(
     '<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>'
     '<groupId>reference</groupId><artifactId>case</artifactId><version>0</version>'
+    f'<dependencyManagement><dependencies>{managed}</dependencies></dependencyManagement>'
     f'<dependencies>{deps}</dependencies></project>')
 PY
   docker run --rm --platform "${platform:-linux/amd64}" -v "$work:/w" -w /w "$MAVEN_IMAGE" sh -c \

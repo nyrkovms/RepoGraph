@@ -1,0 +1,14 @@
+description: >
+  jackson-databind without a version, given by the spring-boot-dependencies BOM; an explicit managed jackson-core
+  listed after the BOM still wins over the BOM's.
+roots:
+  - {purl: "pkg:maven/com.fasterxml.jackson.core/jackson-databind", constraint: "*"}
+managed:
+  - {purl: "pkg:maven/org.springframework.boot/spring-boot-dependencies@3.3.5?type=pom", constraint: "3.3.5"}
+  - {purl: "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.18.0", constraint: "2.18.0"}
+environment: {scopes: [compile, runtime], strategy: maven}
+sources:
+  - {slug: maven-central, protocol: maven2, base_url: "https://repo1.maven.org/maven2/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

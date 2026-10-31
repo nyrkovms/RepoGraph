@@ -1,0 +1,10 @@
+description: >
+  mysql-connector-java 8.0.33 is relocated to com.mysql:mysql-connector-j: Maven resolves the target in its place.
+roots:
+  - {purl: "pkg:maven/mysql/mysql-connector-java@8.0.33", constraint: "8.0.33"}
+environment: {scopes: [compile, runtime], strategy: maven}
+sources:
+  - {slug: maven-central, protocol: maven2, base_url: "https://repo1.maven.org/maven2/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

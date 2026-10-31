@@ -79,6 +79,7 @@ def test_reference_case(case_dir: Path) -> None:
                 profile = await _profile(db, ecosystem, case["sources"])
                 graph = await resolve_graph(db, GraphResolveRequest(
                     ecosystem=ecosystem, profile=profile, roots=case["roots"], environment=environment,
+                    managed=case.get("managed") or [],
                     # Recording waits for the crates.io API (1 request/s) once per crate the case reaches: longer
                     # than the API allows a request to take.
                     options=GraphOptions.model_construct(timeout_s=900) if os.environ.get("HTTP_RECORD_DIR")
