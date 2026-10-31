@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"04027bdf755119c77c9cbca284b09a38\"",
+    "last-modified": "Mon, 08 Jun 2026 17:10:27 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-jcl/6.2.19/spring-jcl-6.2.19.pom"
+  },
+  "status": 200
+}
