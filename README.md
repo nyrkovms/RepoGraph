@@ -196,7 +196,7 @@ Maven: слаг экосистемы `maven`, тип purl `maven` (`pkg:maven/or
 Пакет — пара `groupId:artifactId`, регистр значим; в путях, в `name` и в поиске она пишется через двоеточие
 (`org.springframework:spring-core`). Версии сравниваются как Maven ComparableVersion (`6.1.14`, `33.3.1-jre`, `6.2.0-RC1`), все они
 `active`: релизы Maven не удаляют, дату версии даёт `Last-Modified` её POM (новейшей — сразу, остальным — фоновая задача). Если новейший POM переносит артефакт
-(`<relocation>`), пакет несёт `deprecation.alternative` (`<groupId>:<artifactId>`). Зависимости версии берутся из effective model
+(`<relocation>`), пакет несёт `deprecation.alternative` (`<groupId>:<artifactId>`, с `:<версия>`, если перенос её называет; resolve ставит целевой артефакт на место перенесённого). Зависимости версии берутся из effective model
 (родительские POM, `dependencyManagement` и BOM применены); окружение дерева — `scopes` (по умолчанию `compile,runtime`; ещё `provided`,
 `system`, `test`), у ребра в `details` бывают `exclusions`, `type` и `classifier`:
 
@@ -209,7 +209,7 @@ curl 'http://localhost:8000/api/v1/search?q=org.springframework:spring&ecosystem
 
 Для resolve укажите `"ecosystem": "maven"`; `constraint` корня — версия (мягкая, как её берёт Maven), диапазон `[1.0,2.0)` или `*` (последний
 релиз), версия в purl без `constraint` закрепляет её. `managed` — `dependencyManagement` проекта: purl с `?type=pom` — BOM, который
-импортируется на своё место. Окружение — `scopes`, `strategy` и `java_version`. Стратегия `maven` (по умолчанию, ответ `maven-nearest-wins`,
+импортируется на своё место. Окружение — `scopes`, `strategy`, `plugins` и `java_version` (по умолчанию 21, решает jdk-профили POM). Стратегия `maven` (по умолчанию, ответ `maven-nearest-wins`,
 `Maven 3.9`) берёт ближайшее объявление, множество `(groupId:artifactId, версия)` в ответе равно `mvn dependency:list -DincludeScope=runtime`;
 стратегия `gradle` (`gradle-highest-wins`) при разных версиях берёт наибольшую. Gradle Module Metadata (`.module`) не читается, результат
 `gradle` строится по POM и неполон там, где POM упрощён (Kotlin Multiplatform, часть AndroidX, platform через constraints); узлы несут
