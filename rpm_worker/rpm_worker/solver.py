@@ -38,6 +38,11 @@ def _consider(pool: Any, keep_out: Set[int]) -> None:
         pool.set_considered_list([s.id for s in pool.solvables_iter() if s.id not in keep_out])
 
 
+def _exact(pool: Any, s: Any) -> Any:
+    """`name = evr` of a build: Obsoletes match versions (perl-interpreter obsoletes only `perl < 4:5.22`)."""
+    return pool.Dep(s.name).Rel(solv.REL_EQ, pool.Dep(s.evr))
+
+
 def _with_obsoleters(pool: Any, selection: Any, by_name: bool) -> Any:
     """dnf installs a named package or anything that obsoletes it (the newest wins under best=True)."""
     if not by_name:
@@ -45,7 +50,7 @@ def _with_obsoleters(pool: Any, selection: Any, by_name: bool) -> Any:
     ids = {s.id for s in selection.solvables()}
     extra = set()
     for s in selection.solvables():
-        for obsoleter in pool.whatmatchesdep(solv.SOLVABLE_OBSOLETES, pool.Dep(s.name)):
+        for obsoleter in pool.whatmatchesdep(solv.SOLVABLE_OBSOLETES, _exact(pool, s)):
             if obsoleter.id not in ids:
                 extra.add(obsoleter.id)
     if not extra:
@@ -150,7 +155,7 @@ def resolve(request: Mapping[str, Any]) -> Dict[str, Any]:
         text = "%s %s" % (spec, constraint) if constraint else spec
         candidates = list(pool.select(text, _SELECT).solvables())
         candidates += [o for c in list(candidates)
-                       for o in pool.whatmatchesdep(solv.SOLVABLE_OBSOLETES, pool.Dep(c.name))]
+                       for o in pool.whatmatchesdep(solv.SOLVABLE_OBSOLETES, _exact(pool, c))]
         chosen = next((c for c in candidates if c.id in ids), None)
         if chosen is not None:
             roots.append({"spec": text, "nevra": display_nevra(chosen)})

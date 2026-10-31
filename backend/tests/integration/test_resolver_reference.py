@@ -99,7 +99,9 @@ def test_reference_case(case_dir: Path) -> None:
                     assert graph.error is None, graph.error
                 errors = {node.name: node.errors for node in graph.nodes if node.errors}
                 assert not {n for n in errors if name(n) not in allowed}, errors
-                return {(name(node.name), node.version) for node in graph.nodes}
+                # RPM: the arch is part of what dnf chose (multilib), so it is compared too.
+                return {(name(f"{node.name}.{node.details['arch']}" if ecosystem == "rpm" else node.name), node.version)
+                        for node in graph.nodes}
             finally:
                 await db.close()
                 await transaction.rollback()

@@ -6,1286 +6,1286 @@
     "--assumeno",
     "--installroot"
   ],
-  "generated_at": "2026-10-31T09:21:17+00:00",
+  "generated_at": "2026-10-31T10:01:49+00:00",
   "install": [
     {
-      "name": "rocky-8/acl",
+      "name": "rocky-8/acl.x86_64",
       "version": "2.2.53-1.el8.1"
     },
     {
-      "name": "rocky-8/audit-libs",
+      "name": "rocky-8/audit-libs.x86_64",
       "version": "3.0.7-5.el8"
     },
     {
-      "name": "rocky-8/basesystem",
+      "name": "rocky-8/basesystem.noarch",
       "version": "11-5.el8"
     },
     {
-      "name": "rocky-8/bash",
+      "name": "rocky-8/bash.x86_64",
       "version": "4.4.20-4.el8_6"
     },
     {
-      "name": "rocky-8/brotli",
+      "name": "rocky-8/brotli.x86_64",
       "version": "1.0.6-3.el8"
     },
     {
-      "name": "rocky-8/bzip2-libs",
+      "name": "rocky-8/bzip2-libs.x86_64",
       "version": "1.0.6-26.el8"
     },
     {
-      "name": "rocky-8/ca-certificates",
+      "name": "rocky-8/ca-certificates.noarch",
       "version": "2023.2.60_v7.0.306-80.0.el8_8"
     },
     {
-      "name": "rocky-8/chkconfig",
+      "name": "rocky-8/chkconfig.x86_64",
       "version": "1.19.2-1.el8"
     },
     {
-      "name": "rocky-8/coreutils",
+      "name": "rocky-8/coreutils-common.x86_64",
       "version": "8.30-15.el8"
     },
     {
-      "name": "rocky-8/coreutils-common",
+      "name": "rocky-8/coreutils.x86_64",
       "version": "8.30-15.el8"
     },
     {
-      "name": "rocky-8/cpio",
+      "name": "rocky-8/cpio.x86_64",
       "version": "2.12-11.el8"
     },
     {
-      "name": "rocky-8/cracklib",
+      "name": "rocky-8/cracklib-dicts.x86_64",
       "version": "2.9.6-15.el8"
     },
     {
-      "name": "rocky-8/cracklib-dicts",
+      "name": "rocky-8/cracklib.x86_64",
       "version": "2.9.6-15.el8"
     },
     {
-      "name": "rocky-8/crypto-policies",
+      "name": "rocky-8/crypto-policies-scripts.noarch",
       "version": "20230731-1.git3177e06.el8"
     },
     {
-      "name": "rocky-8/crypto-policies-scripts",
+      "name": "rocky-8/crypto-policies.noarch",
       "version": "20230731-1.git3177e06.el8"
     },
     {
-      "name": "rocky-8/cryptsetup-libs",
+      "name": "rocky-8/cryptsetup-libs.x86_64",
       "version": "2.3.7-7.el8"
     },
     {
-      "name": "rocky-8/curl",
+      "name": "rocky-8/curl.x86_64",
       "version": "7.61.1-33.el8_9.5"
     },
     {
-      "name": "rocky-8/cyrus-sasl-lib",
+      "name": "rocky-8/cyrus-sasl-lib.x86_64",
       "version": "2.1.27-6.el8_5"
     },
     {
-      "name": "rocky-8/dbus",
+      "name": "rocky-8/dbus-common.noarch",
       "version": "1:1.12.8-26.el8"
     },
     {
-      "name": "rocky-8/dbus-common",
+      "name": "rocky-8/dbus-daemon.x86_64",
       "version": "1:1.12.8-26.el8"
     },
     {
-      "name": "rocky-8/dbus-daemon",
+      "name": "rocky-8/dbus-libs.x86_64",
       "version": "1:1.12.8-26.el8"
     },
     {
-      "name": "rocky-8/dbus-libs",
+      "name": "rocky-8/dbus-tools.x86_64",
       "version": "1:1.12.8-26.el8"
     },
     {
-      "name": "rocky-8/dbus-tools",
+      "name": "rocky-8/dbus.x86_64",
       "version": "1:1.12.8-26.el8"
     },
     {
-      "name": "rocky-8/device-mapper",
+      "name": "rocky-8/device-mapper-libs.x86_64",
       "version": "8:1.02.181-13.el8_9"
     },
     {
-      "name": "rocky-8/device-mapper-libs",
+      "name": "rocky-8/device-mapper.x86_64",
       "version": "8:1.02.181-13.el8_9"
     },
     {
-      "name": "rocky-8/diffutils",
+      "name": "rocky-8/diffutils.x86_64",
       "version": "3.6-6.el8"
     },
     {
-      "name": "rocky-8/dracut",
+      "name": "rocky-8/dracut.x86_64",
       "version": "049-228.git20230802.el8"
     },
     {
-      "name": "rocky-8/dwz",
+      "name": "rocky-8/dwz.x86_64",
       "version": "0.12-10.el8"
     },
     {
-      "name": "rocky-8/efi-srpm-macros",
+      "name": "rocky-8/efi-srpm-macros.noarch",
       "version": "3-3.el8"
     },
     {
-      "name": "rocky-8/elfutils-debuginfod-client",
+      "name": "rocky-8/elfutils-debuginfod-client.x86_64",
       "version": "0.189-3.el8"
     },
     {
-      "name": "rocky-8/elfutils-default-yama-scope",
+      "name": "rocky-8/elfutils-default-yama-scope.noarch",
       "version": "0.189-3.el8"
     },
     {
-      "name": "rocky-8/elfutils-libelf",
+      "name": "rocky-8/elfutils-libelf.x86_64",
       "version": "0.189-3.el8"
     },
     {
-      "name": "rocky-8/elfutils-libs",
+      "name": "rocky-8/elfutils-libs.x86_64",
       "version": "0.189-3.el8"
     },
     {
-      "name": "rocky-8/expat",
+      "name": "rocky-8/expat.x86_64",
       "version": "2.2.5-11.el8_9.1"
     },
     {
-      "name": "rocky-8/file",
+      "name": "rocky-8/file-libs.x86_64",
       "version": "5.33-25.el8"
     },
     {
-      "name": "rocky-8/file-libs",
+      "name": "rocky-8/file.x86_64",
       "version": "5.33-25.el8"
     },
     {
-      "name": "rocky-8/filesystem",
+      "name": "rocky-8/filesystem.x86_64",
       "version": "3.8-6.el8"
     },
     {
-      "name": "rocky-8/findutils",
+      "name": "rocky-8/findutils.x86_64",
       "version": "1:4.6.0-21.el8"
     },
     {
-      "name": "rocky-8/gawk",
+      "name": "rocky-8/gawk.x86_64",
       "version": "4.2.1-4.el8"
     },
     {
-      "name": "rocky-8/gdbm",
+      "name": "rocky-8/gdbm-libs.x86_64",
       "version": "1:1.18-2.el8"
     },
     {
-      "name": "rocky-8/gdbm-libs",
+      "name": "rocky-8/gdbm.x86_64",
       "version": "1:1.18-2.el8"
     },
     {
-      "name": "rocky-8/gettext",
+      "name": "rocky-8/gettext-libs.x86_64",
       "version": "0.19.8.1-17.el8"
     },
     {
-      "name": "rocky-8/gettext-libs",
+      "name": "rocky-8/gettext.x86_64",
       "version": "0.19.8.1-17.el8"
     },
     {
-      "name": "rocky-8/ghc-srpm-macros",
+      "name": "rocky-8/ghc-srpm-macros.noarch",
       "version": "1.4.2-7.el8"
     },
     {
-      "name": "rocky-8/glib2",
+      "name": "rocky-8/glib2.x86_64",
       "version": "2.56.4-161.el8"
     },
     {
-      "name": "rocky-8/glibc",
+      "name": "rocky-8/glibc-all-langpacks.x86_64",
       "version": "2.28-236.el8_9.13"
     },
     {
-      "name": "rocky-8/glibc-all-langpacks",
+      "name": "rocky-8/glibc-common.x86_64",
       "version": "2.28-236.el8_9.13"
     },
     {
-      "name": "rocky-8/glibc-common",
+      "name": "rocky-8/glibc-gconv-extra.x86_64",
       "version": "2.28-236.el8_9.13"
     },
     {
-      "name": "rocky-8/glibc-gconv-extra",
+      "name": "rocky-8/glibc.x86_64",
       "version": "2.28-236.el8_9.13"
     },
     {
-      "name": "rocky-8/gmp",
+      "name": "rocky-8/gmp.x86_64",
       "version": "1:6.1.2-10.el8"
     },
     {
-      "name": "rocky-8/gnutls",
+      "name": "rocky-8/gnutls.x86_64",
       "version": "3.6.16-8.el8_9.3"
     },
     {
-      "name": "rocky-8/go-srpm-macros",
+      "name": "rocky-8/go-srpm-macros.noarch",
       "version": "2-17.el8"
     },
     {
-      "name": "rocky-8/grep",
+      "name": "rocky-8/grep.x86_64",
       "version": "3.1-6.el8"
     },
     {
-      "name": "rocky-8/groff-base",
+      "name": "rocky-8/groff-base.x86_64",
       "version": "1.22.3-18.el8"
     },
     {
-      "name": "rocky-8/grub2-common",
+      "name": "rocky-8/grub2-common.noarch",
       "version": "1:2.02-150.el8.rocky.0.3"
     },
     {
-      "name": "rocky-8/grub2-tools",
+      "name": "rocky-8/grub2-tools-minimal.x86_64",
       "version": "1:2.02-150.el8.rocky.0.3"
     },
     {
-      "name": "rocky-8/grub2-tools-minimal",
+      "name": "rocky-8/grub2-tools.x86_64",
       "version": "1:2.02-150.el8.rocky.0.3"
     },
     {
-      "name": "rocky-8/grubby",
+      "name": "rocky-8/grubby.x86_64",
       "version": "8.40-48.el8"
     },
     {
-      "name": "rocky-8/gzip",
+      "name": "rocky-8/gzip.x86_64",
       "version": "1.9-13.el8_5"
     },
     {
-      "name": "rocky-8/hardlink",
+      "name": "rocky-8/hardlink.x86_64",
       "version": "1:1.3-6.el8"
     },
     {
-      "name": "rocky-8/info",
+      "name": "rocky-8/info.x86_64",
       "version": "6.5-7.el8"
     },
     {
-      "name": "rocky-8/json-c",
+      "name": "rocky-8/json-c.x86_64",
       "version": "0.13.1-3.el8"
     },
     {
-      "name": "rocky-8/kbd",
+      "name": "rocky-8/kbd-legacy.noarch",
       "version": "2.0.4-11.el8"
     },
     {
-      "name": "rocky-8/kbd-legacy",
+      "name": "rocky-8/kbd-misc.noarch",
       "version": "2.0.4-11.el8"
     },
     {
-      "name": "rocky-8/kbd-misc",
+      "name": "rocky-8/kbd.x86_64",
       "version": "2.0.4-11.el8"
     },
     {
-      "name": "rocky-8/keyutils-libs",
+      "name": "rocky-8/keyutils-libs.x86_64",
       "version": "1.5.10-9.el8"
     },
     {
-      "name": "rocky-8/kmod",
+      "name": "rocky-8/kmod-libs.x86_64",
       "version": "25-19.el8"
     },
     {
-      "name": "rocky-8/kmod-libs",
+      "name": "rocky-8/kmod.x86_64",
       "version": "25-19.el8"
     },
     {
-      "name": "rocky-8/kpartx",
+      "name": "rocky-8/kpartx.x86_64",
       "version": "0.8.4-39.el8"
     },
     {
-      "name": "rocky-8/krb5-libs",
+      "name": "rocky-8/krb5-libs.x86_64",
       "version": "1.18.2-26.el8"
     },
     {
-      "name": "rocky-8/libacl",
+      "name": "rocky-8/libacl.x86_64",
       "version": "2.2.53-1.el8.1"
     },
     {
-      "name": "rocky-8/libarchive",
+      "name": "rocky-8/libarchive.x86_64",
       "version": "3.3.3-5.el8"
     },
     {
-      "name": "rocky-8/libattr",
+      "name": "rocky-8/libattr.x86_64",
       "version": "2.4.48-3.el8"
     },
     {
-      "name": "rocky-8/libblkid",
+      "name": "rocky-8/libblkid.x86_64",
       "version": "2.32.1-44.el8_9.1"
     },
     {
-      "name": "rocky-8/libcap",
-      "version": "2.48-6.el8_9"
-    },
-    {
-      "name": "rocky-8/libcap-ng",
+      "name": "rocky-8/libcap-ng.x86_64",
       "version": "0.7.11-1.el8"
     },
     {
-      "name": "rocky-8/libcom_err",
+      "name": "rocky-8/libcap.x86_64",
+      "version": "2.48-6.el8_9"
+    },
+    {
+      "name": "rocky-8/libcom_err.x86_64",
       "version": "1.45.6-5.el8"
     },
     {
-      "name": "rocky-8/libcroco",
+      "name": "rocky-8/libcroco.x86_64",
       "version": "0.6.12-4.el8_2.1"
     },
     {
-      "name": "rocky-8/libcurl",
+      "name": "rocky-8/libcurl.x86_64",
       "version": "7.61.1-33.el8_9.5"
     },
     {
-      "name": "rocky-8/libdb",
+      "name": "rocky-8/libdb-utils.x86_64",
       "version": "5.3.28-42.el8_4"
     },
     {
-      "name": "rocky-8/libdb-utils",
+      "name": "rocky-8/libdb.x86_64",
       "version": "5.3.28-42.el8_4"
     },
     {
-      "name": "rocky-8/libfdisk",
+      "name": "rocky-8/libfdisk.x86_64",
       "version": "2.32.1-44.el8_9.1"
     },
     {
-      "name": "rocky-8/libffi",
+      "name": "rocky-8/libffi.x86_64",
       "version": "3.1-24.el8"
     },
     {
-      "name": "rocky-8/libgcc",
+      "name": "rocky-8/libgcc.x86_64",
       "version": "8.5.0-20.el8"
     },
     {
-      "name": "rocky-8/libgcrypt",
+      "name": "rocky-8/libgcrypt.x86_64",
       "version": "1.8.5-7.el8_6"
     },
     {
-      "name": "rocky-8/libgomp",
+      "name": "rocky-8/libgomp.x86_64",
       "version": "8.5.0-20.el8"
     },
     {
-      "name": "rocky-8/libgpg-error",
+      "name": "rocky-8/libgpg-error.x86_64",
       "version": "1.31-1.el8"
     },
     {
-      "name": "rocky-8/libidn2",
+      "name": "rocky-8/libidn2.x86_64",
       "version": "2.2.0-1.el8"
     },
     {
-      "name": "rocky-8/libkcapi",
+      "name": "rocky-8/libkcapi-hmaccalc.x86_64",
       "version": "1.2.0-2.el8"
     },
     {
-      "name": "rocky-8/libkcapi-hmaccalc",
+      "name": "rocky-8/libkcapi.x86_64",
       "version": "1.2.0-2.el8"
     },
     {
-      "name": "rocky-8/libmount",
+      "name": "rocky-8/libmount.x86_64",
       "version": "2.32.1-44.el8_9.1"
     },
     {
-      "name": "rocky-8/libnghttp2",
+      "name": "rocky-8/libnghttp2.x86_64",
       "version": "1.33.0-5.el8_8"
     },
     {
-      "name": "rocky-8/libnsl2",
+      "name": "rocky-8/libnsl2.x86_64",
       "version": "1.2.0-2.20180605git4a062cf.el8"
     },
     {
-      "name": "rocky-8/libpsl",
+      "name": "rocky-8/libpsl.x86_64",
       "version": "0.20.2-6.el8"
     },
     {
-      "name": "rocky-8/libpwquality",
+      "name": "rocky-8/libpwquality.x86_64",
       "version": "1.4.4-6.el8"
     },
     {
-      "name": "rocky-8/libseccomp",
+      "name": "rocky-8/libseccomp.x86_64",
       "version": "2.5.2-1.el8"
     },
     {
-      "name": "rocky-8/libselinux",
+      "name": "rocky-8/libselinux.x86_64",
       "version": "2.9-8.el8"
     },
     {
-      "name": "rocky-8/libsemanage",
+      "name": "rocky-8/libsemanage.x86_64",
       "version": "2.9-9.el8_6"
     },
     {
-      "name": "rocky-8/libsepol",
+      "name": "rocky-8/libsepol.x86_64",
       "version": "2.9-3.el8"
     },
     {
-      "name": "rocky-8/libsigsegv",
+      "name": "rocky-8/libsigsegv.x86_64",
       "version": "2.11-5.el8"
     },
     {
-      "name": "rocky-8/libsmartcols",
+      "name": "rocky-8/libsmartcols.x86_64",
       "version": "2.32.1-44.el8_9.1"
     },
     {
-      "name": "rocky-8/libssh",
+      "name": "rocky-8/libssh-config.noarch",
       "version": "0.9.6-13.el8_9"
     },
     {
-      "name": "rocky-8/libssh-config",
+      "name": "rocky-8/libssh.x86_64",
       "version": "0.9.6-13.el8_9"
     },
     {
-      "name": "rocky-8/libstdc++",
+      "name": "rocky-8/libstdc++.x86_64",
       "version": "8.5.0-20.el8"
     },
     {
-      "name": "rocky-8/libtasn1",
+      "name": "rocky-8/libtasn1.x86_64",
       "version": "4.13-4.el8_7"
     },
     {
-      "name": "rocky-8/libtirpc",
+      "name": "rocky-8/libtirpc.x86_64",
       "version": "1.1.4-8.el8"
     },
     {
-      "name": "rocky-8/libunistring",
+      "name": "rocky-8/libunistring.x86_64",
       "version": "0.9.9-3.el8"
     },
     {
-      "name": "rocky-8/libutempter",
+      "name": "rocky-8/libutempter.x86_64",
       "version": "1.1.6-14.el8"
     },
     {
-      "name": "rocky-8/libuuid",
+      "name": "rocky-8/libuuid.x86_64",
       "version": "2.32.1-44.el8_9.1"
     },
     {
-      "name": "rocky-8/libverto",
+      "name": "rocky-8/libverto.x86_64",
       "version": "0.3.2-2.el8"
     },
     {
-      "name": "rocky-8/libxcrypt",
+      "name": "rocky-8/libxcrypt.x86_64",
       "version": "4.1.1-6.el8"
     },
     {
-      "name": "rocky-8/libxkbcommon",
+      "name": "rocky-8/libxkbcommon.x86_64",
       "version": "0.9.1-1.el8"
     },
     {
-      "name": "rocky-8/libxml2",
+      "name": "rocky-8/libxml2.x86_64",
       "version": "2.9.7-18.el8_9"
     },
     {
-      "name": "rocky-8/libzstd",
+      "name": "rocky-8/libzstd.x86_64",
       "version": "1.4.4-1.el8"
     },
     {
-      "name": "rocky-8/lua-libs",
+      "name": "rocky-8/lua-libs.x86_64",
       "version": "5.3.4-12.el8"
     },
     {
-      "name": "rocky-8/lz4-libs",
+      "name": "rocky-8/lz4-libs.x86_64",
       "version": "1.8.3-3.el8_4"
     },
     {
-      "name": "rocky-8/make",
+      "name": "rocky-8/make.x86_64",
       "version": "1:4.2.1-11.el8"
     },
     {
-      "name": "rocky-8/memstrack",
+      "name": "rocky-8/memstrack.x86_64",
       "version": "0.2.5-2.el8"
     },
     {
-      "name": "rocky-8/mpfr",
+      "name": "rocky-8/mpfr.x86_64",
       "version": "3.1.6-1.el8"
     },
     {
-      "name": "rocky-8/ncurses",
+      "name": "rocky-8/ncurses-base.noarch",
       "version": "6.1-10.20180224.el8"
     },
     {
-      "name": "rocky-8/ncurses-base",
+      "name": "rocky-8/ncurses-libs.x86_64",
       "version": "6.1-10.20180224.el8"
     },
     {
-      "name": "rocky-8/ncurses-libs",
+      "name": "rocky-8/ncurses.x86_64",
       "version": "6.1-10.20180224.el8"
     },
     {
-      "name": "rocky-8/nettle",
+      "name": "rocky-8/nettle.x86_64",
       "version": "3.4.1-7.el8"
     },
     {
-      "name": "rocky-8/ocaml-srpm-macros",
+      "name": "rocky-8/ocaml-srpm-macros.noarch",
       "version": "5-4.el8"
     },
     {
-      "name": "rocky-8/openblas-srpm-macros",
+      "name": "rocky-8/openblas-srpm-macros.noarch",
       "version": "2-2.el8"
     },
     {
-      "name": "rocky-8/openldap",
+      "name": "rocky-8/openldap.x86_64",
       "version": "2.4.46-18.el8"
     },
     {
-      "name": "rocky-8/openssl",
+      "name": "rocky-8/openssl-libs.x86_64",
       "version": "1:1.1.1k-12.el8_9"
     },
     {
-      "name": "rocky-8/openssl-libs",
-      "version": "1:1.1.1k-12.el8_9"
-    },
-    {
-      "name": "rocky-8/openssl-pkcs11",
+      "name": "rocky-8/openssl-pkcs11.x86_64",
       "version": "0.4.10-3.el8"
     },
     {
-      "name": "rocky-8/os-prober",
+      "name": "rocky-8/openssl.x86_64",
+      "version": "1:1.1.1k-12.el8_9"
+    },
+    {
+      "name": "rocky-8/os-prober.x86_64",
       "version": "1.74-9.el8"
     },
     {
-      "name": "rocky-8/p11-kit",
+      "name": "rocky-8/p11-kit-trust.x86_64",
       "version": "0.23.22-1.el8"
     },
     {
-      "name": "rocky-8/p11-kit-trust",
+      "name": "rocky-8/p11-kit.x86_64",
       "version": "0.23.22-1.el8"
     },
     {
-      "name": "rocky-8/pam",
+      "name": "rocky-8/pam.x86_64",
       "version": "1.3.1-27.el8"
     },
     {
-      "name": "rocky-8/pcre",
+      "name": "rocky-8/pcre.x86_64",
       "version": "8.42-6.el8"
     },
     {
-      "name": "rocky-8/pcre2",
+      "name": "rocky-8/pcre2.x86_64",
       "version": "10.32-3.el8_6"
     },
     {
-      "name": "rocky-8/perl",
-      "version": "4:5.26.3-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-Algorithm-Diff",
+      "name": "rocky-8/perl-Algorithm-Diff.noarch",
       "version": "1.1903-9.el8"
     },
     {
-      "name": "rocky-8/perl-Archive-Tar",
+      "name": "rocky-8/perl-Archive-Tar.noarch",
       "version": "2.30-1.el8"
     },
     {
-      "name": "rocky-8/perl-Archive-Zip",
+      "name": "rocky-8/perl-Archive-Zip.noarch",
       "version": "1.60-3.el8"
     },
     {
-      "name": "rocky-8/perl-Attribute-Handlers",
+      "name": "rocky-8/perl-Attribute-Handlers.noarch",
       "version": "0.99-422.el8"
     },
     {
-      "name": "rocky-8/perl-B-Debug",
+      "name": "rocky-8/perl-B-Debug.noarch",
       "version": "1.26-2.el8"
     },
     {
-      "name": "rocky-8/perl-CPAN",
-      "version": "2.18-397.el8"
-    },
-    {
-      "name": "rocky-8/perl-CPAN-Meta",
-      "version": "2.150010-396.el8"
-    },
-    {
-      "name": "rocky-8/perl-CPAN-Meta-Requirements",
+      "name": "rocky-8/perl-CPAN-Meta-Requirements.noarch",
       "version": "2.140-396.el8"
     },
     {
-      "name": "rocky-8/perl-CPAN-Meta-YAML",
+      "name": "rocky-8/perl-CPAN-Meta-YAML.noarch",
       "version": "0.018-397.el8"
     },
     {
-      "name": "rocky-8/perl-Carp",
+      "name": "rocky-8/perl-CPAN-Meta.noarch",
+      "version": "2.150010-396.el8"
+    },
+    {
+      "name": "rocky-8/perl-CPAN.noarch",
+      "version": "2.18-397.el8"
+    },
+    {
+      "name": "rocky-8/perl-Carp.noarch",
       "version": "1.42-396.el8"
     },
     {
-      "name": "rocky-8/perl-Compress-Bzip2",
+      "name": "rocky-8/perl-Compress-Bzip2.x86_64",
       "version": "2.26-6.el8"
     },
     {
-      "name": "rocky-8/perl-Compress-Raw-Bzip2",
+      "name": "rocky-8/perl-Compress-Raw-Bzip2.x86_64",
       "version": "2.081-1.el8"
     },
     {
-      "name": "rocky-8/perl-Compress-Raw-Zlib",
+      "name": "rocky-8/perl-Compress-Raw-Zlib.x86_64",
       "version": "2.081-1.el8"
     },
     {
-      "name": "rocky-8/perl-Config-Perl-V",
+      "name": "rocky-8/perl-Config-Perl-V.noarch",
       "version": "0.30-1.el8"
     },
     {
-      "name": "rocky-8/perl-DB_File",
+      "name": "rocky-8/perl-DB_File.x86_64",
       "version": "1.842-1.el8"
     },
     {
-      "name": "rocky-8/perl-Data-Dumper",
+      "name": "rocky-8/perl-Data-Dumper.x86_64",
       "version": "2.167-399.el8"
     },
     {
-      "name": "rocky-8/perl-Data-OptList",
+      "name": "rocky-8/perl-Data-OptList.noarch",
       "version": "0.110-6.el8"
     },
     {
-      "name": "rocky-8/perl-Data-Section",
+      "name": "rocky-8/perl-Data-Section.noarch",
       "version": "0.200007-3.el8"
     },
     {
-      "name": "rocky-8/perl-Devel-PPPort",
+      "name": "rocky-8/perl-Devel-PPPort.x86_64",
       "version": "3.36-5.el8"
     },
     {
-      "name": "rocky-8/perl-Devel-Peek",
+      "name": "rocky-8/perl-Devel-Peek.x86_64",
       "version": "1.26-422.el8"
     },
     {
-      "name": "rocky-8/perl-Devel-SelfStubber",
+      "name": "rocky-8/perl-Devel-SelfStubber.noarch",
       "version": "1.06-422.el8"
     },
     {
-      "name": "rocky-8/perl-Devel-Size",
+      "name": "rocky-8/perl-Devel-Size.x86_64",
       "version": "0.81-2.el8"
     },
     {
-      "name": "rocky-8/perl-Digest",
-      "version": "1.17-395.el8"
-    },
-    {
-      "name": "rocky-8/perl-Digest-MD5",
+      "name": "rocky-8/perl-Digest-MD5.x86_64",
       "version": "2.55-396.el8"
     },
     {
-      "name": "rocky-8/perl-Digest-SHA",
+      "name": "rocky-8/perl-Digest-SHA.x86_64",
       "version": "1:6.02-1.el8"
     },
     {
-      "name": "rocky-8/perl-Encode",
-      "version": "4:2.97-3.el8"
-    },
-    {
-      "name": "rocky-8/perl-Encode-Locale",
-      "version": "1.05-10.module+el8.9.0+1521+0101edce"
-    },
-    {
-      "name": "rocky-8/perl-Encode-devel",
-      "version": "4:2.97-3.el8"
-    },
-    {
-      "name": "rocky-8/perl-Env",
-      "version": "1.04-395.el8"
-    },
-    {
-      "name": "rocky-8/perl-Errno",
-      "version": "1.28-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-Exporter",
-      "version": "5.72-396.el8"
-    },
-    {
-      "name": "rocky-8/perl-ExtUtils-CBuilder",
-      "version": "1:0.280230-2.el8"
-    },
-    {
-      "name": "rocky-8/perl-ExtUtils-Command",
-      "version": "1:7.34-1.el8"
-    },
-    {
-      "name": "rocky-8/perl-ExtUtils-Embed",
-      "version": "1.34-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-ExtUtils-Install",
-      "version": "2.14-4.el8"
-    },
-    {
-      "name": "rocky-8/perl-ExtUtils-MM-Utils",
-      "version": "1:7.34-1.el8"
-    },
-    {
-      "name": "rocky-8/perl-ExtUtils-MakeMaker",
-      "version": "1:7.34-1.el8"
-    },
-    {
-      "name": "rocky-8/perl-ExtUtils-Manifest",
-      "version": "1.70-395.el8"
-    },
-    {
-      "name": "rocky-8/perl-ExtUtils-Miniperl",
-      "version": "1.06-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-ExtUtils-ParseXS",
-      "version": "1:3.35-2.el8"
-    },
-    {
-      "name": "rocky-8/perl-File-Fetch",
-      "version": "0.56-2.el8"
-    },
-    {
-      "name": "rocky-8/perl-File-HomeDir",
-      "version": "1.002-4.el8"
-    },
-    {
-      "name": "rocky-8/perl-File-Path",
-      "version": "2.15-2.el8"
-    },
-    {
-      "name": "rocky-8/perl-File-Temp",
-      "version": "0.230.600-1.el8"
-    },
-    {
-      "name": "rocky-8/perl-File-Which",
-      "version": "1.22-2.el8"
-    },
-    {
-      "name": "rocky-8/perl-Filter",
-      "version": "2:1.58-2.el8"
-    },
-    {
-      "name": "rocky-8/perl-Filter-Simple",
-      "version": "0.94-2.el8"
-    },
-    {
-      "name": "rocky-8/perl-Getopt-Long",
-      "version": "1:2.50-4.el8"
-    },
-    {
-      "name": "rocky-8/perl-HTTP-Tiny",
-      "version": "0.074-2.el8_9.1"
-    },
-    {
-      "name": "rocky-8/perl-IO",
-      "version": "1.38-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-IO-Compress",
-      "version": "2.081-1.el8"
-    },
-    {
-      "name": "rocky-8/perl-IO-Socket-IP",
-      "version": "0.39-5.el8"
-    },
-    {
-      "name": "rocky-8/perl-IO-Socket-SSL",
-      "version": "2.066-4.module+el8.9.0+1517+e71a7a62"
-    },
-    {
-      "name": "rocky-8/perl-IO-Zlib",
-      "version": "1:1.10-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-IPC-Cmd",
-      "version": "2:1.02-1.el8"
-    },
-    {
-      "name": "rocky-8/perl-IPC-SysV",
-      "version": "2.07-397.el8"
-    },
-    {
-      "name": "rocky-8/perl-IPC-System-Simple",
-      "version": "1.25-17.el8"
-    },
-    {
-      "name": "rocky-8/perl-JSON-PP",
-      "version": "1:2.97.001-3.el8"
-    },
-    {
-      "name": "rocky-8/perl-Locale-Codes",
-      "version": "3.57-1.el8"
-    },
-    {
-      "name": "rocky-8/perl-Locale-Maketext",
-      "version": "1.28-396.el8"
-    },
-    {
-      "name": "rocky-8/perl-Locale-Maketext-Simple",
-      "version": "1:0.21-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-MIME-Base64",
-      "version": "3.15-396.el8"
-    },
-    {
-      "name": "rocky-8/perl-MRO-Compat",
-      "version": "0.13-4.el8"
-    },
-    {
-      "name": "rocky-8/perl-Math-BigInt",
-      "version": "1:1.9998.11-7.el8"
-    },
-    {
-      "name": "rocky-8/perl-Math-BigInt-FastCalc",
-      "version": "0.500.600-6.el8"
-    },
-    {
-      "name": "rocky-8/perl-Math-BigRat",
-      "version": "0.2614-1.el8"
-    },
-    {
-      "name": "rocky-8/perl-Math-Complex",
-      "version": "1.59-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-Memoize",
-      "version": "1.03-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-Module-Build",
-      "version": "2:0.42.24-5.el8"
-    },
-    {
-      "name": "rocky-8/perl-Module-CoreList",
-      "version": "1:5.20181130-1.el8"
-    },
-    {
-      "name": "rocky-8/perl-Module-CoreList-tools",
-      "version": "1:5.20181130-1.el8"
-    },
-    {
-      "name": "rocky-8/perl-Module-Load",
-      "version": "1:0.32-395.el8"
-    },
-    {
-      "name": "rocky-8/perl-Module-Load-Conditional",
-      "version": "0.68-395.el8"
-    },
-    {
-      "name": "rocky-8/perl-Module-Loaded",
-      "version": "1:0.08-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-Module-Metadata",
-      "version": "1.000033-395.el8"
-    },
-    {
-      "name": "rocky-8/perl-Mozilla-CA",
-      "version": "20160104-7.module+el8.9.0+1521+0101edce"
-    },
-    {
-      "name": "rocky-8/perl-Net-Ping",
-      "version": "2.55-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-Net-SSLeay",
-      "version": "1.88-2.module+el8.9.0+1517+e71a7a62"
-    },
-    {
-      "name": "rocky-8/perl-Package-Generator",
-      "version": "1.106-11.el8"
-    },
-    {
-      "name": "rocky-8/perl-Params-Check",
-      "version": "1:0.38-395.el8"
-    },
-    {
-      "name": "rocky-8/perl-Params-Util",
-      "version": "1.07-22.el8"
-    },
-    {
-      "name": "rocky-8/perl-PathTools",
-      "version": "3.74-1.el8"
-    },
-    {
-      "name": "rocky-8/perl-Perl-OSType",
-      "version": "1.010-396.el8"
-    },
-    {
-      "name": "rocky-8/perl-PerlIO-via-QuotedPrint",
-      "version": "0.08-395.el8"
-    },
-    {
-      "name": "rocky-8/perl-Pod-Checker",
-      "version": "4:1.73-395.el8"
-    },
-    {
-      "name": "rocky-8/perl-Pod-Escapes",
-      "version": "1:1.07-395.el8"
-    },
-    {
-      "name": "rocky-8/perl-Pod-Html",
-      "version": "1.22.02-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-Pod-Parser",
-      "version": "1.63-396.el8"
-    },
-    {
-      "name": "rocky-8/perl-Pod-Perldoc",
-      "version": "3.28-396.el8"
-    },
-    {
-      "name": "rocky-8/perl-Pod-Simple",
-      "version": "1:3.35-395.el8"
-    },
-    {
-      "name": "rocky-8/perl-Pod-Usage",
-      "version": "4:1.69-395.el8"
-    },
-    {
-      "name": "rocky-8/perl-Scalar-List-Utils",
-      "version": "3:1.49-2.el8"
-    },
-    {
-      "name": "rocky-8/perl-SelfLoader",
-      "version": "1.23-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-Socket",
-      "version": "4:2.027-3.el8"
-    },
-    {
-      "name": "rocky-8/perl-Software-License",
-      "version": "0.103013-2.el8"
-    },
-    {
-      "name": "rocky-8/perl-Storable",
-      "version": "1:3.11-3.el8"
-    },
-    {
-      "name": "rocky-8/perl-Sub-Exporter",
-      "version": "0.987-15.el8"
-    },
-    {
-      "name": "rocky-8/perl-Sub-Install",
-      "version": "0.928-14.el8"
-    },
-    {
-      "name": "rocky-8/perl-Sys-Syslog",
-      "version": "0.35-397.el8"
-    },
-    {
-      "name": "rocky-8/perl-Term-ANSIColor",
-      "version": "4.06-396.el8"
-    },
-    {
-      "name": "rocky-8/perl-Term-Cap",
+      "name": "rocky-8/perl-Digest.noarch",
       "version": "1.17-395.el8"
     },
     {
-      "name": "rocky-8/perl-TermReadKey",
+      "name": "rocky-8/perl-Encode-Locale.noarch",
+      "version": "1.05-10.module+el8.9.0+1521+0101edce"
+    },
+    {
+      "name": "rocky-8/perl-Encode-devel.x86_64",
+      "version": "4:2.97-3.el8"
+    },
+    {
+      "name": "rocky-8/perl-Encode.x86_64",
+      "version": "4:2.97-3.el8"
+    },
+    {
+      "name": "rocky-8/perl-Env.noarch",
+      "version": "1.04-395.el8"
+    },
+    {
+      "name": "rocky-8/perl-Errno.x86_64",
+      "version": "1.28-422.el8"
+    },
+    {
+      "name": "rocky-8/perl-Exporter.noarch",
+      "version": "5.72-396.el8"
+    },
+    {
+      "name": "rocky-8/perl-ExtUtils-CBuilder.noarch",
+      "version": "1:0.280230-2.el8"
+    },
+    {
+      "name": "rocky-8/perl-ExtUtils-Command.noarch",
+      "version": "1:7.34-1.el8"
+    },
+    {
+      "name": "rocky-8/perl-ExtUtils-Embed.noarch",
+      "version": "1.34-422.el8"
+    },
+    {
+      "name": "rocky-8/perl-ExtUtils-Install.noarch",
+      "version": "2.14-4.el8"
+    },
+    {
+      "name": "rocky-8/perl-ExtUtils-MM-Utils.noarch",
+      "version": "1:7.34-1.el8"
+    },
+    {
+      "name": "rocky-8/perl-ExtUtils-MakeMaker.noarch",
+      "version": "1:7.34-1.el8"
+    },
+    {
+      "name": "rocky-8/perl-ExtUtils-Manifest.noarch",
+      "version": "1.70-395.el8"
+    },
+    {
+      "name": "rocky-8/perl-ExtUtils-Miniperl.noarch",
+      "version": "1.06-422.el8"
+    },
+    {
+      "name": "rocky-8/perl-ExtUtils-ParseXS.noarch",
+      "version": "1:3.35-2.el8"
+    },
+    {
+      "name": "rocky-8/perl-File-Fetch.noarch",
+      "version": "0.56-2.el8"
+    },
+    {
+      "name": "rocky-8/perl-File-HomeDir.noarch",
+      "version": "1.002-4.el8"
+    },
+    {
+      "name": "rocky-8/perl-File-Path.noarch",
+      "version": "2.15-2.el8"
+    },
+    {
+      "name": "rocky-8/perl-File-Temp.noarch",
+      "version": "0.230.600-1.el8"
+    },
+    {
+      "name": "rocky-8/perl-File-Which.noarch",
+      "version": "1.22-2.el8"
+    },
+    {
+      "name": "rocky-8/perl-Filter-Simple.noarch",
+      "version": "0.94-2.el8"
+    },
+    {
+      "name": "rocky-8/perl-Filter.x86_64",
+      "version": "2:1.58-2.el8"
+    },
+    {
+      "name": "rocky-8/perl-Getopt-Long.noarch",
+      "version": "1:2.50-4.el8"
+    },
+    {
+      "name": "rocky-8/perl-HTTP-Tiny.noarch",
+      "version": "0.074-2.el8_9.1"
+    },
+    {
+      "name": "rocky-8/perl-IO-Compress.noarch",
+      "version": "2.081-1.el8"
+    },
+    {
+      "name": "rocky-8/perl-IO-Socket-IP.noarch",
+      "version": "0.39-5.el8"
+    },
+    {
+      "name": "rocky-8/perl-IO-Socket-SSL.noarch",
+      "version": "2.066-4.module+el8.9.0+1517+e71a7a62"
+    },
+    {
+      "name": "rocky-8/perl-IO-Zlib.noarch",
+      "version": "1:1.10-422.el8"
+    },
+    {
+      "name": "rocky-8/perl-IO.x86_64",
+      "version": "1.38-422.el8"
+    },
+    {
+      "name": "rocky-8/perl-IPC-Cmd.noarch",
+      "version": "2:1.02-1.el8"
+    },
+    {
+      "name": "rocky-8/perl-IPC-SysV.x86_64",
+      "version": "2.07-397.el8"
+    },
+    {
+      "name": "rocky-8/perl-IPC-System-Simple.noarch",
+      "version": "1.25-17.el8"
+    },
+    {
+      "name": "rocky-8/perl-JSON-PP.noarch",
+      "version": "1:2.97.001-3.el8"
+    },
+    {
+      "name": "rocky-8/perl-Locale-Codes.noarch",
+      "version": "3.57-1.el8"
+    },
+    {
+      "name": "rocky-8/perl-Locale-Maketext-Simple.noarch",
+      "version": "1:0.21-422.el8"
+    },
+    {
+      "name": "rocky-8/perl-Locale-Maketext.noarch",
+      "version": "1.28-396.el8"
+    },
+    {
+      "name": "rocky-8/perl-MIME-Base64.x86_64",
+      "version": "3.15-396.el8"
+    },
+    {
+      "name": "rocky-8/perl-MRO-Compat.noarch",
+      "version": "0.13-4.el8"
+    },
+    {
+      "name": "rocky-8/perl-Math-BigInt-FastCalc.x86_64",
+      "version": "0.500.600-6.el8"
+    },
+    {
+      "name": "rocky-8/perl-Math-BigInt.noarch",
+      "version": "1:1.9998.11-7.el8"
+    },
+    {
+      "name": "rocky-8/perl-Math-BigRat.noarch",
+      "version": "0.2614-1.el8"
+    },
+    {
+      "name": "rocky-8/perl-Math-Complex.noarch",
+      "version": "1.59-422.el8"
+    },
+    {
+      "name": "rocky-8/perl-Memoize.noarch",
+      "version": "1.03-422.el8"
+    },
+    {
+      "name": "rocky-8/perl-Module-Build.noarch",
+      "version": "2:0.42.24-5.el8"
+    },
+    {
+      "name": "rocky-8/perl-Module-CoreList-tools.noarch",
+      "version": "1:5.20181130-1.el8"
+    },
+    {
+      "name": "rocky-8/perl-Module-CoreList.noarch",
+      "version": "1:5.20181130-1.el8"
+    },
+    {
+      "name": "rocky-8/perl-Module-Load-Conditional.noarch",
+      "version": "0.68-395.el8"
+    },
+    {
+      "name": "rocky-8/perl-Module-Load.noarch",
+      "version": "1:0.32-395.el8"
+    },
+    {
+      "name": "rocky-8/perl-Module-Loaded.noarch",
+      "version": "1:0.08-422.el8"
+    },
+    {
+      "name": "rocky-8/perl-Module-Metadata.noarch",
+      "version": "1.000033-395.el8"
+    },
+    {
+      "name": "rocky-8/perl-Mozilla-CA.noarch",
+      "version": "20160104-7.module+el8.9.0+1521+0101edce"
+    },
+    {
+      "name": "rocky-8/perl-Net-Ping.noarch",
+      "version": "2.55-422.el8"
+    },
+    {
+      "name": "rocky-8/perl-Net-SSLeay.x86_64",
+      "version": "1.88-2.module+el8.9.0+1517+e71a7a62"
+    },
+    {
+      "name": "rocky-8/perl-Package-Generator.noarch",
+      "version": "1.106-11.el8"
+    },
+    {
+      "name": "rocky-8/perl-Params-Check.noarch",
+      "version": "1:0.38-395.el8"
+    },
+    {
+      "name": "rocky-8/perl-Params-Util.x86_64",
+      "version": "1.07-22.el8"
+    },
+    {
+      "name": "rocky-8/perl-PathTools.x86_64",
+      "version": "3.74-1.el8"
+    },
+    {
+      "name": "rocky-8/perl-Perl-OSType.noarch",
+      "version": "1.010-396.el8"
+    },
+    {
+      "name": "rocky-8/perl-PerlIO-via-QuotedPrint.noarch",
+      "version": "0.08-395.el8"
+    },
+    {
+      "name": "rocky-8/perl-Pod-Checker.noarch",
+      "version": "4:1.73-395.el8"
+    },
+    {
+      "name": "rocky-8/perl-Pod-Escapes.noarch",
+      "version": "1:1.07-395.el8"
+    },
+    {
+      "name": "rocky-8/perl-Pod-Html.noarch",
+      "version": "1.22.02-422.el8"
+    },
+    {
+      "name": "rocky-8/perl-Pod-Parser.noarch",
+      "version": "1.63-396.el8"
+    },
+    {
+      "name": "rocky-8/perl-Pod-Perldoc.noarch",
+      "version": "3.28-396.el8"
+    },
+    {
+      "name": "rocky-8/perl-Pod-Simple.noarch",
+      "version": "1:3.35-395.el8"
+    },
+    {
+      "name": "rocky-8/perl-Pod-Usage.noarch",
+      "version": "4:1.69-395.el8"
+    },
+    {
+      "name": "rocky-8/perl-Scalar-List-Utils.x86_64",
+      "version": "3:1.49-2.el8"
+    },
+    {
+      "name": "rocky-8/perl-SelfLoader.noarch",
+      "version": "1.23-422.el8"
+    },
+    {
+      "name": "rocky-8/perl-Socket.x86_64",
+      "version": "4:2.027-3.el8"
+    },
+    {
+      "name": "rocky-8/perl-Software-License.noarch",
+      "version": "0.103013-2.el8"
+    },
+    {
+      "name": "rocky-8/perl-Storable.x86_64",
+      "version": "1:3.11-3.el8"
+    },
+    {
+      "name": "rocky-8/perl-Sub-Exporter.noarch",
+      "version": "0.987-15.el8"
+    },
+    {
+      "name": "rocky-8/perl-Sub-Install.noarch",
+      "version": "0.928-14.el8"
+    },
+    {
+      "name": "rocky-8/perl-Sys-Syslog.x86_64",
+      "version": "0.35-397.el8"
+    },
+    {
+      "name": "rocky-8/perl-Term-ANSIColor.noarch",
+      "version": "4.06-396.el8"
+    },
+    {
+      "name": "rocky-8/perl-Term-Cap.noarch",
+      "version": "1.17-395.el8"
+    },
+    {
+      "name": "rocky-8/perl-TermReadKey.x86_64",
       "version": "2.37-7.el8"
     },
     {
-      "name": "rocky-8/perl-Test",
-      "version": "1.30-422.el8"
-    },
-    {
-      "name": "rocky-8/perl-Test-Harness",
+      "name": "rocky-8/perl-Test-Harness.noarch",
       "version": "1:3.42-1.el8"
     },
     {
-      "name": "rocky-8/perl-Test-Simple",
+      "name": "rocky-8/perl-Test-Simple.noarch",
       "version": "1:1.302135-1.el8"
     },
     {
-      "name": "rocky-8/perl-Text-Balanced",
+      "name": "rocky-8/perl-Test.noarch",
+      "version": "1.30-422.el8"
+    },
+    {
+      "name": "rocky-8/perl-Text-Balanced.noarch",
       "version": "2.03-395.el8"
     },
     {
-      "name": "rocky-8/perl-Text-Diff",
+      "name": "rocky-8/perl-Text-Diff.noarch",
       "version": "1.45-2.el8"
     },
     {
-      "name": "rocky-8/perl-Text-Glob",
+      "name": "rocky-8/perl-Text-Glob.noarch",
       "version": "0.11-4.el8"
     },
     {
-      "name": "rocky-8/perl-Text-ParseWords",
+      "name": "rocky-8/perl-Text-ParseWords.noarch",
       "version": "3.30-395.el8"
     },
     {
-      "name": "rocky-8/perl-Text-Tabs+Wrap",
+      "name": "rocky-8/perl-Text-Tabs+Wrap.noarch",
       "version": "2013.0523-395.el8"
     },
     {
-      "name": "rocky-8/perl-Text-Template",
+      "name": "rocky-8/perl-Text-Template.noarch",
       "version": "1.51-1.el8"
     },
     {
-      "name": "rocky-8/perl-Thread-Queue",
+      "name": "rocky-8/perl-Thread-Queue.noarch",
       "version": "3.13-1.el8"
     },
     {
-      "name": "rocky-8/perl-Time-HiRes",
+      "name": "rocky-8/perl-Time-HiRes.x86_64",
       "version": "4:1.9758-2.el8"
     },
     {
-      "name": "rocky-8/perl-Time-Local",
+      "name": "rocky-8/perl-Time-Local.noarch",
       "version": "1:1.280-1.el8"
     },
     {
-      "name": "rocky-8/perl-Time-Piece",
+      "name": "rocky-8/perl-Time-Piece.x86_64",
       "version": "1.31-422.el8"
     },
     {
-      "name": "rocky-8/perl-URI",
+      "name": "rocky-8/perl-URI.noarch",
       "version": "1.73-3.el8"
     },
     {
-      "name": "rocky-8/perl-Unicode-Collate",
+      "name": "rocky-8/perl-Unicode-Collate.x86_64",
       "version": "1.25-2.el8"
     },
     {
-      "name": "rocky-8/perl-Unicode-Normalize",
+      "name": "rocky-8/perl-Unicode-Normalize.x86_64",
       "version": "1.25-396.el8"
     },
     {
-      "name": "rocky-8/perl-autodie",
+      "name": "rocky-8/perl-autodie.noarch",
       "version": "2.29-396.el8"
     },
     {
-      "name": "rocky-8/perl-bignum",
+      "name": "rocky-8/perl-bignum.noarch",
       "version": "0.49-2.el8"
     },
     {
-      "name": "rocky-8/perl-constant",
+      "name": "rocky-8/perl-constant.noarch",
       "version": "1.33-396.el8"
     },
     {
-      "name": "rocky-8/perl-devel",
+      "name": "rocky-8/perl-devel.x86_64",
       "version": "4:5.26.3-422.el8"
     },
     {
-      "name": "rocky-8/perl-encoding",
+      "name": "rocky-8/perl-encoding.x86_64",
       "version": "4:2.22-3.el8"
     },
     {
-      "name": "rocky-8/perl-experimental",
+      "name": "rocky-8/perl-experimental.noarch",
       "version": "0.019-2.el8"
     },
     {
-      "name": "rocky-8/perl-inc-latest",
+      "name": "rocky-8/perl-inc-latest.noarch",
       "version": "2:0.500-9.el8"
     },
     {
-      "name": "rocky-8/perl-interpreter",
+      "name": "rocky-8/perl-interpreter.x86_64",
       "version": "4:5.26.3-422.el8"
     },
     {
-      "name": "rocky-8/perl-libnet",
+      "name": "rocky-8/perl-libnet.noarch",
       "version": "3.11-3.el8"
     },
     {
-      "name": "rocky-8/perl-libnetcfg",
+      "name": "rocky-8/perl-libnetcfg.noarch",
       "version": "4:5.26.3-422.el8"
     },
     {
-      "name": "rocky-8/perl-libs",
+      "name": "rocky-8/perl-libs.x86_64",
       "version": "4:5.26.3-422.el8"
     },
     {
-      "name": "rocky-8/perl-local-lib",
+      "name": "rocky-8/perl-local-lib.noarch",
       "version": "2.000024-2.el8"
     },
     {
-      "name": "rocky-8/perl-macros",
+      "name": "rocky-8/perl-macros.x86_64",
       "version": "4:5.26.3-422.el8"
     },
     {
-      "name": "rocky-8/perl-open",
+      "name": "rocky-8/perl-open.noarch",
       "version": "1.11-422.el8"
     },
     {
-      "name": "rocky-8/perl-parent",
+      "name": "rocky-8/perl-parent.noarch",
       "version": "1:0.237-1.el8"
     },
     {
-      "name": "rocky-8/perl-perlfaq",
+      "name": "rocky-8/perl-perlfaq.noarch",
       "version": "5.20180605-1.el8"
     },
     {
-      "name": "rocky-8/perl-podlators",
+      "name": "rocky-8/perl-podlators.noarch",
       "version": "4.11-1.el8"
     },
     {
-      "name": "rocky-8/perl-srpm-macros",
+      "name": "rocky-8/perl-srpm-macros.noarch",
       "version": "1-25.el8"
     },
     {
-      "name": "rocky-8/perl-threads",
-      "version": "1:2.21-2.el8"
-    },
-    {
-      "name": "rocky-8/perl-threads-shared",
+      "name": "rocky-8/perl-threads-shared.x86_64",
       "version": "1.58-2.el8"
     },
     {
-      "name": "rocky-8/perl-utils",
+      "name": "rocky-8/perl-threads.x86_64",
+      "version": "1:2.21-2.el8"
+    },
+    {
+      "name": "rocky-8/perl-utils.noarch",
       "version": "5.26.3-422.el8"
     },
     {
-      "name": "rocky-8/perl-version",
+      "name": "rocky-8/perl-version.x86_64",
       "version": "6:0.99.24-1.el8"
     },
     {
-      "name": "rocky-8/pigz",
+      "name": "rocky-8/perl.x86_64",
+      "version": "4:5.26.3-422.el8"
+    },
+    {
+      "name": "rocky-8/pigz.x86_64",
       "version": "2.4-4.el8"
     },
     {
-      "name": "rocky-8/platform-python",
-      "version": "3.6.8-56.el8_9.3.rocky.0"
-    },
-    {
-      "name": "rocky-8/platform-python-pip",
+      "name": "rocky-8/platform-python-pip.noarch",
       "version": "9.0.3-23.el8_9.1.rocky.0"
     },
     {
-      "name": "rocky-8/platform-python-setuptools",
+      "name": "rocky-8/platform-python-setuptools.noarch",
       "version": "39.2.0-7.el8"
     },
     {
-      "name": "rocky-8/popt",
+      "name": "rocky-8/platform-python.x86_64",
+      "version": "3.6.8-56.el8_9.3.rocky.0"
+    },
+    {
+      "name": "rocky-8/popt.x86_64",
       "version": "1.18-1.el8"
     },
     {
-      "name": "rocky-8/procps-ng",
+      "name": "rocky-8/procps-ng.x86_64",
       "version": "3.3.15-14.el8"
     },
     {
-      "name": "rocky-8/publicsuffix-list-dafsa",
+      "name": "rocky-8/publicsuffix-list-dafsa.noarch",
       "version": "20180723-1.el8"
     },
     {
-      "name": "rocky-8/python-rpm-macros",
+      "name": "rocky-8/python-rpm-macros.noarch",
       "version": "3-45.el8"
     },
     {
-      "name": "rocky-8/python-srpm-macros",
+      "name": "rocky-8/python-srpm-macros.noarch",
       "version": "3-45.el8"
     },
     {
-      "name": "rocky-8/python3-libs",
+      "name": "rocky-8/python3-libs.x86_64",
       "version": "3.6.8-56.el8_9.3.rocky.0"
     },
     {
-      "name": "rocky-8/python3-pip-wheel",
+      "name": "rocky-8/python3-pip-wheel.noarch",
       "version": "9.0.3-23.el8_9.1.rocky.0"
     },
     {
-      "name": "rocky-8/python3-pyparsing",
+      "name": "rocky-8/python3-pyparsing.noarch",
       "version": "2.1.10-7.el8"
     },
     {
-      "name": "rocky-8/python3-rpm-macros",
+      "name": "rocky-8/python3-rpm-macros.noarch",
       "version": "3-45.el8"
     },
     {
-      "name": "rocky-8/python3-setuptools-wheel",
+      "name": "rocky-8/python3-setuptools-wheel.noarch",
       "version": "39.2.0-7.el8"
     },
     {
-      "name": "rocky-8/qt5-srpm-macros",
+      "name": "rocky-8/qt5-srpm-macros.noarch",
       "version": "5.15.3-1.el8"
     },
     {
-      "name": "rocky-8/readline",
+      "name": "rocky-8/readline.x86_64",
       "version": "7.0-10.el8"
     },
     {
-      "name": "rocky-8/redhat-rpm-config",
+      "name": "rocky-8/redhat-rpm-config.noarch",
       "version": "131-1.el8"
     },
     {
-      "name": "rocky-8/rocky-gpg-keys",
+      "name": "rocky-8/rocky-gpg-keys.noarch",
       "version": "8.9-1.9.el8"
     },
     {
-      "name": "rocky-8/rocky-release",
+      "name": "rocky-8/rocky-release.noarch",
       "version": "8.9-1.9.el8"
     },
     {
-      "name": "rocky-8/rocky-repos",
+      "name": "rocky-8/rocky-repos.noarch",
       "version": "8.9-1.9.el8"
     },
     {
-      "name": "rocky-8/rpm",
+      "name": "rocky-8/rpm-libs.x86_64",
       "version": "4.14.3-28.el8_9"
     },
     {
-      "name": "rocky-8/rpm-libs",
+      "name": "rocky-8/rpm.x86_64",
       "version": "4.14.3-28.el8_9"
     },
     {
-      "name": "rocky-8/rust-srpm-macros",
+      "name": "rocky-8/rust-srpm-macros.noarch",
       "version": "5-2.el8"
     },
     {
-      "name": "rocky-8/sed",
+      "name": "rocky-8/sed.x86_64",
       "version": "4.5-5.el8"
     },
     {
-      "name": "rocky-8/setup",
+      "name": "rocky-8/setup.noarch",
       "version": "2.12.2-9.el8"
     },
     {
-      "name": "rocky-8/shadow-utils",
+      "name": "rocky-8/shadow-utils.x86_64",
       "version": "2:4.6-19.el8"
     },
     {
-      "name": "rocky-8/shared-mime-info",
+      "name": "rocky-8/shared-mime-info.x86_64",
       "version": "1.9-3.el8"
     },
     {
-      "name": "rocky-8/sqlite-libs",
+      "name": "rocky-8/sqlite-libs.x86_64",
       "version": "3.26.0-19.el8_9"
     },
     {
-      "name": "rocky-8/systemd",
+      "name": "rocky-8/systemd-libs.x86_64",
       "version": "239-78.el8"
     },
     {
-      "name": "rocky-8/systemd-libs",
+      "name": "rocky-8/systemd-pam.x86_64",
       "version": "239-78.el8"
     },
     {
-      "name": "rocky-8/systemd-pam",
+      "name": "rocky-8/systemd-udev.x86_64",
       "version": "239-78.el8"
     },
     {
-      "name": "rocky-8/systemd-udev",
+      "name": "rocky-8/systemd.x86_64",
       "version": "239-78.el8"
     },
     {
-      "name": "rocky-8/systemtap-sdt-devel",
+      "name": "rocky-8/systemtap-sdt-devel.x86_64",
       "version": "4.9-3.el8"
     },
     {
-      "name": "rocky-8/trousers",
+      "name": "rocky-8/trousers-lib.x86_64",
       "version": "0.3.15-1.el8"
     },
     {
-      "name": "rocky-8/trousers-lib",
+      "name": "rocky-8/trousers.x86_64",
       "version": "0.3.15-1.el8"
     },
     {
-      "name": "rocky-8/tzdata",
+      "name": "rocky-8/tzdata.noarch",
       "version": "2024a-1.el8"
     },
     {
-      "name": "rocky-8/unzip",
+      "name": "rocky-8/unzip.x86_64",
       "version": "6.0-46.el8"
     },
     {
-      "name": "rocky-8/util-linux",
+      "name": "rocky-8/util-linux.x86_64",
       "version": "2.32.1-44.el8_9.1"
     },
     {
-      "name": "rocky-8/which",
+      "name": "rocky-8/which.x86_64",
       "version": "2.21-20.el8"
     },
     {
-      "name": "rocky-8/xkeyboard-config",
+      "name": "rocky-8/xkeyboard-config.noarch",
       "version": "2.28-1.el8"
     },
     {
-      "name": "rocky-8/xz",
+      "name": "rocky-8/xz-libs.x86_64",
       "version": "5.2.4-4.el8_6"
     },
     {
-      "name": "rocky-8/xz-libs",
+      "name": "rocky-8/xz.x86_64",
       "version": "5.2.4-4.el8_6"
     },
     {
-      "name": "rocky-8/zip",
+      "name": "rocky-8/zip.x86_64",
       "version": "3.0-23.el8"
     },
     {
-      "name": "rocky-8/zlib",
+      "name": "rocky-8/zlib.x86_64",
       "version": "1.2.11-25.el8"
     }
   ]

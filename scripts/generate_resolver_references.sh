@@ -285,6 +285,7 @@ env = case["environment"]
 arch, distro = env.get("arch", "x86_64"), env["distro"]
 major = distro.rsplit("-", 1)[1].split(".")[0]
 base = dnf.Base()
+base.conf.read()                     # /etc/dnf/dnf.conf, as the CLI reads it: best=True, install_weak_deps=True
 base.conf.installroot = "/tmp/root"
 base.conf.install_weak_deps = env.get("weak_deps", True)
 base.conf.module_platform_id = "platform:el%s" % major
@@ -293,15 +294,35 @@ for source in case["sources"]:
     url = source["base_url"].replace("$basearch", arch).replace("$releasever", major)
     base.repos.add_new_repo(source["slug"], base.conf, baseurl=[url], gpgcheck=False)
 base.fill_sack(load_system_repo=False)
+modules = dnf.module.module_base.ModuleBase(base)
+
+
+def module_step(call, specs):
+    # As dnf's module command: problems of default streams are reported, not fatal (they drop out).
+    import libdnf
+    try:
+        call(specs)
+    except dnf.exceptions.MarkingErrors as exc:
+        defaults = libdnf.module.ModulePackageContainer.ModuleErrorType_ERROR_IN_DEFAULTS
+        if exc.no_match_group_specs or exc.error_group_specs or not exc.module_depsolv_errors \
+                or exc.module_depsolv_errors[1] != defaults:
+            raise
+
+
 streams = ["%s:%s" % item for item in (env.get("module_streams") or {}).items()]
 if streams:
-    dnf.module.module_base.ModuleBase(base).enable(streams)
-for root in case["roots"]:
+    module_step(modules.enable, streams)
+if env.get("disabled_modules"):
+    module_step(modules.disable, list(env["disabled_modules"]))
+if env.get("module_install"):
+    module_step(modules.install, list(env["module_install"]))
+for root in case.get("roots") or []:
     name = root["purl"].split("/")[2].split("?")[0].split("@")[0]
     constraint = root.get("constraint") or "*"
     base.install(name if constraint == "*" else "%s %s" % (name, constraint))
 base.resolve(allow_erasing=False)
-rows = sorted({("%s/%s" % (distro, p.name), p.evr) for p in base.transaction.install_set})
+# With the arch: multilib choices count.
+rows = sorted({("%s/%s.%s" % (distro, p.name, p.arch), p.evr) for p in base.transaction.install_set})
 json.dump({"tool": "dnf " + dnf.const.VERSION, "rows": rows}, open("/w/out.json", "w"))
 PY
   docker run --rm --platform "${platform:-linux/amd64}" -v "$work:/w" "$image" sh -c \

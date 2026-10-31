@@ -48,7 +48,6 @@ class Source:
     modular: bool = False
     auth_type: str = "none"
     credentials_ref: Optional[str] = None
-    vendor: str = ""
 
     def url(self, arch: str) -> str:
         url = self.base_url.replace("$basearch", arch).replace("$releasever", self.releasever)
@@ -64,7 +63,7 @@ def source_from(raw: Mapping[str, Any]) -> Source:
         namespace=str(config.get("namespace") or ""), arches=[str(a) for a in arches],
         releasever=str(config.get("releasever") or config.get("release") or ""),
         modular=bool(config.get("modular", False)), auth_type=str(raw.get("auth_type") or "none"),
-        credentials_ref=raw.get("credentials_ref"), vendor=str(config.get("vendor") or ""),
+        credentials_ref=raw.get("credentials_ref")
     )
 
 
