@@ -5,14 +5,18 @@ A version's dependencies are not in its POM alone. The effective model:
 1. the `<parent>` chain, each parent loaded through `load` (the caller's channel: a parent may live in another
    repository of the profile; the documents are cached in source_documents, they are not catalog packages): groupId,
    version, properties, dependencyManagement, dependencies, licenses and links are inherited, the child winning;
-2. profiles with `<activeByDefault>true</activeByDefault>` (no other activation is evaluated at load time);
+2. profiles with `<activeByDefault>true</activeByDefault>` contribute like the POM; the dependencies of a profile
+   activated by `<jdk>` are kept with that activation (`Dependency.jdk`) for the resolver to evaluate against the
+   environment's `java_version` (§7.3), and when the POM has such profiles its active-by-default dependencies carry
+   them in `unless_jdk` (Maven drops active-by-default profiles once another profile of the POM activates); no other
+   activation is evaluated, and jdk profiles contribute only dependencies;
 3. `${...}` interpolation from `project.*`/`pom.*`, `project.parent.*` and properties (inherited ones included),
    repeated until nothing changes; `env.*`, system properties and anything unknown stay as written and the dependency
    is marked `details.unresolved_property`;
 4. `dependencyManagement` with `<scope>import</scope>` BOMs, each BOM's own effective dependencyManagement merged in
    declaration order after the POM's own entries (the first entry for a key wins, as Maven's import does);
 5. dependencies without a version or scope take them from dependencyManagement (by groupId:artifactId:type:classifier);
-   managed exclusions are added to the dependency's own;
+   managed exclusions apply to a dependency that declares none (Maven 3.9's management merger);
 6. `<distributionManagement><relocation>` names the artifact's new coordinates.
 
 `<repositories>` are ignored: the profile alone says where artifacts come from (§7.4, point 6).
@@ -65,6 +69,8 @@ class Dependency:
     optional: bool = False
     exclusions: tuple[Exclusion, ...] = ()
     unresolved: tuple[str, ...] = ()      # properties left as written
+    jdk: str | None = None                # from a profile activated by this `<jdk>` spec
+    unless_jdk: tuple[str, ...] = ()      # from an active-by-default profile: dropped when one of these activates
 
     @property
     def key(self) -> tuple[str, str, str, str | None]:
@@ -201,12 +207,18 @@ def parse_pom(content: bytes | str) -> Pom:
     if relocation is not None:
         pom.relocation = Relocation(_text(relocation, "groupId"), _text(relocation, "artifactId"),
                                     _text(relocation, "version"), _text(relocation, "message"))
-    # Profiles active by default contribute like the POM itself (other activations depend on the build).
-    for profile in _children(_child(root, "profiles"), "profile"):
-        if (_text(_child(profile, "activation"), "activeByDefault") or "").lower() == "true":
+    # Profiles active by default contribute like the POM itself; jdk ones depend on the environment.
+    profiles = _children(_child(root, "profiles"), "profile")
+    jdk_specs = tuple(spec for p in profiles if (spec := _text(_child(p, "activation"), "jdk")))
+    for profile in profiles:
+        activation = _child(profile, "activation")
+        jdk = _text(activation, "jdk")
+        if jdk:
+            pom.dependencies += [replace(d, jdk=jdk) for d in _dependencies(profile)]
+        elif (_text(activation, "activeByDefault") or "").lower() == "true":
             pom.properties.update(_properties(profile))
             pom.managed += _dependencies(_child(profile, "dependencyManagement"))
-            pom.dependencies += _dependencies(profile)
+            pom.dependencies += [replace(d, unless_jdk=jdk_specs) for d in _dependencies(profile)]
     return pom
 
 
@@ -303,8 +315,7 @@ async def effective_model(pom: Pom, load: Loader, import_depth: int = 0) -> Effe
         managed_entry = by_key.get(dep.key)
         if managed_entry is not None:
             dep = replace(dep, version=dep.version or managed_entry.version, scope=dep.scope or managed_entry.scope,
-                          exclusions=dep.exclusions + tuple(e for e in managed_entry.exclusions
-                                                            if e not in dep.exclusions))
+                          exclusions=dep.exclusions or managed_entry.exclusions)
         resolved.append(dep)
     relocation = pom.relocation
     return EffectiveModel(

@@ -83,7 +83,7 @@ def test_the_effective_model_inherits_interpolates_and_imports() -> None:
     model = asyncio.run(effective_model(parse_pom(CHILD), load))
     assert (model.group, model.artifact, model.version, model.url) == ("org.example", "child", "2.0", "https://example.org")
     deps = {(d.group, d.artifact): d for d in model.dependencies}
-    # The child's property wins over the parent's; managed exclusions are added.
+    # The child's property wins over the parent's; managed exclusions apply (it declares none).
     jackson = deps[("com.fasterxml.jackson.core", "jackson-databind")]
     assert jackson.version == "2.18.0" and jackson.exclusions == (Exclusion("org.unwanted", "thing"),)
     # From the imported BOM; the POM's own entry for jackson wins over the BOM's 1.0.
@@ -93,7 +93,8 @@ def test_the_effective_model_inherits_interpolates_and_imports() -> None:
     assert sibling.version == "2.0" and sibling.optional
     assert deps[("org.env", "env")].unresolved == ("env.VERSION",)
     assert ("org.slf4j", "slf4j-api") in deps                      # inherited from the parent
-    assert ("org.profile", "on") in deps and ("org.profile", "off") not in deps
+    # The jdk profile's dependency is kept with its activation; the default one yields to it when it activates.
+    assert deps[("org.profile", "off")].jdk == "21" and deps[("org.profile", "on")].unless_jdk == ("21",)
     assert model.license_spdx == "Apache-2.0" and model.problems == []
     assert ("org.junit", "junit-bom", "5.10.0") in asked
     assert all(d.scope != "import" for d in model.managed)
@@ -126,3 +127,32 @@ def test_relocation_and_licenses() -> None:
     model = asyncio.run(effective_model(pom, load))
     assert model.relocation is not None and (model.relocation.group, model.relocation.message) == ("new", "moved")
     assert model.license_raw == "MIT License OR Some Custom License" and model.license_spdx is None
+
+
+def test_managed_exclusions_apply_only_to_a_dependency_without_its_own() -> None:
+    load, _ = _loader({})
+    pom = parse_pom(_pom("""<groupId>g</groupId><artifactId>a</artifactId><version>1</version>
+      <dependencyManagement><dependencies><dependency><groupId>x</groupId><artifactId>y</artifactId><version>1</version>
+        <exclusions><exclusion><groupId>m</groupId><artifactId>managed</artifactId></exclusion></exclusions>
+      </dependency></dependencies></dependencyManagement>
+      <dependencies><dependency><groupId>x</groupId><artifactId>y</artifactId>
+        <exclusions><exclusion><groupId>o</groupId><artifactId>own</artifactId></exclusion></exclusions>
+      </dependency></dependencies>"""))
+    model = asyncio.run(effective_model(pom, load))
+    assert model.dependencies[0].exclusions == (Exclusion("o", "own"),)
+
+
+def test_jdk_profiles_keep_their_activation_and_shadow_active_by_default_ones() -> None:
+    load, _ = _loader({})
+    pom = parse_pom(_pom("""<groupId>g</groupId><artifactId>a</artifactId><version>1</version>
+      <profiles>
+        <profile><activation><jdk>[9,)</jdk></activation><dependencies><dependency><groupId>javax.xml.bind</groupId>
+          <artifactId>jaxb-api</artifactId><version>2.3.1</version></dependency></dependencies></profile>
+        <profile><activation><activeByDefault>true</activeByDefault></activation><dependencies><dependency>
+          <groupId>d</groupId><artifactId>default</artifactId><version>1</version></dependency></dependencies></profile>
+        <profile><activation><property><name>x</name></property></activation><dependencies><dependency>
+          <groupId>p</groupId><artifactId>prop</artifactId><version>1</version></dependency></dependencies></profile>
+      </profiles>"""))
+    deps = {d.artifact: d for d in asyncio.run(effective_model(pom, load)).dependencies}
+    assert set(deps) == {"jaxb-api", "default"}
+    assert deps["jaxb-api"].jdk == "[9,)" and deps["default"].unless_jdk == ("[9,)",)
