@@ -195,7 +195,7 @@ curl -H "Authorization: Bearer phub_admin_dev" -H 'Content-Type: application/jso
 Maven: слаг экосистемы `maven`, тип purl `maven` (`pkg:maven/org.springframework/spring-core`: `groupId` — namespace, `artifactId` — имя).
 Пакет — пара `groupId:artifactId`, регистр значим; в путях, в `name` и в поиске она пишется через двоеточие
 (`org.springframework:spring-core`). Версии сравниваются как Maven ComparableVersion (`6.1.14`, `33.3.1-jre`, `6.2.0-RC1`), все они
-`active`: релизы Maven не удаляют, дату версии даёт `Last-Modified` её POM. Если новейший POM переносит артефакт
+`active`: релизы Maven не удаляют, дату версии даёт `Last-Modified` её POM (новейшей — сразу, остальным — фоновая задача). Если новейший POM переносит артефакт
 (`<relocation>`), пакет несёт `deprecation.alternative` (`<groupId>:<artifactId>`). Зависимости версии берутся из effective model
 (родительские POM, `dependencyManagement` и BOM применены); окружение дерева — `scopes` (по умолчанию `compile,runtime`; ещё `provided`,
 `system`, `test`), у ребра в `details` бывают `exclusions`, `type` и `classifier`:
