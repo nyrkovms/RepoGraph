@@ -182,3 +182,40 @@ def test_a_go_root_without_a_version_resolves_through_the_api_at_its_latest(clie
     assert body["error"] is None, body["error"]
     root = next(node for node in body["nodes"] if node["name"] == "github.com/gin-gonic/gin")
     assert root["version"] == root["latest_compatible"] and root["purl"].startswith("pkg:golang/github.com/gin-gonic/gin@")
+
+
+def test_a_tagless_module_keeps_its_older_pseudo_version_as_superseded() -> None:
+    """#19: a new commit of a module without tags must not mark the previous pseudo-version removed."""
+    go = pipeline.plugin_for("go")
+
+    async def check() -> None:
+        engine = create_async_engine(get_settings().async_db_url, poolclass=NullPool)
+        async with engine.connect() as conn:
+            transaction = await conn.begin()
+            db = AsyncSession(bind=conn, expire_on_commit=False, join_transaction_mode="create_savepoint")
+            try:
+                proxy = await db.scalar(select(Registry).where(Registry.slug == "proxy-golang-org"))
+                path = f"example.com/tagless{uuid.uuid4().hex[:8]}"
+                old, new = "v0.0.0-20261001000000-aaaaaaaaaaaa", "v0.0.0-20261030000000-bbbbbbbbbbbb"
+
+                def snapshot(version: str) -> NormalizedPackage:
+                    return NormalizedPackage(ref=PackageRef("go", "", path), registry_id=str(proxy.id), display_name=path,
+                                             revision=f"latest:{version}",
+                                             versions=[NormalizedVersion(version=version, status="active")])
+
+                await pipeline.write_package(db, go, [snapshot(old)], missing_registry_ids=(), origin=PackageOrigin.seed)
+                package = await pipeline.write_package(db, go, [snapshot(new)], missing_registry_ids=(),
+                                                       origin=PackageOrigin.seed)
+                await db.flush()
+                statuses = {row.version: row.status.value for row in (await db.scalars(
+                    select(PackageVersion).where(PackageVersion.package_id == package.id))).all()}
+                assert statuses == {old: "superseded", new: "active"}
+                kinds = [row.kind.value for row in (await db.scalars(
+                    select(PackageEvent).where(PackageEvent.package_id == package.id))).all()]
+                assert "release_removed" not in kinds
+            finally:
+                await db.close()
+                await transaction.rollback()
+        await engine.dispose()
+
+    asyncio.run(check())
