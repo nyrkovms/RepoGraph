@@ -30,7 +30,7 @@ from app.fetcher.pipeline import (
     dependency_from_row,
     find_package,
     resolve_dependency_links,
-    select_best_version,
+    choose_version,
     source_dependencies,
 )
 from app.models.artifact import Artifact
@@ -662,7 +662,8 @@ class _ProfileView:
         active = self._active[package.id]
         if linked_id is not None and any(row_id == linked_id for _, row_id in active):
             return linked_id
-        return select_best_version(get_plugin(package.ecosystem.value), active, constraint)
+        return await choose_version(self.db, get_plugin(package.ecosystem.value), package.id, active, constraint,
+                                    self.plugin_env)
 
 
 async def _build_tree_for_version(

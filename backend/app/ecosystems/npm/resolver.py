@@ -122,21 +122,7 @@ class _Resolve:
         return self.versions[ref]
 
     def pick(self, versions: Sequence[CatalogVersion], constraint: str) -> CatalogVersion | None:
-        """npm-pick-manifest: a dist-tag names its version; `latest` wins if it satisfies (`*` takes it even as a
-        prerelease) and is usable; otherwise the matching versions, prereleases only when the range names one,
-        ordered by not deprecated, engine-compatible, highest."""
-        spec = constraint.strip()
-        tagged = {tag: v for v in versions for tag in v.tags}
-        if spec in tagged:
-            return tagged[spec]
-        latest = tagged.get("latest")
-        if latest is not None and (spec in ("", "*") or _satisfies(latest.version, spec)) and not latest.deprecated \
-                and self._engine_ok(latest):
-            return latest
-        matching = [v for v in versions if _satisfies(v.version, spec)]
-        if not matching:
-            return None
-        return max(matching, key=lambda v: (not v.deprecated, self._engine_ok(v), _SCHEME.sort_key(v.version)))
+        return pick_manifest(versions, constraint, self.env.node_version)
 
     def _engine_ok(self, version: CatalogVersion) -> bool:
         node = (version.engines or {}).get("node")
@@ -276,6 +262,28 @@ class _Resolve:
                                     errors=list(node.errors), latest_compatible=latest,
                                     details={"bundled": True} if node.version.bundled else {}))
         return out
+
+
+def pick_manifest(versions: Sequence[CatalogVersion], constraint: str, node_version: str) -> CatalogVersion | None:
+    """npm-pick-manifest: a dist-tag names its version; `latest` wins if it satisfies (`*` takes it even as a
+    prerelease) and is usable; otherwise the matching versions, prereleases only when the range names one, ordered by
+    not deprecated, engine-compatible, highest. The tree and dependency links pick with it too (#15)."""
+    def engine_ok(version: CatalogVersion) -> bool:
+        node = (version.engines or {}).get("node")
+        return node is None or _satisfies(node_version, node)
+
+    spec = constraint.strip()
+    tagged = {tag: v for v in versions for tag in v.tags}
+    if spec in tagged:
+        return tagged[spec]
+    latest = tagged.get("latest")
+    if latest is not None and (spec in ("", "*") or _satisfies(latest.version, spec)) and not latest.deprecated \
+            and engine_ok(latest):
+        return latest
+    matching = [v for v in versions if _satisfies(v.version, spec)]
+    if not matching:
+        return None
+    return max(matching, key=lambda v: (not v.deprecated, engine_ok(v), _SCHEME.sort_key(v.version)))
 
 
 def _valid(version: str) -> bool:
