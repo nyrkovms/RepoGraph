@@ -6,7 +6,7 @@
     "--configuration",
     "runtimeClasspath"
   ],
-  "generated_at": "2026-10-30T23:34:20+00:00",
+  "generated_at": "2026-10-31T00:28:40+00:00",
   "install": [
     {
       "name": "ch.qos.logback:logback-classic",
@@ -38,10 +38,6 @@
     },
     {
       "name": "com.fasterxml.jackson.module:jackson-module-parameter-names",
-      "version": "2.17.2"
-    },
-    {
-      "name": "com.fasterxml.jackson:jackson-bom",
       "version": "2.17.2"
     },
     {

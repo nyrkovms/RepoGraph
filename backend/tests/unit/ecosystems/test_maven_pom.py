@@ -97,7 +97,6 @@ def test_the_effective_model_inherits_interpolates_and_imports() -> None:
     assert model.license_spdx == "Apache-2.0" and model.problems == []
     assert ("org.junit", "junit-bom", "5.10.0") in asked
     assert all(d.scope != "import" for d in model.managed)
-    assert model.imports == [("org.junit", "junit-bom", "5.10.0")]   # interpolated; Gradle's platform dependency
 
 
 def test_missing_parents_and_boms_are_problems_not_failures() -> None:

@@ -218,7 +218,7 @@ def test_gradle_excludes_a_module_only_when_every_path_does() -> None:
     assert ("z", "1") not in _set(_resolve(catalog, ("app", "1"), strategy="gradle"))
 
 
-def test_gradle_reads_an_imported_bom_as_a_platform_whose_entries_constrain() -> None:
+def test_gradle_takes_a_managed_bom_as_constraints_and_ignores_a_dependency_s_own_management() -> None:
     lib = ("<project><groupId>g</groupId><artifactId>lib</artifactId><version>1</version><dependencyManagement>"
            "<dependencies><dependency><groupId>g</groupId><artifactId>bom</artifactId><version>2</version>"
            "<type>pom</type><scope>import</scope></dependency></dependencies></dependencyManagement></project>")
@@ -226,11 +226,11 @@ def test_gradle_reads_an_imported_bom_as_a_platform_whose_entries_constrain() ->
                       {"app@1": [_dep("lib", "1"), _dep("c", "1.0")]},
                       {"g/lib/1/lib-1.pom": lib, "g/bom/2/bom-2.pom": _pom("bom", "2", _managed("c", "1.5") +
                                                                          _managed("d", "9.0"))})
-    graph = _resolve(catalog, ("app", "1"), strategy="gradle")
-    # The BOM is a node; it raises c, and adds no d (nothing depends on d).
-    assert _set(graph) == {("app", "1"), ("lib", "1"), ("bom", "2"), ("c", "1.5")}
-    # Maven only merges a dependency's BOM into that dependency's own model: no node, no constraint.
-    assert _set(_resolve(catalog, ("app", "1"))) == {("app", "1"), ("lib", "1"), ("c", "1.0")}
+    # lib's import fills lib's own versions only: no node, no constraint (what Gradle does with POMs).
+    assert _set(_resolve(catalog, ("app", "1"), strategy="gradle")) == {("app", "1"), ("lib", "1"), ("c", "1.0")}
+    # The project's own BOM (`platform()`): it raises c, and adds no d (nothing depends on d).
+    assert _set(_resolve(catalog, ("app", "1"), managed=[("bom", "2", "bom")], strategy="gradle")) == {
+        ("app", "1"), ("lib", "1"), ("c", "1.5")}
 
 
 def test_gradle_managed_entries_raise_but_never_lower_and_add_nothing() -> None:

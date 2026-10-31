@@ -12,7 +12,8 @@
 # nuget: `dotnet restore` of a net8.0 project (.NET SDK 8) referencing the roots, packages from project.assets.json.
 # maven: `mvn dependency:list -DincludeScope=runtime` of a project depending on the roots (Maven 3.9, JDK 21); a case
 # with `strategy: gradle` instead lists the runtimeClasspath of a Gradle 8 `java` project with `implementation` of the
-# roots, reading POMs only (`metadataSources { mavenPom() }`): our gradle strategy does not read Gradle Module Metadata
+# roots, reading POMs only (`metadataSources { mavenPom(); ignoreGradleMetadataRedirection() }`: without the second, a POM
+# marked `published-with-gradle-metadata` sends Gradle to its `.module`): our gradle strategy does not read Gradle Module Metadata
 # (SPEC §9.7, Q15).
 # Needs docker and the live network. Usage: scripts/generate_resolver_references.sh [case-dir ...]
 set -euo pipefail
@@ -221,7 +222,7 @@ for r in case["roots"]:
     deps += f"    implementation '{group}:{artifact}:{r['constraint'] or version}'\n"
 open(f"{sys.argv[2]}/settings.gradle", "w").write("rootProject.name = 'reference'\n")
 open(f"{sys.argv[2]}/build.gradle", "w").write(f"""plugins {{ id 'java' }}
-repositories {{ mavenCentral {{ metadataSources {{ mavenPom(); artifact() }} }} }}
+repositories {{ mavenCentral {{ metadataSources {{ mavenPom(); artifact(); ignoreGradleMetadataRedirection() }} }} }}
 dependencies {{
 {deps}}}
 tasks.register('referenceList') {{

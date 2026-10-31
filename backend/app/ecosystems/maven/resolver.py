@@ -21,15 +21,13 @@
 `strategy=gradle` follows Gradle 8 reading POMs only (Gradle Module Metadata is not read, Q15; a chosen version that
 has it gets a warning):
 
-1. The **highest** version any reached module asks for wins, wherever it is asked; `managed` entries and the
-   dependencyManagement of reached platforms are constraints: they take part in that choice for a module that is
-   reached, and add none.
-2. A BOM a reached POM (or its parent) imports is a platform dependency of that module: a node, whose
-   dependencyManagement constrains the graph.
-3. The graph is walked again with the chosen versions until nothing changes, so the dependencies of a version that
+1. The **highest** version any reached module asks for wins, wherever it is asked; `managed` entries (a `type=pom`
+   one is a platform: its dependencyManagement) are constraints: they take part in that choice for a module that is
+   reached, and add none. The dependencyManagement of a dependency's POM only fills its own versions, as in Maven.
+2. The graph is walked again with the chosen versions until nothing changes, so the dependencies of a version that
    lost no longer count.
-4. A module is excluded only when every path to it excludes it.
-5. Plugins in `environment.plugins` (`<id>:<version>`) are roots by their marker artifact `<id>:<id>.gradle.plugin`.
+3. A module is excluded only when every path to it excludes it.
+4. Plugins in `environment.plugins` (`<id>:<version>`) are roots by their marker artifact `<id>:<id>.gradle.plugin`.
 
 The graph lists the artifacts whose scope is one of `environment.scopes`.
 """
@@ -54,7 +52,7 @@ from app.ecosystems.base import (
 )
 from app.ecosystems.maven.coordinates import pom_path
 from app.ecosystems.maven.environment import MavenEnvironment, maven_scope
-from app.ecosystems.maven.pom import EffectiveModel, Pom, PomError, effective_model, parse_pom
+from app.ecosystems.maven.pom import Pom, PomError, effective_model, parse_pom
 from app.ecosystems.maven.versions import MavenVersionScheme
 
 UNKNOWN_DEPENDENCIES = "dependencies unknown"
@@ -152,7 +150,6 @@ class _Resolve:
         self.chosen: dict[GA, _Chosen] = {}
         self.scopes: dict[GA, str] = {}
         self.poms: dict[tuple[str, str, str], bytes] = {}
-        self.models: dict[tuple[str, str, str], EffectiveModel | None] = {}
         self.root_list = list(request.roots) + [
             ResolveRoot(ref=PackageRef("maven", plugin_id, f"{plugin_id}.gradle.plugin"), constraint=version)
             for plugin_id, version in self.env.plugins]
@@ -213,17 +210,6 @@ class _Resolve:
             return parse_pom(document.content)
         except (PomError, ValueError):
             return None
-
-    async def _model(self, ga: GA, version: str) -> EffectiveModel | None:
-        """The effective model of a version through the document channel (Gradle: its imported BOMs)."""
-        key = (ga[0], ga[1], version)
-        if key not in self.models:
-            pom = await self._pom(*key)
-            try:
-                self.models[key] = await effective_model(pom, self._pom) if pom is not None else None
-            except PomError:
-                self.models[key] = None
-        return self.models[key]
 
     async def import_managed(self) -> None:
         for entry in self.request.managed:
@@ -321,8 +307,6 @@ class _Resolve:
         chosen: dict[GA, _Chosen] = {}
         requests: dict[GA, list[str]] = {}
         reached: dict[GA, frozenset[GA]] = {}
-        platforms: list[EffectiveModel] = []
-        imported: set[GA] = set()
         queue: deque[_Occurrence] = deque()
         for order, root in enumerate(self.root_list):
             queue.append(_Occurrence(_ga(root.ref), root.ref, root.constraint, 1, None, frozenset(), order))
@@ -352,14 +336,6 @@ class _Resolve:
                 if dep.dependency_type == "optional" or scope in _NOT_TRANSITIVE or _excluded(child, excluded):
                     continue
                 arrivals.append((child, dep.target, scope, dep.constraint, excluded | _exclusions(dep)))
-            model = await self._model(ga, version.version)
-            if model is not None:
-                if ga in imported:
-                    platforms.append(model)
-                for group, artifact, bom_version in model.imports:
-                    imported.add((group, artifact))
-                    arrivals.append(((group, artifact), PackageRef("maven", group, artifact), "compile", bom_version,
-                                     excluded))
             for child, target, scope, raw, path_exclusions in arrivals:
                 node.children.append(_Child(child, scope, raw))
                 requests.setdefault(child, []).append(raw)
@@ -367,19 +343,17 @@ class _Resolve:
                 queue.append(_Occurrence(child, target, raw, occurrence.depth + 1, ga, path_exclusions, order))
                 order += 1
         # Constraints count only for modules something depends on.
-        for platform in platforms:
-            for entry in platform.managed:
-                if (entry.group, entry.artifact) in chosen and entry.version:
-                    requests[(entry.group, entry.artifact)].append(entry.version)
         for ga, managed in self.managed.items():
             if ga in chosen and managed.constraint:
                 requests[ga].append(managed.constraint)
         return chosen, requests, reached
 
-    def warn_gradle_metadata(self) -> None:
+    async def warn_gradle_metadata(self) -> None:
         for ga, node in self.chosen.items():
-            content = self.poms.get((ga[0], ga[1], node.version.version), b"")
-            if self.scopes.get(ga) in self.env.scopes and _GRADLE_MARKER.search(content):
+            if self.scopes.get(ga) not in self.env.scopes:
+                continue
+            await self._pom(ga[0], ga[1], node.version.version)          # kept by the catalog: read once
+            if _GRADLE_MARKER.search(self.poms.get((ga[0], ga[1], node.version.version), b"")):
                 self.graph.warnings.append({
                     "code": "gradle_module_metadata", "package": f"{ga[0]}:{ga[1]}", "version": node.version.version,
                     "message": "resolved from the POM: the Gradle Module Metadata published with it is not read"})
@@ -451,7 +425,7 @@ class MavenResolver:
                 return state.graph
             state.settle_scopes()
             if state.gradle:
-                state.warn_gradle_metadata()
+                await state.warn_gradle_metadata()
             state.build()
         except ResolveLimitExceeded as exc:
             state.graph.error = {"code": "resolve_limit_exceeded", "message": str(exc), "limit": exc.limit,

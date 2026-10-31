@@ -579,7 +579,7 @@ resolvelib (backtracking), PEP 508 markers, extras — без изменений
 4. **Exclusions** накапливаются по пути. **Optional** не транзитивны. **Scope** пересчитывается по стандартной матрице.
 
 **`strategy=gradle` (highest wins)** — для Gradle-сборок и плагинов:
-1. Тот же обход, но при конфликте версий одного GA выигрывает **наибольшая**. `managed` действует как Gradle platform/constraints. Граф обходится заново с выбранными версиями, пока выбор не устоится: зависимости проигравших версий не считаются. Исключение действует, только если его требуют все пути к модулю. BOM, который импортирует POM зависимости (или его родитель), Gradle читает как platform-зависимость: это узел графа, а его `dependencyManagement` — constraints (проверено эталоном: `jackson-bom` в графе `spring-boot-starter-web`).
+1. Тот же обход, но при конфликте версий одного GA выигрывает **наибольшая**. `managed` действует как Gradle platform/constraints. Граф обходится заново с выбранными версиями, пока выбор не устоится: зависимости проигравших версий не считаются. Исключение действует, только если его требуют все пути к модулю. `dependencyManagement` POM зависимости (и импортированные им BOM) лишь подставляет версии её собственных зависимостей, как в Maven: узлов и constraints не даёт (проверено эталоном; `jackson-bom` в графе `spring-boot-starter-web` у Gradle появляется только из `.module`).
 2. **Gradle-плагины:** корень `id("org.springframework.boot") version "3.3.5"` превращается в маркер `org.springframework.boot:org.springframework.boot.gradle.plugin:3.3.5` в Gradle Plugin Portal. Его POM ведёт на артефакт реализации.
 3. Метаданные — из POM. **Известное ограничение (Q15):** Gradle Module Metadata (`.module`: варианты, capabilities, атрибуты, constraints) в первой волне не читаем. Gradle публикует `.module` рядом с POM и при сборке предпочитает его, а POM — упрощённый запасной вариант. Где это заметно:
    - **Kotlin Multiplatform** (`kotlinx-coroutines`, `ktor`): в POM корневого артефакта нет зависимостей конкретной платформы (`-jvm`, `-android`), поэтому граф будет неполным;
@@ -587,7 +587,7 @@ resolvelib (backtracking), PEP 508 markers, extras — без изменений
    - **platform/BOM через constraints** Gradle: в POM их нет.
 
    Если у версии есть `.module` (`artifacts.has_metadata_file`), резолвер добавляет в `warnings` пометку «результат по POM, Gradle Module Metadata не учтена». Чтение GMM — кандидат на следующую волну, схема под него готова: `.module` кэшируется в `source_documents`.
-- Эталоны: `mvn dependency:list` для `maven`, runtimeClasspath Gradle 8 для `gradle` — с `metadataSources { mavenPom() }`, то есть по тем же POM, что читает резолвер; расхождения из-за `.module` описывает Q15.
+- Эталоны: `mvn dependency:list` для `maven`, runtimeClasspath Gradle 8 для `gradle` — с `metadataSources { mavenPom(); ignoreGradleMetadataRedirection() }`, то есть по тем же POM, что читает резолвер (без второго Gradle уходит в `.module` у POM с пометкой `published-with-gradle-metadata`); расхождения из-за `.module` описывает Q15.
 
 ### 9.8 RPM — libsolv и модульность
 

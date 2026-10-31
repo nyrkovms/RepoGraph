@@ -114,9 +114,6 @@ class EffectiveModel:
     relocation: Relocation | None
     developers: list[tuple[str | None, str | None]]
     problems: list[str]                    # parents or BOMs that could not be loaded
-    # BOMs this POM and its parents import, (group, artifact, version) in declaration order: Gradle reads each one as
-    # a platform dependency of the module (SPEC §9.7), Maven only merges their dependencyManagement.
-    imports: list[tuple[str, str, str]] = field(default_factory=list)
 
     @property
     def license_raw(self) -> str | None:
@@ -295,8 +292,6 @@ async def effective_model(pom: Pom, load: Loader, import_depth: int = 0) -> Effe
     props = {key: _interpolate(value, props)[0] or "" for key, value in props.items()}
 
     managed = [_resolve(d, props) for d in managed]
-    imports = [(d.group, d.artifact, d.version) for d in managed
-               if d.scope == "import" and d.type == "pom" and d.version and not d.unresolved]
     managed = await _import_boms(managed, load, problems, depth=import_depth)
     by_key: dict[tuple[str, str, str, str | None], Dependency] = {}
     for entry in managed:
@@ -316,7 +311,7 @@ async def effective_model(pom: Pom, load: Loader, import_depth: int = 0) -> Effe
         group=group, artifact=pom.artifact, version=version, packaging=pom.packaging,
         name=pom.name, description=pom.description, url=url, scm_url=scm_url, dependencies=resolved,
         managed=[d for d in managed if d.scope != "import"], licenses=licenses, relocation=relocation,
-        developers=developers, problems=problems, imports=imports)
+        developers=developers, problems=problems)
 
 
 async def _import_boms(managed: list[Dependency], load: Loader, problems: list[str], depth: int) -> list[Dependency]:
