@@ -474,6 +474,9 @@ async def _upsert_versions(
         if existing:
             if existing.metadata_registry_id is not None and str(existing.metadata_registry_id) != merged.metadata_registry_id:
                 metadata_moved.add(version.version)
+            if values["release_date"] is None:
+                # A date the source could not give this time (a failed Maven HEAD) does not wipe the stored one.
+                values["release_date"] = existing.release_date
             for key, value in values.items():
                 setattr(existing, key, value)
             existing.features = _features(existing.features, version.features, hydrated)

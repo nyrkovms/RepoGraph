@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     crates_api_enabled: bool = True
     crates_api_interval_seconds: int = 60
     crates_api_batch: int = 50
+    # Release dates of Maven versions in the background (tasks/maven_dates.py): one HEAD per version.
+    maven_dates_enabled: bool = True
+    maven_dates_interval_seconds: int = 60
+    maven_dates_batch: int = 200
     presence_probe_day_of_week: int = 0      # Sunday
     presence_probe_hour_utc: int = 4
 

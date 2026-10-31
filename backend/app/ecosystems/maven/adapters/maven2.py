@@ -4,8 +4,10 @@ Portal, JBoss, corporate Nexus and Artifactory (SPEC-MULTI-ECOSYSTEM.md §6.1, �
 A package is `<group path>/<artifact>/maven-metadata.xml` (its versions in publication order, `<release>`, `<latest>`,
 `<lastUpdated>`), a version is `<version>/<artifact>-<version>.pom` plus its files. The layout has no description of the
 repository, no feed of changes and no checksums in the metadata, and only the POM's `Last-Modified` dates a version:
-the revision of a package is the ETag of its metadata (else `lastUpdated`, else a hash of the versions), dates are one
-HEAD per version, and checksums and sizes stay empty (§7.1).
+the revision of a package is the ETag of its metadata (else `lastUpdated`, else a hash of the versions), and checksums
+and sizes stay empty (§7.1). Only the latest version is dated at once, from the `Last-Modified` of the POM read anyway;
+the others are dated in the background (`release_date`, tasks/maven_dates.py) like the crates.io API fields (Q22):
+a HEAD for each of hundreds of versions would make every lazy fetch during a resolve take minutes.
 
 The dependencies of the latest version are read at once, through its effective model (parents and BOMs, §7.4), and
 lazily for the others (`fetch_version_dependencies`). A parent or BOM may live in another repository of the profile:
@@ -391,10 +393,9 @@ class Maven2Adapter:
             return None
         metadata = parse_metadata(response.content, url)
         versions = kept_versions(metadata.versions, ref)
-        dates = await self._release_dates(ref, versions)
         latest = pick_latest(metadata.release, versions)
         read = await self._read_version(ref, latest, _PomLoader(self, lookup)) if latest is not None else None
-        model, content = read if read is not None else (None, b"")
+        model, content, latest_date = read if read is not None else (None, b"", None)
         gradle = _GRADLE_MARKER.search(content) is not None
 
         normalized: list[NormalizedVersion] = []
@@ -402,7 +403,7 @@ class Maven2Adapter:
             # Only the latest version has its POM read at once; the others are lazy and their packaging is unknown.
             top = model if version == latest else None
             normalized.append(NormalizedVersion(
-                version=version, status="active", release_date=dates.get(version),
+                version=version, status="active", release_date=latest_date if version == latest else None,
                 raw_metadata=_raw_metadata(top, gradle) if top is not None else {},
                 artifacts=self._artifacts(ref, version, top, gradle and top is not None),
                 dependencies=dependencies_of(top) if top is not None else None,
@@ -429,7 +430,7 @@ class Maven2Adapter:
         read = await self._read_version(ref, version, loader)
         if read is None:
             return VersionDependencies([], available=False)
-        model, _ = read
+        model, _, _ = read
         return VersionDependencies(dependencies_of(model), documents=list(loader.documents.values()))
 
     async def fetch_document(self, path: str) -> FetchedDocument | None:
@@ -458,26 +459,17 @@ class Maven2Adapter:
 
     # --- pieces ---
 
-    async def _release_dates(self, ref: PackageRef, versions: Sequence[str]) -> dict[str, datetime | None]:
-        semaphore = asyncio.Semaphore(self.concurrency)
-
-        async def one(version: str) -> tuple[str, datetime | None]:
-            try:
-                async with semaphore:
-                    response = await self.head(self.pom_url(ref, version))
-                return version, None if _is_missing(response) else _release_date(response)
-            except Exception:  # noqa: BLE001 - a missing date must not lose the version
-                logger.warning("No release date for %s@%s in %s", _COORDINATES.display(ref), version,
-                               self.registry.slug, exc_info=True)
-                return version, None
-
-        return dict(await asyncio.gather(*(one(version) for version in versions)))
+    async def release_date(self, ref: PackageRef, version: str) -> datetime | None:
+        """The `Last-Modified` of the version's POM (a HEAD); None when the POM or the header is missing. Errors of the
+        source propagate: the caller tries again later."""
+        response = await self.head(self.pom_url(ref, version))
+        return None if _is_missing(response) else _release_date(response)
 
     async def _read_version(
         self, ref: PackageRef, version: str, loader: _PomLoader,
-    ) -> tuple[EffectiveModel, bytes] | None:
-        """The effective model of a version and the bytes of its POM; None if the POM is missing or unreadable.
-        Other errors are source errors (§6.4) and propagate."""
+    ) -> tuple[EffectiveModel, bytes, datetime | None] | None:
+        """The effective model of a version, the bytes of its POM and its date; None if the POM is missing or
+        unreadable. Other errors are source errors (§6.4) and propagate."""
         label = f"{_COORDINATES.display(ref)}@{version}"
         response = await self.get(self.pom_url(ref, version))
         if _is_missing(response):
@@ -490,7 +482,7 @@ class Maven2Adapter:
         except PomError as exc:
             logger.warning("Unreadable POM of %s in %s: %s", label, self.registry.slug, exc)
             return None
-        return model, response.content
+        return model, response.content, _release_date(response)
 
     def _artifacts(
         self, ref: PackageRef, version: str, model: EffectiveModel | None, gradle: bool,

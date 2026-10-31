@@ -271,8 +271,8 @@ def test_spring_core_versions_latest_and_package_fields(serve) -> None:
     assert package.authors == [NormalizedAuthor("Juergen Hoeller", "juergen.hoeller@broadcom.com", None, "author")]
     assert package.deprecation is None
     assert all(v.status == "active" for v in package.versions)
-    # The metadata, the POM of the latest and one HEAD per version: no other POM is read.
-    assert upstream.count("GET") == 2 and upstream.count("HEAD") == len(listed)
+    # The metadata and the POM of the latest: no other POM is read, no HEAD (dates come in the background).
+    assert upstream.count("GET") == 2 and upstream.count("HEAD") == 0 and len(listed) == 338
 
 
 def test_spring_core_latest_has_dependencies_and_artifacts_the_others_are_lazy(serve) -> None:
@@ -304,54 +304,35 @@ def test_spring_core_latest_raw_metadata_and_the_gradle_marker(serve) -> None:
     assert [(a.artifact_type, a.has_metadata_file) for a in latest.artifacts] == [("pom", True), ("jar", False)]
 
 
-def test_release_dates_come_from_the_last_modified_of_the_pom(serve) -> None:
+def test_only_the_latest_version_is_dated_at_once_from_its_pom(serve) -> None:
     serve()
     package = _fetch(SPRING)
     assert package is not None
     assert _version(package, SPRING_RELEASE).release_date == datetime(2026, 10, 22, 7, 46, 54, tzinfo=UTC)
-    assert _version(package, "6.1.14").release_date == datetime(2024, 10, 17, 8, 10, 0, tzinfo=UTC)
-    assert _version(package, "5.3.39").release_date == datetime(2024, 8, 14, 9, 4, 42, tzinfo=UTC)
-    dated = {v.version for v in package.versions if v.release_date is not None}
-    assert dated == {SPRING_RELEASE, "7.0.10", "6.2.0", "6.1.14", "5.3.39"}   # the others answered 404 to HEAD
-    assert len(package.versions) == 338                                     # a version without a date is not lost
+    # The others are dated in the background (tasks/maven_dates.py): a HEAD each would make a lazy fetch slow.
+    assert {v.version for v in package.versions if v.release_date is not None} == {SPRING_RELEASE}
+    assert len(package.versions) == 338
 
 
-def test_a_failing_head_or_a_bad_date_leaves_none_and_keeps_the_version(serve, caplog) -> None:
+def test_release_date_is_the_last_modified_of_the_pom(serve) -> None:
     serve({
-        _metadata_url("g:a"): httpx.Response(200, text=_metadata(["1.0", "1.1", "1.2", "1.3"], release="1.3")),
         _pom_url("g:a", "1.0"): httpx.Response(200, headers={"last-modified": "Wed, 01 Jan 2025 10:00:00 GMT"}),
-        _pom_url("g:a", "1.1"): httpx.Response(503),
         _pom_url("g:a", "1.2"): httpx.Response(200, headers={"last-modified": "not a date"}),
         _pom_url("g:a", "1.3"): httpx.Response(200, headers={}),
+        _pom_url("g:a", "1.4"): httpx.Response(404),
     })
-    with caplog.at_level(logging.WARNING, logger=maven2.logger.name):
-        package = _fetch("g:a")
-    assert package is not None
-    assert {v.version: v.release_date for v in package.versions} == {
-        "1.0": datetime(2025, 1, 1, 10, 0, tzinfo=UTC), "1.1": None, "1.2": None, "1.3": None}
-    assert "No release date for g:a@1.1" in caplog.text
-
-
-def test_head_requests_are_bounded_by_the_concurrency(monkeypatch) -> None:
-    active = peak = 0
-
-    async def slow(request: httpx.Request) -> httpx.Response:
-        nonlocal active, peak
-        if request.url.path.endswith("maven-metadata.xml"):
-            return httpx.Response(200, text=_metadata([f"1.{i}" for i in range(12)], release="1.0"))
-        if request.method == "GET":
-            return httpx.Response(404)
-        active += 1
-        peak = max(peak, active)
-        await asyncio.sleep(0.01)
-        active -= 1
-        return httpx.Response(200, headers={"last-modified": "Wed, 01 Jan 2025 10:00:00 GMT"})
-
-    monkeypatch.setattr(maven2, "make_client", lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(slow)))
     adapter = _adapter()
-    adapter.concurrency = 3
-    package = asyncio.run(adapter.fetch_package(_ref("g:a"), None))  # type: ignore[arg-type]
-    assert package is not None and peak == 3 and all(v.release_date is not None for v in package.versions)
+    dates = {v: asyncio.run(adapter.release_date(_ref("g:a"), v)) for v in ("1.0", "1.2", "1.3", "1.4")}
+    assert dates == {"1.0": datetime(2025, 1, 1, 10, 0, tzinfo=UTC), "1.2": None, "1.3": None, "1.4": None}
+    assert asyncio.run(adapter.release_date(_ref(SPRING), "6.1.14")) == datetime(2024, 10, 17, 8, 10, 0, tzinfo=UTC)
+
+
+def test_release_date_raises_on_a_source_error(serve, monkeypatch) -> None:
+    serve({_pom_url("g:a", "1.1"): httpx.Response(503)})
+    adapter = _adapter()
+    adapter.max_retries = 0
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(adapter.release_date(_ref("g:a"), "1.1"))
 
 
 def test_the_release_is_the_latest_only_when_it_is_among_the_versions(serve) -> None:
