@@ -68,8 +68,9 @@ logger = logging.getLogger(__name__)
 
 
 class _ProfileLookup:
-    """SourceLookup for parent POMs and BOMs: the registries of the operation first, then those of the profile its
-    routing allows for the document's own package (a parent may live in another repository than the artifact)."""
+    """SourceLookup for parent POMs and BOMs: the registries of the operation first, then the other registries of the
+    profile, as far as the profile's routing allows them for the document's own package (a parent may live in another
+    repository than the artifact, and must not come from one its group is kept away from)."""
 
     def __init__(self, plugin: EcosystemPlugin, registries: Sequence[RegistryConfig],
                  profile: SourceProfile | None = None) -> None:
@@ -80,8 +81,11 @@ class _ProfileLookup:
     def adapters_for(self, ref: PackageRef) -> Sequence[SourceAdapter]:
         registries = list(self._registries)
         if self._profile is not None:
-            known = {registry.id for registry in registries}
-            registries += [r for r in self._plugin.sources_for(ref, self._profile) if r.id not in known]
+            routed = list(self._plugin.sources_for(ref, self._profile))
+            in_profile = {registry.id for registry in self._profile.registries}
+            allowed = {registry.id for registry in routed}
+            registries = [r for r in registries if r.id in allowed or r.id not in in_profile]
+            registries += [r for r in routed if r.id not in {known.id for known in registries}]
         return [self._plugin.adapter(registry) for registry in registries]
 
 
@@ -487,6 +491,9 @@ async def _upsert_versions(
         if existing:
             if existing.metadata_registry_id is not None and str(existing.metadata_registry_id) != merged.metadata_registry_id:
                 metadata_moved.add(version.version)
+            if not raw_metadata and version.dependencies is None:
+                # A version read lazily (Maven, Go) comes without its metadata: what its own read stored stays.
+                values["raw_metadata"] = existing.raw_metadata
             if values["release_date"] is None:
                 # A date the source could not give this time (a failed Maven HEAD) does not wipe the stored one.
                 values["release_date"] = existing.release_date
