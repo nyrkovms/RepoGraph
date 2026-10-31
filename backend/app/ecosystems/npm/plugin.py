@@ -3,6 +3,7 @@
 from collections.abc import Mapping, Sequence
 
 from app.ecosystems.base import (
+    CatalogVersion,
     Coordinates,
     Ecosystem,
     Environment,
@@ -29,6 +30,16 @@ from app.ecosystems.routing import route
 class NpmPlugin:
     ecosystem: Ecosystem = "npm"
     purl_type: str = "npm"
+
+    def choose_version(self, versions: Sequence[CatalogVersion], constraint: str | None,
+                       env: Environment | None) -> str | None:
+        """The version npm installs for a range (npm-pick-manifest): the tree and dependency links agree with resolve
+        when `latest` sits below the highest match (#15)."""
+        from app.ecosystems.npm.resolver import pick_manifest
+
+        node = env.node_version if isinstance(env, NpmEnvironment) else NpmEnvironment().node_version
+        chosen = pick_manifest([v for v in versions if _valid_version(self, v.version)], constraint or "*", node)
+        return chosen.version if chosen is not None else None
 
     def __init__(self) -> None:
         self.coordinates: Coordinates = NpmCoordinates()
@@ -62,6 +73,14 @@ class NpmPlugin:
         from app.ecosystems.npm.resolver import RESOLVER   # F5
 
         return RESOLVER
+
+
+def _valid_version(plugin: "NpmPlugin", version: str) -> bool:
+    try:
+        plugin.versions.validate(version)
+    except ValueError:
+        return False
+    return True
 
 
 PLUGIN = NpmPlugin()

@@ -19,7 +19,7 @@ from app.ecosystems.base import (
 from app.ecosystems.go.adapters.goproxy import GoProxyAdapter
 from app.ecosystems.go.coordinates import GoCoordinates
 from app.ecosystems.go.environment import GoEnvironment, dependency_applies, parse_environment
-from app.ecosystems.go.versions import GoVersionScheme
+from app.ecosystems.go.versions import GoVersionScheme, is_pseudo
 from app.ecosystems.merge import merge_by_priority
 from app.ecosystems.registry import register
 from app.ecosystems.routing import route
@@ -35,6 +35,12 @@ def _path_matches(ref: PackageRef, pattern: str) -> bool:
 class GoPlugin:
     ecosystem: Ecosystem = "go"
     purl_type: str = "golang"
+
+    @staticmethod
+    def vanished_status(version: str) -> str:
+        """A pseudo-version the proxy stops listing (a tagless module's older commit, still served) was superseded by
+        a newer one, with no event (#19); a tag that vanished was removed."""
+        return "superseded" if is_pseudo(version) else "removed"
 
     def __init__(self) -> None:
         self.coordinates: Coordinates = GoCoordinates()

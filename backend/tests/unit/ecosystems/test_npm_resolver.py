@@ -177,3 +177,19 @@ def test_catalog_failure_is_a_graph_error() -> None:
 
     graph = _resolve(Broken({}, {}), ("a", "1"))
     assert graph.error["code"] == "upstream_error" and "registry went away" in graph.error["message"]
+
+
+def test_the_plugin_picks_for_the_tree_and_links_as_resolve_does() -> None:
+    """#15: `latest` below the highest match (a backport line published later) wins for a range it satisfies."""
+    from app.ecosystems.base import CatalogVersion
+    from app.ecosystems.npm.plugin import PLUGIN as NPM
+
+    def v(version: str, tags: tuple[str, ...] = (), deprecated: bool = False) -> CatalogVersion:
+        return CatalogVersion(version=version, registry_id="", registry_slug="", status="active", tags=tags,
+                              deprecated=deprecated)
+
+    versions = [v("1.0.0", ("latest",)), v("1.1.0"), v("2.0.0", ("next",)), v("not a version")]
+    assert NPM.choose_version(versions, "^1.0.0", None) == "1.0.0"
+    assert NPM.choose_version(versions, ">=1.0.5 <2", None) == "1.1.0"       # latest does not satisfy
+    assert NPM.choose_version(versions, "next", None) == "2.0.0"
+    assert NPM.choose_version([v("1.0.0", ("latest",), deprecated=True), v("1.1.0")], "^1", None) == "1.1.0"

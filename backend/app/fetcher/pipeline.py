@@ -9,7 +9,7 @@ import hashlib
 import logging
 import uuid
 from typing import cast
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select, tuple_, update
@@ -19,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.connectors.base import PackageNotFound
 from app.ecosystems.base import DependencyType as DependencyType_
 from app.ecosystems.base import (
+    CatalogVersion,
+    Environment,
     EcosystemPlugin,
     FetchedDocument,
     InvalidVersion,
@@ -235,9 +237,9 @@ async def write_package(
     version_rows, metadata_moved = await _upsert_versions(db, plugin, package.id, merged.versions)
     version_ids = {version: row.id for version, row in version_rows.items()}
     await _write_version_sources(db, package.id, version_ids, merged.versions, source_versions, registry_rows.keys(), now)
-    # RPM: a build that left the repository was superseded, not removed (Q3), and makes no event.
-    vanished = PackageVersionStatus(getattr(plugin, "vanished_status", "removed"))
-    await _mark_missing_versions_removed(db, package.id, [*version_ids.keys(), *frozen], vanished)
+    # RPM: a build that left the repository was superseded, not removed (Q3); Go: a tagless module's older
+    # pseudo-version, which the proxy still serves but no longer lists (#19). Neither makes an event.
+    await _mark_missing_versions_removed(db, package.id, [*version_ids.keys(), *frozen], vanished_status_of(plugin))
     for merged_version in merged.versions:
         row = version_rows[merged_version.version.version]
         await _write_dependencies(db, row, merged_version, source_versions, merged_version.version.version in metadata_moved)
@@ -258,7 +260,7 @@ async def write_package(
 
     slugs = {registry_id: row.slug for registry_id, row in registry_rows.items()}
     await _record_events(db, package.id, diff_package(snapshot, merged, plugin.versions, latest, slugs, frozen,
-                                                         vanished=getattr(plugin, "vanished_status", "removed")), run_id, now)
+                                                         vanished=vanished_status_of(plugin)), run_id, now)
     for registry_id in [*by_registry, *missing_registry_ids]:
         await _upsert_sync_state(db, registry_id, now)
 
@@ -601,17 +603,24 @@ async def _frozen_versions(
     return {version for version in rows if version not in incoming}
 
 
+def vanished_status_of(plugin: EcosystemPlugin) -> Callable[[str], str]:
+    """The status a version gets when no source asked lists it any more: `removed`, unless the plugin says otherwise
+    (`vanished_status`, a status or a function of the version)."""
+    rule = getattr(plugin, "vanished_status", "removed")
+    return rule if callable(rule) else (lambda version: str(rule))
+
+
 async def _mark_missing_versions_removed(db: AsyncSession, package_id, present_versions: Iterable[str],
-                                        status: PackageVersionStatus = PackageVersionStatus.removed) -> None:
-    await db.execute(
-        update(PackageVersion)
-        .where(
-            PackageVersion.package_id == package_id,
-            PackageVersion.version.not_in(list(present_versions)),
-            PackageVersion.status.not_in([PackageVersionStatus.removed, status]),
-        )
-        .values(status=status)
-    )
+                                        status_of: Callable[[str], str] = lambda version: "removed") -> None:
+    rows = (await db.scalars(select(PackageVersion).where(
+        PackageVersion.package_id == package_id,
+        PackageVersion.version.not_in(list(present_versions)),
+        PackageVersion.status != PackageVersionStatus.removed,
+    ))).all()
+    for row in rows:
+        status = PackageVersionStatus(status_of(row.version))
+        if row.status != status:
+            row.status = status
 
 
 # --- dependencies and artifacts ---------------------------------------------------------------------
@@ -1058,6 +1067,7 @@ class _VersionPicker:
         self.db = db
         self._packages: dict[PackageRef, Package | None] = {}
         self._candidates: dict[object, list[tuple[str, object, bool]]] = {}
+        self._rows: dict[object, list[tuple[str, object]]] = {}
         self._best: dict[tuple[object, str], object] = {}
 
     async def package(self, ref: PackageRef) -> Package | None:
@@ -1077,8 +1087,13 @@ class _VersionPicker:
                         )
                     )
                 ).all()
+                self._rows[package.id] = [(version, row_id) for version, row_id in rows]
                 self._candidates[package.id] = _candidates(plugin_for(package.ecosystem.value), rows)
-            self._best[key] = _pick(plugin_for(package.ecosystem.value), self._candidates[package.id], constraint)
+            plugin = plugin_for(package.ecosystem.value)
+            if hasattr(plugin, "choose_version"):
+                self._best[key] = await choose_version(self.db, plugin, package.id, self._rows[package.id], constraint)
+            else:
+                self._best[key] = _pick(plugin, self._candidates[package.id], constraint)
         return self._best[key]
 
 
@@ -1108,6 +1123,30 @@ def _pick(plugin: EcosystemPlugin, candidates: Sequence[tuple[str, object, bool]
             return row_id
         fallback = fallback or row_id
     return fallback
+
+
+async def choose_version(db: AsyncSession, plugin: EcosystemPlugin, package_id: object,
+                         versions: Sequence[tuple[str, object]], constraint: str | None,
+                         env: Environment | None = None) -> object | None:
+    """The version a dependency on the package resolves to, among `(version, row id)`: the plugin's own choice when
+    it has one (npm: npm-pick-manifest with dist-tags, deprecation and engines, as resolve picks, #15), else the
+    highest valid version satisfying the constraint."""
+    chooser = getattr(plugin, "choose_version", None)
+    if chooser is None:
+        return select_best_version(plugin, versions, constraint)
+    ids = dict(versions)
+    if not ids:
+        return None
+    rows = (await db.execute(select(PackageVersion.version, PackageVersion.deprecation, PackageVersion.engines).where(
+        PackageVersion.package_id == package_id, PackageVersion.version.in_(list(ids))))).all()
+    tags: dict[str, list[str]] = {}
+    for tag, version in (await db.execute(select(DistTag.tag, DistTag.version).where(
+            DistTag.package_id == package_id))).all():
+        tags.setdefault(version, []).append(tag)
+    candidates = [CatalogVersion(version=version, registry_id="", registry_slug="", status="active",
+                                 engines=engines, tags=tuple(tags.get(version, ())), deprecated=deprecation is not None)
+                  for version, deprecation, engines in rows]
+    return ids.get(chooser(candidates, constraint, env))
 
 
 def select_best_version(plugin: EcosystemPlugin, versions: Iterable[tuple[str, object]], constraint: str | None):
