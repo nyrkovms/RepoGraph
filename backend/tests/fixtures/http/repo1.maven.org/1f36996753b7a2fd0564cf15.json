@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"2935804222269edd336d7ccc899dd506\"",
+    "last-modified": "Sat, 17 Feb 2024 18:50:57 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/apache/logging/log4j/log4j-to-slf4j/3.0.0-beta2/log4j-to-slf4j-3.0.0-beta2.pom"
+  },
+  "status": 200
+}

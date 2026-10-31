@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"9b12bbf2f940984beeae0b4413cb0594\"",
+    "last-modified": "Fri, 07 Aug 2026 12:43:30 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/junit/junit-bom/maven-metadata.xml"
+  },
+  "status": 200
+}

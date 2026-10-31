@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"4555eacb94003e52180b59d4e3fc2794\"",
+    "last-modified": "Sat, 24 Jan 2026 19:11:16 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/assertj/assertj-core/maven-metadata.xml"
+  },
+  "status": 200
+}

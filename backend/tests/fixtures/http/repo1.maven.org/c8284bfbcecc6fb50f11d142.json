@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"e2440f7f0219e724dc6fa57b508a8da6\"",
+    "last-modified": "Thu, 22 Oct 2026 09:17:58 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/errorprone/error_prone_annotations/maven-metadata.xml"
+  },
+  "status": 200
+}

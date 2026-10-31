@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"7583ceadd9fed45e4da9f69e1abd4ba3\"",
+    "last-modified": "Sat, 13 Feb 2021 16:31:54 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/junit/junit/4.13.2/junit-4.13.2.pom"
+  },
+  "status": 200
+}

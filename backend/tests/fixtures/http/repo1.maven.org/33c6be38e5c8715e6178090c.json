@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"cf8a34f32a9f43ce9d3f54642efc9aa0\"",
+    "last-modified": "Wed, 19 Mar 2025 16:15:50 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/guava/failureaccess/1.0.3/failureaccess-1.0.3.pom"
+  },
+  "status": 200
+}

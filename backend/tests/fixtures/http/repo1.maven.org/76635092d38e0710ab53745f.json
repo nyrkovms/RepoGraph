@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"97d819e7bf877f6bd670d9283aaca7c3\"",
+    "last-modified": "Thu, 22 Oct 2026 07:54:54 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-aop/maven-metadata.xml"
+  },
+  "status": 200
+}

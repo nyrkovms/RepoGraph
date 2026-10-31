@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"5916ff5a0b85851e50b8d80d3964a1b3\"",
+    "last-modified": "Thu, 17 Oct 2024 08:09:46 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-webmvc/6.1.14/spring-webmvc-6.1.14.pom"
+  },
+  "status": 200
+}

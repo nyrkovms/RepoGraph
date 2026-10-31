@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"558c399c01d067bb1c3e8b808505fa00\"",
+    "last-modified": "Sat, 24 Dec 2016 14:19:29 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/apache/commons/commons-parent/42/commons-parent-42.pom"
+  },
+  "status": 200
+}

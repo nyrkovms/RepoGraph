@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"ac82ee63dc50bb72813408fc6938a311\"",
+    "last-modified": "Mon, 08 Jun 2026 17:42:31 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "HEAD",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-core/7.0.8/spring-core-7.0.8.pom"
+  },
+  "status": 200
+}

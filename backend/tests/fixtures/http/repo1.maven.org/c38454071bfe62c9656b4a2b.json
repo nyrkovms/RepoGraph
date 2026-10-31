@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"60b557218fc349b5f2f1fb1d2c05f0e5\"",
+    "last-modified": "Mon, 27 Feb 2023 10:06:59 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/openjdk/jol/jol-core/maven-metadata.xml"
+  },
+  "status": 200
+}

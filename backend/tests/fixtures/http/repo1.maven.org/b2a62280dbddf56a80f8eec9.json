@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"9cfaa07ce75d4d1c60248c98217f4eab\"",
+    "last-modified": "Tue, 06 Oct 2026 18:35:19 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/apache/tomcat/embed/tomcat-embed-el/11.0.27/tomcat-embed-el-11.0.27.pom"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"c23e9feaf329c6d6cdd1da6646d19310\"",
+    "last-modified": "Thu, 25 Jun 2026 18:58:29 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/apache/apache/39/apache-39.pom"
+  },
+  "status": 200
+}

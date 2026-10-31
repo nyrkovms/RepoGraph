@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"284b457b67967f198d95eae55c7a08d1\"",
+    "last-modified": "Thu, 14 Aug 2025 17:57:32 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/j2objc/j2objc-annotations/maven-metadata.xml"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"b85cec23b4c1351ce85139fabdd56a43\"",
+    "last-modified": "Thu, 22 Oct 2026 07:26:55 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/micrometer/micrometer-commons/1.18.0-RC1/micrometer-commons-1.18.0-RC1.pom"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"840ae63860157331ef1ab16ab16dc1ee\"",
+    "last-modified": "Thu, 24 Oct 2024 13:20:27 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/boot/spring-boot/3.3.5/spring-boot-3.3.5.pom"
+  },
+  "status": 200
+}

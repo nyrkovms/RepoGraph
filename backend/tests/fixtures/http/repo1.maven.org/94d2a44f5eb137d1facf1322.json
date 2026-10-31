@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"a1561a48620936c7ccd0723a3aa8df2d\"",
+    "last-modified": "Tue, 29 Nov 2022 12:29:20 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/apache/httpcomponents/httpcore/maven-metadata.xml"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"188c1651ac678d4c5ab8fe4b69047366\"",
+    "last-modified": "Fri, 16 Aug 2024 01:39:14 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/cloud/native-image-shared-config/1.11.0/native-image-shared-config-1.11.0.pom"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"251054b957496dd9bc920a8870fecb9f\"",
+    "last-modified": "Mon, 14 Oct 2024 21:36:04 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/micrometer/micrometer-observation/1.12.11/micrometer-observation-1.12.11.pom"
+  },
+  "status": 200
+}

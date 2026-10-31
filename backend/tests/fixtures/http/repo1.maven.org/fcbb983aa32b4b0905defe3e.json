@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"cbd46b3dc562c3b3f2d8bc84eb5aa123\"",
+    "last-modified": "Fri, 29 Apr 2022 09:23:28 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/opencensus/opencensus-contrib-http-util/maven-metadata.xml"
+  },
+  "status": 200
+}

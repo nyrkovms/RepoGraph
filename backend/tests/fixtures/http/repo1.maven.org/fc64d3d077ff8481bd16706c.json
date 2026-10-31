@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"ddad27502b248ce3daed5a1f379a56a9\"",
+    "last-modified": "Thu, 09 Mar 2023 19:37:45 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/mockito/mockito-inline/5.2.0/mockito-inline-5.2.0.pom"
+  },
+  "status": 200
+}

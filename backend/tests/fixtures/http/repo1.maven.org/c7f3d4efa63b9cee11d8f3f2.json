@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"bb6d8287e5baffdc452b123faca9d3b4\"",
+    "last-modified": "Thu, 17 Oct 2024 08:09:59 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-expression/6.1.14/spring-expression-6.1.14.pom"
+  },
+  "status": 200
+}

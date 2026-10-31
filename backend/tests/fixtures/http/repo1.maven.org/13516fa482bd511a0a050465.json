@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"c28ae3bdb9e95ad0422a8daed1c9bdc1\"",
+    "last-modified": "Thu, 22 Oct 2026 07:46:54 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-framework-bom/7.1.0-RC1/spring-framework-bom-7.1.0-RC1.pom"
+  },
+  "status": 200
+}

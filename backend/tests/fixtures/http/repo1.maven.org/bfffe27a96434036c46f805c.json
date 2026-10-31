@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"44eeb1523396dd16fa7d33502e6f3a30\"",
+    "last-modified": "Thu, 01 Apr 2021 18:48:05 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/checkerframework/checker-qual/3.12.0/checker-qual-3.12.0.pom"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"3e418cf7f2607bf359e6c514a992cb38\"",
+    "last-modified": "Mon, 07 Mar 2011 12:42:48 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/sonatype/oss/oss-parent/7/oss-parent-7.pom"
+  },
+  "status": 200
+}

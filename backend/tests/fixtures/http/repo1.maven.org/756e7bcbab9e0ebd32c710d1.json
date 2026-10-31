@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"41631deb60df5e163a822bdc1a5a33ba\"",
+    "last-modified": "Tue, 23 Feb 2021 18:00:23 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/eclipse/ee4j/project/1.0.7/project-1.0.7.pom"
+  },
+  "status": 200
+}

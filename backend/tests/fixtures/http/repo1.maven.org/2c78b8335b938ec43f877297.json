@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"6cc316e994fa9c59be455df59993186a\"",
+    "last-modified": "Mon, 27 Feb 2023 09:58:09 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/openjdk/jol/jol-parent/0.17/jol-parent-0.17.pom"
+  },
+  "status": 200
+}

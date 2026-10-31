@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"bd426a327ea92bb0c2c4323c9d8c689a\"",
+    "last-modified": "Thu, 22 Oct 2026 07:46:54 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-aop/7.1.0-RC1/spring-aop-7.1.0-RC1.pom"
+  },
+  "status": 200
+}

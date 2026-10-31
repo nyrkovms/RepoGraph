@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"b9e85b0b717e23a0ea1ef856d0d8cd6f\"",
+    "last-modified": "Fri, 24 Sep 2021 20:28:02 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/guava/guava/31.0-jre/guava-31.0-jre.pom"
+  },
+  "status": 200
+}

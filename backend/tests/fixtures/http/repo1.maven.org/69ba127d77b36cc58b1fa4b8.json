@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"f2af9c3817f43a6f5ea9106a84773038\"",
+    "last-modified": "Thu, 08 Aug 2024 12:59:31 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/slf4j/slf4j-bom/2.0.15/slf4j-bom-2.0.15.pom"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"7a4c1373814816105090be627b30ff70\"",
+    "last-modified": "Thu, 17 Oct 2024 08:10:06 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-aop/6.1.14/spring-aop-6.1.14.pom"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"b70c9859477c04be3ef573be259c4084\"",
+    "last-modified": "Fri, 23 Oct 2026 12:06:58 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/net/bytebuddy/byte-buddy/1.18.16-jdk5/byte-buddy-1.18.16-jdk5.pom"
+  },
+  "status": 200
+}

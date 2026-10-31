@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"a6a987161f5918e44d61ac5768410d10\"",
+    "last-modified": "Tue, 22 Sep 2026 14:57:06 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/slf4j/slf4j-api/maven-metadata.xml"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"9837afb86176ee31f8c8f6e98f72c300\"",
+    "last-modified": "Thu, 22 Oct 2026 12:03:57 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/boot/spring-boot-starter-logging/4.2.0-RC1/spring-boot-starter-logging-4.2.0-RC1.pom"
+  },
+  "status": 200
+}

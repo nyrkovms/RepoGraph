@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"7901a18fd9bbbde9c7d829cd368a82a0\"",
+    "last-modified": "Mon, 12 Oct 2026 11:39:36 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/apache/tomcat/embed/tomcat-embed-core/maven-metadata.xml"
+  },
+  "status": 200
+}

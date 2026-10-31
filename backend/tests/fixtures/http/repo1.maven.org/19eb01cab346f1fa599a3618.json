@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"a4afdd07340bf753ffec5fa87c115bdb\"",
+    "last-modified": "Thu, 14 Aug 2025 17:49:49 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/j2objc/j2objc-annotations/3.1/j2objc-annotations-3.1.pom"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"73d09e014471b1b6074ea0b0a548c560\"",
+    "last-modified": "Thu, 22 Oct 2026 07:54:49 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-expression/maven-metadata.xml"
+  },
+  "status": 200
+}

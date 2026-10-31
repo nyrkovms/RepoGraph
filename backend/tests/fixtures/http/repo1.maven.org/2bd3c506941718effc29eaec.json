@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"9aaed29052ad949bf4b3dbb4d942dcd0\"",
+    "last-modified": "Thu, 17 Oct 2024 08:09:48 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-web/6.1.14/spring-web-6.1.14.pom"
+  },
+  "status": 200
+}

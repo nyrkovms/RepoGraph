@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"78c8927369673fcc71a9cfc4c6a24bdd\"",
+    "last-modified": "Tue, 29 Sep 2026 14:52:58 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/guava/guava/maven-metadata.xml"
+  },
+  "status": 200
+}

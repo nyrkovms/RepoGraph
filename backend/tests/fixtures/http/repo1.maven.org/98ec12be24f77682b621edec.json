@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"bd41564d1c80cf49c3b750f390c9bfbe\"",
+    "last-modified": "Sun, 07 Apr 2024 17:27:45 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/jakarta/annotation/jakarta.annotation-api/maven-metadata.xml"
+  },
+  "status": 200
+}
