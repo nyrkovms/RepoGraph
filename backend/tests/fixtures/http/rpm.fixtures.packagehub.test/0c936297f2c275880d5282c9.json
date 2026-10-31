@@ -1,0 +1,14 @@
+{
+  "headers": {
+    "content-type": "application/octet-stream",
+    "etag": "\"03c4d096bbc03d92\""
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://rpm.fixtures.packagehub.test/rocky-8/AppStream/x86_64/os/repodata/03c4d096bbc03d92a04b47e68b5c4b67641d32d4389da0080ac9cf69f80fc64c-modules.yaml.gz"
+  },
+  "status": 200
+}

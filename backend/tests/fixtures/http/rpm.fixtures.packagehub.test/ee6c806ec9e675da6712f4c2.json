@@ -1,0 +1,14 @@
+{
+  "headers": {
+    "content-type": "application/octet-stream",
+    "etag": "\"799d0369e560e2cb\""
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://rpm.fixtures.packagehub.test/rocky-9/BaseOS/aarch64/os/repodata/repomd.xml"
+  },
+  "status": 200
+}

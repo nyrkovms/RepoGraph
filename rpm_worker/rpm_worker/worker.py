@@ -122,5 +122,5 @@ def whatprovides(sources: List[Mapping[str, Any]], arch: str, capability: str) -
             pairs.append((src.slug, repo.sync(src, arch).solv))
         except repo.Missing:
             continue
-    pool, _ = pools.make_pool(arch, pairs)
+    pool = pools.cached_pool(arch, pairs)
     return pools.whatprovides(pool, capability)

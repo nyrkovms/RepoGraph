@@ -50,6 +50,19 @@ def make_pool(arch: str, snapshots: Iterable[Tuple[str, Path]]) -> Tuple[Any, Di
     return pool, repos
 
 
+_POOLS: "Dict[Tuple[str, Tuple[Tuple[str, str], ...]], Any]" = {}
+
+
+def cached_pool(arch: str, snapshots: Iterable[Tuple[str, Path]]) -> Any:
+    """A pool kept between tasks while its snapshots stay current (a tree asks one capability per dependency)."""
+    key = (arch, tuple((name, str(path)) for name, path in snapshots))
+    if key not in _POOLS:
+        if len(_POOLS) >= 4:
+            _POOLS.pop(next(iter(_POOLS)))
+        _POOLS[key] = make_pool(arch, [(name, Path(path)) for name, path in key[1]])[0]
+    return _POOLS[key]
+
+
 def evr_parts(evr: str) -> Tuple[Optional[int], str, str]:
     epoch, _, rest = evr.rpartition(":") if ":" in evr else ("", "", evr)
     version, _, release = rest.rpartition("-") if "-" in rest else (rest, "", "")

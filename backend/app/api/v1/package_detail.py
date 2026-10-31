@@ -261,12 +261,13 @@ async def get_dependencies_tree(
     default_features: bool | None = Query(default=None),
     target_framework: str | None = Query(default=None),
     scopes: str | None = Query(default=None),
+    arch: str | None = Query(default=None),
 ) -> DependencyTreeResponse:
     """The tree in the ecosystem's environment: PyPI `python_version`/`os` (markers), npm `node_version`/`os`/`cpu`
     (optional dependencies whose version does not fit the platform are left out, as npm does), crates `target`,
     `features` (comma-separated) and `default_features` (below the root, each edge asks its own features), NuGet
     `target_framework` (each version's nearest dependency group), Maven `scopes` (comma-separated, by default
-    compile and runtime)."""
+    compile and runtime), RPM `arch` (x86_64 by default; a capability's package comes from rpm-worker)."""
     target = await _target(db, ecosystem, coordinates)
     version_row = await _version(db, target, version)
     view = _ProfileView(db, await _profile(db, ecosystem, profile))
@@ -279,6 +280,12 @@ async def get_dependencies_tree(
     elif target.plugin.ecosystem == "nuget":
         try:
             view.plugin_env = target.plugin.parse_environment({"target_framework": target_framework or "net8.0"})
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        view.plugin = target.plugin
+    elif target.plugin.ecosystem == "rpm":
+        try:
+            view.plugin_env = target.plugin.parse_environment({"arch": arch or "x86_64"})
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         view.plugin = target.plugin
@@ -699,7 +706,7 @@ async def _build_tree_for_version(
         dependencies_unknown = False
 
         if not dep.resolved_package_id:
-            await _ensure_dependency_resolved(db, dep, fetcher)
+            await _ensure_dependency_resolved(db, dep, fetcher, view)
         child_package = (
             await db.scalar(select(Package).where(Package.id == dep.resolved_package_id)) if dep.resolved_package_id else None
         )
@@ -733,9 +740,17 @@ async def _build_tree_for_version(
                         )
                 dependencies_unknown = resolved.id in view.unknown or await view.known_unknown(child_package, resolved)
 
+        name = _dependency_display(dep)
+        resolved_name = None
+        if child_package is not None:
+            shown = get_plugin(child_package.ecosystem.value).coordinates.display(PackageRef(
+                ecosystem=child_package.ecosystem.value, namespace=child_package.namespace or "",
+                name=child_package.normalized_name))
+            resolved_name = shown if shown != name else None
         nodes.append(
             DependencyNode(
-                name=_dependency_display(dep),
+                name=name,
+                resolved_name=resolved_name,
                 constraint=dep.version_constraint,
                 dependency_type=dep.dependency_type.value,
                 extra_name=dep.extra_name,
@@ -781,16 +796,29 @@ def _dependency_ref(dep: Dependency) -> PackageRef:
 
 
 def _dependency_display(dep: Dependency) -> str:
-    """The name as the ecosystem writes it: npm `@scope/name`, Maven `group:artifact` (the row keeps the parts)."""
+    """The name as the ecosystem writes it: npm `@scope/name`, Maven `group:artifact` (the row keeps the parts); an RPM
+    capability as written (`libssl.so.3()(64bit)`), its package being `resolved_name`."""
     ref = _dependency_ref(dep)
+    if ref.ecosystem == "rpm":
+        return dep.dependency_name
     try:
         return get_plugin(ref.ecosystem).coordinates.display(ref)
     except UnknownEcosystem:
         return dep.dependency_name
 
 
-async def _ensure_dependency_resolved(db: AsyncSession, dep: Dependency, fetcher: LazyFetcher) -> None:
-    package = await fetcher.ensure_package(_dependency_ref(dep))
+async def _ensure_dependency_resolved(db: AsyncSession, dep: Dependency, fetcher: LazyFetcher,
+                                      view: _ProfileView | None = None) -> None:
+    ref = _dependency_ref(dep)
+    if ref.ecosystem == "rpm" and view is not None and view.plugin is not None and view.plugin_env is not None:
+        # An RPM dependency names a capability: rpm-worker knows which package provides it (SPEC §2.2).
+        target = await view.plugin.dependency_target(dependency_from_row(dep), view.plugin_env, view.profile)
+        provider = await fetcher.ensure_package(target) if target is not None else None
+        if provider is not None:
+            dep.resolved_package_id, dep.resolved_version_id = provider.id, None
+            await db.flush()
+        return
+    package = await fetcher.ensure_package(ref)
     if not package:
         return
     await resolve_dependency_links(db, [dep.version_id])

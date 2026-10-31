@@ -100,6 +100,7 @@ class DependencyNode(BaseModel):
     environment_markers: dict | None = None
     details: dict | None = None            # Go `indirect`, Cargo features and registry, npm peer `optional`
     resolved_version: str | None
+    resolved_name: str | None = None       # the catalog package the edge leads to when the name is not it (RPM capability)
     cycle: bool = False
     dependencies_unknown: bool = False   # the resolved version's source has no metadata for it (Q14)
     children: list[DependencyNode] = Field(default_factory=list)

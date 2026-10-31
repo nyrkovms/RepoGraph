@@ -63,6 +63,8 @@ def write_repo(directory: Path, packages: List[Mapping[str, Any]], modules: Opti
     if modules is not None:
         entries.append(("modules", "modules.yaml.gz", gzip.compress(modules)))
     data = ""
+    # Fixed gzip timestamps: the same packages give the same files (and recorded fixtures do not churn).
+    entries = [(k, n, gzip.compress(gzip.decompress(c), mtime=0)) for k, n, c in entries]
     for kind, suffix, content in entries:
         digest = hashlib.sha256(content).hexdigest()
         name = "%s-%s" % (digest, suffix)
