@@ -44,6 +44,8 @@ async def _profile(db: AsyncSession, ecosystem: str, sources: list[dict]) -> str
         # The case's own configuration, also over a source of that slug left in the database.
         registry.base_url, registry.protocol = source["base_url"], RegistryProtocol(source["protocol"])
         registry.priority, registry.routing, registry.enabled = source.get("priority", 50), source.get("routing"), True
+        if "config" in source:   # RPM: namespace, arch, releasever (§6.4); other cases keep the source's own
+            registry.config = source["config"]
         await db.flush()
         members.append(registry)
     slug = f"ref-{uuid.uuid4().hex[:8]}"
@@ -65,6 +67,10 @@ def test_reference_case(case_dir: Path) -> None:
     case = yaml.safe_load((case_dir / "case.yaml").read_text())
     expected = json.loads(expected_file.read_text())
     ecosystem = case_dir.parent.name
+    if ecosystem == "rpm" and not os.environ.get("RPM_REFERENCES"):
+        # Their repositories are frozen vault snapshots of tens of MB: too big for offline fixtures (IMPL E6), so the
+        # nightly workflow runs them against the live vault with RPM_REFERENCES=1.
+        pytest.skip("RPM references run in the nightly workflow (RPM_REFERENCES=1)")
     # PyPI names compare normalized (PEP 503), NuGet ids case-insensitively; elsewhere the spelling is the identity
     # (Go paths, crates names).
     name = {"pypi": canonicalize_name, "nuget": str.lower}.get(ecosystem, str)

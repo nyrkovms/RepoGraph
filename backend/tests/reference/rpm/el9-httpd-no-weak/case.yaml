@@ -1,0 +1,12 @@
+description: >
+  httpd on Rocky Linux 9.4 with install_weak_deps=False.
+roots:
+  - {purl: "pkg:rpm/rocky/httpd?distro=rocky-9", constraint: "*"}
+environment: {distro: rocky-9, arch: x86_64, weak_deps: false}
+sources:
+  - {slug: vault-rocky-9.4-baseos, protocol: rpm-repodata, base_url: "https://dl.rockylinux.org/vault/rocky/9.4/BaseOS/$basearch/os/", priority: 10,
+     config: {namespace: rocky-9, vendor: rocky, arch: [x86_64], releasever: "9"}}
+  - {slug: vault-rocky-9.4-appstream, protocol: rpm-repodata, base_url: "https://dl.rockylinux.org/vault/rocky/9.4/AppStream/$basearch/os/", priority: 20,
+     config: {namespace: rocky-9, vendor: rocky, arch: [x86_64], releasever: "9", modular: true}}
+native: {platform: linux/amd64, image: "rockylinux:9"}
+allowed_differences: []

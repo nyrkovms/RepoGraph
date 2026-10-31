@@ -3,8 +3,10 @@
 update. Needs the `rpm-worker` service of docker-compose.yml running with the same HTTP_REPLAY_DIR."""
 
 import asyncio
+import os
 import uuid
 
+import pytest
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -30,6 +32,8 @@ SOURCES = [
      {"namespace": "rocky-8", "vendor": "rocky", "arch": ["x86_64"], "releasever": "8", "modular": True}),
 ]
 OPENSSL = PackageRef("rpm", "rocky-9", "openssl")
+# The repositories exist only as recorded answers (rpm_worker/tests/fixture_repos.py): nothing to read live.
+pytestmark = pytest.mark.skipif(not os.environ.get("HTTP_REPLAY_DIR"), reason="RPM fixture repositories replay only")
 
 
 async def _sources() -> None:
