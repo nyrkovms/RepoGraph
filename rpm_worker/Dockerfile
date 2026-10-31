@@ -14,4 +14,5 @@ COPY tests ./tests
 
 ENV RPM_CACHE_DIR=/var/cache/rpm-worker PYTHONUNBUFFERED=1
 VOLUME /var/cache/rpm-worker
-CMD ["python3", "-m", "celery", "-A", "rpm_worker.worker:app", "worker", "-Q", "rpm", "--loglevel=INFO", "--concurrency=2"]
+# Two workers: the daily batch (detect_changes, sync_repo) never takes the slots of what a person waits on.
+CMD ["sh", "-c", "python3 -m celery -A rpm_worker.worker:app worker -Q rpm-batch -c 1 -n batch@%h --loglevel=INFO & exec python3 -m celery -A rpm_worker.worker:app worker -Q rpm -c 2 -n interactive@%h --loglevel=INFO"]

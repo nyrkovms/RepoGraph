@@ -13,6 +13,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import tempfile
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 _KEY_HEADERS = ("accept",)
 _WIRE_HEADERS = ("content-encoding", "content-length", "transfer-encoding")
 _STORED_RESPONSE_HEADERS = ("content-type", "etag", "last-modified", "location")
+_SECRET_NAME = re.compile(r"[A-Za-z0-9._-]+")
 USER_AGENT = os.environ.get("HTTP_USER_AGENT", "PackageHub/0.1 (+https://github.com/nyrkovms/RepoGraph)")
 
 
@@ -130,6 +132,8 @@ def client_options(auth_type: str, credentials_ref: Optional[str]) -> Dict[str, 
         return {}
     if not credentials_ref:
         raise SourceAuthError("auth_type %s needs a credentials_ref" % auth_type)
+    if not _SECRET_NAME.fullmatch(credentials_ref) or credentials_ref.startswith("."):
+        raise SourceAuthError("credentials_ref %r is not a secret name ([A-Za-z0-9._-])" % credentials_ref)
     base = _secrets_dir() / credentials_ref
     if auth_type == "basic":
         try:

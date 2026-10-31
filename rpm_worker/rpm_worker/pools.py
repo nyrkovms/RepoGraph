@@ -7,6 +7,7 @@ multilib arches too, as dnf's pool does).
 
 from __future__ import annotations
 
+import functools
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
@@ -110,6 +111,30 @@ def builds(pool: Any, name: str) -> List[Dict[str, Any]]:
     return out
 
 
+_FLAGS = {"=": "REL_EQ", "<": "REL_LT", ">": "REL_GT", "<=": "REL_LT|REL_EQ", ">=": "REL_GT|REL_EQ"}
+
+
+def parse_dep(pool: Any, capability: str) -> Any:
+    """A capability as libsolv matches it: a rich dependency (`(a if b)`), `name op evr`, or a bare name or file.
+    `pool.Dep` alone would intern `name = evr` as one literal name that nothing provides."""
+    text = capability.strip()
+    if text.startswith("("):
+        return pool.parserpmrichdep(text)
+    for operator in ("<=", ">=", "=", "<", ">"):
+        marker = " %s " % operator
+        if marker in text:
+            name, _, evr = text.partition(marker)
+            flags = 0
+            for flag in _FLAGS[operator].split("|"):
+                flags |= getattr(solv, flag)
+            return pool.Dep(name.strip()).Rel(flags, pool.Dep(evr.strip()))
+    return pool.Dep(text)
+
+
 def whatprovides(pool: Any, capability: str) -> List[Dict[str, Any]]:
-    dep = pool.Dep(capability) if not capability.startswith("/") else pool.Dep(capability)
-    return [{"name": s.name, "evr": s.evr, "arch": s.arch, "repo": s.repo.name} for s in pool.whatprovides(dep)]
+    """Providers of a capability, newest first."""
+    dep = parse_dep(pool, capability)
+    if dep is None:
+        return []
+    found = sorted(pool.whatprovides(dep), key=functools.cmp_to_key(lambda a, b: b.evrcmp(a)))
+    return [{"name": s.name, "evr": s.evr, "arch": s.arch, "repo": s.repo.name} for s in found]

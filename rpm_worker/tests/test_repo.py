@@ -43,13 +43,29 @@ def test_a_sync_caches_the_snapshot_and_answers_304_after(served) -> None:
     assert [s for m, p, s in server.requests if p.endswith("repomd.xml")] == [200, 304]
 
 
-def test_a_changed_repository_gets_a_new_snapshot_and_the_old_one_goes(served) -> None:
+def test_a_changed_repository_gets_a_new_snapshot_and_the_previous_stays_one_generation(served) -> None:
     server, root = served
     src = repo.source_from(_source(server.url))
     first = repo.sync(src, "x86_64")
     write_repo(root / "x86_64" / "os", [dict(OPENSSL, evr="1:3.0.7-28.el9"), LIBS, BASH])
     second = repo.sync(src, "x86_64")
-    assert second.revision != first.revision and not first.directory.exists()
+    assert second.revision != first.revision and first.directory.exists()   # a task may still read it
+    write_repo(root / "x86_64" / "os", [dict(OPENSSL, evr="1:3.0.7-29.el9"), LIBS, BASH])
+    third = repo.sync(src, "x86_64")
+    assert third.directory.exists() and second.directory.exists() and not first.directory.exists()
+
+
+def test_a_fresh_snapshot_answers_without_the_source_and_a_down_source_falls_back_to_it(served) -> None:
+    server, _ = served
+    src = repo.source_from(_source(server.url))
+    first = repo.snapshot(src, "x86_64")
+    asked = len(server.requests)
+    assert repo.snapshot(src, "x86_64").directory == first.directory and len(server.requests) == asked
+    server.httpd.shutdown()
+    server.httpd.server_close()
+    assert repo.snapshot(src, "x86_64", refresh=False).directory == first.directory
+    with pytest.raises(Exception):
+        repo.snapshot(src, "x86_64", refresh=True)                 # the daily detect does not hide an outage
 
 
 def test_fetch_package_lists_builds_per_arch_and_noarch_once(served) -> None:
@@ -85,10 +101,13 @@ def test_whatprovides_finds_libraries_and_files(served) -> None:
     assert [p["name"] for p in worker.whatprovides([source], "x86_64", "/bin/sh")] == ["bash"]
 
 
-def test_a_missing_repository_is_no_package_not_an_error(tmp_path) -> None:
+def test_a_repository_without_repomd_is_a_source_error_not_an_empty_source(tmp_path) -> None:
+    # A wrong base_url or a release moved to the vault must not mark every package of the source as gone (§6.4).
     with Server(tmp_path) as server:
-        assert worker.fetch_package(_source(server.url), "openssl") is None
-        assert worker.sync_repo(_source(server.url))["missing"] is True
+        for call in (lambda s: worker.fetch_package(s, "openssl"), worker.sync_repo, worker.test_connection,
+                     lambda s: worker.detect_changes(s, {"openssl": "r"})):
+            with pytest.raises(repo.SourceError):
+                call(_source(server.url))
 
 
 def test_basic_auth_reads_the_secret_and_a_refusal_is_a_source_error(tmp_path, monkeypatch) -> None:
@@ -101,7 +120,7 @@ def test_basic_auth_reads_the_secret_and_a_refusal_is_a_source_error(tmp_path, m
     with Server(root, credentials=("user", "s3cret")) as server:
         assert worker.fetch_package(_source(server.url, auth_type="basic", credentials_ref="satellite"), "bash")
         with pytest.raises(http.SourceAuthError):
-            worker.fetch_package(_source(server.url), "bash")
+            worker.fetch_package(dict(_source(server.url), id="55555555-5555-5555-5555-555555555555"), "bash")
         (secrets / "satellite").write_text("user:wrong\n")
         with pytest.raises(http.SourceAuthError):
             worker.test_connection(_source(server.url, auth_type="basic", credentials_ref="satellite"))
@@ -167,3 +186,10 @@ def test_a_client_certificate_opens_the_repository_and_its_absence_is_a_source_e
         anonymous = dict(_source(server.url), id="44444444-4444-4444-4444-444444444444")
         with pytest.raises((httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError)):
             worker.fetch_package(anonymous, "bash")
+
+
+def test_a_credentials_ref_is_a_name_in_the_secrets_directory_not_a_path(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("SECRETS_DIR", str(tmp_path))
+    for bad in ("../etc/passwd", "/etc/passwd", ".hidden", "a/b"):
+        with pytest.raises(http.SourceAuthError):
+            http.client_options("basic", bad)

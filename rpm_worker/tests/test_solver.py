@@ -105,3 +105,46 @@ def test_module_install_takes_the_profile_and_stream_requirements_enable_streams
 def test_two_streams_of_one_module_conflict(source) -> None:
     problems = _resolve(source, "perl-tool", module_streams={"perl-tool": "1", "perl": "5.26"})["problems"]
     assert problems[0]["code"] == "module_conflict" and problems[0]["module"] == "perl"
+
+
+def test_whatprovides_parses_versioned_and_rich_capabilities(source) -> None:
+    from rpm_worker import worker
+    found = worker.whatprovides([source], "x86_64", "nodejs = 1:18.20.4-1.module+el8.10.0+1")
+    assert [(p["name"], p["evr"]) for p in found] == [("nodejs", "1:18.20.4-1.module+el8.10.0+1")]
+    assert [p["evr"] for p in worker.whatprovides([source], "x86_64", "nodejs >= 1:16")] == [
+        "1:18.20.4-1.module+el8.10.0+1", "1:16.20.2-4.module+el8.9.0+1"]               # newest first
+    assert {p["name"] for p in worker.whatprovides([source], "x86_64", "(bash or perl)")} == {"bash", "perl"}
+
+
+def test_a_named_root_stands_for_what_obsoletes_it_and_no_recommends_edges_without_weak_deps(tmp_path) -> None:
+    root = tmp_path / "mirror"
+    write_repo(root / "x86_64" / "os", [
+        BASH, {"name": "oldtool", "evr": "1.0-1.el8"},
+        {"name": "newtool", "evr": "2.0-1.el8", "provides": [("oldtool", "EQ", "2.0-1.el8")],
+         "obsoletes": [("oldtool", "LT", "2.0")], "recommends": ["bash"]}])
+    with Server(root) as server:
+        src = {"id": "66666666-6666-6666-6666-666666666666", "slug": "obs", "base_url": server.url + "$basearch/os/",
+               "config": {"namespace": "rocky-8", "arch": ["x86_64"]}}
+        result = solver.resolve({"sources": [src], "arch": "x86_64", "roots": [{"spec": "oldtool"}]})
+        assert ("newtool", "2.0-1.el8") in _set(result) and ("oldtool", "1.0-1.el8") not in _set(result)
+        assert result["roots"] == [{"spec": "oldtool", "nevra": "newtool-2.0-1.el8.x86_64"}]
+        quiet = solver.resolve({"sources": [src], "arch": "x86_64", "roots": [{"spec": "newtool"}], "weak_deps": False})
+        assert not [e for e in quiet["edges"] if e["kind"] == "recommends"] and ("bash", "5.1.8-9.el8") not in _set(quiet)
+
+
+def test_a_default_stream_that_clashes_drops_out_and_an_asked_one_errors(source) -> None:
+    # perl-tool has no default; give it one through a stream it needs disabled: the default goes, no error.
+    result = _resolve(source, "perl", disabled_modules=["perl"])
+    assert ("perl", "4:5.26.3-422.el8") in _set(result)                                 # the plain package
+    problems = _resolve(source, "perl-tool", module_streams={"perl-tool": "1"}, disabled_modules=["perl"])["problems"]
+    assert problems[0]["code"] == "module_conflict"
+
+
+def test_a_root_only_in_an_inactive_stream_gets_a_hint(source) -> None:
+    problems = _resolve(source, "npm")["problems"]
+    assert problems[0]["code"] == "not_found" and "nodejs:18" in problems[0]["hint"]
+
+
+def test_module_install_needs_a_profile_when_the_stream_has_no_default_one(source) -> None:
+    problems = _resolve(source, module_install=["perl:5.32"])["problems"]
+    assert problems[0]["code"] == "module_conflict" and "profile" in problems[0]["message"]

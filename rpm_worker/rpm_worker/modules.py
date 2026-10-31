@@ -1,11 +1,12 @@
 """Modularity as dnf does it (SPEC-MULTI-ECOSYSTEM.md §9.8.3), from the `modules.yaml` of EL8/EL9 repositories.
 
 libsolv knows nothing of modules, so the pool is filtered before solving:
-1. active streams: the ones asked for (`module_streams`, `module_install`), the default stream of every other module
-   that is not disabled, and the streams the active ones require (`requires: {perl: [5.32]}`; `platform` is the
-   distribution itself and always holds); two streams of one module are a `module_conflict`;
-2. of an active stream, the contexts whose requirements agree with the active streams (all their versions, dnf keeps
-   them all and libsolv picks the build);
+1. active streams: the ones asked for (`module_streams`, `module_install`) and what they require, hard; the default
+   stream of every other module that is not disabled, weak (dropped when its needs clash); `platform` is the
+   distribution itself and always holds; two asked streams of one module, or an asked stream needing a disabled
+   module, are a `module_conflict`;
+2. of an active stream, the contexts whose requirements agree with the active streams (all their versions stay in
+   the pool and libsolv picks the build; profiles of `module_install` come from the newest version);
 3. excluded: artifacts of every stream that is not active, and non-modular packages that share a name with an artifact
    of an active stream ("modular filtering": the module wins).
 """
@@ -62,7 +63,20 @@ def _read(path: Path) -> str:
     return data.decode("utf-8")
 
 
+_CATALOGS: Dict[Tuple[str, ...], Catalog] = {}
+
+
 def load(paths: Iterable[Path]) -> Catalog:
+    """The modules of the given snapshot files, parsed once per set of files (they never change in place)."""
+    key = tuple(sorted(str(p) for p in paths))
+    if key not in _CATALOGS:
+        if len(_CATALOGS) >= 8:
+            _CATALOGS.pop(next(iter(_CATALOGS)))
+        _CATALOGS[key] = _load([Path(p) for p in key])
+    return _CATALOGS[key]
+
+
+def _load(paths: Iterable[Path]) -> Catalog:
     index = Modulemd.ModuleIndex.new()
     for path in paths:
         index.update_from_string(_read(path), True)
@@ -118,19 +132,24 @@ class Selection:
 
 def select(catalog: Catalog, asked: Mapping[str, str], disabled: Iterable[str] = (),
            install: Iterable[str] = ()) -> Selection:
-    """The active streams and their applicable contexts (step 1-2)."""
+    """The active streams and their applicable contexts (steps 1-2). Asked streams are hard: what they need is
+    enabled, and a contradiction is a module_conflict. Default streams are weak, as libdnf solves them: one whose needs
+    clash with the asked, disabled or other active streams drops out quietly, and it never moves another stream."""
     disabled_set = set(disabled)
     active: Dict[str, str] = {}
     pinned: Set[str] = set()
     profiles_asked: List[Tuple[str, str, Optional[str]]] = []
+    asked = dict(asked)
     for spec in install:                                       # `nodejs:18/common`, `nodejs:18`, `nodejs/common`
         name_stream, _, profile = spec.partition("/")
         name, _, stream = name_stream.partition(":")
         stream = stream or asked.get(name) or catalog.defaults.get(name, "")
         if not stream:
             raise ModuleConflict(name, [], "no stream asked and no default stream")
+        if not profile and not catalog.default_profiles.get((name, stream)):
+            raise ModuleConflict(name, [stream], "no profile asked and the stream has no default profile")
         profiles_asked.append((name, stream, profile or None))
-        asked = dict(asked, **{name: stream})
+        asked[name] = stream
     for module, stream in asked.items():
         if not catalog.of(module, stream):
             raise ModuleConflict(module, [stream], "no such stream")
@@ -139,41 +158,59 @@ def select(catalog: Catalog, asked: Mapping[str, str], disabled: Iterable[str] =
     for module, stream in catalog.defaults.items():
         if module not in active and module not in disabled_set and catalog.of(module, stream):
             active[module] = stream
-    # Requirements of active streams enable what they need; repeat until nothing changes.
-    for _ in range(32):
+    for _ in range(64):
         changed = False
         for module, stream in list(active.items()):
+            if module not in active:
+                continue
             candidates = catalog.of(module, stream)
             if any(all(_agrees(b, active) for b in s.requires) for s in candidates):
                 continue
-            # No context agrees yet: enable what the newest context needs, unless a pinned module says otherwise.
-            for block in max(candidates, key=lambda s: s.version).requires:
-                for required, streams in block.items():
-                    wanted = [s for s in streams if not s.startswith("-")]
-                    if required == PLATFORM or not wanted or active.get(required) in wanted:
-                        continue
-                    if required in pinned or required in disabled_set:
-                        raise ModuleConflict(required, [active.get(required, "disabled")] + wanted,
-                                             "%s:%s needs it" % (module, stream))
-                    choice = catalog.defaults.get(required) if catalog.defaults.get(required) in wanted else wanted[0]
-                    active[required] = choice
+            needs = _needs(max(candidates, key=lambda s: s.version), active)
+            if module not in pinned:
+                # A default stream: enable what it needs only where nothing decided otherwise, else let it go.
+                if any(r in pinned or r in disabled_set or r in active for r, _ in needs):
+                    del active[module]
                     changed = True
+                    continue
+            for required, wanted in needs:
+                if required in pinned or required in disabled_set:
+                    raise ModuleConflict(required, [active.get(required, "disabled")] + wanted,
+                                         "%s:%s needs it" % (module, stream))
+                # An asked stream overrides a default one of the module it needs.
+                choice = catalog.defaults.get(required) if catalog.defaults.get(required) in wanted else wanted[0]
+                active[required] = choice
+                changed = True
         if not changed:
             break
     contexts = [s for module, stream in active.items() for s in catalog.of(module, stream)
                 if all(_agrees(b, active) for b in s.requires)]
-    for module, stream in active.items():
-        if catalog.of(module, stream) and not any(s.module == module for s in contexts):
-            raise ModuleConflict(module, [stream], "no context agrees with the active streams")
+    for module in list(active):
+        if not any(s.module == module for s in contexts):
+            if module in pinned:
+                raise ModuleConflict(module, [active[module]], "no context agrees with the active streams")
+            del active[module]
+    contexts = [s for s in contexts if s.module in active]
     names: List[str] = []
     for module, stream, profile in profiles_asked:
         profile_names = [profile] if profile else catalog.default_profiles.get((module, stream), [])
-        for candidate in catalog.of(module, stream):
-            for name in profile_names:
-                for rpm in candidate.profiles.get(name, []):
-                    if rpm not in names:
-                        names.append(rpm)
+        newest = max(catalog.of(module, stream), key=lambda s: s.version)
+        for name in profile_names:
+            for rpm in newest.profiles.get(name, []):
+                if rpm not in names:
+                    names.append(rpm)
     return Selection(active, contexts, names)
+
+
+def _needs(stream: Stream, active: Mapping[str, str]) -> List[Tuple[str, List[str]]]:
+    """The modules a stream needs that the active streams do not give it, with the streams it accepts."""
+    out = []
+    for block in stream.requires:
+        for required, streams in block.items():
+            wanted = [s for s in streams if not s.startswith("-")]
+            if required != PLATFORM and wanted and active.get(required) not in wanted:
+                out.append((required, wanted))
+    return out
 
 
 def nevra_name(nevra: str) -> str:
@@ -187,9 +224,12 @@ def excluded(catalog: Catalog, selection: Selection, solvables: Iterable[Tuple[i
     """Solvable ids to keep out of the pool (step 3), from `(id, nevra, name)`; NEVRAs as `name-epoch:ver-rel.arch`."""
     active = selection.artifacts()
     modular = {a for s in catalog.streams for a in s.artifacts}
-    active_names = {nevra_name(a) for a in active}
+    present = list(solvables)
+    # Names of active artifacts the pool really has (libdnf): one listed in a repository outside the profile hides
+    # nothing.
+    active_names = {name for _, nevra, name in present if nevra in active}
     out: Set[int] = set()
-    for sid, nevra, name in solvables:
+    for sid, nevra, name in present:
         if nevra in modular:
             if nevra not in active:
                 out.add(sid)

@@ -35,7 +35,7 @@ def _package(p: Mapping[str, Any]) -> str:
     pkgid = hashlib.sha256(("%s-%s.%s" % (name, p["evr"], arch)).encode()).hexdigest()
     sections = ""
     provides = list(p.get("provides", [])) + [(name, "EQ", p["evr"])]
-    for kind, caps in (("provides", provides), ("requires", p.get("requires", [])),
+    for kind, caps in (("provides", provides), ("requires", p.get("requires", [])), ("obsoletes", p.get("obsoletes", [])),
                        ("recommends", p.get("recommends", [])), ("suggests", p.get("suggests", []))):
         if caps:
             sections += "<rpm:%s>%s</rpm:%s>" % (kind, "".join(_entry(c) for c in caps), kind)
