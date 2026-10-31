@@ -19,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.connectors.base import PackageNotFound
 from app.ecosystems.base import DependencyType as DependencyType_
 from app.ecosystems.base import (
+    CatalogVersion,
+    Environment,
     EcosystemPlugin,
     FetchedDocument,
     InvalidVersion,
@@ -1058,6 +1060,7 @@ class _VersionPicker:
         self.db = db
         self._packages: dict[PackageRef, Package | None] = {}
         self._candidates: dict[object, list[tuple[str, object, bool]]] = {}
+        self._rows: dict[object, list[tuple[str, object]]] = {}
         self._best: dict[tuple[object, str], object] = {}
 
     async def package(self, ref: PackageRef) -> Package | None:
@@ -1077,8 +1080,13 @@ class _VersionPicker:
                         )
                     )
                 ).all()
+                self._rows[package.id] = [(version, row_id) for version, row_id in rows]
                 self._candidates[package.id] = _candidates(plugin_for(package.ecosystem.value), rows)
-            self._best[key] = _pick(plugin_for(package.ecosystem.value), self._candidates[package.id], constraint)
+            plugin = plugin_for(package.ecosystem.value)
+            if hasattr(plugin, "choose_version"):
+                self._best[key] = await choose_version(self.db, plugin, package.id, self._rows[package.id], constraint)
+            else:
+                self._best[key] = _pick(plugin, self._candidates[package.id], constraint)
         return self._best[key]
 
 
@@ -1108,6 +1116,30 @@ def _pick(plugin: EcosystemPlugin, candidates: Sequence[tuple[str, object, bool]
             return row_id
         fallback = fallback or row_id
     return fallback
+
+
+async def choose_version(db: AsyncSession, plugin: EcosystemPlugin, package_id: object,
+                         versions: Sequence[tuple[str, object]], constraint: str | None,
+                         env: Environment | None = None) -> object | None:
+    """The version a dependency on the package resolves to, among `(version, row id)`: the plugin's own choice when
+    it has one (npm: npm-pick-manifest with dist-tags, deprecation and engines, as resolve picks, #15), else the
+    highest valid version satisfying the constraint."""
+    chooser = getattr(plugin, "choose_version", None)
+    if chooser is None:
+        return select_best_version(plugin, versions, constraint)
+    ids = dict(versions)
+    if not ids:
+        return None
+    rows = (await db.execute(select(PackageVersion.version, PackageVersion.deprecation, PackageVersion.engines).where(
+        PackageVersion.package_id == package_id, PackageVersion.version.in_(list(ids))))).all()
+    tags: dict[str, list[str]] = {}
+    for tag, version in (await db.execute(select(DistTag.tag, DistTag.version).where(
+            DistTag.package_id == package_id))).all():
+        tags.setdefault(version, []).append(tag)
+    candidates = [CatalogVersion(version=version, registry_id="", registry_slug="", status="active",
+                                 engines=engines, tags=tuple(tags.get(version, ())), deprecated=deprecation is not None)
+                  for version, deprecation, engines in rows]
+    return ids.get(chooser(candidates, constraint, env))
 
 
 def select_best_version(plugin: EcosystemPlugin, versions: Iterable[tuple[str, object]], constraint: str | None):
