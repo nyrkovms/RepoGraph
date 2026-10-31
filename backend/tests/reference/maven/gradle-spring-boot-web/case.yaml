@@ -1,0 +1,10 @@
+description: >
+  spring-boot-starter-web 3.3.5 resolved as Gradle does (highest wins), from POMs only (Q15).
+roots:
+  - {purl: "pkg:maven/org.springframework.boot/spring-boot-starter-web@3.3.5", constraint: "3.3.5"}
+environment: {scopes: [compile, runtime], strategy: gradle}
+sources:
+  - {slug: maven-central, protocol: maven2, base_url: "https://repo1.maven.org/maven2/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

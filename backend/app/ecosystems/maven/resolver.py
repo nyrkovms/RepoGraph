@@ -18,11 +18,23 @@
 6. Scopes are settled after the walk: a node's scope is derived from each parent's scope (`JavaScopeDeriver`) and the
    widest of them wins (compile, runtime, provided, test), a root keeping its own (`JavaScopeSelector`).
 
-`strategy=gradle` takes the same walk but the **highest** version of an artifact wins wherever it is declared, and
-`managed` entries act as constraints (they raise, never lower). The graph lists the artifacts whose scope is one of
-`environment.scopes`.
+`strategy=gradle` follows Gradle 8 reading POMs only (Gradle Module Metadata is not read, Q15; a chosen version that
+has it gets a warning):
+
+1. The **highest** version any reached module asks for wins, wherever it is asked; `managed` entries and the
+   dependencyManagement of reached platforms are constraints: they take part in that choice for a module that is
+   reached, and add none.
+2. A BOM a reached POM (or its parent) imports is a platform dependency of that module: a node, whose
+   dependencyManagement constrains the graph.
+3. The graph is walked again with the chosen versions until nothing changes, so the dependencies of a version that
+   lost no longer count.
+4. A module is excluded only when every path to it excludes it.
+5. Plugins in `environment.plugins` (`<id>:<version>`) are roots by their marker artifact `<id>:<id>.gradle.plugin`.
+
+The graph lists the artifacts whose scope is one of `environment.scopes`.
 """
 
+import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -42,10 +54,13 @@ from app.ecosystems.base import (
 )
 from app.ecosystems.maven.coordinates import pom_path
 from app.ecosystems.maven.environment import MavenEnvironment, maven_scope
-from app.ecosystems.maven.pom import Pom, PomError, effective_model, parse_pom
+from app.ecosystems.maven.pom import EffectiveModel, Pom, PomError, effective_model, parse_pom
 from app.ecosystems.maven.versions import MavenVersionScheme
 
 UNKNOWN_DEPENDENCIES = "dependencies unknown"
+MAX_GRADLE_PASSES = 20
+# Gradle writes this into the POM of everything it publishes together with a `.module` file.
+_GRADLE_MARKER = re.compile(rb"<!--\s*do_not_remove:\s*published-with-gradle-metadata\s*-->")
 _SCHEME = MavenVersionScheme()
 _NOT_TRANSITIVE = ("test", "provided", "system")
 _WIDTH = {"compile": 4, "runtime": 3, "provided": 2, "test": 1, "system": 0}
@@ -136,6 +151,11 @@ class _Resolve:
         self.roots: dict[GA, ResolveRoot] = {}
         self.chosen: dict[GA, _Chosen] = {}
         self.scopes: dict[GA, str] = {}
+        self.poms: dict[tuple[str, str, str], bytes] = {}
+        self.models: dict[tuple[str, str, str], EffectiveModel | None] = {}
+        self.root_list = list(request.roots) + [
+            ResolveRoot(ref=PackageRef("maven", plugin_id, f"{plugin_id}.gradle.plugin"), constraint=version)
+            for plugin_id, version in self.env.plugins]
 
     def _check(self) -> None:
         if time.monotonic() >= self.deadline:
@@ -177,10 +197,9 @@ class _Resolve:
             messages.append(message)
 
     def _requested(self, occurrence: _Occurrence) -> str:
-        """The version asked for: the project's dependencyManagement wins below the roots (as a Gradle constraint it
-        only raises, which the highest-wins walk does by itself once the managed version is seen)."""
+        """The version asked for: the project's dependencyManagement wins below the roots."""
         managed = self.managed.get(occurrence.ga) if occurrence.parent is not None else None
-        if managed is None or not managed.constraint or self.gradle:
+        if managed is None or not managed.constraint:
             return occurrence.raw
         return managed.constraint
 
@@ -188,9 +207,23 @@ class _Resolve:
         ref = PackageRef("maven", group, artifact)
         try:
             document = await self.catalog.document(ref, pom_path(ref, version), self.request.profile)
-            return parse_pom(document.content) if document is not None else None
+            if document is None:
+                return None
+            self.poms[(group, artifact, version)] = document.content
+            return parse_pom(document.content)
         except (PomError, ValueError):
             return None
+
+    async def _model(self, ga: GA, version: str) -> EffectiveModel | None:
+        """The effective model of a version through the document channel (Gradle: its imported BOMs)."""
+        key = (ga[0], ga[1], version)
+        if key not in self.models:
+            pom = await self._pom(*key)
+            try:
+                self.models[key] = await effective_model(pom, self._pom) if pom is not None else None
+            except PomError:
+                self.models[key] = None
+        return self.models[key]
 
     async def import_managed(self) -> None:
         for entry in self.request.managed:
@@ -212,7 +245,7 @@ class _Resolve:
     async def walk(self) -> None:
         await self.import_managed()
         queue: deque[_Occurrence] = deque()
-        for order, root in enumerate(self.request.roots):
+        for order, root in enumerate(self.root_list):
             self.roots.setdefault(_ga(root.ref), root)
             queue.append(_Occurrence(_ga(root.ref), root.ref, root.constraint, 1, None, frozenset(), order))
         order = len(queue)
@@ -220,21 +253,14 @@ class _Resolve:
             self._check()
             occurrence = queue.popleft()
             ga = occurrence.ga
-            existing = self.chosen.get(ga)
-            if existing is not None and not self.gradle:
+            if ga in self.chosen:
                 continue                                                      # nearest (or first) already won
             raw = self._requested(occurrence)
             found = await self.pick(occurrence.ref, raw)
             if found is None:
-                if existing is None:
-                    where = f" (required by {occurrence.parent[0]}:{occurrence.parent[1]})" if occurrence.parent else ""
-                    self.unresolvable.append(f"no version of {ga[0]}:{ga[1]} matches {raw}{where}")
+                self._unresolvable(occurrence, raw)
                 continue
-            if existing is not None:
-                if _SCHEME.sort_key(found.version) <= _SCHEME.sort_key(existing.version.version):
-                    continue
-                occurrence = existing.occurrence                              # gradle: the higher version, same place
-            elif len(self.chosen) >= self.request.max_nodes:
+            if len(self.chosen) >= self.request.max_nodes:
                 raise ResolveLimitExceeded("nodes", self.request.max_nodes)
             chosen = _Chosen(found, occurrence)
             self.chosen[ga] = chosen
@@ -256,6 +282,107 @@ class _Resolve:
                 queue.append(_Occurrence(child, dep.target, dep.constraint, occurrence.depth + 1, ga,
                                          occurrence.exclusions | _exclusions(dep), order))
                 order += 1
+
+    def _unresolvable(self, occurrence: _Occurrence, raw: str) -> None:
+        ga = occurrence.ga
+        where = f" (required by {occurrence.parent[0]}:{occurrence.parent[1]})" if occurrence.parent else ""
+        message = f"no version of {ga[0]}:{ga[1]} matches {raw}{where}"
+        if message not in self.unresolvable:
+            self.unresolvable.append(message)
+
+    async def walk_gradle(self) -> None:
+        await self.import_managed()
+        for root in self.root_list:
+            self.roots.setdefault(_ga(root.ref), root)
+        selected: dict[GA, CatalogVersion] = {}
+        exclusions: dict[GA, frozenset[GA]] = {}
+        for _ in range(MAX_GRADLE_PASSES):
+            chosen, requests, reached_exclusions = await self._gradle_pass(selected, exclusions)
+            settled: dict[GA, CatalogVersion] = {}
+            for ga, chosen_ga in chosen.items():
+                asked = [await self.pick(chosen_ga.occurrence.ref, raw) for raw in requests.get(ga, [])]
+                found = [v for v in asked if v is not None] or [chosen_ga.version]
+                settled[ga] = max(found, key=lambda v: _SCHEME.sort_key(v.version))
+            if {ga: v.version for ga, v in settled.items()} == {ga: v.version for ga, v in selected.items()} \
+                    and reached_exclusions == exclusions:
+                self.chosen = chosen
+                return
+            selected, exclusions = settled, reached_exclusions
+        self.chosen = chosen
+        self.graph.warnings.append({"code": "not_settled",
+                                    "message": f"versions still changed after {MAX_GRADLE_PASSES} passes"})
+
+    async def _gradle_pass(
+        self, selected: dict[GA, CatalogVersion], exclusions: dict[GA, frozenset[GA]],
+    ) -> tuple[dict[GA, _Chosen], dict[GA, list[str]], dict[GA, frozenset[GA]]]:
+        """One walk with the versions chosen so far: what each reached module asks for, and the exclusions every path
+        to a module shares."""
+        self.errors, self.unresolvable = {}, []
+        chosen: dict[GA, _Chosen] = {}
+        requests: dict[GA, list[str]] = {}
+        reached: dict[GA, frozenset[GA]] = {}
+        platforms: list[EffectiveModel] = []
+        imported: set[GA] = set()
+        queue: deque[_Occurrence] = deque()
+        for order, root in enumerate(self.root_list):
+            queue.append(_Occurrence(_ga(root.ref), root.ref, root.constraint, 1, None, frozenset(), order))
+            requests.setdefault(_ga(root.ref), []).append(root.constraint)
+            reached[_ga(root.ref)] = frozenset()
+        order = len(queue)
+        while queue:
+            self._check()
+            occurrence = queue.popleft()
+            ga = occurrence.ga
+            if ga in chosen:
+                continue
+            version = selected.get(ga) or await self.pick(occurrence.ref, occurrence.raw)
+            if version is None:
+                self._unresolvable(occurrence, occurrence.raw)
+                continue
+            if len(chosen) >= self.request.max_nodes:
+                raise ResolveLimitExceeded("nodes", self.request.max_nodes)
+            node = chosen[ga] = _Chosen(version, occurrence)
+            excluded = exclusions.get(ga, occurrence.exclusions)
+            arrivals: list[tuple[GA, PackageRef, str, str, frozenset[GA]]] = []
+            deps = await self.catalog.dependencies(occurrence.ref, version.version, version.registry_id)
+            if deps is None:
+                self._error(ga, UNKNOWN_DEPENDENCIES)
+            for dep in deps or ():
+                child, scope = _ga(dep.target), maven_scope(dep)
+                if dep.dependency_type == "optional" or scope in _NOT_TRANSITIVE or _excluded(child, excluded):
+                    continue
+                arrivals.append((child, dep.target, scope, dep.constraint, excluded | _exclusions(dep)))
+            model = await self._model(ga, version.version)
+            if model is not None:
+                if ga in imported:
+                    platforms.append(model)
+                for group, artifact, bom_version in model.imports:
+                    imported.add((group, artifact))
+                    arrivals.append(((group, artifact), PackageRef("maven", group, artifact), "compile", bom_version,
+                                     excluded))
+            for child, target, scope, raw, path_exclusions in arrivals:
+                node.children.append(_Child(child, scope, raw))
+                requests.setdefault(child, []).append(raw)
+                reached[child] = reached[child] & path_exclusions if child in reached else path_exclusions
+                queue.append(_Occurrence(child, target, raw, occurrence.depth + 1, ga, path_exclusions, order))
+                order += 1
+        # Constraints count only for modules something depends on.
+        for platform in platforms:
+            for entry in platform.managed:
+                if (entry.group, entry.artifact) in chosen and entry.version:
+                    requests[(entry.group, entry.artifact)].append(entry.version)
+        for ga, managed in self.managed.items():
+            if ga in chosen and managed.constraint:
+                requests[ga].append(managed.constraint)
+        return chosen, requests, reached
+
+    def warn_gradle_metadata(self) -> None:
+        for ga, node in self.chosen.items():
+            content = self.poms.get((ga[0], ga[1], node.version.version), b"")
+            if self.scopes.get(ga) in self.env.scopes and _GRADLE_MARKER.search(content):
+                self.graph.warnings.append({
+                    "code": "gradle_module_metadata", "package": f"{ga[0]}:{ga[1]}", "version": node.version.version,
+                    "message": "resolved from the POM: the Gradle Module Metadata published with it is not read"})
 
     def settle_scopes(self) -> None:
         """Scopes once the versions are chosen: roots keep theirs, the rest take the widest derived one. Widening a
@@ -316,13 +443,15 @@ class MavenResolver:
     async def resolve(self, request: ResolveRequest, catalog: CatalogAccess) -> ResolveGraph:
         state = _Resolve(request, catalog)
         try:
-            await state.walk()
-            missing = [f"{r.ref.namespace}:{r.ref.name}" for r in request.roots if not state.versions.get(_ga(r.ref))]
+            await (state.walk_gradle() if state.gradle else state.walk())
+            missing = [f"{r.ref.namespace}:{r.ref.name}" for r in state.root_list if not state.versions.get(_ga(r.ref))]
             if missing:
                 state.graph.error = {"code": "not_found", "packages": missing,
                                      "message": f"no source of the profile has {', '.join(missing)}"}
                 return state.graph
             state.settle_scopes()
+            if state.gradle:
+                state.warn_gradle_metadata()
             state.build()
         except ResolveLimitExceeded as exc:
             state.graph.error = {"code": "resolve_limit_exceeded", "message": str(exc), "limit": exc.limit,

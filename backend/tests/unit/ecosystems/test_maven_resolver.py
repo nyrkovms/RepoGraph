@@ -198,3 +198,64 @@ def test_environment_parsing() -> None:
         except ValueError:
             continue
         raise AssertionError(bad)
+
+
+def test_gradle_drops_what_only_a_losing_version_asked_for() -> None:
+    # b 1.0 (asked first) needs old 1.0; x upgrades b to 2.0, which does not: old leaves, and so does its own pick.
+    catalog = Catalog({"app": _v("1"), "x": _v("1"), "b": _v("1.0", "2.0"), "old": _v("1.0", "3.0"), "y": _v("1")},
+                      {"app@1": [_dep("b", "1.0"), _dep("x", "1")], "x@1": [_dep("b", "2.0"), _dep("y", "1")],
+                       "b@1.0": [_dep("old", "3.0")], "y@1": [_dep("old", "1.0")]})
+    graph = _resolve(catalog, ("app", "1"), strategy="gradle")
+    assert _set(graph) == {("app", "1"), ("x", "1"), ("b", "2.0"), ("y", "1"), ("old", "1.0")}
+
+
+def test_gradle_excludes_a_module_only_when_every_path_does() -> None:
+    catalog = Catalog({n: _v("1") for n in ("app", "p", "q", "z")},
+                      {"app@1": [_dep("p", "1", exclusions=[("g", "z")]), _dep("q", "1")],
+                       "p@1": [_dep("z", "1")], "q@1": [_dep("z", "1")]})
+    assert ("z", "1") in _set(_resolve(catalog, ("app", "1"), strategy="gradle"))
+    catalog.deps["app@1"] = [_dep("p", "1", exclusions=[("g", "z")]), _dep("q", "1", exclusions=[("*", "z")])]
+    assert ("z", "1") not in _set(_resolve(catalog, ("app", "1"), strategy="gradle"))
+
+
+def test_gradle_reads_an_imported_bom_as_a_platform_whose_entries_constrain() -> None:
+    lib = ("<project><groupId>g</groupId><artifactId>lib</artifactId><version>1</version><dependencyManagement>"
+           "<dependencies><dependency><groupId>g</groupId><artifactId>bom</artifactId><version>2</version>"
+           "<type>pom</type><scope>import</scope></dependency></dependencies></dependencyManagement></project>")
+    catalog = Catalog({"app": _v("1"), "lib": _v("1"), "bom": _v("2"), "c": _v("1.0", "1.5"), "d": _v("1.0", "9.0")},
+                      {"app@1": [_dep("lib", "1"), _dep("c", "1.0")]},
+                      {"g/lib/1/lib-1.pom": lib, "g/bom/2/bom-2.pom": _pom("bom", "2", _managed("c", "1.5") +
+                                                                         _managed("d", "9.0"))})
+    graph = _resolve(catalog, ("app", "1"), strategy="gradle")
+    # The BOM is a node; it raises c, and adds no d (nothing depends on d).
+    assert _set(graph) == {("app", "1"), ("lib", "1"), ("bom", "2"), ("c", "1.5")}
+    # Maven only merges a dependency's BOM into that dependency's own model: no node, no constraint.
+    assert _set(_resolve(catalog, ("app", "1"))) == {("app", "1"), ("lib", "1"), ("c", "1.0")}
+
+
+def test_gradle_managed_entries_raise_but_never_lower_and_add_nothing() -> None:
+    catalog = Catalog({"app": _v("1"), "b": _v("1.0", "2.0", "3.0"), "c": _v("1")}, {"app@1": [_dep("b", "2.0")]})
+    assert _set(_resolve(catalog, ("app", "1"), managed=[("b", "3.0", None), ("c", "1", None)], strategy="gradle")) \
+        == {("app", "1"), ("b", "3.0")}
+    assert _set(_resolve(catalog, ("app", "1"), managed=[("b", "1.0", None)], strategy="gradle")) \
+        == {("app", "1"), ("b", "2.0")}
+
+
+def test_gradle_plugins_resolve_through_their_marker_and_gradle_metadata_is_flagged() -> None:
+    marker = PackageRef("maven", "org.example.tool", "org.example.tool.gradle.plugin")
+    impl = ("<project><groupId>g</groupId><artifactId>impl</artifactId><version>1</version>"
+            "<!-- do_not_remove: published-with-gradle-metadata --></project>")
+    catalog = Catalog({marker.name: _v("1.2"), "impl": _v("1")}, documents={"g/impl/1/impl-1.pom": impl})
+    catalog.deps[f"{marker.name}@1.2"] = [_dep("impl", "1")]
+    catalog.data[marker.name] = _v("1.2")
+
+    async def versions(ref: PackageRef, profile: SourceProfile) -> Sequence[CatalogVersion]:
+        return catalog.data.get(ref.name, []) if ref.namespace in ("g", marker.namespace) else []
+
+    catalog.versions = versions  # type: ignore[method-assign]
+    request = ResolveRequest(roots=[], profile=PROFILE,
+                             environment=parse_environment({"strategy": "gradle", "plugins": "org.example.tool:1.2"}))
+    graph = asyncio.run(RESOLVER.resolve(request, catalog))
+    assert {(n.ref.name, n.version) for n in graph.nodes} == {(marker.name, "1.2"), ("impl", "1")}
+    assert [w["code"] for w in graph.warnings] == ["gradle_module_metadata"]
+    assert graph.warnings[0]["package"] == "g:impl"

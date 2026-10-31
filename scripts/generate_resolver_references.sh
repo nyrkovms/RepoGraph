@@ -10,7 +10,10 @@
 # go: `go list -m all` of a main module (go 1.23) that requires the roots, with module graph pruning as Go does it,
 # in the golang image below.
 # nuget: `dotnet restore` of a net8.0 project (.NET SDK 8) referencing the roots, packages from project.assets.json.
-# maven: `mvn dependency:list -DincludeScope=runtime` of a project depending on the roots (Maven 3.9, JDK 21).
+# maven: `mvn dependency:list -DincludeScope=runtime` of a project depending on the roots (Maven 3.9, JDK 21); a case
+# with `strategy: gradle` instead lists the runtimeClasspath of a Gradle 8 `java` project with `implementation` of the
+# roots, reading POMs only (`metadataSources { mavenPom() }`): our gradle strategy does not read Gradle Module Metadata
+# (SPEC §9.7, Q15).
 # Needs docker and the live network. Usage: scripts/generate_resolver_references.sh [case-dir ...]
 set -euo pipefail
 
@@ -23,6 +26,7 @@ RUST_IMAGE="rust:1.86-slim"
 GO_IMAGE="golang:1.23"
 DOTNET_IMAGE="mcr.microsoft.com/dotnet/sdk:8.0"
 MAVEN_IMAGE="maven:3.9-eclipse-temurin-21"
+GRADLE_IMAGE="gradle:8.10-jdk21"
 CASES=("$@")
 if [[ ${#CASES[@]} -eq 0 ]]; then
   # No mapfile: macOS ships bash 3.
@@ -204,8 +208,62 @@ PY
   rm -rf "$work"
 }
 
+gradle_case() {
+  local case_dir="$1" platform="$2" work
+  work="$(mktemp -d)"
+  python3 - "$case_dir/case.yaml" "$work" <<'PY'
+import sys, yaml
+case = yaml.safe_load(open(sys.argv[1]))
+deps = ""
+for r in case["roots"]:
+    coords, _, version = r["purl"].split("/", 1)[1].partition("@")
+    group, artifact = coords.split("/")
+    deps += f"    implementation '{group}:{artifact}:{r['constraint'] or version}'\n"
+open(f"{sys.argv[2]}/settings.gradle", "w").write("rootProject.name = 'reference'\n")
+open(f"{sys.argv[2]}/build.gradle", "w").write(f"""plugins {{ id 'java' }}
+repositories {{ mavenCentral {{ metadataSources {{ mavenPom(); artifact() }} }} }}
+dependencies {{
+{deps}}}
+tasks.register('referenceList') {{
+    def result = configurations.runtimeClasspath.incoming.resolutionResult.rootComponent
+    doLast {{
+        def seen = [] as Set
+        def walk
+        walk = {{ component ->
+            if (!seen.add(component.id)) return
+            if (component.id instanceof org.gradle.api.artifacts.component.ModuleComponentIdentifier) {{
+                println "REF " + component.moduleVersion.group + ":" + component.moduleVersion.name + ":" + component.moduleVersion.version
+            }}
+            component.dependencies.findAll {{ it instanceof org.gradle.api.artifacts.result.ResolvedDependencyResult }}
+                .each {{ walk(it.selected) }}
+        }}
+        walk(result.get())
+    }}
+}}
+""")
+PY
+  docker run --rm --platform "${platform:-linux/amd64}" -v "$work:/w" -w /w "$GRADLE_IMAGE" sh -c \
+    'gradle -q --no-daemon referenceList > deps.txt && gradle --version | sed -n "s/^Gradle /Gradle /p" > tool.txt'
+  python3 - "$work" "$case_dir/expected.json" <<'PY'
+import datetime, json, sys
+work, out = sys.argv[1], sys.argv[2]
+rows = sorted({tuple(line.split()[1].rsplit(":", 1)) for line in open(f"{work}/deps.txt") if line.startswith("REF ")})
+json.dump({"tool": open(f"{work}/tool.txt").read().strip(),
+           "command": ["gradle", "dependencies", "--configuration", "runtimeClasspath"],
+           "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+           "install": [{"name": n, "version": v} for n, v in rows]}, open(out, "w"), indent=2)
+open(out, "a").write("\n")
+print(len(rows), "artifacts")
+PY
+  rm -rf "$work"
+}
+
 for case_dir in "${CASES[@]}"; do
   echo "== ${case_dir}"
+  if [[ "$(basename "$(dirname "$case_dir")")" == "maven" ]] && grep -q "strategy: gradle" "${case_dir}/case.yaml"; then
+    gradle_case "$case_dir" "$(sed -n 's/^  platform: *\([^ #]*\).*/\1/p' "${case_dir}/case.yaml")"
+    continue
+  fi
   if [[ "$(basename "$(dirname "$case_dir")")" == "maven" ]]; then
     maven_case "$case_dir" "$(sed -n 's/^  platform: *\([^ #]*\).*/\1/p' "${case_dir}/case.yaml")"
     continue

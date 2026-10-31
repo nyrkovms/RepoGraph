@@ -1,0 +1,12 @@
+description: >
+  guava 31.0-jre asked for directly and a newer guava through google-http-client 1.45.0: Gradle takes the highest,
+  where Maven keeps the nearest.
+roots:
+  - {purl: "pkg:maven/com.google.http-client/google-http-client@1.45.0", constraint: "1.45.0"}
+  - {purl: "pkg:maven/com.google.guava/guava@31.0-jre", constraint: "31.0-jre"}
+environment: {scopes: [compile, runtime], strategy: gradle}
+sources:
+  - {slug: maven-central, protocol: maven2, base_url: "https://repo1.maven.org/maven2/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

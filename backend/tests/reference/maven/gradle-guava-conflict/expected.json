@@ -1,0 +1,72 @@
+{
+  "tool": "Gradle 8.10.2",
+  "command": [
+    "gradle",
+    "dependencies",
+    "--configuration",
+    "runtimeClasspath"
+  ],
+  "generated_at": "2026-10-30T23:36:03+00:00",
+  "install": [
+    {
+      "name": "com.google.code.findbugs:jsr305",
+      "version": "3.0.2"
+    },
+    {
+      "name": "com.google.errorprone:error_prone_annotations",
+      "version": "2.30.0"
+    },
+    {
+      "name": "com.google.guava:failureaccess",
+      "version": "1.0.1"
+    },
+    {
+      "name": "com.google.guava:guava",
+      "version": "31.0-jre"
+    },
+    {
+      "name": "com.google.guava:listenablefuture",
+      "version": "9999.0-empty-to-avoid-conflict-with-guava"
+    },
+    {
+      "name": "com.google.http-client:google-http-client",
+      "version": "1.45.0"
+    },
+    {
+      "name": "com.google.j2objc:j2objc-annotations",
+      "version": "3.0.0"
+    },
+    {
+      "name": "commons-codec:commons-codec",
+      "version": "1.11"
+    },
+    {
+      "name": "io.grpc:grpc-api",
+      "version": "1.66.0"
+    },
+    {
+      "name": "io.grpc:grpc-context",
+      "version": "1.66.0"
+    },
+    {
+      "name": "io.opencensus:opencensus-api",
+      "version": "0.31.1"
+    },
+    {
+      "name": "io.opencensus:opencensus-contrib-http-util",
+      "version": "0.31.1"
+    },
+    {
+      "name": "org.apache.httpcomponents:httpclient",
+      "version": "4.5.14"
+    },
+    {
+      "name": "org.apache.httpcomponents:httpcore",
+      "version": "4.4.16"
+    },
+    {
+      "name": "org.checkerframework:checker-qual",
+      "version": "3.12.0"
+    }
+  ]
+}
