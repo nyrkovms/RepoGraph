@@ -104,6 +104,12 @@ def test_connection(source: Mapping[str, Any]) -> Dict[str, Any]:
     return {"revision": repo.revision(src)}
 
 
+@app.task(name="rpm.resolve")
+def resolve(request: Mapping[str, Any]) -> Dict[str, Any]:
+    from rpm_worker import solver
+    return solver.resolve(request)
+
+
 @app.task(name="rpm.whatprovides")
 def whatprovides(sources: List[Mapping[str, Any]], arch: str, capability: str) -> List[Dict[str, Any]]:
     from rpm_worker import pools
