@@ -92,6 +92,10 @@ export async function fetchDependencies(ecosystem, coordinates, version, params 
   );
 }
 
+export async function fetchArtifacts(ecosystem, coordinates, version) {
+  return request(`${packagePath(ecosystem, coordinates)}/versions/${encodeURIComponent(version)}/artifacts`);
+}
+
 export async function fetchVulnerabilities(ecosystem, coordinates) {
   return request(`${packagePath(ecosystem, coordinates)}/vulnerabilities`);
 }
