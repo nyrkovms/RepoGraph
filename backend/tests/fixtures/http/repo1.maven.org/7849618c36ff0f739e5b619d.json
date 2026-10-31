@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"c37a03f1636735c1a8d8faafeca4ec69\"",
+    "last-modified": "Fri, 04 Oct 2024 12:34:18 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/junit/junit-bom/5.10.5/junit-bom-5.10.5.pom"
+  },
+  "status": 200
+}

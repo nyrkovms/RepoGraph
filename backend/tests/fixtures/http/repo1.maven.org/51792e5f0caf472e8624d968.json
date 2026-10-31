@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"9bae59f4206d4b0dc726ee5ffeb0581d\"",
+    "last-modified": "Fri, 08 Dec 2023 10:17:33 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/rest-assured/rest-assured-bom/5.4.0/rest-assured-bom-5.4.0.pom"
+  },
+  "status": 200
+}

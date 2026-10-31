@@ -13,18 +13,31 @@ const ECOSYSTEM_OPTIONS = [
   { value: "crates", label: "crates.io" },
   { value: "go", label: "Go" },
   { value: "nuget", label: "NuGet" },
+  { value: "maven", label: "Maven" },
 ];
+
+const DEFAULT_PLACEHOLDER = "flask, requests, numpy...";
+// A Maven package is found and opened by `groupId:artifactId`.
+const PLACEHOLDERS = { maven: "group:artifact, e.g. org.springframework:spring-core" };
 
 function ecosystemLabel(ecosystem) {
   return ECOSYSTEM_OPTIONS.find((option) => option.value === ecosystem)?.label || ecosystem;
 }
 
-// The native spelling of the package name: an npm scope is kept apart from the name in the catalog (`@angular` + `core`).
+// The native spelling of the package name: an npm scope is kept apart from the name in the catalog (`@angular` + `core`),
+// a Maven groupId too (`org.springframework` + `spring-core`).
 function nativeName(item) {
+  if (item.ecosystem === "maven") {
+    return `${item.namespace}:${item.normalized_name}`;
+  }
   return item.namespace ? `@${item.namespace}/${item.normalized_name}` : item.normalized_name;
 }
 
 function displayName(item) {
+  // The name of a Maven package already is `groupId:artifactId`.
+  if (item.ecosystem === "maven") {
+    return item.name;
+  }
   return item.namespace ? `@${item.namespace}/${item.name}` : item.name;
 }
 
@@ -136,7 +149,7 @@ export default function SearchPage() {
   }
 
   function selectSuggestion(item) {
-    setQuery(item.normalized_name);
+    setQuery(item.ecosystem === "maven" ? nativeName(item) : item.normalized_name);
     closeSuggestions();
     navigate(packageHref(item));
   }
@@ -199,7 +212,7 @@ export default function SearchPage() {
         </label>
         <div className="autocomplete">
           <input
-            placeholder="flask, requests, numpy..."
+            placeholder={PLACEHOLDERS[ecosystem] || DEFAULT_PLACEHOLDER}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleInputKeyDown}

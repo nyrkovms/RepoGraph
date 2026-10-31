@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"26a7772112cc5c004450b4c9ecc167dd\"",
+    "last-modified": "Wed, 12 Mar 2025 03:39:15 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/jakarta/platform/jakarta.jakartaee-bom/11.0.0/jakarta.jakartaee-bom-11.0.0.pom"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"53c3b2fe3a6fad4c39824485ca0f3e75\"",
+    "last-modified": "Thu, 24 Sep 2026 10:14:00 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/fabric8/kubernetes-client-bom/8.0.0/kubernetes-client-bom-8.0.0.pom"
+  },
+  "status": 200
+}

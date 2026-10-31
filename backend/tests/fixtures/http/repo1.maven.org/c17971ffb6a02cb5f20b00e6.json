@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"fb22da90bf29d54be31985d926b2988e\"",
+    "last-modified": "Fri, 07 Aug 2026 12:43:28 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/junit/jupiter/junit-jupiter/maven-metadata.xml"
+  },
+  "status": 200
+}

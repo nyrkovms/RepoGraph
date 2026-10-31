@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"b5c1bf911301d8dd1746d16a0d0170cd\"",
+    "last-modified": "Tue, 11 Sep 2018 19:44:11 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/guava/listenablefuture/maven-metadata.xml"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"47a1090c8acea89bfce05cacfcd03f85\"",
+    "last-modified": "Tue, 20 Oct 2026 04:12:01 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/grpc/grpc-context/1.85.1/grpc-context-1.85.1.pom"
+  },
+  "status": 200
+}

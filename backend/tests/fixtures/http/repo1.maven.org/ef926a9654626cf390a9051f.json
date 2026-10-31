@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"76c3c8e252a03db1a957011a08d46752\"",
+    "last-modified": "Thu, 22 Oct 2026 07:46:54 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-context/7.0.10/spring-context-7.0.10.pom"
+  },
+  "status": 200
+}

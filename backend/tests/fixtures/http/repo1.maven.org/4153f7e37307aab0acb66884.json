@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"2e709b810dc89be1c2a945dad73594af\"",
+    "last-modified": "Thu, 11 Apr 2024 00:15:24 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/zipkin/brave/brave-bom/6.0.3/brave-bom-6.0.3.pom"
+  },
+  "status": 200
+}

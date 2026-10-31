@@ -45,7 +45,7 @@ def test_go_routing_is_validated_with_a_module_path() -> None:
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [
-        ({"ecosystem": "maven"}, "no plugin is registered for ecosystem 'maven'"),   # no Maven plugin until E5
+        ({"ecosystem": "rpm"}, "no plugin is registered for ecosystem 'rpm'"),   # no RPM plugin until E6
         ({"ecosystem": "nope"}, "no plugin is registered"),
         ({"protocol": "gopher"}, "unknown protocol 'gopher'"),
         ({"protocol": "npm-registry"}, "no adapter for protocol 'npm-registry'"),
@@ -142,7 +142,8 @@ def test_parse_import_rejects_bad_files() -> None:
 def test_example_file_is_importable_and_valid() -> None:
     path = Path(__file__).resolve().parents[2] / "registries.example.yaml"
     document = parse_import(path.read_text(encoding="utf-8"))
-    assert [(r.slug, r.protocol) for r in document.registries] == [("pypi-mirror", "pypi-warehouse")]
+    assert [(r.slug, r.protocol) for r in document.registries] == [
+        ("pypi-mirror", "pypi-warehouse"), ("google-maven", "maven2"), ("gradle-plugin-portal", "maven2")]
     for registry in document.registries:
         validate_registry(RegistryFields.from_body(registry))
     assert [(p.ecosystem, p.slug, p.is_default, [m.slug for m in p.registries]) for p in document.profiles] == [

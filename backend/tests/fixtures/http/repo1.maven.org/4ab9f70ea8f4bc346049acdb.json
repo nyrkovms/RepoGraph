@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"cdf8958ee3870f5569652ab3e0df5501\"",
+    "last-modified": "Mon, 29 Jan 2024 01:03:03 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/querydsl/querydsl-bom/5.1.0/querydsl-bom-5.1.0.pom"
+  },
+  "status": 200
+}

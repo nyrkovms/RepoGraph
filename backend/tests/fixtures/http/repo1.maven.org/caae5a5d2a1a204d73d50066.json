@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"25b28e957e8be74180f3b628d8dce2c7\"",
+    "last-modified": "Thu, 22 Oct 2026 12:38:03 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/boot/spring-boot-autoconfigure/maven-metadata.xml"
+  },
+  "status": 200
+}

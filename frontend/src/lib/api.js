@@ -54,9 +54,13 @@ export async function searchPackages(params = {}) {
 }
 
 // Package routes are addressed by ecosystem and native coordinates (`@angular/core`, `left-pad`, `flask`); each
-// path segment is encoded, the `/` between scope and name stays (SPEC-MVP-API.md section 3.3).
+// path segment is encoded, the `/` between scope and name stays (SPEC-MVP-API.md section 3.3); so does the `:` of a
+// Maven `groupId:artifactId`, a legal path character.
 export function packagePath(ecosystem, coordinates) {
-  const encoded = String(coordinates).split("/").map(encodeURIComponent).join("/");
+  const encoded = String(coordinates)
+    .split("/")
+    .map((segment) => encodeURIComponent(segment).replaceAll("%3A", ":"))
+    .join("/");
   return `/api/v1/packages/${encodeURIComponent(ecosystem)}/${encoded}/-`;
 }
 

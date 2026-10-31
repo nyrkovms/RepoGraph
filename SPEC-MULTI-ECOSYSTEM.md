@@ -242,10 +242,12 @@ rpm_worker/                   — Dockerfile, worker.py, modules.py, solver.py
 | SemVer 2.0 | npm, crates, go | node-semver 6.3.1 | 29 версий, 841 пара, 0 расхождений (prerelease-идентификаторы, build metadata, псевдоверсии Go) |
 | RPM EVR | rpm | `rpm.labelCompare` (rpm 4.16, Rocky 9) | 28 версий, 784 пары, 0 расхождений (`~`, `^`, эпохи, `el9_4`, модульные сборки, UEK) |
 | PEP 440 | pypi | `packaging` | 38 версий, 1444 пары, 0 расхождений (dev/pre/post, local `+cpu`/`+cu121`, эпохи) |
-| Maven ComparableVersion | maven | — | Не проверено: нужен эталон на Java (`maven-artifact`). Делается на E5 |
+| Maven ComparableVersion | maven | maven-artifact 3.9.9 | 164 версии попарно (и ещё 6 пограничных для сравнения), 66 диапазонов (`containsVersion`, `matchVersion`), 0 расхождений у `compare`; у байтового ключа 0 расхождений на этих векторах, кроме циклов (ниже) |
 | NuGetVersion | nuget | NuGet.Versioning 6.11.1 | 153 версии попарно, 232 диапазона (Satisfies, FindBestMatch), 0 расхождений; байтовый ключ с четвёртым числом и тремя видами меток (NuGet считает `-1` числом) |
 
 Если для Maven или NuGet байтовый ключ не сойдётся с эталоном, есть запасной вариант: ранг версии внутри пакета, пересчитываемый при добавлении версий. Он тоже хранится в `bytea`, так что схема не меняется.
+
+**Порядок Maven не транзитивен.** Сам maven-artifact даёт циклы: `1-alpha < 1 < 1.sp.5 < 1-alpha` и `1.0.alpha.1 < 1 < 1-1 < 1.0.alpha.1`. Причина в квалификаторе между точками после числа: он сравнивается со вложенным списком иначе, чем с отсутствующим элементом. Цикл не воспроизводят ни байтовый ключ, ни ранг внутри пакета: любой линейный порядок разорвёт его в каком-то месте. Поэтому `compare` (резолвер, выбор из диапазона) повторяет Maven точно, а `sort_key` — линейное приближение. Расхождения бывают только у версий с квалификатором между точками (`1.0.sp.2`) против версий со вложенными списками (`1-1`); на случайной выборке обычных версий — 24 пары из 3,1 млн.
 
 | Экосистема | Схема | Диапазоны | Prerelease | Реализация |
 |---|---|---|---|---|
@@ -381,7 +383,7 @@ rpm_worker/                   — Dockerfile, worker.py, modules.py, solver.py
 | `pypi-warehouse` | JSON API `/pypi/{name}/json` | `/pypi/{name}/{ver}/json` (лениво) | classifiers и `license` | Есть |
 | `pypi-simple` | Страница проекта (файлы, даты, yanked) | PEP 658 `.metadata` файла версии. Если его нет — `dependencies_state=unavailable` (Q14): в основном это старые сборки. В карточке, дереве и resolve такая версия помечается «зависимости неизвестны» | — | Описание и лицензию даёт `merge` из pypi.org, если пакет там есть |
 | `npm-registry` | Полный packument (Q19): версии, зависимости, engines, deprecated, dist-tags, даты релизов из `time` | Там же | Из полного документа версии `/{name}/{ver}` | Храним все версии, зависимости — у latest и лениво (Q9) |
-| `maven2` | `maven-metadata.xml` | POM + effective model (§7.4) | `<licenses>` из POM → SPDX-алиасы | Gradle Module Metadata (`.module`) пока не читаем (Q15) |
+| `maven2` | `maven-metadata.xml` | POM + effective model (§7.4) | `<licenses>` из POM → SPDX-алиасы | Gradle Module Metadata (`.module`) пока не читаем (Q15). Дата версии — `Last-Modified` её POM: у новейшей сразу, у остальных фоновой задачей (по HEAD на версию, как API crates.io в Q22), иначе холодный resolve большого графа шёл бы минутами |
 | `nuget-v3` | Registration index | Там же: группы по TFM, deprecation | `licenseExpression` или `licenseUrl` | `vulnerabilities` не сохраняем (D6) |
 | `goproxy` | `@v/list`, `@latest`, `.info` | `.mod` | **Нет.** В первой волне пусто, лицензии даст будущий классификатор (Q11) | Описаний и авторов нет |
 | `cargo-sparse` | Индекс крейта: версии, зависимости, features, yanked, MSRV | Там же | API crates.io (1 запрос/с) — при добавлении пакета и при изменении, в фоне: крейт попадает в каталог из индекса сразу, описание, ссылки и лицензию дозаполняет фоновая задача (Q22) | В зависимостях из другого реестра — поле `registry` → `details.registry` |
@@ -577,7 +579,7 @@ resolvelib (backtracking), PEP 508 markers, extras — без изменений
 4. **Exclusions** накапливаются по пути. **Optional** не транзитивны. **Scope** пересчитывается по стандартной матрице.
 
 **`strategy=gradle` (highest wins)** — для Gradle-сборок и плагинов:
-1. Тот же обход, но при конфликте версий одного GA выигрывает **наибольшая**. `managed` действует как Gradle platform/constraints.
+1. Тот же обход, но при конфликте версий одного GA выигрывает **наибольшая**. `managed` действует как Gradle platform/constraints. Граф обходится заново с выбранными версиями, пока выбор не устоится: зависимости проигравших версий не считаются. Исключение действует, только если его требуют все пути к модулю. `dependencyManagement` POM зависимости (и импортированные им BOM) лишь подставляет версии её собственных зависимостей, как в Maven: узлов и constraints не даёт (проверено эталоном; `jackson-bom` в графе `spring-boot-starter-web` у Gradle появляется только из `.module`).
 2. **Gradle-плагины:** корень `id("org.springframework.boot") version "3.3.5"` превращается в маркер `org.springframework.boot:org.springframework.boot.gradle.plugin:3.3.5` в Gradle Plugin Portal. Его POM ведёт на артефакт реализации.
 3. Метаданные — из POM. **Известное ограничение (Q15):** Gradle Module Metadata (`.module`: варианты, capabilities, атрибуты, constraints) в первой волне не читаем. Gradle публикует `.module` рядом с POM и при сборке предпочитает его, а POM — упрощённый запасной вариант. Где это заметно:
    - **Kotlin Multiplatform** (`kotlinx-coroutines`, `ktor`): в POM корневого артефакта нет зависимостей конкретной платформы (`-jvm`, `-android`), поэтому граф будет неполным;
@@ -585,7 +587,7 @@ resolvelib (backtracking), PEP 508 markers, extras — без изменений
    - **platform/BOM через constraints** Gradle: в POM их нет.
 
    Если у версии есть `.module` (`artifacts.has_metadata_file`), резолвер добавляет в `warnings` пометку «результат по POM, Gradle Module Metadata не учтена». Чтение GMM — кандидат на следующую волну, схема под него готова: `.module` кэшируется в `source_documents`.
-- Эталоны: `mvn dependency:list` для `maven`, `gradle dependencies --configuration runtimeClasspath` для `gradle`.
+- Эталоны: `mvn dependency:list` для `maven`, runtimeClasspath Gradle 8 для `gradle` — с `metadataSources { mavenPom(); ignoreGradleMetadataRedirection() }`, то есть по тем же POM, что читает резолвер (без второго Gradle уходит в `.module` у POM с пометкой `published-with-gradle-metadata`); расхождения из-за `.module` описывает Q15.
 
 ### 9.8 RPM — libsolv и модульность
 

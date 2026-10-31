@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"5277736003de0430023f8ea4042bf0ca\"",
+    "last-modified": "Sun, 30 Aug 2026 17:23:41 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/yaml/snakeyaml/maven-metadata.xml"
+  },
+  "status": 200
+}

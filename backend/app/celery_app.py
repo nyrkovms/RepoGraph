@@ -13,6 +13,7 @@ TASK_MODULES = [
     "app.tasks.daily_update",
     "app.tasks.fetch_deps",
     "app.tasks.fetch_packages",
+    "app.tasks.maven_dates",
     "app.tasks.presence_probe",
     "app.tasks.retry_failed",
     "app.tasks.seed",
@@ -42,6 +43,12 @@ if settings.crates_api_enabled:
     beat_schedule["crates-api"] = {
         "task": "app.tasks.crates_api.fill_crates_api_fields",
         "schedule": settings.crates_api_interval_seconds,
+    }
+
+if settings.maven_dates_enabled:
+    beat_schedule["maven-dates"] = {
+        "task": "app.tasks.maven_dates.fill_maven_release_dates",
+        "schedule": settings.maven_dates_interval_seconds,
     }
 
 celery_app.conf.update(

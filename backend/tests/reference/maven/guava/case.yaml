@@ -1,0 +1,10 @@
+description: >
+  guava 33.3.1-jre: optional dependencies are not transitive, parent properties fill versions.
+roots:
+  - {purl: "pkg:maven/com.google.guava/guava@33.3.1-jre", constraint: "33.3.1-jre"}
+environment: {scopes: [compile, runtime], strategy: maven}
+sources:
+  - {slug: maven-central, protocol: maven2, base_url: "https://repo1.maven.org/maven2/", priority: 0}
+native:
+  platform: linux/amd64
+allowed_differences: []

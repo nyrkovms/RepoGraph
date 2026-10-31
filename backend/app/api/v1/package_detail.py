@@ -260,11 +260,13 @@ async def get_dependencies_tree(
     features: str | None = Query(default=None),
     default_features: bool | None = Query(default=None),
     target_framework: str | None = Query(default=None),
+    scopes: str | None = Query(default=None),
 ) -> DependencyTreeResponse:
     """The tree in the ecosystem's environment: PyPI `python_version`/`os` (markers), npm `node_version`/`os`/`cpu`
     (optional dependencies whose version does not fit the platform are left out, as npm does), crates `target`,
     `features` (comma-separated) and `default_features` (below the root, each edge asks its own features), NuGet
-    `target_framework` (each version's nearest dependency group)."""
+    `target_framework` (each version's nearest dependency group), Maven `scopes` (comma-separated, by default
+    compile and runtime)."""
     target = await _target(db, ecosystem, coordinates)
     version_row = await _version(db, target, version)
     view = _ProfileView(db, await _profile(db, ecosystem, profile))
@@ -277,6 +279,12 @@ async def get_dependencies_tree(
     elif target.plugin.ecosystem == "nuget":
         try:
             view.plugin_env = target.plugin.parse_environment({"target_framework": target_framework or "net8.0"})
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        view.plugin = target.plugin
+    elif target.plugin.ecosystem == "maven":
+        try:
+            view.plugin_env = target.plugin.parse_environment({"scopes": scopes or "compile,runtime"})
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         view.plugin = target.plugin
@@ -727,10 +735,11 @@ async def _build_tree_for_version(
 
         nodes.append(
             DependencyNode(
-                name=dep.dependency_name,
+                name=_dependency_display(dep),
                 constraint=dep.version_constraint,
                 dependency_type=dep.dependency_type.value,
                 extra_name=dep.extra_name,
+                scope=dep.scope,
                 environment_markers=dep.environment_markers,
                 details=dep.details,
                 resolved_version=resolved_version,
@@ -766,10 +775,22 @@ def _child_env(env: Environment | None, dep: Dependency, asks: dict[str, frozens
                              default_features=details.get("default_features", True) is not False)
 
 
+def _dependency_ref(dep: Dependency) -> PackageRef:
+    return PackageRef(ecosystem=dep.dependency_ecosystem.value, namespace=dep.dependency_namespace or "",
+                      name=dep.dependency_name)
+
+
+def _dependency_display(dep: Dependency) -> str:
+    """The name as the ecosystem writes it: npm `@scope/name`, Maven `group:artifact` (the row keeps the parts)."""
+    ref = _dependency_ref(dep)
+    try:
+        return get_plugin(ref.ecosystem).coordinates.display(ref)
+    except UnknownEcosystem:
+        return dep.dependency_name
+
+
 async def _ensure_dependency_resolved(db: AsyncSession, dep: Dependency, fetcher: LazyFetcher) -> None:
-    package = await fetcher.ensure_package(
-        PackageRef(ecosystem=dep.dependency_ecosystem.value, namespace=dep.dependency_namespace or "", name=dep.dependency_name)
-    )
+    package = await fetcher.ensure_package(_dependency_ref(dep))
     if not package:
         return
     await resolve_dependency_links(db, [dep.version_id])

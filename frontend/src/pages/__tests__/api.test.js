@@ -95,4 +95,16 @@ describe("package routes", () => {
     expect(lastUrl().pathname).toBe("/api/v1/packages/nuget/newtonsoft.json/-/versions/13.0.3/dependencies");
     expect(Object.fromEntries(lastUrl().searchParams)).toEqual({ target_framework: "netstandard2.0" });
   });
+
+  it("builds the routes of a Maven package: the colon of groupId:artifactId stays, scopes is the query", async () => {
+    await fetchPackage("maven", "org.springframework:spring-core");
+    expect(lastUrl().pathname).toBe("/api/v1/packages/maven/org.springframework:spring-core/-/");
+
+    await fetchVersion("maven", "org.springframework:spring-core", "6.1.0-RC1");
+    expect(lastUrl().pathname).toBe("/api/v1/packages/maven/org.springframework:spring-core/-/versions/6.1.0-RC1");
+
+    await fetchDependencies("maven", "org.springframework:spring-core", "6.1.0", { scopes: "compile,runtime,test" });
+    expect(lastUrl().pathname).toBe("/api/v1/packages/maven/org.springframework:spring-core/-/versions/6.1.0/dependencies");
+    expect(Object.fromEntries(lastUrl().searchParams)).toEqual({ scopes: "compile,runtime,test" });
+  });
 });

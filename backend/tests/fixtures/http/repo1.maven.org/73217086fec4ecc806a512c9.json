@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"a3fcd0ec21df1f7d23b831cac72ecb90\"",
+    "last-modified": "Fri, 14 Apr 2023 09:12:02 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/mysql/mysql-connector-java/maven-metadata.xml"
+  },
+  "status": 200
+}

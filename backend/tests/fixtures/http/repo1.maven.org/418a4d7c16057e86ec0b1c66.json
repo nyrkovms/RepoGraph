@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"f10052315b058bd40205377d8273fcfd\"",
+    "last-modified": "Thu, 17 Sep 2026 20:05:12 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/protobuf/protobuf-bom/4.36.2/protobuf-bom-4.36.2.pom"
+  },
+  "status": 200
+}

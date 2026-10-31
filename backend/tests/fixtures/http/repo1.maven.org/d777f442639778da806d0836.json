@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"88000541131e3b8e65f889faec5d14f5\"",
+    "last-modified": "Mon, 29 Jun 2026 07:45:44 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/apache/logging/log4j/log4j/2.26.1/log4j-2.26.1.pom"
+  },
+  "status": 200
+}

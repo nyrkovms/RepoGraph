@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"5ba0957cb9570c117185b16c67c0a953\"",
+    "last-modified": "Sun, 25 Oct 2026 14:27:34 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/ch/qos/logback/logback-parent/1.6.6/logback-parent-1.6.6.pom"
+  },
+  "status": 200
+}

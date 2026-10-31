@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"faec2a449747f04223e457ee9c532eae\"",
+    "last-modified": "Tue, 22 Sep 2026 14:50:55 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/slf4j/slf4j-parent/2.0.20/slf4j-parent-2.0.20.pom"
+  },
+  "status": 200
+}

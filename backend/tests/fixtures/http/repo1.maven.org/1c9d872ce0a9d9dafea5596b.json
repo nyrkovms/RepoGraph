@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"14b7518870348b3df4ecd13d5bb95b12\"",
+    "last-modified": "Fri, 07 Aug 2026 12:43:43 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/junit/vintage/junit-vintage-engine/maven-metadata.xml"
+  },
+  "status": 200
+}

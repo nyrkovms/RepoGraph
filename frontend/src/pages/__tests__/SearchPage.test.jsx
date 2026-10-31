@@ -419,4 +419,73 @@ describe("SearchPage", () => {
     );
     expect(screen.getAllByText("NuGet", { selector: ".eco-badge" })).toHaveLength(2);
   });
+
+  it("switches to Maven, hints group:artifact and links artifacts by groupId:artifactId", async () => {
+    const packages = {
+      data: [
+        {
+          ecosystem: "maven",
+          namespace: "org.springframework",
+          name: "org.springframework:spring-core",
+          normalized_name: "spring-core",
+          purl: "pkg:maven/org.springframework/spring-core",
+          description: "Spring Core",
+          license_spdx: "Apache-2.0",
+          latest_version: "6.1.14",
+          has_vulnerabilities: false,
+        },
+        {
+          ecosystem: "maven",
+          namespace: "com.google.guava",
+          name: "com.google.guava:guava",
+          normalized_name: "guava",
+          purl: "pkg:maven/com.google.guava/guava",
+          description: null,
+          license_spdx: "Apache-2.0",
+          latest_version: "33.3.1-jre",
+          has_vulnerabilities: false,
+        },
+      ],
+      cursor: null,
+      has_more: false,
+    };
+    api.fetchPackages.mockResolvedValue(packages);
+    api.searchPackages.mockResolvedValue(packages);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <SearchPage />
+      </MemoryRouter>
+    );
+    await screen.findByRole("link", { name: "org.springframework:spring-core" });
+
+    expect(screen.getByRole("option", { name: "Maven" })).toHaveValue("maven");
+    expect(screen.getByLabelText("Search query")).toHaveAttribute("placeholder", "flask, requests, numpy...");
+    await user.selectOptions(screen.getByLabelText("Ecosystem"), "maven");
+    await waitFor(() => {
+      expect(api.fetchPackages).toHaveBeenLastCalledWith({ limit: 20, sort: "name", ecosystem: "maven" });
+    });
+    expect(screen.getByLabelText("Search query").getAttribute("placeholder")).toContain("group:artifact");
+
+    await user.type(screen.getByLabelText("Search query"), "org.springframework:spring");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => {
+      expect(api.searchPackages).toHaveBeenLastCalledWith({
+        q: "org.springframework:spring",
+        limit: 20,
+        sort: "name",
+        ecosystem: "maven",
+      });
+    });
+
+    expect(screen.getByRole("link", { name: "org.springframework:spring-core" })).toHaveAttribute(
+      "href",
+      "/package/maven/org.springframework:spring-core"
+    );
+    expect(screen.getByRole("link", { name: "com.google.guava:guava" })).toHaveAttribute(
+      "href",
+      "/package/maven/com.google.guava:guava"
+    );
+    expect(screen.getAllByText("Maven", { selector: ".eco-badge" })).toHaveLength(2);
+  });
 });

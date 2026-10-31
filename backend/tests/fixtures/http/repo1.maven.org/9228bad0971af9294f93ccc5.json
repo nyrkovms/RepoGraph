@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"a4b7f1c646c03a924f19de7241985c58\"",
+    "last-modified": "Wed, 21 Aug 2024 20:33:37 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/http-client/google-http-client-parent/1.45.0/google-http-client-parent-1.45.0.pom"
+  },
+  "status": 200
+}

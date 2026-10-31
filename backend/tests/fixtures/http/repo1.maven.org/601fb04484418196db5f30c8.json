@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"0a10720cee757bc9c2b344b693a38ba3\"",
+    "last-modified": "Thu, 22 Oct 2026 07:46:55 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-web/7.1.0-RC1/spring-web-7.1.0-RC1.pom"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"92e01186dabc1e25b11d8e59398f5c08\"",
+    "last-modified": "Sun, 16 Apr 2023 22:11:36 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.0.33/mysql-connector-j-8.0.33.pom"
+  },
+  "status": 200
+}

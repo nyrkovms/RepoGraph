@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"c88da7432ac6257b4ec104be00e0e170\"",
+    "last-modified": "Thu, 08 Oct 2026 17:24:40 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/checkerframework/checker-qual/maven-metadata.xml"
+  },
+  "status": 200
+}

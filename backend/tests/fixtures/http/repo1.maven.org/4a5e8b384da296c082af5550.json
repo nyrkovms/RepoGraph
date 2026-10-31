@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"dc3ba98c7c782b63854e84e0770ee10d\"",
+    "last-modified": "Tue, 02 Jan 2024 19:26:42 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/slf4j/jul-to-slf4j/2.1.0-alpha1/jul-to-slf4j-2.1.0-alpha1.pom"
+  },
+  "status": 200
+}

@@ -1,0 +1,39 @@
+{
+  "tool": "Apache Maven 3.9.16",
+  "command": [
+    "mvn",
+    "dependency:list",
+    "-DincludeScope=runtime"
+  ],
+  "generated_at": "2026-10-30T22:53:19+00:00",
+  "install": [
+    {
+      "name": "com.google.code.findbugs:jsr305",
+      "version": "3.0.2"
+    },
+    {
+      "name": "com.google.errorprone:error_prone_annotations",
+      "version": "2.28.0"
+    },
+    {
+      "name": "com.google.guava:failureaccess",
+      "version": "1.0.2"
+    },
+    {
+      "name": "com.google.guava:guava",
+      "version": "33.3.1-jre"
+    },
+    {
+      "name": "com.google.guava:listenablefuture",
+      "version": "9999.0-empty-to-avoid-conflict-with-guava"
+    },
+    {
+      "name": "com.google.j2objc:j2objc-annotations",
+      "version": "3.0.0"
+    },
+    {
+      "name": "org.checkerframework:checker-qual",
+      "version": "3.43.0"
+    }
+  ]
+}

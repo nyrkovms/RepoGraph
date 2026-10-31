@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"2971281014a59c9e4749fd8527ac9b69\"",
+    "last-modified": "Thu, 22 Oct 2026 12:03:56 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/boot/spring-boot-starter-json/4.1.2/spring-boot-starter-json-4.1.2.pom"
+  },
+  "status": 200
+}

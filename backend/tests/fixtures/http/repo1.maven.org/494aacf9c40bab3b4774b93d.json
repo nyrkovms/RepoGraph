@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"58a94046f6f8534ac886a36c2d07739b\"",
+    "last-modified": "Wed, 07 Aug 2024 05:40:10 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/grpc/grpc-api/1.66.0/grpc-api-1.66.0.pom"
+  },
+  "status": 200
+}

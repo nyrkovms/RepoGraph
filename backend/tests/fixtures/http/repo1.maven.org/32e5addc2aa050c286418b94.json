@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"e481817f3ac9e2b5a08584054012093f\"",
+    "last-modified": "Sun, 15 May 2016 20:52:10 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/apache/apache/18/apache-18.pom"
+  },
+  "status": 200
+}

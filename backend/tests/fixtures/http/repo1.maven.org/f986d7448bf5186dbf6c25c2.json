@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"ecb8fce25b51ebcb30cae2400e2919b3\"",
+    "last-modified": "Thu, 09 Mar 2023 19:38:20 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/mockito/mockito-inline/maven-metadata.xml"
+  },
+  "status": 200
+}

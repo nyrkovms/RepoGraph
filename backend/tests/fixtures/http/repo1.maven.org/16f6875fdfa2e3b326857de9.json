@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"8615b8b24469e3077e36bfaab122cb14\"",
+    "last-modified": "Fri, 31 Mar 2017 04:56:18 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/code/findbugs/jsr305/maven-metadata.xml"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"d99977c0a594692d5baadab8910c8156\"",
+    "last-modified": "Thu, 22 Oct 2026 09:12:07 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/errorprone/error_prone_parent/2.51.0/error_prone_parent-2.51.0.pom"
+  },
+  "status": 200
+}

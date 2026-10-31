@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"28b143b8c277760b08ef44d695e3cdd1\"",
+    "last-modified": "Tue, 19 Mar 2024 21:05:17 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/apache/activemq/artemis-bom/2.33.0/artemis-bom-2.33.0.pom"
+  },
+  "status": 200
+}

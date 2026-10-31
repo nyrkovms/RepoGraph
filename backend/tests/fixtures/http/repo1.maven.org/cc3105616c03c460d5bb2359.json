@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"905337e1a5c85aaabd431cd08c8c32bb\"",
+    "last-modified": "Thu, 04 Apr 2024 20:48:44 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/prometheus/client_java/1.2.1/client_java-1.2.1.pom"
+  },
+  "status": 200
+}

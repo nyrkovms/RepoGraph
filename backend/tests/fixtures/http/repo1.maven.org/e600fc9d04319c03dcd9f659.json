@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"cc43e6f0f73f76ec55f0e838efa2fb8f\"",
+    "last-modified": "Fri, 27 Sep 2024 01:43:33 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.18.0/jackson-core-2.18.0.pom"
+  },
+  "status": 200
+}

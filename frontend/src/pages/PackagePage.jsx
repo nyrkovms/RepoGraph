@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { fetchDependencies, fetchPackage, fetchVersion, fetchVersions, fetchVulnerabilities } from "../lib/api";
 import { getPackageDescriptionParagraphs } from "../lib/packageDescription";
 import { OS_OPTIONS, PYTHON_VERSIONS } from "../lib/runtimeEnv";
 
-const ECOSYSTEM_LABELS = { pypi: "PyPI", npm: "npm", crates: "crates.io", go: "Go", nuget: "NuGet" };
+const ECOSYSTEM_LABELS = { pypi: "PyPI", npm: "npm", crates: "crates.io", go: "Go", nuget: "NuGet", maven: "Maven" };
 
 // npm environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): Node.js version, os and cpu as npm names them.
 const NPM_NODE_VERSIONS = ["22.0.0", "20.0.0", "18.0.0"];
@@ -62,11 +62,15 @@ const NUGET_FRAMEWORKS = [
   "netstandard1.1",
   "netstandard1.0",
 ];
+// Maven environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): the dependency scopes the tree follows; any other value is
+// a 422 of the API. `compile,runtime` is what `mvn dependency:tree` shows for a runtime classpath.
+const MAVEN_SCOPES = ["compile", "runtime", "provided", "system", "test"];
 const DEFAULTS = {
   pypi: { python: "3.12", os: "linux" },
   npm: { node: "20.0.0", os: "linux", cpu: "x64" },
   crates: { target: "x86_64-unknown-linux-gnu" },
   nuget: { framework: "net8.0" },
+  maven: { scopes: "compile,runtime" },
 };
 // Go has no tree environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): every `require` of a go.mod applies.
 // A pseudo-version (`v0.0.0-20261014143641-f0251eb4aa3e`, `v1.2.4-0.2026...-abc`, `v1.2.4-pre.0.2026...-abc`) is a
@@ -93,14 +97,25 @@ function normalizeFeatures(text) {
     .join(",");
 }
 
+// "test, compile,bogus" -> "compile,test": the form of the `scopes` query parameter (known scopes, fixed order); the
+// default when nothing valid is left.
+function normalizeScopes(text) {
+  const wanted = new Set(String(text || "").split(",").map((item) => item.trim()));
+  const scopes = MAVEN_SCOPES.filter((scope) => wanted.has(scope));
+  return scopes.length ? scopes.join(",") : DEFAULTS.maven.scopes;
+}
+
 // Query of the dependency tree request: PyPI `python_version` and `os`, npm `node_version`, `os` and `cpu`,
-// crates `target`, `features` and `default_features`, NuGet `target_framework`, Go none.
+// crates `target`, `features` and `default_features`, NuGet `target_framework`, Maven `scopes`, Go none.
 function treeParams(ecosystem, env, includeOptional) {
   if (ecosystem === "go") {
     return {};
   }
   if (ecosystem === "nuget") {
     return { target_framework: env.framework };
+  }
+  if (ecosystem === "maven") {
+    return { scopes: env.scopes };
   }
   if (ecosystem === "npm") {
     return { include_optional: includeOptional, node_version: env.node, os: env.os, cpu: env.cpu };
@@ -151,7 +166,29 @@ function formatDateTime(value) {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
 }
 
-function collectDependencyConditions(node) {
+// Maven edge: the declared scope, exclusions, classifier and non-jar type. The scope is the edge's own when the API
+// gives it; otherwise it follows from `dependency_type` where that is unambiguous (compile and runtime both map to
+// `runtime`, so no label for them).
+function mavenEdgeLabels(node) {
+  const labels = [];
+  const scope = node.scope || node.details?.scope || { dev: "test", provided: "provided" }[node.dependency_type];
+  if (scope) {
+    labels.push(`scope ${scope}`);
+  }
+  const exclusions = Array.isArray(node.details?.exclusions) ? node.details.exclusions : [];
+  if (exclusions.length) {
+    labels.push(`excludes ${exclusions.map((item) => `${item.group}:${item.artifact}`).join(", ")}`);
+  }
+  if (node.details?.classifier) {
+    labels.push(`classifier ${node.details.classifier}`);
+  }
+  if (node.details?.type) {
+    labels.push(`type ${node.details.type}`);
+  }
+  return labels;
+}
+
+function collectDependencyConditions(node, ecosystem) {
   const labels = [];
   const extraValues = new Set();
   const conditions = Array.isArray(node.environment_markers?.conditions) ? node.environment_markers.conditions : [];
@@ -177,6 +214,10 @@ function collectDependencyConditions(node) {
   // NuGet: the dependency group (target framework, as the registration writes it) the edge is taken from.
   if (typeof node.environment_markers?.dotnet_target_framework === "string") {
     labels.push(node.environment_markers.dotnet_target_framework);
+  }
+
+  if (ecosystem === "maven") {
+    labels.push(...mavenEdgeLabels(node));
   }
 
   if (node.extra_name) {
@@ -277,6 +318,30 @@ function deprecationMessage(deprecation) {
   return typeof deprecation === "string" ? deprecation : String(deprecation.message || "");
 }
 
+// Maven relocation: `deprecation.alternative` is `groupId:artifactId[:version]`, the package the POM moved to.
+function relocationTarget(alternative) {
+  const [group, artifact, version] = String(alternative || "").split(":");
+  if (!group || !artifact) {
+    return null;
+  }
+  return { name: `${group}:${artifact}`, version: version || "" };
+}
+
+function RelocationLink({ alternative, isMaven }) {
+  const target = isMaven ? relocationTarget(alternative) : null;
+  if (!target) {
+    return alternative;
+  }
+  const query = target.version ? `?version=${encodeURIComponent(target.version)}` : "";
+  return <Link to={`/package/maven/${target.name}${query}`}>{alternative}</Link>;
+}
+
+// Packaging of a Maven version (`jar`, `pom`, `aar`...), from its POM; the version payload carries it where it is known.
+function packagingOf(version) {
+  const packaging = version?.packaging ?? version?.raw_metadata?.packaging;
+  return typeof packaging === "string" ? packaging : "";
+}
+
 function VersionStatus({ version, isGo }) {
   // A Go module's author retracts a version in go.mod with a rationale; the catalog keeps it as yanked.
   const retracted = isGo && version.status === "yanked";
@@ -304,8 +369,8 @@ function collectNodeIds(nodes, parentId = "root") {
   return ids;
 }
 
-function DependencyTreeNode({ node, nodeId, packageName, collapsedNodes, onToggleCollapse }) {
-  const conditions = collectDependencyConditions(node);
+function DependencyTreeNode({ node, nodeId, packageName, ecosystem, collapsedNodes, onToggleCollapse }) {
+  const conditions = collectDependencyConditions(node, ecosystem);
   const installHints = conditions.extras.map((extra) => `${packageName}[${extra}]`);
   const hasChildren = Boolean(node.children?.length);
   const isCollapsed = collapsedNodes.has(nodeId);
@@ -351,6 +416,7 @@ function DependencyTreeNode({ node, nodeId, packageName, collapsedNodes, onToggl
         <DependencyTree
           nodes={node.children}
           packageName={packageName}
+          ecosystem={ecosystem}
           parentId={nodeId}
           collapsedNodes={collapsedNodes}
           onToggleCollapse={onToggleCollapse}
@@ -360,7 +426,7 @@ function DependencyTreeNode({ node, nodeId, packageName, collapsedNodes, onToggl
   );
 }
 
-function DependencyTree({ nodes, packageName, parentId = "root", collapsedNodes, onToggleCollapse }) {
+function DependencyTree({ nodes, packageName, ecosystem, parentId = "root", collapsedNodes, onToggleCollapse }) {
   if (!nodes?.length) {
     return null;
   }
@@ -373,6 +439,7 @@ function DependencyTree({ nodes, packageName, parentId = "root", collapsedNodes,
           node={node}
           nodeId={`${parentId}/${node.name}-${idx}`}
           packageName={packageName}
+          ecosystem={ecosystem}
           collapsedNodes={collapsedNodes}
           onToggleCollapse={onToggleCollapse}
         />
@@ -390,6 +457,7 @@ export default function PackagePage() {
   const isCrates = ecosystem === "crates";
   const isGo = ecosystem === "go";
   const isNuget = ecosystem === "nuget";
+  const isMaven = ecosystem === "maven";
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [pkg, setPkg] = useState(null);
@@ -401,6 +469,7 @@ export default function PackagePage() {
   const [os, setOs] = useState(() => searchParams.get("os") || DEFAULTS.pypi.os);
   const [target, setTarget] = useState(() => searchParams.get("target") || DEFAULTS.crates.target);
   const [framework, setFramework] = useState(() => searchParams.get("target_framework") || DEFAULTS.nuget.framework);
+  const [scopes, setScopes] = useState(() => normalizeScopes(searchParams.get("scopes")));
   // The features field is applied (and the tree reloaded) on Enter or blur, not on every keystroke.
   const [features, setFeatures] = useState(() => normalizeFeatures(searchParams.get("features")));
   const [featuresInput, setFeaturesInput] = useState(() => normalizeFeatures(searchParams.get("features")));
@@ -419,6 +488,7 @@ export default function PackagePage() {
   const treeOs = isNpm ? pickOption(os, NPM_OS_OPTIONS.map((item) => item.value), DEFAULTS.npm.os) : os;
   const treeTarget = pickOption(target, CRATES_TARGETS, DEFAULTS.crates.target);
   const treeFramework = pickOption(framework, NUGET_FRAMEWORKS, DEFAULTS.nuget.framework);
+  const selectedScopes = scopes.split(",");
   const latestVersion = useMemo(() => selectedVersion || pkg?.latest_version || versions?.[0]?.version, [selectedVersion, pkg, versions]);
   // `deprecation.message` of the package (Go: the `// Deprecated:` paragraph of go.mod; NuGet: the message or the reasons), `true` when it has no text.
   const deprecated = useMemo(() => {
@@ -427,6 +497,7 @@ export default function PackagePage() {
     }
     return deprecationMessage(pkg.deprecation) || true;
   }, [pkg?.deprecation]);
+  const relocatedTo = pkg?.deprecation?.alternative || "";
   const descriptionParagraphs = useMemo(() => getPackageDescriptionParagraphs(pkg?.description), [pkg?.description]);
   const allNodeIds = useMemo(() => collectNodeIds(deps), [deps]);
   const isTreeCollapsed = useMemo(
@@ -445,6 +516,7 @@ export default function PackagePage() {
     setOs(searchParams.get("os") || DEFAULTS.pypi.os);
     setTarget(searchParams.get("target") || DEFAULTS.crates.target);
     setFramework(searchParams.get("target_framework") || DEFAULTS.nuget.framework);
+    setScopes(normalizeScopes(searchParams.get("scopes")));
     setFeatures(normalizeFeatures(searchParams.get("features")));
     setFeaturesInput(normalizeFeatures(searchParams.get("features")));
     setDefaultFeatures(searchParams.get("default_features") !== "0");
@@ -483,17 +555,21 @@ export default function PackagePage() {
       if (framework && framework !== DEFAULTS.nuget.framework) {
         next.set("target_framework", framework);
       }
+    } else if (isMaven) {
+      if (scopes !== DEFAULTS.maven.scopes) {
+        next.set("scopes", scopes);
+      }
     } else if (!isGo && pythonVersion && pythonVersion !== DEFAULTS.pypi.python) {
       next.set("python", pythonVersion);
     }
-    if (!isCrates && !isGo && !isNuget && os && os !== DEFAULTS.pypi.os) {
+    if (!isCrates && !isGo && !isNuget && !isMaven && os && os !== DEFAULTS.pypi.os) {
       next.set("os", os);
     }
-    if (includeOptional && !isGo && !isNuget) {
+    if (includeOptional && !isGo && !isNuget && !isMaven) {
       next.set("include_optional", "1");
     }
     setSearchParams(next, { replace: true });
-  }, [isNpm, isCrates, isGo, isNuget, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, features, defaultFeatures, includeOptional, setSearchParams]);
+  }, [isNpm, isCrates, isGo, isNuget, isMaven, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, features, defaultFeatures, includeOptional, setSearchParams]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -501,7 +577,7 @@ export default function PackagePage() {
     }
     loadDependencies(name, selectedVersion);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ecosystem, name, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, features, defaultFeatures, includeOptional]);
+  }, [ecosystem, name, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, features, defaultFeatures, includeOptional]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -566,7 +642,7 @@ export default function PackagePage() {
         version,
         treeParams(
           ecosystem,
-          { python: pythonVersion, node: nodeVersion, cpu, os: treeOs, target: treeTarget, framework: treeFramework, features, defaultFeatures },
+          { python: pythonVersion, node: nodeVersion, cpu, os: treeOs, target: treeTarget, framework: treeFramework, scopes, features, defaultFeatures },
           includeOptional
         )
       );
@@ -579,6 +655,19 @@ export default function PackagePage() {
       setDepsUnknown(false);
     } finally {
       setDepsLoading(false);
+    }
+  }
+
+  // At least one scope stays selected: the API refuses an empty list.
+  function toggleScope(scope, checked) {
+    const next = new Set(selectedScopes);
+    if (checked) {
+      next.add(scope);
+    } else {
+      next.delete(scope);
+    }
+    if (next.size > 0) {
+      setScopes(MAVEN_SCOPES.filter((item) => next.has(item)).join(","));
     }
   }
 
@@ -623,7 +712,7 @@ export default function PackagePage() {
   return (
     <section>
       <h2>
-        Package: {isNuget && pkg?.name ? pkg.name : name}
+        Package: {(isNuget || isMaven) && pkg?.name ? pkg.name : name}
         <span className="tag eco-badge">{ECOSYSTEM_LABELS[ecosystem] || ecosystem}</span>
       </h2>
       {error ? <p className="error">{error}</p> : null}
@@ -635,6 +724,12 @@ export default function PackagePage() {
             <div className="banner warn" role="alert">
               <b>Deprecated</b>
               {deprecated !== true ? `: ${deprecated}` : ""}
+              {relocatedTo ? (
+                <>
+                  {" "}
+                  (moved to <RelocationLink alternative={relocatedTo} isMaven={isMaven} />)
+                </>
+              ) : null}
             </div>
           ) : null}
           {/* Go modules have no description, license or authors in the catalog: no empty blocks for them. */}
@@ -652,6 +747,16 @@ export default function PackagePage() {
               <span>
                 <b>purl</b>: <code>{pkg.purl}</code>
               </span>
+            ) : null}
+            {isMaven ? (
+              <>
+                <span>
+                  <b>groupId</b>: <code>{pkg.namespace}</code>
+                </span>
+                <span>
+                  <b>artifactId</b>: <code>{pkg.normalized_name}</code>
+                </span>
+              </>
             ) : null}
             <span>
               <b>Latest</b>: {latestVersion}
@@ -705,6 +810,7 @@ export default function PackagePage() {
               <li key={v.version}>
                 {v.version}
                 <VersionStatus version={v} isGo={isGo} />
+                {isMaven && packagingOf(v) ? <span className="tag cond">{packagingOf(v)}</span> : null}
                 {formatDate(v.release_date) ? <span className="muted version-date">{formatDate(v.release_date)}</span> : null}
               </li>
             ))}
@@ -775,7 +881,22 @@ export default function PackagePage() {
                   </select>
                 </label>
               </>
-            ) : isGo ? null : isNuget ? (
+            ) : isGo ? null : isMaven ? (
+              <div className="scope-select" role="group" aria-label="Scopes">
+                <b>Scopes</b>
+                {MAVEN_SCOPES.map((scope) => (
+                  <label key={scope}>
+                    <input
+                      type="checkbox"
+                      checked={selectedScopes.includes(scope)}
+                      onChange={(e) => toggleScope(scope, e.target.checked)}
+                      disabled={loading || depsLoading}
+                    />
+                    {scope}
+                  </label>
+                ))}
+              </div>
+            ) : isNuget ? (
               <label>
                 Target framework
                 <select
@@ -868,7 +989,7 @@ export default function PackagePage() {
                 </label>
               </>
             )}
-            {isGo || isNuget ? null : (
+            {isGo || isNuget || isMaven ? null : (
               <label>
                 <input
                   type="checkbox"
@@ -910,6 +1031,11 @@ export default function PackagePage() {
                   Retracted{versionDetail.status_reason ? `: ${versionDetail.status_reason}` : ""}
                 </p>
               ) : null}
+              {isMaven && packagingOf(versionDetail) ? (
+                <p className="muted">
+                  Packaging: <code>{packagingOf(versionDetail)}</code>
+                </p>
+              ) : null}
               {isNuget && versionDetail.status === "unlisted" ? (
                 <p className="muted">Unlisted: the author hid this version from search, it can still be restored.</p>
               ) : null}
@@ -932,6 +1058,7 @@ export default function PackagePage() {
           <DependencyTree
             nodes={deps}
             packageName={pkg.normalized_name}
+            ecosystem={ecosystem}
             collapsedNodes={collapsedNodes}
             onToggleCollapse={toggleNodeCollapse}
           />

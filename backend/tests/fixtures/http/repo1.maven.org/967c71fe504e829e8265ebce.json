@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"a77ee4b3c635d6fcb697247b7f69977f\"",
+    "last-modified": "Thu, 24 Sep 2026 10:24:32 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/fabric8/kubernetes-client-bom/maven-metadata.xml"
+  },
+  "status": 200
+}

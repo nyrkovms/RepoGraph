@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"a7e890c07314e75a1e04a99bd44a7759\"",
+    "last-modified": "Thu, 20 May 2010 00:51:21 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/javax/measure/jsr-275/1.0.0/jsr-275-1.0.0.pom"
+  },
+  "status": 200
+}

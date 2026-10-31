@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"94d5ad7e9e5433eda635eeed9a7b4deb\"",
+    "last-modified": "Thu, 22 Oct 2026 12:38:53 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/boot/spring-boot-starter-web/maven-metadata.xml"
+  },
+  "status": 200
+}

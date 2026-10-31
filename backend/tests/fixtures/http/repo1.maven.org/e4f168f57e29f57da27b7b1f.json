@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"f6e23ec61c917a9cfd89756fe4c1a476\"",
+    "last-modified": "Sat, 17 Oct 2026 18:07:42 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/maven-metadata.xml"
+  },
+  "status": 200
+}

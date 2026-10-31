@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"9f46c61f7eb7105cd1b411503f969628\"",
+    "last-modified": "Mon, 27 Feb 2023 09:59:29 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/openjdk/jol/jol-core/0.17/jol-core-0.17.pom"
+  },
+  "status": 200
+}

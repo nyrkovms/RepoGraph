@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"90afe33342e2d510d42d746ebbb4c1a4\"",
+    "last-modified": "Mon, 15 Aug 2011 19:27:27 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/javax/measure/jsr-275/maven-metadata.xml"
+  },
+  "status": 200
+}

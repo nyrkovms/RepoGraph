@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"8d656019c77c684f4ea9a0a27e59c247\"",
+    "last-modified": "Wed, 24 Jan 2024 19:09:42 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/mockito/mockito-bom/5.10.0/mockito-bom-5.10.0.pom"
+  },
+  "status": 200
+}

@@ -1,0 +1,82 @@
+{
+  "com/fasterxml/jackson/core/jackson-databind/2.17.2/jackson-databind-2.17.2.pom": {
+    "content-type": "text/xml",
+    "etag": "\"bb5930e2d75085c2e4b48ed49e23b211\"",
+    "last-modified": "Fri, 05 Jul 2024 17:15:55 GMT"
+  },
+  "com/fasterxml/jackson/jackson-base/2.17.2/jackson-base-2.17.2.pom": {
+    "content-type": "text/xml",
+    "etag": "\"98ae983d3b9b3c7680b4f7409e1262d9\"",
+    "last-modified": "Fri, 05 Jul 2024 16:49:01 GMT"
+  },
+  "com/fasterxml/jackson/jackson-bom/2.17.2/jackson-bom-2.17.2.pom": {
+    "content-type": "text/xml",
+    "etag": "\"d7064e7a6724740345791a8e7f554b46\"",
+    "last-modified": "Fri, 05 Jul 2024 16:48:48 GMT"
+  },
+  "com/fasterxml/jackson/jackson-parent/2.17/jackson-parent-2.17.pom": {
+    "content-type": "text/xml",
+    "etag": "\"462ebe2957870d2e8445e57241ef9cc7\"",
+    "last-modified": "Tue, 12 Mar 2024 03:34:41 GMT"
+  },
+  "com/fasterxml/oss-parent/58/oss-parent-58.pom": {
+    "content-type": "text/xml",
+    "etag": "\"dc6aad16b7275b83c9a80f8ce11a9459\"",
+    "last-modified": "Mon, 19 Feb 2024 21:49:14 GMT"
+  },
+  "com/google/guava/guava-parent/33.3.1-jre/guava-parent-33.3.1-jre.pom": {
+    "content-type": "text/xml",
+    "etag": "\"fcc6275624efcd791ee156b9ec18c824\"",
+    "last-modified": "Mon, 23 Sep 2024 20:09:01 GMT"
+  },
+  "com/google/guava/guava/33.3.1-jre/guava-33.3.1-jre.pom": {
+    "content-type": "text/xml",
+    "etag": "\"b1b6ae8e8d1ebd0cb399154da74c8986\"",
+    "last-modified": "Mon, 23 Sep 2024 20:12:57 GMT"
+  },
+  "mysql/mysql-connector-java/8.0.33/mysql-connector-java-8.0.33.pom": {
+    "content-type": "text/xml",
+    "etag": "\"ac65b27184e8db8cd7ba75ca13dd8a80\"",
+    "last-modified": "Tue, 07 Mar 2023 16:15:54 GMT"
+  },
+  "org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.9.0/kotlinx-coroutines-core-jvm-1.9.0.pom": {
+    "content-type": "text/xml",
+    "etag": "\"204a1db1715f362d45475ef698df430c\"",
+    "last-modified": "Fri, 13 Sep 2024 14:10:19 GMT"
+  },
+  "org/junit/junit-bom/5.10.2/junit-bom-5.10.2.pom": {
+    "content-type": "text/xml",
+    "etag": "\"97eb371397be93a5b207ccd80e33dbd7\"",
+    "last-modified": "Sun, 04 Feb 2024 08:35:24 GMT"
+  },
+  "org/springframework/spring-core/5.3.39/spring-core-5.3.39.pom": {
+    "content-type": "text/xml",
+    "etag": "\"8556167b8ef0af6e246acf6849881d0c\"",
+    "last-modified": "Wed, 14 Aug 2024 09:04:42 GMT"
+  },
+  "org/springframework/spring-core/6.1.14/spring-core-6.1.14.pom": {
+    "content-type": "text/xml",
+    "etag": "\"8dcd2b76b67f327e4902822979968035\"",
+    "last-modified": "Thu, 17 Oct 2024 08:10:00 GMT"
+  },
+  "org/springframework/spring-core/6.2.0/spring-core-6.2.0.pom": {
+    "content-type": "text/xml",
+    "etag": "\"d2e6b534cc971784c659569e0f78a0b3\"",
+    "last-modified": "Thu, 14 Nov 2024 16:38:50 GMT"
+  },
+  "org/springframework/spring-core/7.0.10/spring-core-7.0.10.pom": {
+    "content-type": "text/xml",
+    "etag": "\"8b6c39b165c906d58cd638f7fe1f5c9b\"",
+    "last-modified": "Thu, 22 Oct 2026 07:46:54 GMT"
+  },
+  "org/springframework/spring-core/7.1.0-RC1/spring-core-7.1.0-RC1.pom": {
+    "content-type": "text/xml",
+    "etag": "\"5726ecf19a00ca6e07a5d1b3ac210672\"",
+    "last-modified": "Thu, 22 Oct 2026 07:46:54 GMT"
+  },
+  "org/springframework/spring-core/maven-metadata.xml": {
+    "content-type": "text/xml",
+    "etag": "\"7076934ebba0ffee3eba7b448eb8cc1c\"",
+    "last-modified": "Thu, 22 Oct 2026 07:54:48 GMT"
+  }
+}

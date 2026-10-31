@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"842cf1c6671e64a2be23cd0dc465c2da\"",
+    "last-modified": "Thu, 22 Oct 2026 07:33:59 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/micrometer/micrometer-observation/maven-metadata.xml"
+  },
+  "status": 200
+}

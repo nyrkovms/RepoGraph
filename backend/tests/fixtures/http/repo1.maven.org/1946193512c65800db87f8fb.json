@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"4d9c39f91ac4ce446239f7e84322c4df\"",
+    "last-modified": "Thu, 22 Oct 2026 07:54:52 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-framework-bom/maven-metadata.xml"
+  },
+  "status": 200
+}

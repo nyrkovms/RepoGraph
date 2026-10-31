@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"26e00349cbd5cee630b0c4356fdb737d\"",
+    "last-modified": "Tue, 06 Oct 2026 08:46:48 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/netty/netty-bom/4.2.19.Final/netty-bom-4.2.19.Final.pom"
+  },
+  "status": 200
+}

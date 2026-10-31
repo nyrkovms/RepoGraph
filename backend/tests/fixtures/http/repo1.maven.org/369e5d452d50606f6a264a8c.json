@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"7fb487ffda704b13f00617978fc2fdbe\"",
+    "last-modified": "Thu, 22 Oct 2026 07:46:55 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-webmvc/7.1.0-RC1/spring-webmvc-7.1.0-RC1.pom"
+  },
+  "status": 200
+}

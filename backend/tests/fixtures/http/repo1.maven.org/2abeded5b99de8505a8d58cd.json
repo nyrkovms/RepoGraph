@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"2749fff137275c41ebaa60bf2c8f5c7f\"",
+    "last-modified": "Tue, 08 Apr 2025 12:20:41 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/jakarta/platform/jakarta.jakartaee-bom/maven-metadata.xml"
+  },
+  "status": 200
+}

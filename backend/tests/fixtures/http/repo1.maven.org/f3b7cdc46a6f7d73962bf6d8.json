@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"7373b8b29db78b8cfd7ffd53caf2a64e\"",
+    "last-modified": "Fri, 29 Apr 2022 09:10:31 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/opencensus/opencensus-api/0.31.1/opencensus-api-0.31.1.pom"
+  },
+  "status": 200
+}

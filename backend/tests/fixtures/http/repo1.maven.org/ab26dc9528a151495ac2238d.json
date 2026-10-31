@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"226c18e5fdd3995047e5e7b7104e9b6b\"",
+    "last-modified": "Sat, 13 Feb 2021 16:44:33 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/junit/junit/maven-metadata.xml"
+  },
+  "status": 200
+}

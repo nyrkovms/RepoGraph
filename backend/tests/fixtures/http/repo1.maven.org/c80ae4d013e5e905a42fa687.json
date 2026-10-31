@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"a1fcefa6a9899afe70b8ac608130991e\"",
+    "last-modified": "Tue, 29 Sep 2026 14:47:28 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/guava/guava-testlib/33.7.2-jre/guava-testlib-33.7.2-jre.pom"
+  },
+  "status": 200
+}

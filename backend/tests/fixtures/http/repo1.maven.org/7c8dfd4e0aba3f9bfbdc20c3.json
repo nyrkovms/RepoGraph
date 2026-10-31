@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"62a5c386cae22d73902f13f52c876a81\"",
+    "last-modified": "Fri, 07 Aug 2026 12:27:00 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/junit/vintage/junit-vintage-engine/6.1.3/junit-vintage-engine-6.1.3.pom"
+  },
+  "status": 200
+}

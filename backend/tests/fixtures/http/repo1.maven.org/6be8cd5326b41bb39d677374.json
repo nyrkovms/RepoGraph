@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"7b41021aa8adc8772db45e89c7ad38d3\"",
+    "last-modified": "Thu, 11 Jan 2024 10:15:57 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/apache/logging/logging-parent/10.6.0/logging-parent-10.6.0.pom"
+  },
+  "status": 200
+}

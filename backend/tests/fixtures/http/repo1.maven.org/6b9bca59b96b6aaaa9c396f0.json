@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"14e3d0cdf669ded9500c02992d7f3c83\"",
+    "last-modified": "Tue, 27 May 2025 03:51:22 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/codehaus/groovy/groovy-bom/maven-metadata.xml"
+  },
+  "status": 200
+}

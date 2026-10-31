@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"140f0ea021f6c3d52a523dde945c7177\"",
+    "last-modified": "Fri, 24 Sep 2021 20:26:59 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/guava/guava-parent/31.0-jre/guava-parent-31.0-jre.pom"
+  },
+  "status": 200
+}

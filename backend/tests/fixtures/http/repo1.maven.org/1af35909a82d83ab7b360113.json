@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"88ecc6efb646e2281a46bf10a2c59996\"",
+    "last-modified": "Sun, 30 Aug 2026 17:16:54 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/yaml/snakeyaml/2.7/snakeyaml-2.7.pom"
+  },
+  "status": 200
+}

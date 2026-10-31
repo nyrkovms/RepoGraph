@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"c5d2bfb0d5253316797c98ba97ce5142\"",
+    "last-modified": "Thu, 22 May 2025 16:14:36 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/tools/jackson/jackson-base/3.0.0-rc5/jackson-base-3.0.0-rc5.pom"
+  },
+  "status": 200
+}

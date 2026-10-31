@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"dbe9ae09ea2da6bdf325d7edea51414e\"",
+    "last-modified": "Tue, 20 Oct 2026 04:19:09 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/grpc/grpc-context/maven-metadata.xml"
+  },
+  "status": 200
+}

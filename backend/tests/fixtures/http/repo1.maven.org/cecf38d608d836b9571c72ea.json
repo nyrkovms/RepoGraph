@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"f929e86e8d77e264902823b25dff9938\"",
+    "last-modified": "Tue, 27 May 2025 03:36:20 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/codehaus/groovy/groovy-bom/3.0.25/groovy-bom-3.0.25.pom"
+  },
+  "status": 200
+}

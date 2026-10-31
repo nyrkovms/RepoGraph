@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"02625218c5a6841fe441aedf598fc748\"",
+    "last-modified": "Thu, 17 Oct 2024 08:10:04 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-beans/6.1.14/spring-beans-6.1.14.pom"
+  },
+  "status": 200
+}

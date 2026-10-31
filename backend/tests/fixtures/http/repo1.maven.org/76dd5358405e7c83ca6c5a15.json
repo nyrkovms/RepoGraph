@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"d3d4fa38bb0fda39c8ab79a21ed39755\"",
+    "last-modified": "Sun, 09 Mar 2025 23:18:11 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/assertj/assertj-core/4.0.0-M1/assertj-core-4.0.0-M1.pom"
+  },
+  "status": 200
+}

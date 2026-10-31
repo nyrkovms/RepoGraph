@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"dc6aad16b7275b83c9a80f8ce11a9459\"",
+    "last-modified": "Mon, 19 Feb 2024 21:49:14 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/fasterxml/oss-parent/58/oss-parent-58.pom"
+  },
+  "status": 200
+}

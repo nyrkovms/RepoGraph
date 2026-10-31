@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"3175ac03238172a2f9b9bd097b015a99\"",
+    "last-modified": "Sat, 17 Oct 2026 23:36:19 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/fasterxml/jackson/module/jackson-modules-java8/2.22.4/jackson-modules-java8-2.22.4.pom"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"6dcd91dac88bb86b837b0ce4ae3df386\"",
+    "last-modified": "Wed, 19 Mar 2025 16:20:49 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/google/guava/failureaccess/maven-metadata.xml"
+  },
+  "status": 200
+}

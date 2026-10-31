@@ -1,0 +1,19 @@
+{
+  "tool": "Apache Maven 3.9.16",
+  "command": [
+    "mvn",
+    "dependency:list",
+    "-DincludeScope=runtime"
+  ],
+  "generated_at": "2026-10-31T03:57:36+00:00",
+  "install": [
+    {
+      "name": "com.google.protobuf:protobuf-java",
+      "version": "3.21.9"
+    },
+    {
+      "name": "com.mysql:mysql-connector-j",
+      "version": "8.0.33"
+    }
+  ]
+}

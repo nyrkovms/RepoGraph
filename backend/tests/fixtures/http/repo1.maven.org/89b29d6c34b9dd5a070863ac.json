@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"898d3c778c4b7ec1705da7269538c037\"",
+    "last-modified": "Tue, 15 Oct 2024 10:21:23 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/ch/qos/logback/logback-core/1.5.11/logback-core-1.5.11.pom"
+  },
+  "status": 200
+}
