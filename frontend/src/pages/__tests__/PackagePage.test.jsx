@@ -7,6 +7,7 @@ import PackagePage from "../PackagePage";
 import * as api from "../../lib/api";
 
 vi.mock("../../lib/api", () => ({
+  fetchArtifacts: vi.fn(),
   fetchDependencies: vi.fn(),
   fetchPackage: vi.fn(),
   fetchVersion: vi.fn(),
@@ -1616,6 +1617,305 @@ describe("PackagePage", () => {
       await screen.findByText("werkzeug");
       expect(screen.queryByRole("group", { name: "Scopes" })).not.toBeInTheDocument();
       expect(api.fetchDependencies.mock.calls[0][3]).not.toHaveProperty("scopes");
+    });
+  });
+
+  describe("rpm", () => {
+    const NAME = "rocky-9/openssl";
+
+    function renderApp(path) {
+      render(
+        <MemoryRouter initialEntries={[path]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <App />
+        </MemoryRouter>
+      );
+    }
+
+    // The files of a build: the API's `arch` where it has one, the file name otherwise.
+    const ARTIFACTS = {
+      "1:3.0.7-27.el9": [
+        { filename: "openssl-3.0.7-27.el9.x86_64.rpm", artifact_type: "rpm", arch: "x86_64" },
+        { filename: "openssl-3.0.7-27.el9.aarch64.rpm", artifact_type: "rpm", arch: "aarch64" },
+        { filename: "openssl-3.0.7-27.el9.aarch64.rpm", artifact_type: "rpm", arch: "aarch64" },
+      ],
+      "1:3.0.7-24.el9": [
+        { filename: "openssl-3.0.7-24.el9.s390x.rpm", artifact_type: "rpm" },
+        { filename: "openssl-3.0.7-24.el9.x86_64.rpm", artifact_type: "rpm" },
+      ],
+      "1:3.0.7~rc1-1.el9": [{ filename: "openssl-3.0.7~rc1-1.el9.noarch.rpm", artifact_type: "rpm" }],
+    };
+
+    function mockPackage(overrides = {}) {
+      api.fetchPackage.mockResolvedValue({
+        ecosystem: "rpm",
+        name: NAME,
+        normalized_name: "openssl",
+        namespace: "rocky-9",
+        purl: "pkg:rpm/rocky/openssl?distro=rocky-9",
+        description: "Utilities from the general purpose cryptography library",
+        homepage_url: "http://www.openssl.org/",
+        repository_url: null,
+        documentation_url: null,
+        license_raw: "ASL 2.0",
+        license_spdx: null,
+        latest_version: "1:3.0.7-27.el9",
+        sources: [],
+        ...overrides,
+      });
+      api.fetchVersions.mockResolvedValue({
+        data: [
+          { version: "1:3.0.7-27.el9", status: "active", release_date: "2024-10-16T10:00:00Z" },
+          { version: "1:3.0.7-24.el9", status: "superseded", release_date: "2024-05-02T10:00:00Z" },
+          { version: "1:3.0.7~rc1-1.el9", status: "active", release_date: null },
+        ],
+        cursor: null,
+        has_more: false,
+      });
+      api.fetchVersion.mockImplementation(async (ecosystem, name, version) => ({
+        name: NAME,
+        purl: `pkg:rpm/rocky/openssl@${version}?distro=rocky-9`,
+        version,
+        status: version === "1:3.0.7-24.el9" ? "superseded" : "active",
+        features: null,
+        dependencies_state: "hydrated",
+        sources: [],
+      }));
+      api.fetchArtifacts.mockImplementation(async (ecosystem, name, version) => ({ data: ARTIFACTS[version] || [] }));
+      api.fetchDependencies.mockResolvedValue({
+        package: NAME,
+        version: "1:3.0.7-27.el9",
+        depth: 1,
+        dependencies: [
+          {
+            name: "libssl.so.3()(64bit)",
+            constraint: "*",
+            dependency_type: "runtime",
+            scope: "requires",
+            extra_name: null,
+            environment_markers: null,
+            resolved_name: "rocky-9/openssl-libs",
+            resolved_version: "1:3.0.7-27.el9",
+            cycle: false,
+            children: [],
+          },
+          {
+            name: "openssl-libs(x86-64)",
+            constraint: "= 1:3.0.7-27.el9",
+            dependency_type: "runtime",
+            scope: "requires",
+            extra_name: null,
+            environment_markers: { arch: ["x86_64", "s390x"] },
+            resolved_name: "rocky-9/openssl-libs",
+            resolved_version: "1:3.0.7-27.el9",
+            cycle: false,
+            children: [],
+          },
+          {
+            name: "ca-certificates",
+            constraint: ">= 2023",
+            dependency_type: "optional",
+            scope: "recommends",
+            extra_name: null,
+            environment_markers: null,
+            resolved_name: "rocky-9/ca-certificates",
+            resolved_version: "2023.2.60-90.el9",
+            cycle: false,
+            children: [],
+          },
+          {
+            name: "/bin/sh",
+            constraint: "*",
+            dependency_type: "runtime",
+            scope: "requires",
+            extra_name: null,
+            environment_markers: null,
+            resolved_name: null,
+            resolved_version: null,
+            cycle: false,
+            children: [],
+          },
+        ],
+      });
+    }
+
+    it("opens a package by distro/name and shows the purl, distro, name and the license", async () => {
+      mockPackage();
+      renderApp(`/package/rpm/${NAME}`);
+
+      expect(await screen.findByText("pkg:rpm/rocky/openssl?distro=rocky-9")).toBeInTheDocument();
+      expect(screen.getByText("RPM", { selector: ".eco-badge" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(`Package: ${NAME}`);
+      expect(screen.getByText("rocky-9", { selector: "code" })).toBeInTheDocument();
+      expect(screen.getByText("openssl", { selector: "code" })).toBeInTheDocument();
+      // The RPM License tag is shown as it is when it has no SPDX form.
+      expect(screen.getByText((content) => content.includes("ASL 2.0"))).toBeInTheDocument();
+      expect(api.fetchPackage).toHaveBeenCalledWith("rpm", NAME);
+      expect(api.fetchVersions).toHaveBeenCalledWith("rpm", NAME, { limit: 30 });
+      expect(api.fetchVulnerabilities).toHaveBeenCalledWith("rpm", NAME);
+      await waitFor(() => expect(api.fetchVersion).toHaveBeenCalledWith("rpm", NAME, "1:3.0.7-27.el9"));
+    });
+
+    it("shows the epoch, dates, a marked superseded build and prereleases as they are", async () => {
+      mockPackage();
+      renderApp(`/package/rpm/${NAME}`);
+
+      await screen.findByText("pkg:rpm/rocky/openssl?distro=rocky-9");
+      const items = [...document.querySelectorAll(".inline-list > li")];
+      const row = (version) => items.find((item) => item.textContent.startsWith(version));
+
+      expect(within(row("1:3.0.7-27.el9")).getByText("2024-10-16")).toBeInTheDocument();
+      expect(within(row("1:3.0.7-27.el9")).getByText("active")).not.toHaveClass("muted-tag");
+      const superseded = within(row("1:3.0.7-24.el9")).getByText("superseded");
+      expect(superseded).toHaveClass("muted-tag");
+      expect(superseded).toHaveAttribute("title", expect.stringContaining("newer build"));
+      expect(within(row("1:3.0.7-24.el9")).getByText("2024-05-02")).toBeInTheDocument();
+      expect(row("1:3.0.7~rc1-1.el9").querySelector(".version-date")).toBeNull();
+      expect(screen.getByRole("option", { name: "1:3.0.7~rc1-1.el9" })).toBeInTheDocument();
+    });
+
+    it("shows the arches of each version from its artifacts, once each, from the file name when there is no arch", async () => {
+      mockPackage();
+      renderApp(`/package/rpm/${NAME}`);
+
+      await screen.findByText("pkg:rpm/rocky/openssl?distro=rocky-9");
+      const items = [...document.querySelectorAll(".inline-list > li")];
+      const row = (version) => items.find((item) => item.textContent.startsWith(version));
+      const arches = (version) => [...row(version).querySelectorAll(".tag.cond")].map((tag) => tag.textContent);
+
+      await waitFor(() => expect(arches("1:3.0.7-27.el9")).toEqual(["x86_64", "aarch64"]));
+      await waitFor(() => expect(arches("1:3.0.7-24.el9")).toEqual(["x86_64", "s390x"]));
+      await waitFor(() => expect(arches("1:3.0.7~rc1-1.el9")).toEqual(["noarch"]));
+      expect(api.fetchArtifacts).toHaveBeenCalledWith("rpm", NAME, "1:3.0.7-27.el9");
+      expect(api.fetchArtifacts).toHaveBeenCalledWith("rpm", NAME, "1:3.0.7-24.el9");
+    });
+
+    it("lists the arches and the superseded state of the selected version", async () => {
+      mockPackage();
+      renderApp(`/package/rpm/${NAME}?version=${encodeURIComponent("1:3.0.7-24.el9")}`);
+
+      expect(await screen.findByText("Arches: x86_64, s390x")).toBeInTheDocument();
+      expect(screen.getByText(/Superseded: a newer build of the same arch/)).toBeInTheDocument();
+    });
+
+    it("stays usable when the artifacts cannot be read", async () => {
+      mockPackage();
+      api.fetchArtifacts.mockRejectedValue({ message: "HTTP 500" });
+      renderApp(`/package/rpm/${NAME}`);
+
+      expect(await screen.findByText("libssl.so.3()(64bit)")).toBeInTheDocument();
+      expect(screen.queryByText("HTTP 500")).not.toBeInTheDocument();
+      expect(document.querySelectorAll(".inline-list > li .tag.cond")).toHaveLength(0);
+    });
+
+    it("shows an arch selector with the four arches, x86_64 selected, and sends only arch and include_optional", async () => {
+      mockPackage();
+      renderApp(`/package/rpm/${NAME}`);
+
+      await screen.findByText("libssl.so.3()(64bit)");
+      const select = screen.getByLabelText("Arch");
+      expect(select).toHaveValue("x86_64");
+      expect([...select.querySelectorAll("option")].map((option) => option.value)).toEqual(["x86_64", "aarch64", "ppc64le", "s390x"]);
+      expect(screen.queryByLabelText("Python version")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("OS")).not.toBeInTheDocument();
+      expect(screen.queryByRole("group", { name: "Scopes" })).not.toBeInTheDocument();
+      expect(api.fetchDependencies).toHaveBeenCalledWith("rpm", NAME, "1:3.0.7-27.el9", { include_optional: false, arch: "x86_64" });
+    });
+
+    it("reloads the tree for another arch", async () => {
+      mockPackage();
+      renderApp(`/package/rpm/${NAME}`);
+
+      await screen.findByText("libssl.so.3()(64bit)");
+      await userEvent.selectOptions(screen.getByLabelText("Arch"), "aarch64");
+      await waitFor(() =>
+        expect(api.fetchDependencies).toHaveBeenLastCalledWith("rpm", NAME, "1:3.0.7-27.el9", { include_optional: false, arch: "aarch64" })
+      );
+    });
+
+    it("reads the arch from the query", async () => {
+      mockPackage();
+      renderApp(`/package/rpm/${NAME}?arch=s390x`);
+      await screen.findByText("libssl.so.3()(64bit)");
+      expect(screen.getByLabelText("Arch")).toHaveValue("s390x");
+      expect(api.fetchDependencies.mock.calls[0][3]).toEqual({ include_optional: false, arch: "s390x" });
+    });
+
+    it("falls back to x86_64 for an arch the API does not know", async () => {
+      mockPackage();
+      renderApp(`/package/rpm/${NAME}?arch=riscv64`);
+      await screen.findByText("libssl.so.3()(64bit)");
+      expect(screen.getByLabelText("Arch")).toHaveValue("x86_64");
+      expect(api.fetchDependencies.mock.calls[0][3]).toEqual({ include_optional: false, arch: "x86_64" });
+    });
+
+    it("asks for weak dependencies when include optional is ticked", async () => {
+      mockPackage();
+      renderApp(`/package/rpm/${NAME}`);
+
+      await screen.findByText("libssl.so.3()(64bit)");
+      await userEvent.click(screen.getByLabelText("include optional"));
+      await waitFor(() =>
+        expect(api.fetchDependencies).toHaveBeenLastCalledWith("rpm", NAME, "1:3.0.7-27.el9", { include_optional: true, arch: "x86_64" })
+      );
+    });
+
+    it("shows the capability with its constraint and a link to the package that provides it", async () => {
+      mockPackage();
+      renderApp(`/package/rpm/${NAME}`);
+
+      await screen.findByText("libssl.so.3()(64bit)");
+      const item = (name) => screen.getByText(name).closest(".dep-tree-item");
+
+      const soname = item("libssl.so.3()(64bit)");
+      const link = within(soname).getByRole("link", { name: "rocky-9/openssl-libs" });
+      expect(link).toHaveAttribute("href", "/package/rpm/rocky-9/openssl-libs?version=1%3A3.0.7-27.el9");
+      expect(within(soname).getByText("1:3.0.7-27.el9")).toHaveClass("tag");
+      // A plain requires edge has no kind label.
+      expect(within(soname).queryByText("requires")).not.toBeInTheDocument();
+
+      const capability = item("openssl-libs(x86-64)");
+      expect(within(capability).getByText("= 1:3.0.7-27.el9")).toBeInTheDocument();
+      expect(within(capability).getByRole("link", { name: "rocky-9/openssl-libs" })).toBeInTheDocument();
+    });
+
+    it("shows the kind of a weak dependency and the arches a dependency is limited to", async () => {
+      mockPackage();
+      renderApp(`/package/rpm/${NAME}`);
+
+      await screen.findByText("libssl.so.3()(64bit)");
+      const item = (name) => screen.getByText(name).closest(".dep-tree-item");
+
+      expect(within(item("ca-certificates")).getByText("recommends")).toHaveClass("cond");
+      expect(within(item("openssl-libs(x86-64)")).getByText("arch x86_64, s390x")).toHaveClass("cond");
+    });
+
+    it("shows a capability nothing provides as unresolved, without a link", async () => {
+      mockPackage();
+      renderApp(`/package/rpm/${NAME}`);
+
+      await screen.findByText("/bin/sh");
+      const shell = screen.getByText("/bin/sh").closest(".dep-tree-item");
+      expect(within(shell).getByText("unresolved")).toBeInTheDocument();
+      expect(within(shell).queryByRole("link")).not.toBeInTheDocument();
+    });
+
+    it("carries a non-default arch to the page of the providing package", async () => {
+      mockPackage();
+      renderApp(`/package/rpm/${NAME}?arch=aarch64`);
+
+      await screen.findByText("libssl.so.3()(64bit)");
+      const link = within(screen.getByText("libssl.so.3()(64bit)").closest(".dep-tree-item")).getByRole("link", {
+        name: "rocky-9/openssl-libs",
+      });
+      expect(link).toHaveAttribute("href", "/package/rpm/rocky-9/openssl-libs?version=1%3A3.0.7-27.el9&arch=aarch64");
+    });
+
+    it("sends no arch for the other ecosystems", async () => {
+      renderApp("/package/flask");
+      await screen.findByText("werkzeug");
+      expect(screen.queryByLabelText("Arch")).not.toBeInTheDocument();
+      expect(api.fetchDependencies.mock.calls[0][3]).not.toHaveProperty("arch");
+      expect(api.fetchArtifacts).not.toHaveBeenCalled();
     });
   });
 });

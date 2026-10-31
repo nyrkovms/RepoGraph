@@ -1,0 +1,12 @@
+description: >
+  postgresql-server on Rocky Linux 8.9 (frozen vault snapshot) with modularity, stream postgresql: 15.
+roots:
+  - {purl: "pkg:rpm/rocky/postgresql-server?distro=rocky-8", constraint: "*"}
+environment: {distro: rocky-8, arch: x86_64, module_streams: {postgresql: "15"}}
+sources:
+  - {slug: vault-rocky-8.9-baseos, protocol: rpm-repodata, base_url: "https://dl.rockylinux.org/vault/rocky/8.9/BaseOS/$basearch/os/", priority: 10,
+     config: {namespace: rocky-8, vendor: rocky, arch: [x86_64], releasever: "8"}}
+  - {slug: vault-rocky-8.9-appstream, protocol: rpm-repodata, base_url: "https://dl.rockylinux.org/vault/rocky/8.9/AppStream/$basearch/os/", priority: 20,
+     config: {namespace: rocky-8, vendor: rocky, arch: [x86_64], releasever: "8", modular: true}}
+native: {platform: linux/amd64, image: "rockylinux:8"}
+allowed_differences: []

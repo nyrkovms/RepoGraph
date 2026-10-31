@@ -285,7 +285,7 @@ async def _profile(db: AsyncSession, ecosystem: str, slug: str | None) -> Source
 
 
 # How a range pins one version where it is not PEP 440's `==` (a bare version is an exact range in node-semver).
-_PIN = {"npm": "{}", "crates": "={}", "go": "{}", "nuget": "[{}]", "maven": "{}"}
+_PIN = {"npm": "{}", "crates": "={}", "go": "{}", "nuget": "[{}]", "maven": "{}", "rpm": "= {}"}
 
 
 def _environment(plugin: EcosystemPlugin, raw: Mapping[str, object]) -> Environment:

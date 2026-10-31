@@ -13,6 +13,13 @@ const PERIODS = [
 // so an npm package does not link to a PyPI page of the same name.
 function displayName(item) {
   if (!item.purl) return item.name;
+  // RPM: `pkg:rpm/rocky/openssl?distro=rocky-9` is the package `rocky-9/openssl`; the distro qualifier is the namespace
+  // (the purl vendor, `rocky`, is not), so the same name in two releases stays two packages.
+  if (item.purl.startsWith("pkg:rpm/")) {
+    const distro = new URLSearchParams(item.purl.replace(/^[^?]*\??/, "").replace(/#.*$/, "")).get("distro");
+    const name = decodeURIComponent(item.purl.replace(/[?#].*$/, "").replace(/@[^/]*$/, "").split("/").pop());
+    return distro ? `${distro}/${name}` : item.name;
+  }
   // The scope's `@` is encoded in a purl, so a literal `@` can only start a version.
   const native = decodeURIComponent(item.purl.replace(/^pkg:[^/]+\//, "").replace(/[?#].*$/, "").replace(/@[^/]*$/, ""));
   // Maven: `pkg:maven/org.springframework/spring-core` is the package `org.springframework:spring-core`.

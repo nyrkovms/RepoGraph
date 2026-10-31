@@ -320,4 +320,51 @@ describe("UpdatesPage links by ecosystem", () => {
     const link = await screen.findByRole("link", { name: "com.google.guava:guava" });
     expect(link).toHaveAttribute("href", "/package/maven/com.google.guava:guava");
   });
+
+  it("links an RPM entry to its package page by distro/name, from the distro qualifier of the purl", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      packages: [
+        {
+          ...SUMMARY.packages[0],
+          ecosystem: "rpm",
+          name: "rocky-9/openssl",
+          purl: "pkg:rpm/rocky/openssl?distro=rocky-9",
+        },
+        {
+          ...SUMMARY.packages[1],
+          ecosystem: undefined,
+          name: "openssl",
+          purl: "pkg:rpm/redhat/openssl?distro=rhel-9",
+        },
+      ],
+    });
+    renderPage();
+    const link = await screen.findByRole("link", { name: "rocky-9/openssl" });
+    expect(link).toHaveAttribute("href", "/package/rpm/rocky-9/openssl");
+    // The same name in another release is another package, and the ecosystem comes from the purl type.
+    expect(screen.getByRole("link", { name: "rhel-9/openssl" })).toHaveAttribute("href", "/package/rpm/rhel-9/openssl");
+  });
+
+  it("ignores the version of an RPM purl and keeps a name with a plus", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      packages: [
+        { ...SUMMARY.packages[0], ecosystem: "rpm", name: "libstdc++", purl: "pkg:rpm/rocky/libstdc%2B%2B@11.4.1-3.el9?distro=rocky-9" },
+      ],
+    });
+    renderPage();
+    const link = await screen.findByRole("link", { name: "rocky-9/libstdc++" });
+    expect(link).toHaveAttribute("href", "/package/rpm/rocky-9/libstdc%2B%2B");
+  });
+
+  it("falls back to the name of an RPM entry whose purl has no distro", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      packages: [{ ...SUMMARY.packages[0], ecosystem: "rpm", name: "rocky-9/openssl", purl: "pkg:rpm/rocky/openssl" }],
+    });
+    renderPage();
+    const link = await screen.findByRole("link", { name: "rocky-9/openssl" });
+    expect(link).toHaveAttribute("href", "/package/rpm/rocky-9/openssl");
+  });
 });

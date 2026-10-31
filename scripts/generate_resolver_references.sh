@@ -15,6 +15,8 @@
 # roots, reading POMs only (`metadataSources { mavenPom(); ignoreGradleMetadataRedirection() }`: without the second, a POM
 # marked `published-with-gradle-metadata` sends Gradle to its `.module`): our gradle strategy does not read Gradle Module Metadata
 # (SPEC §9.7, Q15).
+# rpm: dnf 4's Python API (the resolve of `dnf install --assumeno --installroot`) in the case's Rocky Linux image, over
+# frozen vault snapshots; the module streams of the environment enabled first.
 # Needs docker and the live network. Usage: scripts/generate_resolver_references.sh [case-dir ...]
 set -euo pipefail
 
@@ -271,8 +273,79 @@ PY
   rm -rf "$work"
 }
 
+rpm_case() {
+  local case_dir="$1" platform="$2" image="$3" work
+  work="$(mktemp -d)"
+  cp "$case_dir/case.yaml" "$work/case.yaml"
+  cat > "$work/resolve.py" <<'PY'
+import json, sys
+import dnf, dnf.module.module_base, yaml
+case = yaml.safe_load(open("/w/case.yaml"))
+env = case["environment"]
+arch, distro = env.get("arch", "x86_64"), env["distro"]
+major = distro.rsplit("-", 1)[1].split(".")[0]
+base = dnf.Base()
+base.conf.read()                     # /etc/dnf/dnf.conf, as the CLI reads it: best=True, install_weak_deps=True
+base.conf.installroot = "/tmp/root"
+base.conf.install_weak_deps = env.get("weak_deps", True)
+base.conf.module_platform_id = "platform:el%s" % major
+base.conf.substitutions["releasever"], base.conf.substitutions["basearch"] = major, arch
+for source in case["sources"]:
+    url = source["base_url"].replace("$basearch", arch).replace("$releasever", major)
+    base.repos.add_new_repo(source["slug"], base.conf, baseurl=[url], gpgcheck=False)
+base.fill_sack(load_system_repo=False)
+modules = dnf.module.module_base.ModuleBase(base)
+
+
+def module_step(call, specs):
+    # As dnf's module command: problems of default streams are reported, not fatal (they drop out).
+    import libdnf
+    try:
+        call(specs)
+    except dnf.exceptions.MarkingErrors as exc:
+        defaults = libdnf.module.ModulePackageContainer.ModuleErrorType_ERROR_IN_DEFAULTS
+        if exc.no_match_group_specs or exc.error_group_specs or not exc.module_depsolv_errors \
+                or exc.module_depsolv_errors[1] != defaults:
+            raise
+
+
+streams = ["%s:%s" % item for item in (env.get("module_streams") or {}).items()]
+if streams:
+    module_step(modules.enable, streams)
+if env.get("disabled_modules"):
+    module_step(modules.disable, list(env["disabled_modules"]))
+if env.get("module_install"):
+    module_step(modules.install, list(env["module_install"]))
+for root in case.get("roots") or []:
+    name = root["purl"].split("/")[2].split("?")[0].split("@")[0]
+    constraint = root.get("constraint") or "*"
+    base.install(name if constraint == "*" else "%s %s" % (name, constraint))
+base.resolve(allow_erasing=False)
+# With the arch: multilib choices count.
+rows = sorted({("%s/%s.%s" % (distro, p.name, p.arch), p.evr) for p in base.transaction.install_set})
+json.dump({"tool": "dnf " + dnf.const.VERSION, "rows": rows}, open("/w/out.json", "w"))
+PY
+  docker run --rm --platform "${platform:-linux/amd64}" -v "$work:/w" "$image" sh -c \
+    'dnf -y -q install python3-pyyaml >/dev/null 2>&1; /usr/libexec/platform-python /w/resolve.py'
+  python3 - "$work/out.json" "$case_dir/expected.json" <<'PY'
+import datetime, json, sys
+out = json.load(open(sys.argv[1]))
+json.dump({"tool": out["tool"], "command": ["dnf", "install", "--assumeno", "--installroot"],
+           "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+           "install": [{"name": n, "version": v} for n, v in out["rows"]]}, open(sys.argv[2], "w"), indent=2)
+open(sys.argv[2], "a").write("\n")
+print(len(out["rows"]), "packages")
+PY
+  rm -rf "$work"
+}
+
 for case_dir in "${CASES[@]}"; do
   echo "== ${case_dir}"
+  if [[ "$(basename "$(dirname "$case_dir")")" == "rpm" ]]; then
+    rpm_case "$case_dir" "$(sed -n 's/^native: {platform: *\([^,]*\),.*/\1/p' "${case_dir}/case.yaml")" \
+      "$(sed -n 's/.*image: *"\([^"]*\)".*/\1/p' "${case_dir}/case.yaml")"
+    continue
+  fi
   if [[ "$(basename "$(dirname "$case_dir")")" == "maven" ]] && grep -q "strategy: gradle" "${case_dir}/case.yaml"; then
     gradle_case "$case_dir" "$(sed -n 's/^  platform: *\([^ #]*\).*/\1/p' "${case_dir}/case.yaml")"
     continue

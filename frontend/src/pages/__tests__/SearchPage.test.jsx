@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 
@@ -487,5 +487,103 @@ describe("SearchPage", () => {
       "/package/maven/com.google.guava:guava"
     );
     expect(screen.getAllByText("Maven", { selector: ".eco-badge" })).toHaveLength(2);
+  });
+
+  it("switches to RPM, hints distro/name and links packages by distro/name", async () => {
+    const packages = {
+      data: [
+        {
+          ecosystem: "rpm",
+          namespace: "rocky-9",
+          name: "rocky-9/openssl",
+          normalized_name: "openssl",
+          purl: "pkg:rpm/rocky/openssl?distro=rocky-9",
+          description: "Utilities from the general purpose cryptography library",
+          license_spdx: null,
+          latest_version: "1:3.0.7-27.el9",
+          has_vulnerabilities: false,
+        },
+        {
+          ecosystem: "rpm",
+          namespace: "rhel-9",
+          name: "rhel-9/openssl",
+          normalized_name: "openssl",
+          purl: "pkg:rpm/redhat/openssl?distro=rhel-9",
+          description: null,
+          license_spdx: null,
+          latest_version: "1:3.0.7-28.el9_4",
+          has_vulnerabilities: false,
+        },
+      ],
+      cursor: null,
+      has_more: false,
+    };
+    api.fetchPackages.mockResolvedValue(packages);
+    api.searchPackages.mockResolvedValue(packages);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <SearchPage />
+      </MemoryRouter>
+    );
+    await screen.findByRole("link", { name: "rocky-9/openssl" });
+
+    expect(screen.getByRole("option", { name: "RPM" })).toHaveValue("rpm");
+    await user.selectOptions(screen.getByLabelText("Ecosystem"), "rpm");
+    await waitFor(() => {
+      expect(api.fetchPackages).toHaveBeenLastCalledWith({ limit: 20, sort: "name", ecosystem: "rpm" });
+    });
+    expect(screen.getByLabelText("Search query").getAttribute("placeholder")).toContain("distro/name");
+    expect(screen.getByLabelText("Search query").getAttribute("placeholder")).toContain("rocky-9/openssl");
+
+    await user.type(screen.getByLabelText("Search query"), "rocky-9/openssl");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => {
+      expect(api.searchPackages).toHaveBeenLastCalledWith({
+        q: "rocky-9/openssl",
+        limit: 20,
+        sort: "name",
+        ecosystem: "rpm",
+      });
+    });
+
+    // The same name in two releases is two packages with two pages.
+    expect(screen.getByRole("link", { name: "rocky-9/openssl" })).toHaveAttribute("href", "/package/rpm/rocky-9/openssl");
+    expect(screen.getByRole("link", { name: "rhel-9/openssl" })).toHaveAttribute("href", "/package/rpm/rhel-9/openssl");
+    expect(screen.getAllByText("RPM", { selector: ".eco-badge" })).toHaveLength(2);
+  });
+
+  it("opens the RPM package page of a suggestion and puts distro/name in the field", async () => {
+    const suggestion = {
+      data: [
+        {
+          ecosystem: "rpm",
+          namespace: "rocky-9",
+          name: "rocky-9/openssl",
+          normalized_name: "openssl",
+          description: null,
+          latest_version: "1:3.0.7-27.el9",
+          has_vulnerabilities: false,
+        },
+      ],
+      cursor: null,
+      has_more: false,
+    };
+    api.searchPackages.mockResolvedValue(suggestion);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Routes>
+          <Route path="/" element={<SearchPage />} />
+          <Route path="/package/rpm/*" element={<p>rpm page</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await user.selectOptions(screen.getByLabelText("Ecosystem"), "rpm");
+    await user.type(screen.getByLabelText("Search query"), "open");
+
+    const list = await screen.findByRole("listbox", { name: "Search suggestions" });
+    await user.click(within(list).getByRole("button", { name: /rocky-9\/openssl/ }));
+    expect(await screen.findByText("rpm page")).toBeInTheDocument();
   });
 });

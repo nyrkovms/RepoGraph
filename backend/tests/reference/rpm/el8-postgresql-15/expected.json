@@ -1,0 +1,672 @@
+{
+  "tool": "dnf 4.7.0",
+  "command": [
+    "dnf",
+    "install",
+    "--assumeno",
+    "--installroot"
+  ],
+  "generated_at": "2026-10-31T10:02:19+00:00",
+  "install": [
+    {
+      "name": "rocky-8/acl.x86_64",
+      "version": "2.2.53-1.el8.1"
+    },
+    {
+      "name": "rocky-8/audit-libs.x86_64",
+      "version": "3.0.7-5.el8"
+    },
+    {
+      "name": "rocky-8/basesystem.noarch",
+      "version": "11-5.el8"
+    },
+    {
+      "name": "rocky-8/bash.x86_64",
+      "version": "4.4.20-4.el8_6"
+    },
+    {
+      "name": "rocky-8/brotli.x86_64",
+      "version": "1.0.6-3.el8"
+    },
+    {
+      "name": "rocky-8/bzip2-libs.x86_64",
+      "version": "1.0.6-26.el8"
+    },
+    {
+      "name": "rocky-8/ca-certificates.noarch",
+      "version": "2023.2.60_v7.0.306-80.0.el8_8"
+    },
+    {
+      "name": "rocky-8/chkconfig.x86_64",
+      "version": "1.19.2-1.el8"
+    },
+    {
+      "name": "rocky-8/coreutils-common.x86_64",
+      "version": "8.30-15.el8"
+    },
+    {
+      "name": "rocky-8/coreutils.x86_64",
+      "version": "8.30-15.el8"
+    },
+    {
+      "name": "rocky-8/cpio.x86_64",
+      "version": "2.12-11.el8"
+    },
+    {
+      "name": "rocky-8/cracklib-dicts.x86_64",
+      "version": "2.9.6-15.el8"
+    },
+    {
+      "name": "rocky-8/cracklib.x86_64",
+      "version": "2.9.6-15.el8"
+    },
+    {
+      "name": "rocky-8/crypto-policies-scripts.noarch",
+      "version": "20230731-1.git3177e06.el8"
+    },
+    {
+      "name": "rocky-8/crypto-policies.noarch",
+      "version": "20230731-1.git3177e06.el8"
+    },
+    {
+      "name": "rocky-8/cryptsetup-libs.x86_64",
+      "version": "2.3.7-7.el8"
+    },
+    {
+      "name": "rocky-8/curl.x86_64",
+      "version": "7.61.1-33.el8_9.5"
+    },
+    {
+      "name": "rocky-8/cyrus-sasl-lib.x86_64",
+      "version": "2.1.27-6.el8_5"
+    },
+    {
+      "name": "rocky-8/dbus-common.noarch",
+      "version": "1:1.12.8-26.el8"
+    },
+    {
+      "name": "rocky-8/dbus-daemon.x86_64",
+      "version": "1:1.12.8-26.el8"
+    },
+    {
+      "name": "rocky-8/dbus-libs.x86_64",
+      "version": "1:1.12.8-26.el8"
+    },
+    {
+      "name": "rocky-8/dbus-tools.x86_64",
+      "version": "1:1.12.8-26.el8"
+    },
+    {
+      "name": "rocky-8/dbus.x86_64",
+      "version": "1:1.12.8-26.el8"
+    },
+    {
+      "name": "rocky-8/device-mapper-libs.x86_64",
+      "version": "8:1.02.181-13.el8_9"
+    },
+    {
+      "name": "rocky-8/device-mapper.x86_64",
+      "version": "8:1.02.181-13.el8_9"
+    },
+    {
+      "name": "rocky-8/diffutils.x86_64",
+      "version": "3.6-6.el8"
+    },
+    {
+      "name": "rocky-8/dracut.x86_64",
+      "version": "049-228.git20230802.el8"
+    },
+    {
+      "name": "rocky-8/elfutils-debuginfod-client.x86_64",
+      "version": "0.189-3.el8"
+    },
+    {
+      "name": "rocky-8/elfutils-default-yama-scope.noarch",
+      "version": "0.189-3.el8"
+    },
+    {
+      "name": "rocky-8/elfutils-libelf.x86_64",
+      "version": "0.189-3.el8"
+    },
+    {
+      "name": "rocky-8/elfutils-libs.x86_64",
+      "version": "0.189-3.el8"
+    },
+    {
+      "name": "rocky-8/expat.x86_64",
+      "version": "2.2.5-11.el8_9.1"
+    },
+    {
+      "name": "rocky-8/file-libs.x86_64",
+      "version": "5.33-25.el8"
+    },
+    {
+      "name": "rocky-8/file.x86_64",
+      "version": "5.33-25.el8"
+    },
+    {
+      "name": "rocky-8/filesystem.x86_64",
+      "version": "3.8-6.el8"
+    },
+    {
+      "name": "rocky-8/findutils.x86_64",
+      "version": "1:4.6.0-21.el8"
+    },
+    {
+      "name": "rocky-8/gawk.x86_64",
+      "version": "4.2.1-4.el8"
+    },
+    {
+      "name": "rocky-8/gdbm-libs.x86_64",
+      "version": "1:1.18-2.el8"
+    },
+    {
+      "name": "rocky-8/gdbm.x86_64",
+      "version": "1:1.18-2.el8"
+    },
+    {
+      "name": "rocky-8/gettext-libs.x86_64",
+      "version": "0.19.8.1-17.el8"
+    },
+    {
+      "name": "rocky-8/gettext.x86_64",
+      "version": "0.19.8.1-17.el8"
+    },
+    {
+      "name": "rocky-8/glib2.x86_64",
+      "version": "2.56.4-161.el8"
+    },
+    {
+      "name": "rocky-8/glibc-all-langpacks.x86_64",
+      "version": "2.28-236.el8_9.13"
+    },
+    {
+      "name": "rocky-8/glibc-common.x86_64",
+      "version": "2.28-236.el8_9.13"
+    },
+    {
+      "name": "rocky-8/glibc-gconv-extra.x86_64",
+      "version": "2.28-236.el8_9.13"
+    },
+    {
+      "name": "rocky-8/glibc.x86_64",
+      "version": "2.28-236.el8_9.13"
+    },
+    {
+      "name": "rocky-8/gmp.x86_64",
+      "version": "1:6.1.2-10.el8"
+    },
+    {
+      "name": "rocky-8/gnutls.x86_64",
+      "version": "3.6.16-8.el8_9.3"
+    },
+    {
+      "name": "rocky-8/grep.x86_64",
+      "version": "3.1-6.el8"
+    },
+    {
+      "name": "rocky-8/grub2-common.noarch",
+      "version": "1:2.02-150.el8.rocky.0.3"
+    },
+    {
+      "name": "rocky-8/grub2-tools-minimal.x86_64",
+      "version": "1:2.02-150.el8.rocky.0.3"
+    },
+    {
+      "name": "rocky-8/grub2-tools.x86_64",
+      "version": "1:2.02-150.el8.rocky.0.3"
+    },
+    {
+      "name": "rocky-8/grubby.x86_64",
+      "version": "8.40-48.el8"
+    },
+    {
+      "name": "rocky-8/gzip.x86_64",
+      "version": "1.9-13.el8_5"
+    },
+    {
+      "name": "rocky-8/hardlink.x86_64",
+      "version": "1:1.3-6.el8"
+    },
+    {
+      "name": "rocky-8/info.x86_64",
+      "version": "6.5-7.el8"
+    },
+    {
+      "name": "rocky-8/json-c.x86_64",
+      "version": "0.13.1-3.el8"
+    },
+    {
+      "name": "rocky-8/kbd-legacy.noarch",
+      "version": "2.0.4-11.el8"
+    },
+    {
+      "name": "rocky-8/kbd-misc.noarch",
+      "version": "2.0.4-11.el8"
+    },
+    {
+      "name": "rocky-8/kbd.x86_64",
+      "version": "2.0.4-11.el8"
+    },
+    {
+      "name": "rocky-8/keyutils-libs.x86_64",
+      "version": "1.5.10-9.el8"
+    },
+    {
+      "name": "rocky-8/kmod-libs.x86_64",
+      "version": "25-19.el8"
+    },
+    {
+      "name": "rocky-8/kmod.x86_64",
+      "version": "25-19.el8"
+    },
+    {
+      "name": "rocky-8/kpartx.x86_64",
+      "version": "0.8.4-39.el8"
+    },
+    {
+      "name": "rocky-8/krb5-libs.x86_64",
+      "version": "1.18.2-26.el8"
+    },
+    {
+      "name": "rocky-8/libacl.x86_64",
+      "version": "2.2.53-1.el8.1"
+    },
+    {
+      "name": "rocky-8/libarchive.x86_64",
+      "version": "3.3.3-5.el8"
+    },
+    {
+      "name": "rocky-8/libattr.x86_64",
+      "version": "2.4.48-3.el8"
+    },
+    {
+      "name": "rocky-8/libblkid.x86_64",
+      "version": "2.32.1-44.el8_9.1"
+    },
+    {
+      "name": "rocky-8/libcap-ng.x86_64",
+      "version": "0.7.11-1.el8"
+    },
+    {
+      "name": "rocky-8/libcap.x86_64",
+      "version": "2.48-6.el8_9"
+    },
+    {
+      "name": "rocky-8/libcom_err.x86_64",
+      "version": "1.45.6-5.el8"
+    },
+    {
+      "name": "rocky-8/libcroco.x86_64",
+      "version": "0.6.12-4.el8_2.1"
+    },
+    {
+      "name": "rocky-8/libcurl.x86_64",
+      "version": "7.61.1-33.el8_9.5"
+    },
+    {
+      "name": "rocky-8/libdb-utils.x86_64",
+      "version": "5.3.28-42.el8_4"
+    },
+    {
+      "name": "rocky-8/libdb.x86_64",
+      "version": "5.3.28-42.el8_4"
+    },
+    {
+      "name": "rocky-8/libfdisk.x86_64",
+      "version": "2.32.1-44.el8_9.1"
+    },
+    {
+      "name": "rocky-8/libffi.x86_64",
+      "version": "3.1-24.el8"
+    },
+    {
+      "name": "rocky-8/libgcc.x86_64",
+      "version": "8.5.0-20.el8"
+    },
+    {
+      "name": "rocky-8/libgcrypt.x86_64",
+      "version": "1.8.5-7.el8_6"
+    },
+    {
+      "name": "rocky-8/libgomp.x86_64",
+      "version": "8.5.0-20.el8"
+    },
+    {
+      "name": "rocky-8/libgpg-error.x86_64",
+      "version": "1.31-1.el8"
+    },
+    {
+      "name": "rocky-8/libicu.x86_64",
+      "version": "60.3-2.el8_1"
+    },
+    {
+      "name": "rocky-8/libidn2.x86_64",
+      "version": "2.2.0-1.el8"
+    },
+    {
+      "name": "rocky-8/libkcapi-hmaccalc.x86_64",
+      "version": "1.2.0-2.el8"
+    },
+    {
+      "name": "rocky-8/libkcapi.x86_64",
+      "version": "1.2.0-2.el8"
+    },
+    {
+      "name": "rocky-8/libmount.x86_64",
+      "version": "2.32.1-44.el8_9.1"
+    },
+    {
+      "name": "rocky-8/libnghttp2.x86_64",
+      "version": "1.33.0-5.el8_8"
+    },
+    {
+      "name": "rocky-8/libnsl2.x86_64",
+      "version": "1.2.0-2.20180605git4a062cf.el8"
+    },
+    {
+      "name": "rocky-8/libpsl.x86_64",
+      "version": "0.20.2-6.el8"
+    },
+    {
+      "name": "rocky-8/libpwquality.x86_64",
+      "version": "1.4.4-6.el8"
+    },
+    {
+      "name": "rocky-8/libseccomp.x86_64",
+      "version": "2.5.2-1.el8"
+    },
+    {
+      "name": "rocky-8/libselinux.x86_64",
+      "version": "2.9-8.el8"
+    },
+    {
+      "name": "rocky-8/libsemanage.x86_64",
+      "version": "2.9-9.el8_6"
+    },
+    {
+      "name": "rocky-8/libsepol.x86_64",
+      "version": "2.9-3.el8"
+    },
+    {
+      "name": "rocky-8/libsigsegv.x86_64",
+      "version": "2.11-5.el8"
+    },
+    {
+      "name": "rocky-8/libsmartcols.x86_64",
+      "version": "2.32.1-44.el8_9.1"
+    },
+    {
+      "name": "rocky-8/libssh-config.noarch",
+      "version": "0.9.6-13.el8_9"
+    },
+    {
+      "name": "rocky-8/libssh.x86_64",
+      "version": "0.9.6-13.el8_9"
+    },
+    {
+      "name": "rocky-8/libstdc++.x86_64",
+      "version": "8.5.0-20.el8"
+    },
+    {
+      "name": "rocky-8/libtasn1.x86_64",
+      "version": "4.13-4.el8_7"
+    },
+    {
+      "name": "rocky-8/libtirpc.x86_64",
+      "version": "1.1.4-8.el8"
+    },
+    {
+      "name": "rocky-8/libunistring.x86_64",
+      "version": "0.9.9-3.el8"
+    },
+    {
+      "name": "rocky-8/libutempter.x86_64",
+      "version": "1.1.6-14.el8"
+    },
+    {
+      "name": "rocky-8/libuuid.x86_64",
+      "version": "2.32.1-44.el8_9.1"
+    },
+    {
+      "name": "rocky-8/libverto.x86_64",
+      "version": "0.3.2-2.el8"
+    },
+    {
+      "name": "rocky-8/libxcrypt.x86_64",
+      "version": "4.1.1-6.el8"
+    },
+    {
+      "name": "rocky-8/libxkbcommon.x86_64",
+      "version": "0.9.1-1.el8"
+    },
+    {
+      "name": "rocky-8/libxml2.x86_64",
+      "version": "2.9.7-18.el8_9"
+    },
+    {
+      "name": "rocky-8/libzstd.x86_64",
+      "version": "1.4.4-1.el8"
+    },
+    {
+      "name": "rocky-8/lua-libs.x86_64",
+      "version": "5.3.4-12.el8"
+    },
+    {
+      "name": "rocky-8/lz4-libs.x86_64",
+      "version": "1.8.3-3.el8_4"
+    },
+    {
+      "name": "rocky-8/memstrack.x86_64",
+      "version": "0.2.5-2.el8"
+    },
+    {
+      "name": "rocky-8/mpfr.x86_64",
+      "version": "3.1.6-1.el8"
+    },
+    {
+      "name": "rocky-8/ncurses-base.noarch",
+      "version": "6.1-10.20180224.el8"
+    },
+    {
+      "name": "rocky-8/ncurses-libs.x86_64",
+      "version": "6.1-10.20180224.el8"
+    },
+    {
+      "name": "rocky-8/ncurses.x86_64",
+      "version": "6.1-10.20180224.el8"
+    },
+    {
+      "name": "rocky-8/nettle.x86_64",
+      "version": "3.4.1-7.el8"
+    },
+    {
+      "name": "rocky-8/openldap.x86_64",
+      "version": "2.4.46-18.el8"
+    },
+    {
+      "name": "rocky-8/openssl-libs.x86_64",
+      "version": "1:1.1.1k-12.el8_9"
+    },
+    {
+      "name": "rocky-8/openssl-pkcs11.x86_64",
+      "version": "0.4.10-3.el8"
+    },
+    {
+      "name": "rocky-8/openssl.x86_64",
+      "version": "1:1.1.1k-12.el8_9"
+    },
+    {
+      "name": "rocky-8/os-prober.x86_64",
+      "version": "1.74-9.el8"
+    },
+    {
+      "name": "rocky-8/p11-kit-trust.x86_64",
+      "version": "0.23.22-1.el8"
+    },
+    {
+      "name": "rocky-8/p11-kit.x86_64",
+      "version": "0.23.22-1.el8"
+    },
+    {
+      "name": "rocky-8/pam.x86_64",
+      "version": "1.3.1-27.el8"
+    },
+    {
+      "name": "rocky-8/pcre.x86_64",
+      "version": "8.42-6.el8"
+    },
+    {
+      "name": "rocky-8/pcre2.x86_64",
+      "version": "10.32-3.el8_6"
+    },
+    {
+      "name": "rocky-8/pigz.x86_64",
+      "version": "2.4-4.el8"
+    },
+    {
+      "name": "rocky-8/platform-python-pip.noarch",
+      "version": "9.0.3-23.el8_9.1.rocky.0"
+    },
+    {
+      "name": "rocky-8/platform-python-setuptools.noarch",
+      "version": "39.2.0-7.el8"
+    },
+    {
+      "name": "rocky-8/platform-python.x86_64",
+      "version": "3.6.8-56.el8_9.3.rocky.0"
+    },
+    {
+      "name": "rocky-8/popt.x86_64",
+      "version": "1.18-1.el8"
+    },
+    {
+      "name": "rocky-8/postgresql-private-libs.x86_64",
+      "version": "15.6-1.module+el8.9.0+1737+de0a3665"
+    },
+    {
+      "name": "rocky-8/postgresql-server.x86_64",
+      "version": "15.6-1.module+el8.9.0+1737+de0a3665"
+    },
+    {
+      "name": "rocky-8/postgresql.x86_64",
+      "version": "15.6-1.module+el8.9.0+1737+de0a3665"
+    },
+    {
+      "name": "rocky-8/procps-ng.x86_64",
+      "version": "3.3.15-14.el8"
+    },
+    {
+      "name": "rocky-8/publicsuffix-list-dafsa.noarch",
+      "version": "20180723-1.el8"
+    },
+    {
+      "name": "rocky-8/python3-libs.x86_64",
+      "version": "3.6.8-56.el8_9.3.rocky.0"
+    },
+    {
+      "name": "rocky-8/python3-pip-wheel.noarch",
+      "version": "9.0.3-23.el8_9.1.rocky.0"
+    },
+    {
+      "name": "rocky-8/python3-setuptools-wheel.noarch",
+      "version": "39.2.0-7.el8"
+    },
+    {
+      "name": "rocky-8/readline.x86_64",
+      "version": "7.0-10.el8"
+    },
+    {
+      "name": "rocky-8/rocky-gpg-keys.noarch",
+      "version": "8.9-1.9.el8"
+    },
+    {
+      "name": "rocky-8/rocky-release.noarch",
+      "version": "8.9-1.9.el8"
+    },
+    {
+      "name": "rocky-8/rocky-repos.noarch",
+      "version": "8.9-1.9.el8"
+    },
+    {
+      "name": "rocky-8/rpm-libs.x86_64",
+      "version": "4.14.3-28.el8_9"
+    },
+    {
+      "name": "rocky-8/rpm.x86_64",
+      "version": "4.14.3-28.el8_9"
+    },
+    {
+      "name": "rocky-8/sed.x86_64",
+      "version": "4.5-5.el8"
+    },
+    {
+      "name": "rocky-8/setup.noarch",
+      "version": "2.12.2-9.el8"
+    },
+    {
+      "name": "rocky-8/shadow-utils.x86_64",
+      "version": "2:4.6-19.el8"
+    },
+    {
+      "name": "rocky-8/shared-mime-info.x86_64",
+      "version": "1.9-3.el8"
+    },
+    {
+      "name": "rocky-8/sqlite-libs.x86_64",
+      "version": "3.26.0-19.el8_9"
+    },
+    {
+      "name": "rocky-8/systemd-libs.x86_64",
+      "version": "239-78.el8"
+    },
+    {
+      "name": "rocky-8/systemd-pam.x86_64",
+      "version": "239-78.el8"
+    },
+    {
+      "name": "rocky-8/systemd-udev.x86_64",
+      "version": "239-78.el8"
+    },
+    {
+      "name": "rocky-8/systemd.x86_64",
+      "version": "239-78.el8"
+    },
+    {
+      "name": "rocky-8/trousers-lib.x86_64",
+      "version": "0.3.15-1.el8"
+    },
+    {
+      "name": "rocky-8/trousers.x86_64",
+      "version": "0.3.15-1.el8"
+    },
+    {
+      "name": "rocky-8/tzdata.noarch",
+      "version": "2024a-1.el8"
+    },
+    {
+      "name": "rocky-8/util-linux.x86_64",
+      "version": "2.32.1-44.el8_9.1"
+    },
+    {
+      "name": "rocky-8/which.x86_64",
+      "version": "2.21-20.el8"
+    },
+    {
+      "name": "rocky-8/xkeyboard-config.noarch",
+      "version": "2.28-1.el8"
+    },
+    {
+      "name": "rocky-8/xz-libs.x86_64",
+      "version": "5.2.4-4.el8_6"
+    },
+    {
+      "name": "rocky-8/xz.x86_64",
+      "version": "5.2.4-4.el8_6"
+    },
+    {
+      "name": "rocky-8/zlib.x86_64",
+      "version": "1.2.11-25.el8"
+    }
+  ]
+}

@@ -92,6 +92,25 @@ services:
       redis:
         condition: service_healthy
 
+  # RPM repodata, libsolv and modularity (SPEC-MULTI-ECOSYSTEM.md §3.2): the `rpm` queue. Repository metadata lives on
+  # its volume; recorded upstream answers are shared with the API's fixture tree for offline tests.
+  rpm-worker:
+    build:
+      context: ./rpm_worker
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RPM_CACHE_DIR: /var/cache/rpm-worker
+      SECRETS_DIR: /run/secrets/packagehub
+      HTTP_REPLAY_DIR: ${HTTP_REPLAY_DIR:-}
+      HTTP_RECORD_DIR: ${HTTP_RECORD_DIR:-}
+    volumes:
+      - rpm_cache:/var/cache/rpm-worker
+      - ./backend/tests/fixtures/http:/app/tests/fixtures/http
+      - ${PACKAGEHUB_SECRETS_DIR:-./secrets}:/run/secrets/packagehub:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+
   frontend:
     build:
       context: ./frontend
@@ -106,3 +125,4 @@ services:
 
 volumes:
   pg_data:
+  rpm_cache:

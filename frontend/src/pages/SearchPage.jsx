@@ -14,28 +14,37 @@ const ECOSYSTEM_OPTIONS = [
   { value: "go", label: "Go" },
   { value: "nuget", label: "NuGet" },
   { value: "maven", label: "Maven" },
+  { value: "rpm", label: "RPM" },
 ];
 
 const DEFAULT_PLACEHOLDER = "flask, requests, numpy...";
 // A Maven package is found and opened by `groupId:artifactId`.
-const PLACEHOLDERS = { maven: "group:artifact, e.g. org.springframework:spring-core" };
+// An RPM package is found and opened by `distro/name`: the distro and release are its namespace (`openssl` in
+// `rocky-9` and in `rhel-9` are two packages).
+const PLACEHOLDERS = {
+  maven: "group:artifact, e.g. org.springframework:spring-core",
+  rpm: "distro/name, e.g. rocky-9/openssl",
+};
 
 function ecosystemLabel(ecosystem) {
   return ECOSYSTEM_OPTIONS.find((option) => option.value === ecosystem)?.label || ecosystem;
 }
 
 // The native spelling of the package name: an npm scope is kept apart from the name in the catalog (`@angular` + `core`),
-// a Maven groupId too (`org.springframework` + `spring-core`).
+// a Maven groupId too (`org.springframework` + `spring-core`), an RPM distro too (`rocky-9` + `openssl`).
 function nativeName(item) {
   if (item.ecosystem === "maven") {
     return `${item.namespace}:${item.normalized_name}`;
+  }
+  if (item.ecosystem === "rpm") {
+    return `${item.namespace}/${item.normalized_name}`;
   }
   return item.namespace ? `@${item.namespace}/${item.normalized_name}` : item.normalized_name;
 }
 
 function displayName(item) {
-  // The name of a Maven package already is `groupId:artifactId`.
-  if (item.ecosystem === "maven") {
+  // The name of a Maven package already is `groupId:artifactId`, that of an RPM package `distro/name`.
+  if (item.ecosystem === "maven" || item.ecosystem === "rpm") {
     return item.name;
   }
   return item.namespace ? `@${item.namespace}/${item.name}` : item.name;
@@ -149,7 +158,7 @@ export default function SearchPage() {
   }
 
   function selectSuggestion(item) {
-    setQuery(item.ecosystem === "maven" ? nativeName(item) : item.normalized_name);
+    setQuery(item.ecosystem === "maven" || item.ecosystem === "rpm" ? nativeName(item) : item.normalized_name);
     closeSuggestions();
     navigate(packageHref(item));
   }

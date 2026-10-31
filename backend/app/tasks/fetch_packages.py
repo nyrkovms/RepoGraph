@@ -60,21 +60,21 @@ async def canonical_ref(db: AsyncSession, ref: PackageRef) -> PackageRef | None:
     return None
 
 
-async def sync_manual(db: AsyncSession, ref: PackageRef) -> PackageRef:
+async def sync_manual(db: AsyncSession, ref: PackageRef, origin: PackageOrigin = PackageOrigin.manual) -> PackageRef:
     """sync_package for a package someone asked for by name; returns the ref it was stored under."""
     try:
-        await sync_package(db, ref, origin=PackageOrigin.manual)
+        await sync_package(db, ref, origin=origin)
         return ref
     except PackageNotFound:
         await db.rollback()
         canonical = await canonical_ref(db, ref)
         if canonical is None:
             raise
-    await sync_package(db, canonical, origin=PackageOrigin.manual)
+    await sync_package(db, canonical, origin=origin)
     return canonical
 
 
-async def _fetch_packages_async(purls: list[str]) -> dict[str, object]:
+async def _fetch_packages_async(purls: list[str], origin: PackageOrigin = PackageOrigin.manual) -> dict[str, object]:
     started = perf_counter()
     counts = {"fetched": 0, "not_found": 0, "failed": 0}
 
@@ -87,7 +87,7 @@ async def _fetch_packages_async(purls: list[str]) -> dict[str, object]:
                 logger.warning("Fetch skipped, bad purl: %s", purl)
                 continue
             try:
-                stored = await sync_manual(db, ref)
+                stored = await sync_manual(db, ref, origin)
                 await clear_sync_failure(db, ref=ref)
                 if stored != ref:
                     logger.info("Fetched %s as %s", purl, stored.name)
@@ -115,5 +115,6 @@ async def _fetch_packages_async(purls: list[str]) -> dict[str, object]:
 
 
 @celery_app.task(name="app.tasks.fetch_packages.fetch_packages")
-def fetch_packages(purls: list[str]) -> dict[str, object]:
-    return asyncio.run(_fetch_packages_async(purls))
+def fetch_packages(purls: list[str], origin: str = "manual") -> dict[str, object]:
+    """`origin` `discovered`: packages a resolve found (RPM, SPEC §9.8.6), not asked for by anyone."""
+    return asyncio.run(_fetch_packages_async(purls, PackageOrigin(origin)))

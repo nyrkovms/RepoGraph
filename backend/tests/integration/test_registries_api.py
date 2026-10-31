@@ -232,7 +232,6 @@ def test_create_defaults(client: TestClient, auth: dict) -> None:
     [
         ({"protocol": "gopher"}, "unknown protocol"),
         ({"protocol": "npm-registry"}, "no adapter for protocol"),
-        ({"ecosystem": "rpm", "protocol": "rpm-repodata"}, "no plugin is registered"),
         ({"routing": {"mode": "sometimes", "packages": ["torch"]}}, "unknown routing mode"),
         ({"routing": {"mode": "exclusive"}}, "needs routing.packages"),
         ({"auth_type": "bearer"}, "credentials_ref is required"),

@@ -1,0 +1,14 @@
+{
+  "headers": {
+    "content-type": "application/octet-stream",
+    "etag": "\"9e9929f97b6332e0\""
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://rpm.fixtures.packagehub.test/rocky-8/AppStream/x86_64/os/repodata/9e9929f97b6332e092a655c5a185423dedf73f16f60770db95955b7c734f1382-primary.xml.gz"
+  },
+  "status": 200
+}

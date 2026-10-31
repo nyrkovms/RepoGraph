@@ -79,4 +79,15 @@ SAMPLES: dict[str, Samples] = {
         invalid_versions=["", "1.0 beta", "1.0\t"],
         prereleases=["1.0-alpha-1", "1.0-beta-2", "1.0-M1", "1.0-RC1", "1.0-SNAPSHOT"],
     ),
+    "rpm": Samples(
+        # The distro and release are the namespace: openssl in rocky-9 and in rhel-9 are two packages.
+        names=[("rocky-9/openssl", "pkg:rpm/rocky/openssl?distro=rocky-9"),
+               ("rhel-9/python3", "pkg:rpm/redhat/python3?distro=rhel-9"),
+               ("epel-9/htop", "pkg:rpm/fedora/htop?distro=epel-9")],
+        # Checked against rpm.labelCompare (rpm 4.16, tests/fixtures/rpm/versions/expected.json).
+        ordered_versions=["1.0~rc1-1", "1.0-1", "1.0-1.el9", "1.0-1.el9_4", "1.0^git1-1", "1.0.1-1", "1.10-1",
+                          "1:0.9-1"],
+        invalid_versions=["", "1.0 1", "a:1.0"],
+        prereleases=["1.0~rc1-1"],
+    ),
 }

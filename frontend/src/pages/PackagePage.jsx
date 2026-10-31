@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
-import { fetchDependencies, fetchPackage, fetchVersion, fetchVersions, fetchVulnerabilities } from "../lib/api";
+import { fetchArtifacts, fetchDependencies, fetchPackage, fetchVersion, fetchVersions, fetchVulnerabilities } from "../lib/api";
 import { getPackageDescriptionParagraphs } from "../lib/packageDescription";
 import { OS_OPTIONS, PYTHON_VERSIONS } from "../lib/runtimeEnv";
 
-const ECOSYSTEM_LABELS = { pypi: "PyPI", npm: "npm", crates: "crates.io", go: "Go", nuget: "NuGet", maven: "Maven" };
+const ECOSYSTEM_LABELS = { pypi: "PyPI", npm: "npm", crates: "crates.io", go: "Go", nuget: "NuGet", maven: "Maven", rpm: "RPM" };
 
 // npm environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): Node.js version, os and cpu as npm names them.
 const NPM_NODE_VERSIONS = ["22.0.0", "20.0.0", "18.0.0"];
@@ -65,12 +65,17 @@ const NUGET_FRAMEWORKS = [
 // Maven environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): the dependency scopes the tree follows; any other value is
 // a 422 of the API. `compile,runtime` is what `mvn dependency:tree` shows for a runtime classpath.
 const MAVEN_SCOPES = ["compile", "runtime", "provided", "system", "test"];
+// RPM environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): the architecture whose builds the tree follows; any other value
+// is a 422 of the API.
+const RPM_ARCHES = ["x86_64", "aarch64", "ppc64le", "s390x"];
+const VERSIONS_SHOWN = 10;
 const DEFAULTS = {
   pypi: { python: "3.12", os: "linux" },
   npm: { node: "20.0.0", os: "linux", cpu: "x64" },
   crates: { target: "x86_64-unknown-linux-gnu" },
   nuget: { framework: "net8.0" },
   maven: { scopes: "compile,runtime" },
+  rpm: { arch: "x86_64" },
 };
 // Go has no tree environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): every `require` of a go.mod applies.
 // A pseudo-version (`v0.0.0-20261014143641-f0251eb4aa3e`, `v1.2.4-0.2026...-abc`, `v1.2.4-pre.0.2026...-abc`) is a
@@ -106,7 +111,7 @@ function normalizeScopes(text) {
 }
 
 // Query of the dependency tree request: PyPI `python_version` and `os`, npm `node_version`, `os` and `cpu`,
-// crates `target`, `features` and `default_features`, NuGet `target_framework`, Maven `scopes`, Go none.
+// crates `target`, `features` and `default_features`, NuGet `target_framework`, Maven `scopes`, RPM `arch`, Go none.
 function treeParams(ecosystem, env, includeOptional) {
   if (ecosystem === "go") {
     return {};
@@ -116,6 +121,9 @@ function treeParams(ecosystem, env, includeOptional) {
   }
   if (ecosystem === "maven") {
     return { scopes: env.scopes };
+  }
+  if (ecosystem === "rpm") {
+    return { include_optional: includeOptional, arch: env.arch };
   }
   if (ecosystem === "npm") {
     return { include_optional: includeOptional, node_version: env.node, os: env.os, cpu: env.cpu };
@@ -188,6 +196,37 @@ function mavenEdgeLabels(node) {
   return labels;
 }
 
+// RPM edge: the kind of dependency when it is not a hard `requires` (recommends, suggests, supplements, enhances) and
+// the arches a dependency is limited to.
+function rpmEdgeLabels(node) {
+  const labels = [];
+  const kind = node.scope || node.details?.kind;
+  if (kind && kind !== "requires") {
+    labels.push(kind);
+  }
+  const arches = node.environment_markers?.arch;
+  if (Array.isArray(arches) && arches.length) {
+    labels.push(`arch ${arches.join(", ")}`);
+  }
+  return labels;
+}
+
+// The arch of an RPM artifact: the API's `arch` where it has one, otherwise the one the file name carries
+// (`openssl-3.0.7-27.el9.x86_64.rpm`).
+function artifactArch(artifact) {
+  if (artifact?.arch) {
+    return String(artifact.arch);
+  }
+  return /\.([A-Za-z0-9_]+)\.rpm$/.exec(artifact?.filename || "")?.[1] || "";
+}
+
+// The arches of a version in a stable order: the four the catalog serves first, then the rest (noarch, src...).
+function archesOf(artifacts) {
+  const arches = [...new Set((artifacts || []).map(artifactArch).filter(Boolean))];
+  const rank = (arch) => (RPM_ARCHES.includes(arch) ? RPM_ARCHES.indexOf(arch) : RPM_ARCHES.length);
+  return arches.sort((left, right) => rank(left) - rank(right) || left.localeCompare(right));
+}
+
 function collectDependencyConditions(node, ecosystem) {
   const labels = [];
   const extraValues = new Set();
@@ -218,6 +257,10 @@ function collectDependencyConditions(node, ecosystem) {
 
   if (ecosystem === "maven") {
     labels.push(...mavenEdgeLabels(node));
+  }
+
+  if (ecosystem === "rpm") {
+    labels.push(...rpmEdgeLabels(node));
   }
 
   if (node.extra_name) {
@@ -346,11 +389,18 @@ function VersionStatus({ version, isGo }) {
   // A Go module's author retracts a version in go.mod with a rationale; the catalog keeps it as yanked.
   const retracted = isGo && version.status === "yanked";
   // A NuGet version is unlisted by its author: hidden from search, still restorable, so it stays in the list.
-  const statusClass = version.status === "yanked" ? "tag warn" : version.status === "unlisted" ? "tag muted-tag" : "tag";
+  // An RPM build is superseded by a newer build of the same arch in its repository: it still exists, so it stays listed.
+  const statusClass =
+    version.status === "yanked" ? "tag warn" : version.status === "unlisted" || version.status === "superseded" ? "tag muted-tag" : "tag";
   const deprecation = version.deprecation ? deprecationMessage(version.deprecation) : "";
   return (
     <>
-      <span className={statusClass}>{retracted ? "retracted" : version.status}</span>
+      <span
+        className={statusClass}
+        title={version.status === "superseded" ? "A newer build of the same arch is in the source" : undefined}
+      >
+        {retracted ? "retracted" : version.status}
+      </span>
       {isGoPseudoVersion(version.version) ? <span className="tag cond">pseudo-version</span> : null}
       {retracted && version.status_reason ? <span className="muted version-reason">{version.status_reason}</span> : null}
       {version.deprecation ? <span className="tag warn">deprecated</span> : null}
@@ -369,7 +419,25 @@ function collectNodeIds(nodes, parentId = "root") {
   return ids;
 }
 
-function DependencyTreeNode({ node, nodeId, packageName, ecosystem, collapsedNodes, onToggleCollapse }) {
+// The package that provides an RPM capability (`resolved_name`, found by rpm-worker), linked to its page at the
+// version the tree resolved.
+function ProviderLink({ node, arch }) {
+  const query = new URLSearchParams();
+  if (node.resolved_version) {
+    query.set("version", node.resolved_version);
+  }
+  if (arch && arch !== DEFAULTS.rpm.arch) {
+    query.set("arch", arch);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return (
+    <span className="muted dep-provider">
+      provided by <Link to={`/package/rpm/${node.resolved_name}${suffix}`}>{node.resolved_name}</Link>
+    </span>
+  );
+}
+
+function DependencyTreeNode({ node, nodeId, packageName, ecosystem, arch, collapsedNodes, onToggleCollapse }) {
   const conditions = collectDependencyConditions(node, ecosystem);
   const installHints = conditions.extras.map((extra) => `${packageName}[${extra}]`);
   const hasChildren = Boolean(node.children?.length);
@@ -393,6 +461,7 @@ function DependencyTreeNode({ node, nodeId, packageName, ecosystem, collapsedNod
           )}
           <code className="dep-node-name">{node.name}</code>
           {node.constraint && node.constraint !== "*" ? <span className="muted dep-constraint">{node.constraint}</span> : null}
+          {ecosystem === "rpm" && node.resolved_name ? <ProviderLink node={node} arch={arch} /> : null}
           {node.resolved_version ? <span className="tag dep-version-tag">{node.resolved_version}</span> : <span className="tag muted-tag dep-version-tag">unresolved</span>}
           {node.cycle ? <span className="tag warn">cycle</span> : null}
           {node.dependencies_unknown ? <span className="tag warn">dependencies unknown</span> : null}
@@ -417,6 +486,7 @@ function DependencyTreeNode({ node, nodeId, packageName, ecosystem, collapsedNod
           nodes={node.children}
           packageName={packageName}
           ecosystem={ecosystem}
+          arch={arch}
           parentId={nodeId}
           collapsedNodes={collapsedNodes}
           onToggleCollapse={onToggleCollapse}
@@ -426,7 +496,7 @@ function DependencyTreeNode({ node, nodeId, packageName, ecosystem, collapsedNod
   );
 }
 
-function DependencyTree({ nodes, packageName, ecosystem, parentId = "root", collapsedNodes, onToggleCollapse }) {
+function DependencyTree({ nodes, packageName, ecosystem, arch, parentId = "root", collapsedNodes, onToggleCollapse }) {
   if (!nodes?.length) {
     return null;
   }
@@ -440,6 +510,7 @@ function DependencyTree({ nodes, packageName, ecosystem, parentId = "root", coll
           nodeId={`${parentId}/${node.name}-${idx}`}
           packageName={packageName}
           ecosystem={ecosystem}
+          arch={arch}
           collapsedNodes={collapsedNodes}
           onToggleCollapse={onToggleCollapse}
         />
@@ -458,6 +529,7 @@ export default function PackagePage() {
   const isGo = ecosystem === "go";
   const isNuget = ecosystem === "nuget";
   const isMaven = ecosystem === "maven";
+  const isRpm = ecosystem === "rpm";
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [pkg, setPkg] = useState(null);
@@ -470,6 +542,9 @@ export default function PackagePage() {
   const [target, setTarget] = useState(() => searchParams.get("target") || DEFAULTS.crates.target);
   const [framework, setFramework] = useState(() => searchParams.get("target_framework") || DEFAULTS.nuget.framework);
   const [scopes, setScopes] = useState(() => normalizeScopes(searchParams.get("scopes")));
+  const [arch, setArch] = useState(() => pickOption(searchParams.get("arch"), RPM_ARCHES, DEFAULTS.rpm.arch));
+  // RPM: the arches of each version, from its artifacts, by `<name>/<version>`.
+  const [archesByVersion, setArchesByVersion] = useState({});
   // The features field is applied (and the tree reloaded) on Enter or blur, not on every keystroke.
   const [features, setFeatures] = useState(() => normalizeFeatures(searchParams.get("features")));
   const [featuresInput, setFeaturesInput] = useState(() => normalizeFeatures(searchParams.get("features")));
@@ -517,6 +592,7 @@ export default function PackagePage() {
     setTarget(searchParams.get("target") || DEFAULTS.crates.target);
     setFramework(searchParams.get("target_framework") || DEFAULTS.nuget.framework);
     setScopes(normalizeScopes(searchParams.get("scopes")));
+    setArch(pickOption(searchParams.get("arch"), RPM_ARCHES, DEFAULTS.rpm.arch));
     setFeatures(normalizeFeatures(searchParams.get("features")));
     setFeaturesInput(normalizeFeatures(searchParams.get("features")));
     setDefaultFeatures(searchParams.get("default_features") !== "0");
@@ -559,17 +635,21 @@ export default function PackagePage() {
       if (scopes !== DEFAULTS.maven.scopes) {
         next.set("scopes", scopes);
       }
+    } else if (isRpm) {
+      if (arch !== DEFAULTS.rpm.arch) {
+        next.set("arch", arch);
+      }
     } else if (!isGo && pythonVersion && pythonVersion !== DEFAULTS.pypi.python) {
       next.set("python", pythonVersion);
     }
-    if (!isCrates && !isGo && !isNuget && !isMaven && os && os !== DEFAULTS.pypi.os) {
+    if (!isCrates && !isGo && !isNuget && !isMaven && !isRpm && os && os !== DEFAULTS.pypi.os) {
       next.set("os", os);
     }
     if (includeOptional && !isGo && !isNuget && !isMaven) {
       next.set("include_optional", "1");
     }
     setSearchParams(next, { replace: true });
-  }, [isNpm, isCrates, isGo, isNuget, isMaven, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, features, defaultFeatures, includeOptional, setSearchParams]);
+  }, [isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -577,7 +657,31 @@ export default function PackagePage() {
     }
     loadDependencies(name, selectedVersion);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ecosystem, name, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, features, defaultFeatures, includeOptional]);
+  }, [ecosystem, name, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional]);
+
+  // RPM: the listed versions and the selected one are asked for their files, whose arches the page shows. A failed
+  // request leaves that version without arches; the page does not depend on them.
+  useEffect(() => {
+    if (!isRpm || !name) {
+      return undefined;
+    }
+    const wanted = new Set(versions.slice(0, VERSIONS_SHOWN).map((row) => row.version));
+    if (selectedVersion) {
+      wanted.add(selectedVersion);
+    }
+    wanted.forEach((version) => {
+      const key = `${name}/${version}`;
+      if (archesByVersion[key]) {
+        return;
+      }
+      // Keyed by package, so an answer that arrives after the page moved on is still the right one for its key.
+      fetchArtifacts(ecosystem, name, version)
+        .then((payload) => setArchesByVersion((current) => ({ ...current, [key]: archesOf(payload?.data) })))
+        .catch(() => {});
+    });
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRpm, ecosystem, name, versions, selectedVersion]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -642,7 +746,7 @@ export default function PackagePage() {
         version,
         treeParams(
           ecosystem,
-          { python: pythonVersion, node: nodeVersion, cpu, os: treeOs, target: treeTarget, framework: treeFramework, scopes, features, defaultFeatures },
+          { python: pythonVersion, node: nodeVersion, cpu, os: treeOs, target: treeTarget, framework: treeFramework, scopes, arch, features, defaultFeatures },
           includeOptional
         )
       );
@@ -712,7 +816,7 @@ export default function PackagePage() {
   return (
     <section>
       <h2>
-        Package: {(isNuget || isMaven) && pkg?.name ? pkg.name : name}
+        Package: {(isNuget || isMaven || isRpm) && pkg?.name ? pkg.name : name}
         <span className="tag eco-badge">{ECOSYSTEM_LABELS[ecosystem] || ecosystem}</span>
       </h2>
       {error ? <p className="error">{error}</p> : null}
@@ -755,6 +859,16 @@ export default function PackagePage() {
                 </span>
                 <span>
                   <b>artifactId</b>: <code>{pkg.normalized_name}</code>
+                </span>
+              </>
+            ) : null}
+            {isRpm ? (
+              <>
+                <span>
+                  <b>Distro</b>: <code>{pkg.namespace}</code>
+                </span>
+                <span>
+                  <b>Name</b>: <code>{pkg.normalized_name}</code>
                 </span>
               </>
             ) : null}
@@ -806,11 +920,18 @@ export default function PackagePage() {
 
           <h3>Versions</h3>
           <ul className="inline-list">
-            {versions.slice(0, 10).map((v) => (
+            {versions.slice(0, VERSIONS_SHOWN).map((v) => (
               <li key={v.version}>
                 {v.version}
                 <VersionStatus version={v} isGo={isGo} />
                 {isMaven && packagingOf(v) ? <span className="tag cond">{packagingOf(v)}</span> : null}
+                {isRpm
+                  ? (archesByVersion[`${name}/${v.version}`] || []).map((item) => (
+                      <span key={item} className="tag cond">
+                        {item}
+                      </span>
+                    ))
+                  : null}
                 {formatDate(v.release_date) ? <span className="muted version-date">{formatDate(v.release_date)}</span> : null}
               </li>
             ))}
@@ -881,7 +1002,18 @@ export default function PackagePage() {
                   </select>
                 </label>
               </>
-            ) : isGo ? null : isMaven ? (
+            ) : isGo ? null : isRpm ? (
+              <label>
+                Arch
+                <select aria-label="Arch" value={arch} onChange={(e) => setArch(e.target.value)} disabled={loading || depsLoading}>
+                  {RPM_ARCHES.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : isMaven ? (
               <div className="scope-select" role="group" aria-label="Scopes">
                 <b>Scopes</b>
                 {MAVEN_SCOPES.map((scope) => (
@@ -1031,6 +1163,12 @@ export default function PackagePage() {
                   Retracted{versionDetail.status_reason ? `: ${versionDetail.status_reason}` : ""}
                 </p>
               ) : null}
+              {isRpm && archesByVersion[`${name}/${versionDetail.version}`]?.length ? (
+                <p className="muted">Arches: {archesByVersion[`${name}/${versionDetail.version}`].join(", ")}</p>
+              ) : null}
+              {isRpm && versionDetail.status === "superseded" ? (
+                <p className="muted">Superseded: a newer build of the same arch is in the source, this one is still in the catalog.</p>
+              ) : null}
               {isMaven && packagingOf(versionDetail) ? (
                 <p className="muted">
                   Packaging: <code>{packagingOf(versionDetail)}</code>
@@ -1059,6 +1197,7 @@ export default function PackagePage() {
             nodes={deps}
             packageName={pkg.normalized_name}
             ecosystem={ecosystem}
+            arch={arch}
             collapsedNodes={collapsedNodes}
             onToggleCollapse={toggleNodeCollapse}
           />

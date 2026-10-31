@@ -1,4 +1,4 @@
-import { fetchDependencies, fetchPackage, fetchVersion, fetchVersions, fetchVulnerabilities } from "../../lib/api";
+import { fetchArtifacts, fetchDependencies, fetchPackage, fetchVersion, fetchVersions, fetchVulnerabilities } from "../../lib/api";
 
 describe("package routes", () => {
   let fetchMock;
@@ -106,5 +106,20 @@ describe("package routes", () => {
     await fetchDependencies("maven", "org.springframework:spring-core", "6.1.0", { scopes: "compile,runtime,test" });
     expect(lastUrl().pathname).toBe("/api/v1/packages/maven/org.springframework:spring-core/-/versions/6.1.0/dependencies");
     expect(Object.fromEntries(lastUrl().searchParams)).toEqual({ scopes: "compile,runtime,test" });
+  });
+
+  it("builds the routes of an RPM package: distro/name is the coordinates, the epoch colon is encoded in the version, arch is the query", async () => {
+    await fetchPackage("rpm", "rocky-9/openssl");
+    expect(lastUrl().pathname).toBe("/api/v1/packages/rpm/rocky-9/openssl/-/");
+
+    await fetchVersion("rpm", "rocky-9/openssl", "1:3.0.7-27.el9");
+    expect(lastUrl().pathname).toBe("/api/v1/packages/rpm/rocky-9/openssl/-/versions/1%3A3.0.7-27.el9");
+
+    await fetchArtifacts("rpm", "rocky-9/libstdc++", "1:3.0.7~rc1-1.el9");
+    expect(lastUrl().pathname).toBe("/api/v1/packages/rpm/rocky-9/libstdc%2B%2B/-/versions/1%3A3.0.7~rc1-1.el9/artifacts");
+
+    await fetchDependencies("rpm", "rocky-9/openssl", "1:3.0.7-27.el9", { include_optional: true, arch: "aarch64" });
+    expect(lastUrl().pathname).toBe("/api/v1/packages/rpm/rocky-9/openssl/-/versions/1%3A3.0.7-27.el9/dependencies");
+    expect(Object.fromEntries(lastUrl().searchParams)).toEqual({ include_optional: "true", arch: "aarch64" });
   });
 });
