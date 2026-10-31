@@ -1,0 +1,56 @@
+# RPM repositories (SPEC-MULTI-ECOSYSTEM.md §6.4) for `python -m app.cli registries import registries.rpm.yaml`.
+#
+# One source = one repository of one release; `config.namespace` is the distro and release its packages belong to
+# (`openssl` in rocky-9 and in rhel-9 are two packages), `config.arch` the arches read, and `$basearch`/`$releasever`
+# in base_url expand per arch. AppStream of EL8/EL9 carries modules.yaml (`modular`). RHEL itself comes later (Q12):
+# its CDN takes `auth_type: tls_client_cert` with `credentials_ref` naming the entitlement certificate in the secrets
+# directory, a Satellite `basic`. Sources are created disabled and enabled after a passing connection test.
+
+registries:
+  - {slug: rocky-9-baseos, name: Rocky Linux 9 BaseOS, ecosystem: rpm, protocol: rpm-repodata, priority: 10,
+     base_url: "https://dl.rockylinux.org/pub/rocky/9/BaseOS/$basearch/os/", enabled: true,
+     config: {namespace: rocky-9, vendor: rocky, releasever: "9", arch: [x86_64, aarch64]}}
+  - {slug: rocky-9-appstream, name: Rocky Linux 9 AppStream, ecosystem: rpm, protocol: rpm-repodata, priority: 20,
+     base_url: "https://dl.rockylinux.org/pub/rocky/9/AppStream/$basearch/os/", enabled: true,
+     config: {namespace: rocky-9, vendor: rocky, releasever: "9", arch: [x86_64, aarch64], modular: true}}
+  - {slug: rocky-9-crb, name: Rocky Linux 9 CRB, ecosystem: rpm, protocol: rpm-repodata, priority: 30,
+     base_url: "https://dl.rockylinux.org/pub/rocky/9/CRB/$basearch/os/",
+     config: {namespace: rocky-9, vendor: rocky, releasever: "9", arch: [x86_64, aarch64]}}
+  - {slug: rocky-8-baseos, name: Rocky Linux 8 BaseOS, ecosystem: rpm, protocol: rpm-repodata, priority: 10,
+     base_url: "https://dl.rockylinux.org/pub/rocky/8/BaseOS/$basearch/os/", enabled: true,
+     config: {namespace: rocky-8, vendor: rocky, releasever: "8", arch: [x86_64]}}
+  - {slug: rocky-8-appstream, name: Rocky Linux 8 AppStream, ecosystem: rpm, protocol: rpm-repodata, priority: 20,
+     base_url: "https://dl.rockylinux.org/pub/rocky/8/AppStream/$basearch/os/", enabled: true,
+     config: {namespace: rocky-8, vendor: rocky, releasever: "8", arch: [x86_64], modular: true}}
+  - {slug: alma-9-baseos, name: AlmaLinux 9 BaseOS, ecosystem: rpm, protocol: rpm-repodata, priority: 10,
+     base_url: "https://repo.almalinux.org/almalinux/9/BaseOS/$basearch/os/",
+     config: {namespace: alma-9, vendor: almalinux, releasever: "9", arch: [x86_64]}}
+  - {slug: alma-9-appstream, name: AlmaLinux 9 AppStream, ecosystem: rpm, protocol: rpm-repodata, priority: 20,
+     base_url: "https://repo.almalinux.org/almalinux/9/AppStream/$basearch/os/",
+     config: {namespace: alma-9, vendor: almalinux, releasever: "9", arch: [x86_64], modular: true}}
+  - {slug: epel-9, name: EPEL 9, ecosystem: rpm, protocol: rpm-repodata, priority: 40,
+     base_url: "https://dl.fedoraproject.org/pub/epel/9/Everything/$basearch/",
+     config: {namespace: epel-9, vendor: fedora, releasever: "9", arch: [x86_64]}}
+  - {slug: fedora-41, name: Fedora 41, ecosystem: rpm, protocol: rpm-repodata, priority: 10,
+     base_url: "https://dl.fedoraproject.org/pub/fedora/linux/releases/41/Everything/$basearch/os/",
+     config: {namespace: fedora-41, vendor: fedora, releasever: "41", arch: [x86_64]}}
+  - {slug: fedora-41-updates, name: Fedora 41 updates, ecosystem: rpm, protocol: rpm-repodata, priority: 20,
+     base_url: "https://dl.fedoraproject.org/pub/fedora/linux/updates/41/Everything/$basearch/",
+     config: {namespace: fedora-41, vendor: fedora, releasever: "41", arch: [x86_64]}}
+
+profiles:
+  - slug: default
+    name: RPM
+    ecosystem: rpm
+    is_default: true
+    registries:
+      - {slug: rocky-9-baseos}
+      - {slug: rocky-9-appstream}
+      - {slug: rocky-9-crb}
+      - {slug: rocky-8-baseos}
+      - {slug: rocky-8-appstream}
+      - {slug: alma-9-baseos}
+      - {slug: alma-9-appstream}
+      - {slug: epel-9}
+      - {slug: fedora-41}
+      - {slug: fedora-41-updates}

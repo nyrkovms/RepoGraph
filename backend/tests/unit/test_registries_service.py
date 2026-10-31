@@ -45,7 +45,6 @@ def test_go_routing_is_validated_with_a_module_path() -> None:
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [
-        ({"ecosystem": "rpm"}, "no plugin is registered for ecosystem 'rpm'"),   # no RPM plugin until E6
         ({"ecosystem": "nope"}, "no plugin is registered"),
         ({"protocol": "gopher"}, "unknown protocol 'gopher'"),
         ({"protocol": "npm-registry"}, "no adapter for protocol 'npm-registry'"),
@@ -224,3 +223,15 @@ def test_pytorch_file_is_importable_and_valid() -> None:
     # exclusive inside the profile only: the catalog keeps reading torch from pypi.org as well
     assert {p.slug: p.registries[0].routing_override["mode"] for p in document.profiles} == {
         "cpu": "exclusive", "cuda121": "exclusive", "cuda128": "exclusive"}
+
+
+def test_rpm_file_is_importable_and_valid() -> None:
+    path = Path(__file__).resolve().parents[2] / "registries.rpm.yaml"
+    document = parse_import(path.read_text(encoding="utf-8"))
+    assert {r.protocol for r in document.registries} == {"rpm-repodata"}
+    for registry in document.registries:
+        validate_registry(RegistryFields.from_body(registry))
+        assert registry.config["namespace"] and registry.config["arch"]
+    # Every source belongs to the default rpm profile the migration creates.
+    assert [(p.slug, p.ecosystem, p.is_default) for p in document.profiles] == [("default", "rpm", True)]
+    assert [m.slug for m in document.profiles[0].registries] == [r.slug for r in document.registries]

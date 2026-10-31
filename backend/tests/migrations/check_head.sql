@@ -168,3 +168,11 @@ BEGIN
     RAISE EXCEPTION '0012: default maven profile'; END IF;
   RAISE NOTICE 'ok: 0012 Maven starter source';
 END $$;
+
+-- 0013: the default rpm profile, no starter source (IMPL E6 K7, SPEC §6.3).
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM source_profiles WHERE ecosystem = 'rpm' AND slug = 'default' AND is_default) <> 1 THEN
+    RAISE EXCEPTION '0013: default rpm profile'; END IF;
+  RAISE NOTICE 'ok: 0013 RPM default profile';
+END $$;

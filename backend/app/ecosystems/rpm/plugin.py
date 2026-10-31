@@ -44,7 +44,9 @@ class RpmPlugin:
         raise ValueError(f"rpm plugin has no adapter for protocol {registry.protocol!r} (registry {registry.slug})")
 
     def sources_for(self, ref: PackageRef, profile: SourceProfile) -> Sequence[RegistryConfig]:
-        # A source is one repository of one release: only those of the package's distro (§6.4).
+        # A source is one repository of one release: only those of the package's distro (§6.4). Every source's rule
+        # is still parsed, so a broken one fails whatever the package.
+        route(ref, profile.registries, "packages", package_matches)
         mine = [r for r in profile.registries if _namespace(r) == ref.namespace]
         return route(ref, mine, "packages", package_matches)
 
