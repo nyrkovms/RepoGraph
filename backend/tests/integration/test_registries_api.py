@@ -232,7 +232,7 @@ def test_create_defaults(client: TestClient, auth: dict) -> None:
     [
         ({"protocol": "gopher"}, "unknown protocol"),
         ({"protocol": "npm-registry"}, "no adapter for protocol"),
-        ({"ecosystem": "maven", "protocol": "maven2"}, "no plugin is registered"),
+        ({"ecosystem": "rpm", "protocol": "rpm-repodata"}, "no plugin is registered"),
         ({"routing": {"mode": "sometimes", "packages": ["torch"]}}, "unknown routing mode"),
         ({"routing": {"mode": "exclusive"}}, "needs routing.packages"),
         ({"auth_type": "bearer"}, "credentials_ref is required"),
@@ -486,10 +486,10 @@ def test_fetch_packages_rejects_bad_purls_and_queues_nothing(
     monkeypatch.setattr(admin_api, "fetch_packages", SimpleNamespace(delay=lambda purls: queued.append(purls)))
 
     response = client.post("/api/v1/admin/packages", headers=auth,
-                           json={"purls": ["pkg:pypi/flask", "flask", "pkg:maven/org.example/x", "pkg:pypi/ns/pkg"]})
+                           json={"purls": ["pkg:pypi/flask", "flask", "pkg:rpm/fedora/curl", "pkg:pypi/ns/pkg"]})
     assert response.status_code == 422
     detail = response.json()["detail"]
-    assert "flask:" in detail and "pkg:maven/org.example/x" in detail and "pkg:pypi/ns/pkg" in detail
+    assert "flask:" in detail and "pkg:rpm/fedora/curl" in detail and "pkg:pypi/ns/pkg" in detail
     assert "pkg:pypi/flask:" not in detail
     assert queued == []
 
