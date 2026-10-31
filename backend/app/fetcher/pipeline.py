@@ -68,13 +68,26 @@ logger = logging.getLogger(__name__)
 
 
 class _ProfileLookup:
-    """SourceLookup over a fixed list of registries (parent POMs and BOMs from other sources of the profile)."""
+    """SourceLookup for parent POMs and BOMs: the registries of the operation first, then those of the profile its
+    routing allows for the document's own package (a parent may live in another repository than the artifact)."""
 
-    def __init__(self, plugin: EcosystemPlugin, registries: Sequence[RegistryConfig]) -> None:
-        self._adapters = [plugin.adapter(registry) for registry in registries]
+    def __init__(self, plugin: EcosystemPlugin, registries: Sequence[RegistryConfig],
+                 profile: SourceProfile | None = None) -> None:
+        self._plugin = plugin
+        self._registries = list(registries)
+        self._profile = profile
 
     def adapters_for(self, ref: PackageRef) -> Sequence[SourceAdapter]:
-        return self._adapters
+        registries = list(self._registries)
+        if self._profile is not None:
+            known = {registry.id for registry in registries}
+            registries += [r for r in self._plugin.sources_for(ref, self._profile) if r.id not in known]
+        return [self._plugin.adapter(registry) for registry in registries]
+
+
+async def _lookup(db: AsyncSession, plugin: EcosystemPlugin, registries: Sequence[RegistryConfig],
+                  profile: SourceProfile | None = None) -> _ProfileLookup:
+    return _ProfileLookup(plugin, registries, profile or await sources.default_profile(db, plugin.ecosystem))
 
 
 def pypi_ref(name: str) -> PackageRef:
@@ -111,7 +124,7 @@ async def sync_package(
     if existing is not None:
         registries, frozen = await _known_sources(db, plugin, ref, existing.id, extra_registries)
         if registries:
-            fetched = await discovery.fetch_known(db, plugin, ref, registries, _ProfileLookup(plugin, registries))
+            fetched = await discovery.fetch_known(db, plugin, ref, registries, await _lookup(db, plugin, registries))
             if not fetched.snapshots and frozen:
                 # Gone from the sources asked, still listed by a frozen one: not unavailable, nothing else changes.
                 await _mark_registries_missing(db, existing.id, fetched.missing)
@@ -126,7 +139,7 @@ async def sync_package(
         if not registries:
             raise PackageNotFound(f"no enabled source for {plugin.coordinates.display(ref)}")
         fetched = await discovery.discover(
-            db, plugin, ref, registries, _ProfileLookup(plugin, registries),
+            db, plugin, ref, registries, await _lookup(db, plugin, registries, profile),
             use_negative_cache=origin not in (PackageOrigin.seed, PackageOrigin.manual),
         )
 
@@ -783,7 +796,8 @@ async def ensure_version_dependencies(db: AsyncSession, package: Package, versio
     # A disabled metadata source hands the version over to the next enabled one, as the next merge would.
     version_row.metadata_registry_id = registry_id
     adapter = plugin.adapter(sources.registry_config(registry))
-    loaded = await adapter.fetch_version_dependencies(ref, version_row.version, _ProfileLookup(plugin, [adapter.registry]))
+    loaded = await adapter.fetch_version_dependencies(ref, version_row.version,
+                                                      await _lookup(db, plugin, [adapter.registry]))
     await store_documents(db, registry_id, loaded.documents)
 
     features = dict(version_row.features or {})
@@ -911,7 +925,8 @@ async def _load_source_dependencies(
     plugin = plugin_for(package.ecosystem.value)
     ref = PackageRef(ecosystem=package.ecosystem.value, namespace=package.namespace or "", name=package.normalized_name)
     adapter = plugin.adapter(sources.registry_config(registry))
-    loaded = await adapter.fetch_version_dependencies(ref, version_row.version, _ProfileLookup(plugin, [adapter.registry]))
+    loaded = await adapter.fetch_version_dependencies(ref, version_row.version,
+                                                      await _lookup(db, plugin, [adapter.registry]))
     await store_documents(db, registry.id, loaded.documents)
     await _replace_dependency_rows(db, version_row.id, str(registry.id), [])
     if not loaded.available:
