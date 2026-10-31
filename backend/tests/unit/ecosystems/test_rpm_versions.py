@@ -115,14 +115,15 @@ def test_prerelease_is_a_tilde_in_the_version() -> None:
 
 
 def test_bump() -> None:
+    # A new release of the same version is a patch (SPEC §5.5): a rebuild or a backported fix.
     cases = {
         "3.0.7-27.el9": [("4.0.0-1.el9", "major"), ("3.1.0-1.el9", "minor"), ("3.0.8-1.el9", "patch"), ("3.0.7.1-1", "patch"),
-                         ("3.0.7-28.el9", "other"), ("3.0.7-27.el9_4", "other"), ("3.0.7-27.el9", "other"), ("3.0.6-1", "other"),
+                         ("3.0.7-28.el9", "patch"), ("3.0.7-27.el9_4", "patch"), ("3.0.7-27.el9", "other"), ("3.0.6-1", "other"),
                          ("1:3.0.7-27.el9", "other"), ("1:4.0.0-1", "other"), ("3.0.8~rc1-1", "pre"), ("4.0~beta-1", "pre"),
-                         ("3.0.7a-1", "patch"), ("3.0.07-28.el9", "other"), ("2.9.9-1", "other")],
-        "1.1.1k-9.el9": [("1.1.1l-1.el9", "patch"), ("1.1.2-1", "patch"), ("1.2-1", "minor"), ("1.1.1k-12.el9_4", "other")],
+                         ("3.0.7a-1", "patch"), ("3.0.07-28.el9", "patch"), ("2.9.9-1", "other")],
+        "1.1.1k-9.el9": [("1.1.1l-1.el9", "patch"), ("1.1.2-1", "patch"), ("1.2-1", "minor"), ("1.1.1k-12.el9_4", "patch")],
         "1.0~rc1-1": [("1.0-1", "patch"), ("1.0~rc2-1", "pre"), ("1.1-1", "minor"), ("2.0-1", "major")],
-        "5.14.0-427.13.1.el9_4": [("5.14.0-503.14.1.el9_5", "other"), ("5.15.0-1.el9", "minor")],
+        "5.14.0-427.13.1.el9_4": [("5.14.0-503.14.1.el9_5", "patch"), ("5.15.0-1.el9", "minor")],
     }
     for previous, changes in cases.items():
         assert [(c, SCHEME.bump(previous, c)) for c, _ in changes] == changes, previous

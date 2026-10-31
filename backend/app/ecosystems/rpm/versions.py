@@ -265,8 +265,10 @@ class RpmVersionScheme:
         before, after = parse(previous), parse(current)
         if "~" in after.version:
             return "pre"
-        if _compare_parsed(after, before) <= 0 or before.epoch != after.epoch or vercmp(before.version, after.version) == 0:
-            return "other"                         # a downgrade, a new epoch (the numbers do not compare) or only a new release
+        if _compare_parsed(after, before) <= 0 or before.epoch != after.epoch:
+            return "other"                         # a downgrade, or a new epoch (the numbers do not compare)
+        if vercmp(before.version, after.version) == 0:
+            return "patch"                         # only a new release: a rebuild or a backported fix (SPEC §5.5)
         old, new = _numbers(before.version), _numbers(after.version)
         if new[0] != old[0]:
             return "major"
