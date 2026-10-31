@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"23e04e8381f2b249d4f563f6beee86ce\"",
+    "last-modified": "Thu, 04 Apr 2024 20:48:47 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/prometheus/prometheus-metrics-bom/1.2.1/prometheus-metrics-bom-1.2.1.pom"
+  },
+  "status": 200
+}

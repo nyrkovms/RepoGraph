@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"ebb95ddd9a75fb3344a9101a26d83fc8\"",
+    "last-modified": "Wed, 08 May 2024 21:57:30 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/testcontainers/testcontainers-bom/1.19.8/testcontainers-bom-1.19.8.pom"
+  },
+  "status": 200
+}

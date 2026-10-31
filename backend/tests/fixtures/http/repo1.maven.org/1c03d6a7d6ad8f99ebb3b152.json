@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"539fc52ef98bf545c1ca7c1b29d7cb50\"",
+    "last-modified": "Wed, 15 Jun 2022 21:22:02 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/prometheus/simpleclient_bom/0.16.0/simpleclient_bom-0.16.0.pom"
+  },
+  "status": 200
+}

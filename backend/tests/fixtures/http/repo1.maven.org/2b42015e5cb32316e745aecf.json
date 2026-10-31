@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"bac4b8b3a622076d88af25930afd521c\"",
+    "last-modified": "Thu, 15 Jan 2026 08:18:59 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "HEAD",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-core/7.0.3/spring-core-7.0.3.pom"
+  },
+  "status": 200
+}

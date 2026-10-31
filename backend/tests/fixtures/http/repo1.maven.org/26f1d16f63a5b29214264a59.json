@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"db099579cc3e8fb1851518583bbf3a87\"",
+    "last-modified": "Tue, 20 Oct 2026 11:36:55 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/26.10.0/mysql-connector-j-26.10.0.pom"
+  },
+  "status": 200
+}

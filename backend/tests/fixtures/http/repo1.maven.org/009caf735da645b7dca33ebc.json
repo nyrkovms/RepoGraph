@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"81b6827b166dea9b7df30fc591cd97a0\"",
+    "last-modified": "Fri, 27 Sep 2024 01:16:06 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/fasterxml/jackson/jackson-parent/2.18/jackson-parent-2.18.pom"
+  },
+  "status": 200
+}

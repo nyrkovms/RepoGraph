@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"ba66f0d8fe8b16e89d39d4cd540b9f13\"",
+    "last-modified": "Sun, 31 May 2026 04:44:48 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.22/jackson-annotations-2.22.pom"
+  },
+  "status": 200
+}

@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"533a8385645cddca925a57f2ed1296bd\"",
+    "last-modified": "Mon, 09 Sep 2024 12:19:43 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/apache/groovy/groovy-bom/4.0.23/groovy-bom-4.0.23.pom"
+  },
+  "status": 200
+}

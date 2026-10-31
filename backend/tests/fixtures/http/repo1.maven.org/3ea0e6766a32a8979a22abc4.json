@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"dc9a1a75ee2a311039428326b1a9654e\"",
+    "last-modified": "Mon, 14 Oct 2024 21:50:41 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/micrometer/micrometer-bom/1.13.6/micrometer-bom-1.13.6.pom"
+  },
+  "status": 200
+}

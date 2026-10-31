@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"52bb095fa22f6ea97817255576aa6ad5\"",
+    "last-modified": "Thu, 22 Oct 2026 12:04:04 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/boot/spring-boot/4.1.2/spring-boot-4.1.2.pom"
+  },
+  "status": 200
+}

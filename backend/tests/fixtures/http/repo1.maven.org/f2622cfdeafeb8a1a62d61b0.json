@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"80019b48ec72abcf641a5deab3651f7e\"",
+    "last-modified": "Sat, 24 Jan 2026 19:07:20 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/assertj/assertj-core/3.27.7/assertj-core-3.27.7.pom"
+  },
+  "status": 200
+}

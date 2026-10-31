@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"1efaabbeb52bb1dc82ba5ab163e37ede\"",
+    "last-modified": "Mon, 21 Oct 2024 17:26:52 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/security/spring-security-bom/6.3.4/spring-security-bom-6.3.4.pom"
+  },
+  "status": 200
+}

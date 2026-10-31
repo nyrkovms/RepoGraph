@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"0457f907ec42f67db5e8d79482a71c1a\"",
+    "last-modified": "Mon, 30 Sep 2024 14:36:45 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-bom/12.0.14/jetty-bom-12.0.14.pom"
+  },
+  "status": 200
+}

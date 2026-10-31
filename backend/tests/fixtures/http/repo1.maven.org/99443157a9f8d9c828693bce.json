@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"cc2848ab489e87bc354e026a35ecfe20\"",
+    "last-modified": "Thu, 17 Oct 2024 08:09:58 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/spring-framework-bom/6.1.14/spring-framework-bom-6.1.14.pom"
+  },
+  "status": 200
+}

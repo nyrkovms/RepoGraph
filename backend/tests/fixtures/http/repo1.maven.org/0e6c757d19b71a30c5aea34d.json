@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"b2eb0e496c9516f76de13ff6c6472525\"",
+    "last-modified": "Wed, 15 Jun 2022 21:17:40 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/io/prometheus/parent/0.16.0/parent-0.16.0.pom"
+  },
+  "status": 200
+}

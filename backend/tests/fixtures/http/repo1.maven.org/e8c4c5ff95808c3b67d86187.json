@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"5ff7a3b26fb29136bfe77326c2d2a5e1\"",
+    "last-modified": "Sun, 04 Feb 2024 21:54:53 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/assertj/assertj-bom/3.25.3/assertj-bom-3.25.3.pom"
+  },
+  "status": 200
+}

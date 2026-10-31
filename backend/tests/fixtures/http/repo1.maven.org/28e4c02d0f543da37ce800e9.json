@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"5392a6d11a0e751d8e3ec5ade17c531a\"",
+    "last-modified": "Mon, 29 Jul 2024 16:03:05 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/apache/pulsar/pulsar-bom/3.2.4/pulsar-bom-3.2.4.pom"
+  },
+  "status": 200
+}

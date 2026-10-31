@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "content-type": "text/xml",
+    "etag": "W/\"fbbf170ddecaf3d0af6c198ed657ab41\"",
+    "last-modified": "Thu, 22 Oct 2026 12:04:01 GMT"
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://repo1.maven.org/maven2/org/springframework/boot/spring-boot-starter-web/4.1.2/spring-boot-starter-web-4.1.2.pom"
+  },
+  "status": 200
+}
