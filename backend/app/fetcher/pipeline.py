@@ -9,7 +9,7 @@ import hashlib
 import logging
 import uuid
 from typing import cast
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select, tuple_, update
@@ -235,9 +235,9 @@ async def write_package(
     version_rows, metadata_moved = await _upsert_versions(db, plugin, package.id, merged.versions)
     version_ids = {version: row.id for version, row in version_rows.items()}
     await _write_version_sources(db, package.id, version_ids, merged.versions, source_versions, registry_rows.keys(), now)
-    # RPM: a build that left the repository was superseded, not removed (Q3), and makes no event.
-    vanished = PackageVersionStatus(getattr(plugin, "vanished_status", "removed"))
-    await _mark_missing_versions_removed(db, package.id, [*version_ids.keys(), *frozen], vanished)
+    # RPM: a build that left the repository was superseded, not removed (Q3); Go: a tagless module's older
+    # pseudo-version, which the proxy still serves but no longer lists (#19). Neither makes an event.
+    await _mark_missing_versions_removed(db, package.id, [*version_ids.keys(), *frozen], vanished_status_of(plugin))
     for merged_version in merged.versions:
         row = version_rows[merged_version.version.version]
         await _write_dependencies(db, row, merged_version, source_versions, merged_version.version.version in metadata_moved)
@@ -258,7 +258,7 @@ async def write_package(
 
     slugs = {registry_id: row.slug for registry_id, row in registry_rows.items()}
     await _record_events(db, package.id, diff_package(snapshot, merged, plugin.versions, latest, slugs, frozen,
-                                                         vanished=getattr(plugin, "vanished_status", "removed")), run_id, now)
+                                                         vanished=vanished_status_of(plugin)), run_id, now)
     for registry_id in [*by_registry, *missing_registry_ids]:
         await _upsert_sync_state(db, registry_id, now)
 
@@ -601,17 +601,24 @@ async def _frozen_versions(
     return {version for version in rows if version not in incoming}
 
 
+def vanished_status_of(plugin: EcosystemPlugin) -> Callable[[str], str]:
+    """The status a version gets when no source asked lists it any more: `removed`, unless the plugin says otherwise
+    (`vanished_status`, a status or a function of the version)."""
+    rule = getattr(plugin, "vanished_status", "removed")
+    return rule if callable(rule) else (lambda version: str(rule))
+
+
 async def _mark_missing_versions_removed(db: AsyncSession, package_id, present_versions: Iterable[str],
-                                        status: PackageVersionStatus = PackageVersionStatus.removed) -> None:
-    await db.execute(
-        update(PackageVersion)
-        .where(
-            PackageVersion.package_id == package_id,
-            PackageVersion.version.not_in(list(present_versions)),
-            PackageVersion.status.not_in([PackageVersionStatus.removed, status]),
-        )
-        .values(status=status)
-    )
+                                        status_of: Callable[[str], str] = lambda version: "removed") -> None:
+    rows = (await db.scalars(select(PackageVersion).where(
+        PackageVersion.package_id == package_id,
+        PackageVersion.version.not_in(list(present_versions)),
+        PackageVersion.status != PackageVersionStatus.removed,
+    ))).all()
+    for row in rows:
+        status = PackageVersionStatus(status_of(row.version))
+        if row.status != status:
+            row.status = status
 
 
 # --- dependencies and artifacts ---------------------------------------------------------------------

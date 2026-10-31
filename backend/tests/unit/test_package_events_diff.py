@@ -194,3 +194,17 @@ def test_a_vanished_rpm_build_is_superseded_without_an_event_and_a_modular_relea
     added = _diff(before, merge_by_priority([to_contract(_package([_version("1.0"), _version("2.0"), modular]),
                                                          "reg-rpm")]), PyPIVersionScheme(), "3.0")
     assert added[0].kind == PackageEventKind.release_added and added[0].details["modules"] == ["nodejs:18"]
+
+
+def test_a_tagless_go_module_s_older_pseudo_version_is_superseded_without_an_event() -> None:
+    """#19: the proxy lists only `@latest` for a module without tags; the previous pseudo-version is still served."""
+    from app.ecosystems.go.plugin import PLUGIN as GO
+
+    old, new = "v0.0.0-20261001000000-aaaaaaaaaaaa", "v0.0.0-20261030000000-bbbbbbbbbbbb"
+    before = _snapshot({old: "active", "v1.0.0": "active"}, latest=old)
+    merged = merge_by_priority([to_contract(_package([_version(new)]), "reg-proxy")])
+    events = _diff(before, merged, PyPIVersionScheme(), new, vanished=GO.vanished_status)
+    # The vanished tag is still a removal; the vanished pseudo-version is not.
+    assert [(e.kind, e.version) for e in events if e.kind != PackageEventKind.release_added] == [
+        (PackageEventKind.release_removed, "v1.0.0")]
+    assert GO.vanished_status(old) == "superseded" and GO.vanished_status("v1.0.0") == "removed"
