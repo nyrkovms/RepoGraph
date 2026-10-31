@@ -225,3 +225,17 @@ def test_waiting_on_the_worker_is_allowed_inside_a_celery_task(monkeypatch) -> N
         assert asyncio.run(client.call("rpm.detect_changes", {}, {}, {})) == {"revision": "r"}
     finally:
         _state._set_task_join_will_block(False)
+
+
+def test_an_epel_dependency_is_provided_from_its_base_distro(worker) -> None:
+    calls, answers = worker
+    answers["rpm.whatprovides"] = [{"name": "glibc", "evr": "2.34-100.el9", "arch": "x86_64", "repo": "rocky-9-baseos"}]
+    epel = RegistryConfig(id="id-epel-9", slug="epel-9", ecosystem="rpm", protocol="rpm-repodata",
+                          base_url="https://mirror/epel/9/$basearch/", priority=40, routing=None, auth_type="none",
+                          credentials_ref=None, config={"namespace": "epel-9", "arch": ["x86_64"], "base_distro": ["rocky-9"]})
+    profile = SourceProfile(ecosystem="rpm", slug="default", registries=[_registry(), epel])
+    dep = NormalizedDependency(target=PackageRef("rpm", "epel-9", "libc.so.6()(64bit)"), constraint="",
+                               dependency_type="runtime", raw_spec="libc.so.6()(64bit)")
+    found = asyncio.run(PLUGIN.provider(dep, parse_environment({}), profile))
+    assert found == (PackageRef("rpm", "rocky-9", "glibc"), "2.34-100.el9")
+    assert [s["slug"] for s in calls[-1][1][0]] == ["epel-9", "rocky-9-baseos"]

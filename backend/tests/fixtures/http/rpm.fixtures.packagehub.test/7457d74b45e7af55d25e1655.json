@@ -1,0 +1,14 @@
+{
+  "headers": {
+    "content-type": "application/octet-stream",
+    "etag": "\"4a63d66e9812d7b9\""
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://rpm.fixtures.packagehub.test/epel/9/Everything/x86_64/repodata/4a63d66e9812d7b9ded5b32e41a5f9a942658066d50d1e30a17fd59e72a1c23a-primary.xml.gz"
+  },
+  "status": 200
+}

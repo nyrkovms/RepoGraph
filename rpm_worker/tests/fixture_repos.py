@@ -3,7 +3,8 @@ that does not exist, so integration tests run the real rpm-worker offline (`pyth
 
 Real repodata is tens of MB per repository (IMPL E6 probes); these hold a handful of packages shaped like Rocky's:
 rocky-9 BaseOS for x86_64 and aarch64 (openssl with a superseded build, its libraries, bash for /bin/sh, a noarch
-package, a weak dependency) and rocky-8 AppStream with nodejs streams 18 (default) and 20 and a non-modular nodejs.
+package, a weak dependency) and rocky-8 AppStream with nodejs streams 18 (default) and 20 and a non-modular nodejs, and epel-9 with a package that
+needs rocky-9's glibc.
 """
 
 from __future__ import annotations
@@ -140,10 +141,14 @@ def _publish(out: Path, prefix: str, packages: list, modules: bytes = None) -> N
             _record(out, BASE + prefix + "repodata/" + path.name, path.read_bytes())
 
 
+EPEL9 = [{"name": "htop", "evr": "3.3.0-1.el9", "requires": ["libc.so.6()(64bit)"], "license": "GPL-2.0-or-later"}]
+
+
 def main(out: Path) -> None:
     for arch in ("x86_64", "aarch64"):
         _publish(out, "rocky-9/BaseOS/%s/os/" % arch, rocky9(arch))
     _publish(out, "rocky-8/AppStream/x86_64/os/", ROCKY8, NODE_MODULES)
+    _publish(out, "epel/9/Everything/x86_64/", EPEL9)
 
 
 if __name__ == "__main__":

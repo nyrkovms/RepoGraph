@@ -22,14 +22,15 @@ from app.ecosystems.base import (
 from app.ecosystems.rpm import client
 from app.ecosystems.rpm.coordinates import RpmCoordinates
 from app.ecosystems.rpm.environment import RpmEnvironment
+from app.ecosystems.rpm.profiles import namespaces_by_slug, pool_sources
 
 logger = logging.getLogger(__name__)
 _COORDINATES = RpmCoordinates()
 
 
 def _sources(request: ResolveRequest, distro: str, env: RpmEnvironment) -> list[RegistryConfig]:
-    mine = [r for r in request.profile.registries if r.config.get("namespace") == distro]
-    return [r for r in mine if r.slug in env.repos] if env.repos else mine
+    pool = pool_sources(request.profile, distro)
+    return [r for r in pool if r.slug in env.repos] if env.repos else pool
 
 
 def _depths(nodes: Sequence[Mapping[str, Any]], edges: Sequence[Mapping[str, Any]],
@@ -102,11 +103,14 @@ class RpmResolver:
                            "limit": "nodes", "value": request.max_nodes}
             return graph
         depths = _depths(nodes, edges, roots)
+        # A node belongs to the distro of the source it comes from (EPEL's htop on Rocky's glibc, Q25).
+        namespace = namespaces_by_slug(sources)
         ordered = sorted(nodes, key=lambda n: (depths[str(n["nevra"])] or 1_000, str(n["name"]), str(n["arch"])))
         ids = {str(n["nevra"]): f"n{i}" for i, n in enumerate(ordered, start=1)}
         for node in ordered:
             graph.nodes.append(ResolvedNode(
-                id=ids[str(node["nevra"])], ref=PackageRef("rpm", distro, str(node["name"])), version=str(node["evr"]),
+                id=ids[str(node["nevra"])], version=str(node["evr"]),
+                ref=PackageRef("rpm", namespace.get(str(node["repo"]), distro), str(node["name"])),
                 registry_slug=str(node["repo"]), depth=depths[str(node["nevra"])],
                 details={"arch": node["arch"], "nevra": node["nevra"]}))
         constraints = {r.ref.name: r.constraint for r in request.roots}
@@ -121,7 +125,8 @@ class RpmResolver:
                 details={"capability": edge["capability"], "kind": edge.get("kind")}))
         graph.details = {"modules": dict(answer.get("modules") or {}), "distro": distro, "arch": env.arch}
         # Packages of the transaction the catalog does not have yet: queued for it as `discovered`, off the loop.
-        refs = sorted({PackageRef("rpm", distro, str(n["name"])) for n in nodes}, key=lambda r: r.name)
+        refs = sorted({PackageRef("rpm", namespace.get(str(n["repo"]), distro), str(n["name"])) for n in nodes},
+                      key=lambda r: (r.namespace, r.name))
         unknown = [r for r in refs if not await catalog.versions(r, request.profile)]
         await asyncio.to_thread(_queue_discovered, [_COORDINATES.to_purl(r) for r in unknown])
         return graph

@@ -30,6 +30,8 @@ SOURCES = [
      {"namespace": "rocky-9", "vendor": "rocky", "arch": ["x86_64", "aarch64"], "releasever": "9"}),
     ("fixture-rocky-8-appstream", FIXTURES + "rocky-8/AppStream/$basearch/os/",
      {"namespace": "rocky-8", "vendor": "rocky", "arch": ["x86_64"], "releasever": "8", "modular": True}),
+    ("fixture-epel-9", FIXTURES + "epel/9/Everything/$basearch/",
+     {"namespace": "epel-9", "arch": ["x86_64"], "releasever": "9", "base_distro": ["rhel-9", "rocky-9"]}),
 ]
 OPENSSL = PackageRef("rpm", "rocky-9", "openssl")
 # The repositories exist only as recorded answers (rpm_worker/tests/fixture_repos.py): nothing to read live.
@@ -134,3 +136,13 @@ def test_resolve_follows_the_default_and_the_asked_module_stream(client) -> None
     assert ("rocky-8/nodejs", "1:20.16.0-1.module+el8.10.0+2") in {(n["name"], n["version"]) for n in streams["nodes"]}
     disabled = client.post("/api/v1/resolve", json={**body, "environment": {"disabled_modules": ["nodejs"]}}).json()
     assert ("rocky-8/nodejs", "1:10.24.0-1.el8") in {(n["name"], n["version"]) for n in disabled["nodes"]}
+
+
+def test_an_epel_package_resolves_on_its_base_distro(client) -> None:
+    asyncio.run(_sources())
+    response = client.post("/api/v1/resolve", json={
+        "ecosystem": "rpm", "roots": [{"purl": "pkg:rpm/fedora/htop?distro=epel-9"}], "options": {"timeout_s": 120}})
+    graph = response.json()
+    assert response.status_code == 200 and graph["error"] is None, graph
+    assert {(n["name"], n["version"]) for n in graph["nodes"]} == {
+        ("epel-9/htop", "3.3.0-1.el9"), ("rocky-9/glibc", "2.34-100.el9")}

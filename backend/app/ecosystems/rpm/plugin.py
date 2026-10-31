@@ -23,6 +23,7 @@ from app.ecosystems.rpm import client
 from app.ecosystems.rpm.adapters.repodata import RepodataAdapter
 from app.ecosystems.rpm.coordinates import RpmCoordinates, package_matches
 from app.ecosystems.rpm.environment import RpmEnvironment, dependency_applies, parse_environment
+from app.ecosystems.rpm.profiles import namespaces_by_slug, pool_sources
 from app.ecosystems.rpm.versions import RpmVersionScheme
 
 
@@ -74,7 +75,7 @@ class RpmPlugin:
         profile's sources of its distro, and the EVR of its newest providing build (§2.2: the worker knows the whole
         repositories). A capability named like a package it is provided by resolves to that package."""
         rpm_env = env if isinstance(env, RpmEnvironment) else parse_environment(env.as_dict())
-        registries = [r for r in profile.registries if _namespace(r) == dep.target.namespace]
+        registries = pool_sources(profile, dep.target.namespace)            # EPEL's dependencies are on its base too
         if not registries:
             return None
         providers = await client.whatprovides(registries, rpm_env.arch, dep.raw_spec or dep.target.name)
@@ -83,7 +84,8 @@ class RpmPlugin:
         names = [str(p["name"]) for p in providers]
         chosen = dep.target.name if dep.target.name in names else sorted(set(names))[0]
         newest = next(p for p in providers if p["name"] == chosen)          # the worker answers newest first
-        return PackageRef("rpm", dep.target.namespace, chosen), str(newest["evr"])
+        namespace = namespaces_by_slug(registries).get(str(newest.get("repo")), dep.target.namespace)
+        return PackageRef("rpm", namespace, chosen), str(newest["evr"])
 
     def resolver(self) -> Resolver:
         from app.ecosystems.rpm.resolver import RESOLVER   # K6

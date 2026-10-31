@@ -95,3 +95,25 @@ def test_a_distro_without_sources_or_roots_of_two_distros(worker) -> None:
                                   ResolveRoot(PackageRef("rpm", "epel-8", "b"), "*")],
                            environment=parse_environment({}), profile=PROFILE)
     assert asyncio.run(resolver.RESOLVER.resolve(mixed, None)).error["code"] == "invalid_request"  # type: ignore[arg-type,index]
+
+
+def test_an_epel_package_resolves_on_its_base_distro_and_nodes_keep_their_source_s_distro(worker) -> None:
+    sent, answer, _ = worker
+    epel = RegistryConfig(id="id-epel-9", slug="epel-9", ecosystem="rpm", protocol="rpm-repodata",
+                          base_url="https://mirror/epel/9/$basearch/", priority=40, routing=None, auth_type="none",
+                          credentials_ref=None,
+                          config={"namespace": "epel-9", "arch": ["x86_64"], "base_distro": ["rhel-9", "rocky-9"]})
+    profile = SourceProfile(ecosystem="rpm", slug="default", registries=[
+        _registry("rocky-9-baseos", "rocky-9"), _registry("alma-9-baseos", "alma-9"), epel])
+    answer["value"] = {"nodes": [
+        {"nevra": "htop-3.3.0-1.el9.x86_64", "name": "htop", "evr": "3.3.0-1.el9", "arch": "x86_64", "repo": "epel-9"},
+        {"nevra": "glibc-2.34-100.el9.x86_64", "name": "glibc", "evr": "2.34-100.el9", "arch": "x86_64",
+         "repo": "rocky-9-baseos"}],
+        "edges": [{"from": "htop-3.3.0-1.el9.x86_64", "to": "glibc-2.34-100.el9.x86_64", "capability": "libc.so.6()(64bit)",
+                   "kind": "requires"}], "roots": [{"spec": "htop", "nevra": "htop-3.3.0-1.el9.x86_64"}], "modules": {}}
+    request = ResolveRequest(roots=[ResolveRoot(ref=PackageRef("rpm", "epel-9", "htop"), constraint="*")],
+                             environment=parse_environment({}), profile=profile)
+    graph = asyncio.run(resolver.RESOLVER.resolve(request, Catalog()))  # type: ignore[arg-type]
+    # rhel-9 is not in the profile: the first base distro it has (rocky-9) joins the pool, alma-9 does not.
+    assert [s["slug"] for s in sent[-1][1][0]["sources"]] == ["epel-9", "rocky-9-baseos"]
+    assert [(n.ref.namespace, n.ref.name) for n in graph.nodes] == [("epel-9", "htop"), ("rocky-9", "glibc")]
