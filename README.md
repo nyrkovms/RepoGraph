@@ -1,6 +1,6 @@
 # PackageHub MVP
 
-PyPI-first MVP: каталог метаданных пакетов, demand-driven sync и dependency resolve. Экосистемы каталога: PyPI, npm, crates.io, Go, NuGet и Maven.
+PyPI-first MVP: каталог метаданных пакетов, demand-driven sync и dependency resolve. Экосистемы каталога: PyPI, npm, crates.io, Go, NuGet, Maven и RPM.
 
 ## Prerequisites
 
@@ -235,6 +235,59 @@ curl -H "Authorization: Bearer phub_admin_dev" -H 'Content-Type: application/jso
 `/package/maven/<groupId>:<artifactId>`: purl, `groupId` и `artifactId`, лицензия, версии с датами, баннер переезда артефакта со ссылкой на
 новое место, упаковка версии (`jar`, `pom`, `aar`), если API её отдаёт. Окружение дерева — выбор scopes (`compile` и `runtime` по умолчанию),
 у ребра показаны его scope (`test` и `provided`; остальные, когда API их отдаёт), exclusions, classifier и тип. Ссылки из дайджеста ведут на страницу артефакта.
+
+RPM: слаг экосистемы `rpm`, тип purl `rpm` (`pkg:rpm/rocky/openssl?distro=rocky-9`: `vendor` — издатель дистрибутива, qualifier `distro` — namespace пакета).
+Namespace — дистрибутив и релиз (`rocky-9`, `rhel-9`), он часть идентичности: `openssl` в `rocky-9` и в `rhel-9` — два пакета. В путях,
+в `name` и в поиске пакет пишется `<namespace>/<имя>` (`rocky-9/openssl`), регистр имени значим. Версия — EVR (`1:3.0.7-27.el9`, эпоха 0 не
+пишется), сравнение как в `rpm`; сборка, у которой в источнике есть более новая сборка той же архитектуры, получает `status: "superseded"`
+(она остаётся в каталоге, события для неё нет), `release_date` — время сборки, лицензия — тег License пакета, файлы версии — её `.rpm` по
+архитектурам (`artifacts`). Дерево зависимостей показывает не пакеты, а возможности (capability: `libssl.so.3()(64bit)`, `/bin/sh`), которые версия
+требует; пакет, который возможность предоставляет, — в `resolved_name`. Окружение дерева — `arch` (`x86_64` по умолчанию, ещё `aarch64`,
+`ppc64le`, `s390x`), слабые зависимости (`recommends`, `suggests`, `supplements`, `enhances`) входят при `include_optional=true`:
+
+```bash
+curl http://localhost:8000/api/v1/packages/rpm/rocky-9/openssl/-/                                         # карточка: purl, лицензия, источники
+curl http://localhost:8000/api/v1/packages/rpm/rocky-9/openssl/-/versions                                 # EVR с датами, superseded помечены
+curl 'http://localhost:8000/api/v1/packages/rpm/rocky-9/openssl/-/versions/1%3A3.0.7-27.el9/dependencies?arch=aarch64&include_optional=true'
+curl 'http://localhost:8000/api/v1/search?q=rocky-9/openssl&ecosystem=rpm'                                # поиск distro/name
+curl -i 'http://localhost:8000/api/v1/purl/pkg:rpm/rocky/openssl?distro=rocky-9'                          # 307 на каноническую адресацию
+```
+
+Для resolve укажите `"ecosystem": "rpm"`; `constraint` корня — флаг RPM (`>= 3.0`, `= 1:3.0.7-27.el9`) или `*`. Окружение — `distro`, `arch`,
+`repos` (какие репозитории дистрибутива использовать), `weak_deps`, `module_streams` (`{"nodejs": "18"}`), `disabled_modules` и `module_install`
+(`["nodejs:18/common"]`). Задачу решает libsolv в rpm-worker (стратегия `libsolv`, ответ `emulates: "dnf 4"`), модульность учитывается как в
+`dnf`: множество пакетов в ответе равно `dnf install --assumeno --installroot` с пустым корнем. Активные потоки модулей приходят в `details.modules`
+ответа, ошибки — `unsolvable`, `module_conflict` и `not_found`, причины — в `error.problems[]`. Пакеты, которые resolve нашёл и которых нет в каталоге,
+добавляются в фоне как `discovered`:
+
+```bash
+curl -H 'Content-Type: application/json' http://localhost:8000/api/v1/resolve \
+  -d '{"ecosystem": "rpm", "roots": [{"purl": "pkg:rpm/rocky/nodejs?distro=rocky-8", "constraint": "*"}], "environment": {"arch": "x86_64", "module_streams": {"nodejs": "18"}}}'
+```
+
+Стартового источника у RPM нет: миграция создаёт только пустой профиль `default`, репозитории подключают сами. Готовый набор — Rocky Linux 8 и 9
+(BaseOS, AppStream, CRB), AlmaLinux 9, EPEL 9 и Fedora 41 — лежит в `backend/registries.rpm.yaml`; один источник — один репозиторий одного релиза
+(`config.namespace`, `config.arch`, `$basearch` и `$releasever` в `base_url`, `modular: true` у AppStream):
+
+```bash
+docker compose run --rm api python -m app.cli registries import registries.rpm.yaml
+```
+
+Репозитории читает rpm-worker, отдельный контейнер (Rocky Linux 9 с libsolv и libmodulemd), он слушает очередь Celery `rpm`; без него пакеты RPM не
+читаются и не решаются. Закрытые репозитории (RHEL) подключаются с `auth_type: tls_client_cert` (`credentials_ref` — имя пары `<имя>.crt` и
+`<имя>.key` в каталоге секретов, он монтируется в rpm-worker: `PACKAGEHUB_SECRETS_DIR`, по умолчанию `./secrets`) или `basic` (файл со строкой
+`user:password`). Ежедневное обновление rpm-worker обновляет метаданные каждого репозитория (условный запрос `repomd.xml`) и сравнивает сборки
+известных пакетов. Добавить пакет в каталог можно по purl через admin API (с `distro`, namespace входит в идентичность):
+
+```bash
+curl -H "Authorization: Bearer phub_admin_dev" -H 'Content-Type: application/json' http://localhost:8000/api/v1/admin/packages \
+  -d '{"purls": ["pkg:rpm/rocky/openssl?distro=rocky-9"]}'
+```
+
+В Web UI RPM выбирается в переключателе экосистем на странице поиска (ввод `distro/name`, например `rocky-9/openssl`); страница пакета —
+`/package/rpm/<namespace>/<имя>`: purl, дистрибутив и имя, лицензия, версии с датами и архитектурами их сборок, вытесненные сборки помечены
+`superseded`. Окружение дерева — выбор архитектуры (`x86_64` по умолчанию), у каждого ребра показаны возможность, её флаг версии, вид зависимости
+(если не `requires`) и ссылка на пакет, который её предоставляет, с его версией. Ссылки из дайджеста ведут на страницу пакета.
 
 ## Test stand
 
