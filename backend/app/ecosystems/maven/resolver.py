@@ -162,6 +162,7 @@ class _Resolve:
         self.relocated: dict[GA, GA] = {}
         self.scopes: dict[GA, str] = {}
         self.poms: dict[tuple[str, str, str], bytes] = {}
+        self.missing_boms: list[str] = []
         self.root_list = list(request.roots) + [
             ResolveRoot(ref=PackageRef("maven", plugin_id, f"{plugin_id}.gradle.plugin"), constraint=version)
             for plugin_id, version in self.env.plugins]
@@ -320,6 +321,7 @@ class _Resolve:
 
     async def walk_gradle(self) -> None:
         await self.import_managed()
+        self.missing_boms = list(self.unresolvable)   # every pass starts over from what the import reported
         for root in self.root_list:
             self.roots.setdefault(_ga(root.ref), root)
         selected: dict[GA, CatalogVersion] = {}
@@ -360,7 +362,7 @@ class _Resolve:
     ) -> tuple[dict[GA, _Chosen], dict[GA, list[str]], dict[GA, frozenset[frozenset[GA]]]]:
         """One walk with the versions chosen so far: what each reached module asks for, and the exclusions of every
         path to a module (a dependency is excluded only when every path's exclusions exclude it)."""
-        self.errors, self.unresolvable = {}, []
+        self.errors, self.unresolvable = {}, list(self.missing_boms)
         chosen: dict[GA, _Chosen] = {}
         requests: dict[GA, list[str]] = {}
         reached: dict[GA, set[frozenset[GA]]] = {}
