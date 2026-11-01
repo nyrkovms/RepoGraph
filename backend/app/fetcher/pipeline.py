@@ -802,8 +802,10 @@ async def _upsert_vulnerabilities(db: AsyncSession, package_id, vulnerabilities)
 # --- lazy dependencies of one version -------------------------------------------------------------------
 
 
-async def ensure_version_dependencies(db: AsyncSession, package: Package, version_row: PackageVersion) -> None:
-    """Load the canonical dependencies of a version that only has its row (lazy, SPEC §7) from its metadata source."""
+async def ensure_version_dependencies(db: AsyncSession, package: Package, version_row: PackageVersion,
+                                      profile: SourceProfile | None = None) -> None:
+    """Load the canonical dependencies of a version that only has its row (lazy, SPEC §7) from its metadata source.
+    Parent POMs and BOMs come from the sources of `profile`, the reader's (the ecosystem's default when not given)."""
     if version_row.dependencies_state != DependenciesState.pending:
         return
 
@@ -817,7 +819,7 @@ async def ensure_version_dependencies(db: AsyncSession, package: Package, versio
     version_row.metadata_registry_id = registry_id
     adapter = plugin.adapter(sources.registry_config(registry))
     loaded = await adapter.fetch_version_dependencies(ref, version_row.version,
-                                                      await _lookup(db, plugin, [adapter.registry]))
+                                                      await _lookup(db, plugin, [adapter.registry], profile))
     await store_documents(db, registry_id, loaded.documents)
 
     features = dict(version_row.features or {})
@@ -862,7 +864,8 @@ def dependency_from_row(dep: Dependency) -> NormalizedDependency:
 
 
 async def source_dependencies(
-    db: AsyncSession, package: Package, version_row: PackageVersion, registry_id: str
+    db: AsyncSession, package: Package, version_row: PackageVersion, registry_id: str,
+    profile: SourceProfile | None = None,
 ) -> tuple[list[Dependency] | None, bool]:
     """The version's dependencies as `registry_id` publishes them (SPEC §6.5, §9.1), and whether anything was loaded.
 
@@ -870,11 +873,12 @@ async def source_dependencies(
     version from it: its digest is kept in version_sources, and where it differs from the canonical digest its own
     set is stored as a variant (torch 2.9.1 on the PyTorch CPU index has no nvidia-* requirements); no metadata
     makes them unknown. The source row is locked only while the source is read, so two readers do not both write
-    the variant and plain reads do not queue behind each other.
+    the variant and plain reads do not queue behind each other. Whatever is loaded looks up parent documents in the
+    reader's `profile`.
     None = unknown.
     """
     version_id, before = version_row.id, version_row.dependencies_state
-    await ensure_version_dependencies(db, package, version_row)
+    await ensure_version_dependencies(db, package, version_row, profile)
     changed = version_row.dependencies_state != before
     if registry_id != str(version_row.metadata_registry_id):
         source_key = (VersionSource.version_id == version_id, VersionSource.registry_id == uuid.UUID(registry_id))
@@ -887,7 +891,8 @@ async def source_dependencies(
                 source = await db.scalar(select(VersionSource).where(*source_key).with_for_update())
                 variant = await _variant_rows(db, version_id, registry_id)
                 if source is not None and _needs_reading(source.metadata_digest, canonical_digest, variant):
-                    if not await _load_source_dependencies(db, package, version_row, source, canonical_digest):
+                    if not await _load_source_dependencies(db, package, version_row, source, canonical_digest,
+                                                           profile):
                         return None, changed   # the source could not be asked (degraded): unknown for now
                     changed = True
                     variant = await _variant_rows(db, version_id, registry_id)
@@ -936,7 +941,8 @@ async def _canonical_digest(db: AsyncSession, version_row: PackageVersion) -> by
 
 
 async def _load_source_dependencies(
-    db: AsyncSession, package: Package, version_row: PackageVersion, source: VersionSource, canonical_digest: bytes | None
+    db: AsyncSession, package: Package, version_row: PackageVersion, source: VersionSource, canonical_digest: bytes | None,
+    profile: SourceProfile | None = None,
 ) -> bool:
     """Read the version's metadata from `source`; False if the source cannot be asked now (disabled, degraded)."""
     registry = await db.get(Registry, source.registry_id)
@@ -946,7 +952,7 @@ async def _load_source_dependencies(
     ref = PackageRef(ecosystem=package.ecosystem.value, namespace=package.namespace or "", name=package.normalized_name)
     adapter = plugin.adapter(sources.registry_config(registry))
     loaded = await adapter.fetch_version_dependencies(ref, version_row.version,
-                                                      await _lookup(db, plugin, [adapter.registry]))
+                                                      await _lookup(db, plugin, [adapter.registry], profile))
     await store_documents(db, registry.id, loaded.documents)
     await _replace_dependency_rows(db, version_row.id, str(registry.id), [])
     if not loaded.available:
