@@ -184,7 +184,7 @@ async def resolve_dependencies(db: AsyncSession, payload: ResolveRequest) -> Res
 
 
 async def _run(db: AsyncSession, plugin: EcosystemPlugin, request: ContractRequest) -> tuple[ResolveGraph, DbCatalog]:
-    catalog = DbCatalog(db, plugin)
+    catalog = DbCatalog(db, plugin, request.profile)
     resolver = plugin.resolver()
     try:
         graph = await asyncio.wait_for(resolver.resolve(request, catalog), request.timeout_s + _TIMEOUT_MARGIN_S)

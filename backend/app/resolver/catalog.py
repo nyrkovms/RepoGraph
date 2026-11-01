@@ -41,9 +41,10 @@ def _features(raw: object) -> dict[str, list[str]] | None:
 
 
 class DbCatalog:
-    def __init__(self, db: AsyncSession, plugin: EcosystemPlugin) -> None:
+    def __init__(self, db: AsyncSession, plugin: EcosystemPlugin, profile: SourceProfile | None = None) -> None:
         self.db = db
         self.plugin = plugin
+        self.profile = profile   # the resolve's: lazy loads look up parent POMs and BOMs in it
         self.synced_at: dict[uuid.UUID, datetime] = {}   # package id -> synced_at when read
         self.failed = False   # a load failed and was reported as "dependencies unknown": the answer is not cached
 
@@ -115,7 +116,7 @@ class DbCatalog:
         if package is None or version_row is None:
             return None
         try:
-            rows, changed = await source_dependencies(self.db, package, version_row, registry_id)
+            rows, changed = await source_dependencies(self.db, package, version_row, registry_id, self.profile)
         except Exception:  # noqa: BLE001 - a partial graph with "dependencies unknown" beats failing the resolve
             logger.warning("Dependencies of %s %s could not be loaded", ref.name, version, exc_info=True)
             self.failed = True

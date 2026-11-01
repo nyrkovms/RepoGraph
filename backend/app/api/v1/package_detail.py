@@ -622,7 +622,7 @@ class _ProfileView:
         registry_id = chosen.id if chosen is not None else str(version_row.metadata_registry_id)
         try:
             async with self.db.begin_nested():
-                rows, _ = await source_dependencies(self.db, package, version_row, registry_id)
+                rows, _ = await source_dependencies(self.db, package, version_row, registry_id, self.profile)
         except Exception:  # noqa: BLE001 - one source failing leaves that node unknown, not the whole tree a 500
             logger.warning("Dependencies of %s %s could not be loaded", package.normalized_name, version_row.version,
                            exc_info=True)
