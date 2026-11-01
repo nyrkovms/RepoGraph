@@ -20,7 +20,7 @@ from app.models.package_event import PackageEvent
 from app.models.run import Run
 from app.models.version import PackageVersion
 from app.ecosystems.maven.adapters import maven2
-from app.tasks import daily_update, maven_dates
+from app.tasks import daily_update, release_dates
 
 SPRING_CORE = PackageRef("maven", "org.springframework", "spring-core")
 OLD = datetime(2001, 1, 1, tzinfo=UTC)
@@ -64,7 +64,7 @@ def test_an_artifact_is_read_from_maven_central_and_followed_by_its_metadata_eta
 
     # As after a first sync (the database may keep dates and marks from an earlier run of this test).
     asyncio.run(stamp(None, *(v.id for v in versions.values() if v.id != latest.id), fresh=True))
-    counts = asyncio.run(maven_dates._run(limit=5))
+    counts = asyncio.run(release_dates._run(limit=5))
     assert counts["dated"] == 5 and counts["failed"] == 0, counts
 
     # A source that fails (down, or refusing HEAD) marks those versions; the next run takes others.
@@ -72,16 +72,16 @@ def test_an_artifact_is_read_from_maven_central_and_followed_by_its_metadata_eta
         raise httpx.ConnectError("repository down")
 
     monkeypatch.setattr(maven2.Maven2Adapter, "release_date", down)
-    assert asyncio.run(maven_dates._run(limit=3))["failed"] == 3
+    assert asyncio.run(release_dates._run(limit=3))["failed"] == 3
     monkeypatch.undo()
-    assert asyncio.run(maven_dates._run(limit=3)) == {"status": "completed", "operation": "maven_dates", "dated": 3,
+    assert asyncio.run(release_dates._run(limit=3)) == {"status": "completed", "operation": "release_dates", "dated": 3,
                                                       "undated": 0, "failed": 0}
     asyncio.run(stamp(OLD, versions["6.1.14"].id))
     _, again = asyncio.run(sync())
     assert again["6.1.14"].release_date == OLD
     assert sum(1 for v in again.values() if v.release_date is not None) >= 9
     # The sync reads no metadata of the lazy versions: what was stored on them (the failure marks) stays.
-    assert sum(1 for v in again.values() if maven_dates.FAILED in (v.raw_metadata or {})) == 3
+    assert sum(1 for v in again.values() if release_dates.FAILED in (v.raw_metadata or {})) == 3
 
     async def no_wait(seconds: float) -> None:
         return None

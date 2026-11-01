@@ -310,7 +310,7 @@ def test_only_the_latest_version_is_dated_at_once_from_its_pom(serve) -> None:
     package = _fetch(SPRING)
     assert package is not None
     assert _version(package, SPRING_LATEST).release_date == datetime(2026, 10, 22, 7, 46, 54, tzinfo=UTC)
-    # The others are dated in the background (tasks/maven_dates.py): a HEAD each would make a lazy fetch slow.
+    # The others are dated in the background (tasks/release_dates.py): a HEAD each would make a lazy fetch slow.
     assert {v.version for v in package.versions if v.release_date is not None} == {SPRING_LATEST}
     assert len(package.versions) == 338
 

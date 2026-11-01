@@ -17,13 +17,13 @@ from app.db import loop_local_session
 from app.ecosystems.base import NormalizedDependency, NormalizedPackage, NormalizedVersion, PackageRef
 from app.ecosystems.go import changes
 from app.fetcher import pipeline
-from app.models.enums import PackageOrigin
+from app.models.enums import Ecosystem, PackageOrigin
 from app.models.package_event import PackageEvent
 from app.models.registry import Registry
 from app.models.run import Run
 from app.models.sync_state import SyncState
 from app.models.version import PackageVersion
-from app.tasks import daily_update
+from app.tasks import daily_update, release_dates
 
 GIN = PackageRef("go", "", "github.com/gin-gonic/gin")
 
@@ -64,8 +64,17 @@ def test_a_module_is_read_from_the_proxy_then_followed_through_the_index(monkeyp
 
     package, versions = asyncio.run(sync())
     assert package.name == "github.com/gin-gonic/gin" and len(versions) > 20
-    assert all(v.release_date for v in versions), "every version is dated from its .info"
     latest = max(versions, key=lambda v: v.sort_key)
+    assert latest.release_date is not None                          # from `@latest`, at once
+
+    # The others are dated in the background from their `.info` (#43); a sync keeps the dates already stored.
+    async def dates() -> dict[str, datetime | None]:
+        async with loop_local_session() as db:
+            rows = await db.scalars(select(PackageVersion).where(PackageVersion.package_id == package.id))
+            return {row.version: row.release_date for row in rows}
+
+    asyncio.run(release_dates._run(limit=1000, ecosystems=(Ecosystem.go,)))
+    assert all(asyncio.run(dates()).values()), "every version is dated from its .info"
     assert latest.engines and "go" in latest.engines
 
     async def no_wait(seconds: float) -> None:
