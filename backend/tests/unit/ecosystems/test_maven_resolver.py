@@ -133,6 +133,9 @@ def test_a_bom_among_the_managed_entries_is_imported_in_place() -> None:
     assert _set(graph) == {("app", "1"), ("b", "3.0"), ("c", "2.0")}
     graph = _resolve(catalog, ("app", "1"), managed=[("bom", "6", "bom")])
     assert graph.warnings == [{"code": "unresolvable", "message": "BOM g:bom:6 not found"}]
+    # Regression (#35): the gradle strategy's passes kept it too.
+    graph = _resolve(catalog, ("app", "1"), managed=[("bom", "6", "bom")], strategy="gradle")
+    assert graph.warnings == [{"code": "unresolvable", "message": "BOM g:bom:6 not found"}]
 
 
 def test_a_root_asked_for_with_a_star_takes_the_highest_release() -> None:
