@@ -81,6 +81,10 @@ def test_purl_redirects_to_the_canonical_path(client: TestClient) -> None:
 
     assert client.get("/api/v1/purl/pkg:pypi/flask").json()["purl"] == "pkg:pypi/flask"
 
+    # Regression (#41): qualifiers written as is arrive as the query string; rpm needs `distro` from it.
+    rpm = client.get("/api/v1/purl/pkg:rpm/rocky/bash?distro=rocky-9", follow_redirects=False)
+    assert rpm.status_code == 307 and rpm.headers["location"] == "/api/v1/packages/rpm/rocky-9/bash/-/"
+
 
 @pytest.mark.parametrize(
     ("path", "status"),
