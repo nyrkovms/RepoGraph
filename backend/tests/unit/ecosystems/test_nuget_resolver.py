@@ -157,3 +157,56 @@ def test_a_version_with_only_framework_groups_is_reported() -> None:
     catalog = Catalog({"a": [_v("1.0.0")], "old": [_v("1.0.0")]}, {"a@1.0.0": deps})
     graph = _resolve(catalog, ("a", "1.0.0"))
     assert _set(graph) == {("a", "1.0.0")} and [w["code"] for w in graph.warnings] == ["no_framework_group"]
+
+
+def _warnings(graph: ResolveGraph) -> list[tuple[str, str]]:
+    return [(w["code"], w["message"]) for w in graph.warnings]
+
+
+def test_restore_warns_about_lower_bounds_and_ranges_a_direct_reference_exceeds() -> None:
+    """Regression (#30): the warnings `dotnet restore` (SDK 8) gives on the same feed, messages as it writes them."""
+    catalog = Catalog({"a": [_v("1.0.0")], "b": [_v("1.0.0"), _v("2.1.0")], "c": [_v("1.0.1"), _v("1.1.0")],
+                       "e": [_v("1.0.0"), _v("1.0.1")], "f": [_v("1.0.0")], "g": [_v("1.0.0")],
+                       "h": [_v("1.0.1"), _v("1.2.0")], "p": [_v("1.0.0")], "m": [_v("1.0.0")],
+                       "n": [_v("1.5.0"), _v("2.5.0")], "x": [_v("1.0.0")], "y": [_v("1.0.0")]},
+                      {"a@1.0.0": _deps(("b", "[1.0.0, 2.0.0)")), "f@1.0.0": _deps(("h", "1.0.0")),
+                       "g@1.0.0": _deps(("h", "1.2.0")), "p@1.0.0": _deps(("m", "1.0.0")),
+                       "m@1.0.0": _deps(("n", "[1.0.0, 2.0.0)")), "x@1.0.0": _deps(("e", "(1.0.0, )")),
+                       "y@1.0.0": _deps(("e", ""))})
+    assert _warnings(_resolve(catalog, ("a", "1.0.0"), ("b", "2.1.0"))) == [(
+        "NU1608", "Detected package version outside of dependency constraint: a 1.0.0 requires b (>= 1.0.0 && < 2.0.0) "
+                  "but version b 2.1.0 was resolved.")]
+    assert _warnings(_resolve(catalog, ("p", "1.0.0"), ("n", "2.5.0")))[0][0] == "NU1608"   # two levels down
+    assert _warnings(_resolve(catalog, ("c", "1.0.0"))) == [(
+        "NU1603", "the project depends on c (>= 1.0.0) but c 1.0.0 was not found. An approximate best match of c 1.0.1 "
+                  "was resolved.")]
+    assert _warnings(_resolve(catalog, ("c", "1.0.*"))) == []                                  # floating
+    # The edge counts as walked, though h 1.0.1 loses to its cousin 1.2.0.
+    graph = _resolve(catalog, ("f", "1.0.0"), ("g", "1.0.0"))
+    assert ("h", "1.2.0") in _set(graph) and _warnings(graph) == [(
+        "NU1603", "f 1.0.0 depends on h (>= 1.0.0) but h 1.0.0 was not found. An approximate best match of h 1.0.1 "
+                  "was resolved.")]
+    assert _warnings(_resolve(catalog, ("e", "(1.0.0, )"))) == [(
+        "NU1604", "Project dependency e (> 1.0.0) does not contain an inclusive lower bound. Include a lower bound in "
+                  "the dependency version to ensure consistent restore results.")]
+    assert _warnings(_resolve(catalog, ("x", "1.0.0"))) == [(
+        "NU1602", "x 1.0.0 does not provide an inclusive lower bound for dependency e (> 1.0.0). An approximate best "
+                  "match of e 1.0.1 was resolved.")]
+    assert _warnings(_resolve(catalog, ("y", "1.0.0"))) == [(
+        "NU1602", "y 1.0.0 does not provide an inclusive lower bound for dependency e. An approximate best match of "
+                  "e 1.0.0 was resolved.")]
+
+
+def test_an_eclipsed_edge_gives_no_lower_bound_warning_and_an_exact_range_prints_as_equal() -> None:
+    catalog = Catalog({"a": [_v("1.0.0")], "b": [_v("1.0.1"), _v("2.0.0")], "u": [_v("1.0.0")],
+                       "v": [_v("1.0.0"), _v("2.0.0")], "q": [_v("1.0.0")], "r": [_v("1.0.0")],
+                       "s": [_v("1.0.0"), _v("2.0.0")], "t": [_v("1.0.1")]},
+                      {"a@1.0.0": _deps(("b", "1.0.0")), "u@1.0.0": _deps(("v", "[1.0.0]")),
+                       "q@1.0.0": _deps(("s", "1.0.0")), "r@1.0.0": _deps(("s", "2.0.0")),
+                       "s@1.0.0": _deps(("t", "1.0.0"))})
+    assert _warnings(_resolve(catalog, ("a", "1.0.0"), ("b", "2.0.0"))) == []
+    assert _warnings(_resolve(catalog, ("u", "1.0.0"), ("v", "2.0.0"))) == [(
+        "NU1608", "Detected package version outside of dependency constraint: u 1.0.0 requires v (= 1.0.0) but version "
+                  "v 2.0.0 was resolved.")]
+    # Below a version that later loses (s 1.0.0 to 2.0.0), as restore does.
+    assert _warnings(_resolve(catalog, ("q", "1.0.0"), ("r", "1.0.0")))[0][0] == "NU1603"
