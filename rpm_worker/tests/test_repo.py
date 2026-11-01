@@ -84,6 +84,18 @@ def test_fetch_package_lists_builds_per_arch_and_noarch_once(served) -> None:
     assert worker.fetch_package(_source(server.url), "nothing") is None
 
 
+def test_fetch_package_describes_only_the_builds_of_its_name(served, monkeypatch) -> None:
+    """Regression (#42): describing the whole repository for one name took ~10 s on Rocky's BaseOS."""
+    from rpm_worker import pools
+    server, _ = served
+    described = []
+    real = pools.describe
+    monkeypatch.setattr(pools, "describe", lambda s: described.append(s.name) or real(s))
+    # One build per arch of the asked package; the rest of the repository is not described.
+    assert worker.fetch_package(_source(server.url, arch=["x86_64", "aarch64"]), "openssl") is not None
+    assert described == ["openssl", "openssl"]
+
+
 def test_detect_changes_reports_changed_and_missing_packages(served) -> None:
     server, root = served
     source = _source(server.url)
