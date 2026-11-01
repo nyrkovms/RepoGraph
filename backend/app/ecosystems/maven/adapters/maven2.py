@@ -6,7 +6,7 @@ A package is `<group path>/<artifact>/maven-metadata.xml` (its versions in publi
 repository, no feed of changes and no checksums in the metadata, and only the POM's `Last-Modified` dates a version:
 the revision of a package is the ETag of its metadata (else `lastUpdated`, else a hash of the versions), and checksums
 and sizes stay empty (§7.1). Only the latest version is dated at once, from the `Last-Modified` of the POM read anyway;
-the others are dated in the background (`release_date`, tasks/maven_dates.py) like the crates.io API fields (Q22):
+the others are dated in the background (`release_date`, tasks/release_dates.py) like the crates.io API fields (Q22):
 a HEAD for each of hundreds of versions would make every lazy fetch during a resolve take minutes.
 
 The dependencies of the latest version are read at once, through its effective model (parents and BOMs, §7.4), and

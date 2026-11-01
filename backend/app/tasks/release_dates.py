@@ -1,4 +1,4 @@
-"""Release dates of Maven versions in the background (SPEC-MULTI-ECOSYSTEM.md §7.1, like the crates.io API fields,
+"""Release dates of versions in the background (SPEC-MULTI-ECOSYSTEM.md §7.1, like the crates.io API fields,
 Q22).
 
 A Maven repository dates a version only by the `Last-Modified` of its POM: one HEAD per version. A fetch dates just the
@@ -80,9 +80,9 @@ async def _run(limit: int) -> dict[str, object]:
         await asyncio.gather(*(date(version, package, sources[version.id]) for version, package in rows
                                if sources[version.id] is not None))
         await db.commit()
-    return {"status": "completed", "operation": "maven_dates", **counts}
+    return {"status": "completed", "operation": "release_dates", **counts}
 
 
-@celery_app.task(name="app.tasks.maven_dates.fill_maven_release_dates")
-def fill_maven_release_dates(limit: int | None = None) -> dict[str, object]:
-    return asyncio.run(_run(limit or get_settings().maven_dates_batch))
+@celery_app.task(name="app.tasks.release_dates.fill_release_dates")
+def fill_release_dates(limit: int | None = None) -> dict[str, object]:
+    return asyncio.run(_run(limit or get_settings().release_dates_batch))
