@@ -605,6 +605,8 @@ class _ProfileView:
     unknown: set[object] = field(default_factory=set)   # versions whose dependencies are unknown
     plugin_env: Environment | None = None                 # npm, crates: the plugin's rules instead of PEP 508 markers
     plugin: EcosystemPlugin | None = None                 # with plugin_env: decides which dependencies apply
+    # RPM: capability -> (provider package id, build version id) for this view's arch and profile
+    providers: dict[tuple[str, str], tuple[object, object | None] | None] = field(default_factory=dict)
 
     async def registries(self, package: Package) -> list[RegistryConfig]:
         if package.id not in self._registries:
@@ -707,14 +709,17 @@ async def _build_tree_for_version(
         cycle = False
         dependencies_unknown = False
 
-        if not dep.resolved_package_id:
-            await _ensure_dependency_resolved(db, dep, fetcher, view)
-        child_package = (
-            await db.scalar(select(Package).where(Package.id == dep.resolved_package_id)) if dep.resolved_package_id else None
-        )
+        linked: tuple[object, object | None] | None
+        if dep.dependency_ecosystem.value == "rpm" and view.plugin_env is not None:
+            linked = await _rpm_provider(db, dep, fetcher, view)
+        else:
+            if not dep.resolved_package_id:
+                await _ensure_dependency_resolved(db, dep, fetcher)
+            linked = (dep.resolved_package_id, dep.resolved_version_id) if dep.resolved_package_id else None
+        child_package = await db.scalar(select(Package).where(Package.id == linked[0])) if linked else None
         # An RPM constraint is on the capability (`python(abi) = 3.9`), not on the provider's versions.
         constraint = None if dep.dependency_ecosystem.value == "rpm" else dep.version_constraint
-        resolved_version_id = await view.pick(child_package, constraint, dep.resolved_version_id) if child_package else None
+        resolved_version_id = await view.pick(child_package, constraint, linked[1]) if child_package and linked else None
 
         if child_package and resolved_version_id:
             resolved = await db.scalar(select(PackageVersion).where(PackageVersion.id == resolved_version_id))
@@ -811,24 +816,31 @@ def _dependency_display(dep: Dependency) -> str:
         return dep.dependency_name
 
 
-async def _ensure_dependency_resolved(db: AsyncSession, dep: Dependency, fetcher: LazyFetcher,
-                                      view: _ProfileView | None = None) -> None:
-    ref = _dependency_ref(dep)
-    if ref.ecosystem == "rpm" and view is not None and view.plugin is not None and view.plugin_env is not None:
-        # An RPM dependency names a capability: rpm-worker knows which package (and build) provides it (SPEC §2.2).
-        find = getattr(view.plugin, "provider", None)
+async def _rpm_provider(db: AsyncSession, dep: Dependency, fetcher: LazyFetcher,
+                        view: _ProfileView) -> tuple[object, object | None] | None:
+    """An RPM dependency names a capability: rpm-worker knows which package (and build) provides it in the view's
+    arch and profile (SPEC §2.2). Asked per tree and kept for it only: the catalog row is shared by every arch and
+    profile, and the newest providing build changes with the repositories. None: no provider."""
+    find = getattr(view.plugin, "provider", None)
+    if find is None or view.plugin_env is None:
+        return None
+    key = (dep.dependency_namespace or "", dep.raw_spec or dep.dependency_name)
+    if key not in view.providers:
+        view.providers[key] = None
         try:
-            found = await find(dependency_from_row(dep), view.plugin_env, view.profile) if find else None
+            found = await find(dependency_from_row(dep), view.plugin_env, view.profile)
         except Exception:  # noqa: BLE001 - the worker or a source failing leaves the edge unresolved, not the tree
             logger.warning("No provider for %s", dep.dependency_name, exc_info=True)
-            return
+            return None
         provider = await fetcher.ensure_package(found[0]) if found is not None else None
         if provider is not None and found is not None:
-            dep.resolved_package_id = provider.id
-            dep.resolved_version_id = await db.scalar(select(PackageVersion.id).where(
-                PackageVersion.package_id == provider.id, PackageVersion.version == found[1]))
-            await db.flush()
-        return
+            view.providers[key] = (provider.id, await db.scalar(select(PackageVersion.id).where(
+                PackageVersion.package_id == provider.id, PackageVersion.version == found[1])))
+    return view.providers[key]
+
+
+async def _ensure_dependency_resolved(db: AsyncSession, dep: Dependency, fetcher: LazyFetcher) -> None:
+    ref = _dependency_ref(dep)
     package = await fetcher.ensure_package(ref)
     if not package:
         return
