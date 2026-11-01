@@ -1,9 +1,10 @@
 """Release dates of versions in the background (SPEC-MULTI-ECOSYSTEM.md §7.1, like the crates.io API fields,
 Q22).
 
-A Maven repository dates a version only by the `Last-Modified` of its POM: one HEAD per version. A fetch dates just the
-latest version (its POM is read anyway); this task, run every minute, dates up to a batch of the others, newest
-versions of the most recently synced packages first, each from the highest-priority enabled source that has it. A
+A Maven repository dates a version only by the `Last-Modified` of its POM (one HEAD per version), a Go proxy by its
+`.info` (one GET per version). A fetch dates just the latest version (and Go's pseudo-versions, which carry their
+time); this task, run every minute, dates up to a batch of the others, newest versions of the most recently synced
+packages first, each from the highest-priority enabled source that has it (its adapter's `release_date`). A
 version whose POM has no date is marked and not asked again; one the source fails for (down, or refusing HEAD) is
 marked with the time and tried again a day later, so failing versions do not take every batch.
 """
@@ -30,10 +31,10 @@ logger = logging.getLogger(__name__)
 UNKNOWN = "release_date_unknown"
 FAILED = "release_date_failed_at"
 RETRY_AFTER = timedelta(days=1)
+ECOSYSTEMS = (Ecosystem.maven, Ecosystem.go)
 
 
-async def _run(limit: int) -> dict[str, object]:
-    plugin = plugin_for("maven")
+async def _run(limit: int, ecosystems: tuple[Ecosystem, ...] = ECOSYSTEMS) -> dict[str, object]:
     counts = {"dated": 0, "undated": 0, "failed": 0}
     now = datetime.now(UTC)
     cutoff = (now - RETRY_AFTER).isoformat()
@@ -43,7 +44,7 @@ async def _run(limit: int) -> dict[str, object]:
         rows = (await db.execute(
             select(PackageVersion, Package)
             .join(Package, Package.id == PackageVersion.package_id)
-            .where(Package.ecosystem == Ecosystem.maven, PackageVersion.release_date.is_(None),
+            .where(Package.ecosystem.in_(ecosystems), PackageVersion.release_date.is_(None),
                    not_(PackageVersion.raw_metadata.has_key(UNKNOWN)),
                    or_(not_(PackageVersion.raw_metadata.has_key(FAILED)),
                        PackageVersion.raw_metadata[FAILED].astext < cutoff),
@@ -59,8 +60,8 @@ async def _run(limit: int) -> dict[str, object]:
         semaphore = asyncio.Semaphore(get_settings().daily_update_concurrency)
 
         async def date(version: PackageVersion, package: Package, registry: Registry) -> None:
-            adapter = plugin.adapter(registry_config(registry))
-            ref = PackageRef("maven", package.namespace or "", package.normalized_name)
+            adapter = plugin_for(package.ecosystem.value).adapter(registry_config(registry))
+            ref = PackageRef(package.ecosystem.value, package.namespace or "", package.normalized_name)
             try:
                 async with semaphore:
                     found = await adapter.release_date(ref, version.version)  # type: ignore[attr-defined]
