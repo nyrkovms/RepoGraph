@@ -16,6 +16,7 @@ from app.config import get_settings
 from app.db import loop_local_session
 from app.ecosystems.base import PackageRef
 from app.fetcher import pipeline
+from app.models.dependency import Dependency
 from app.models.enums import Ecosystem, PackageOrigin, RegistryProtocol
 from app.models.package_event import PackageEvent
 from app.models.registry import Registry
@@ -115,6 +116,16 @@ def test_the_tree_finds_the_package_behind_each_capability() -> None:
                 assert all(n.dependency_type == "runtime" for n in tree.dependencies)   # recommends on request only
                 artifacts = await routes.list_artifacts("rpm", "rocky-9/openssl", "1:3.0.7-27.el9", db)
                 assert {(a.arch, a.artifact_type) for a in artifacts.data} == {("x86_64", "rpm"), ("aarch64", "rpm")}
+                # Regression (#31): the provider is the tree's own, not a link the x86_64 tree left in the catalog.
+                tree = await routes.get_dependencies_tree(
+                    "rpm", "rocky-9/openssl", "1:3.0.7-27.el9", db, profile=None, depth=1, include_optional=False,
+                    python_version=None, os=None, node_version=None, cpu=None, target_triple=None, features=None,
+                    default_features=None, target_framework=None, scopes=None, arch="aarch64")
+                found = {(n.name, n.resolved_name, n.resolved_version) for n in tree.dependencies}
+                assert ("/bin/sh", "rocky-9/bash", "5.1.8-6.el9") in found
+                linked = await db.scalar(select(Dependency.resolved_package_id).where(
+                    Dependency.dependency_name == "/bin/sh"))
+                assert linked is None                      # the shared row keeps no arch's answer
             finally:
                 await db.close()
                 await transaction.rollback()

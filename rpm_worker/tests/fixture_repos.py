@@ -2,8 +2,8 @@
 that does not exist, so integration tests run the real rpm-worker offline (`python3 -m tests.fixture_repos <dir>`).
 
 Real repodata is tens of MB per repository (IMPL E6 probes); these hold a handful of packages shaped like Rocky's:
-rocky-9 BaseOS for x86_64 and aarch64 (openssl with a superseded build, its libraries, bash for /bin/sh, a noarch
-package, a weak dependency) and rocky-8 AppStream with nodejs streams 18 (default) and 20 and a non-modular nodejs, and epel-9 with a package that
+rocky-9 BaseOS for x86_64 and aarch64 (openssl with a superseded build, its libraries, bash for /bin/sh in an older
+build on aarch64, a noarch package, a weak dependency) and rocky-8 AppStream with nodejs streams 18 (default) and 20 and a non-modular nodejs, and epel-9 with a package that
 needs rocky-9's glibc.
 """
 
@@ -45,7 +45,9 @@ def libs(arch: str) -> dict:
 
 
 def rocky9(arch: str) -> list:
-    return [dict(GLIBC, arch=arch), dict(BASH, arch=arch), libs(arch), POLICIES,
+    # bash differs by arch, so a tree's provider of /bin/sh depends on the arch it is asked for
+    bash = dict(BASH, arch=arch, evr="5.1.8-6.el9") if arch == "aarch64" else dict(BASH, arch=arch)
+    return [dict(GLIBC, arch=arch), bash, libs(arch), POLICIES,
             openssl("1:3.0.7-26.el9", arch), openssl("1:3.0.7-27.el9", arch)]
 
 

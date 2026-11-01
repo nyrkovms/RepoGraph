@@ -1,0 +1,14 @@
+{
+  "headers": {
+    "content-type": "application/octet-stream",
+    "etag": "\"fdc5e078851a2c5b\""
+  },
+  "request": {
+    "headers": {
+      "accept": "*/*"
+    },
+    "method": "GET",
+    "url": "https://rpm.fixtures.packagehub.test/rocky-9/BaseOS/aarch64/os/repodata/fdc5e078851a2c5bda74ae0b8057b01003a644ea938c62494be7341087d00a64-primary.xml.gz"
+  },
+  "status": 200
+}
