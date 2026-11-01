@@ -14,6 +14,10 @@ The way NuGet's RemoteDependencyWalker and its conflict resolution do it:
    the winner does not satisfy fails the restore (NU1107).
 
 A failed restore keeps its graph, as NuGet still writes the assets file, with the error code in `error`.
+
+Warnings as restore gives them: every walked edge, whatever later wins, whose range has no inclusive lower bound
+(NU1604 on the project's references, NU1602 below) or whose lower bound the feed lacks (NU1603: the best match is
+higher); and an eclipsed edge whose range the nearer declaration's version exceeds (NU1608). Floating ranges give none.
 """
 
 import time
@@ -67,6 +71,20 @@ def _range(raw: str) -> NuGetConstraint:
     return parse_range(raw.strip() or "0.0.0")
 
 
+def _pretty(raw: str, constraint: NuGetConstraint) -> str:
+    """A range as restore prints it in messages: ` (>= 1.0.0 && < 2.0.0)`, ` (= 1.0.0)`; nothing for no range."""
+    if not raw.strip():
+        return ""
+    if constraint.min is not None and constraint.min == constraint.max:
+        return f" (= {constraint.min})"
+    parts = []
+    if constraint.min is not None:
+        parts.append(f"{'>=' if constraint.min_inclusive else '>'} {constraint.min}")
+    if constraint.max is not None:
+        parts.append(f"{'<=' if constraint.max_inclusive else '<'} {constraint.max}")
+    return f" ({' && '.join(parts)})"
+
+
 def _valid(version: str) -> bool:
     try:
         _SCHEME.validate(version)
@@ -91,6 +109,7 @@ class _Resolve:
         self.downgrades: list[tuple[_Node, str, str]] = []   # (eclipsed edge's parent, id, wanted range)
         self.cycles: list[str] = []
         self.root = _Node("", None, "", None, None, None, 0)
+        self.warnings: dict[str, dict[str, str]] = {}          # message -> warning, in the order restore finds them
 
     def _check(self) -> None:
         if time.monotonic() >= self.deadline:
@@ -158,11 +177,40 @@ class _Resolve:
             if version is None:
                 self._node_error(node, f"no version of {ref.name} matches {raw}")
                 continue
+            self._lower_bound(node, child)
             deps = await self.dependencies(ref, version)
             if deps is None:
                 self.errors[(ref.name, version.version)].append(UNKNOWN_DEPENDENCIES)
                 continue
             await self._expand(child, [(dep.target, dep.constraint) for dep in deps])
+
+    def _warn(self, code: str, package_id: str, message: str) -> None:
+        self.warnings.setdefault(message, {"code": code, "package": package_id, "message": message})
+
+    def _who(self, node: _Node) -> str:
+        return f"{node.package_id} {node.version.version}" if node.version is not None else "the project"
+
+    def _lower_bound(self, parent: _Node, child: _Node) -> None:
+        """NU1604, NU1602, NU1603 for one walked edge."""
+        constraint, version = child.constraint, child.version
+        if constraint is None or version is None or constraint.floating is not None:
+            return
+        pretty = _pretty(child.raw, constraint)
+        if not child.raw.strip() or constraint.min is None or not constraint.min_inclusive:
+            if parent is self.root:
+                self._warn("NU1604", child.package_id,
+                           f"Project dependency {child.package_id}{pretty} does not contain an inclusive lower bound. "
+                           f"Include a lower bound in the dependency version to ensure consistent restore results.")
+            else:
+                self._warn("NU1602", child.package_id,
+                           f"{self._who(parent)} does not provide an inclusive lower bound for dependency "
+                           f"{child.package_id}{pretty}. An approximate best match of {child.package_id} "
+                           f"{version.version} was resolved.")
+        elif _SCHEME.sort_key(version.version) != _SCHEME.sort_key(constraint.min):
+            self._warn("NU1603", child.package_id,
+                       f"{self._who(parent)} depends on {child.package_id}{pretty} but {child.package_id} "
+                       f"{constraint.min} was not found. An approximate best match of {child.package_id} "
+                       f"{version.version} was resolved.")
 
     @staticmethod
     def _is_ancestor(node: _Node, package_id: str) -> bool:
@@ -227,6 +275,24 @@ class _Resolve:
             live.append(node)
             stack.extend(node.children)
         return live
+
+    def warn_eclipsed(self, winners: dict[str, CatalogVersion], live: set[int]) -> None:
+        """NU1608 for an eclipsed edge (under a node still in the graph) whose range the winner exceeds."""
+        for parent, package_id, raw in self.downgrades:
+            winner = winners.get(package_id)
+            if winner is None or parent is self.root or id(parent) not in live:
+                continue
+            try:
+                constraint = _range(raw)
+            except InvalidVersion:
+                continue
+            below = constraint.min is not None and _SCHEME.sort_key(winner.version) < _SCHEME.sort_key(constraint.min)
+            if not constraint.contains(winner.version) and not below:      # below the range is NU1605
+                self._warn("NU1608", package_id,
+                           f"Detected package version outside of dependency constraint: {self._who(parent)} requires "
+                           f"{package_id}{_pretty(raw, constraint)} but version {package_id} {winner.version} "
+                           f"was resolved.")
+        self.graph.warnings.extend(self.warnings.values())
 
     def check(self, winners: dict[str, CatalogVersion], live: set[int]) -> None:
         """NU1107 for a reference (from a node still in the graph) the winner does not satisfy; NU1605 for a downgrade
@@ -300,6 +366,7 @@ class NuGetResolver:
                 return state.graph
             winners, live = state.settle()
             state.build(winners, live)
+            state.warn_eclipsed(winners, live)
             state.check(winners, live)
         except ResolveLimitExceeded as exc:
             state.graph.error = {"code": "resolve_limit_exceeded", "message": str(exc), "limit": exc.limit,
