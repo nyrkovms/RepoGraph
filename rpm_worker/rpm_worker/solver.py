@@ -5,14 +5,15 @@ obsolete it too (hawkey's `q.union(obsoletes=q)`).
 
 Request: `sources` (the profile's sources of the distro, as the API sends them), `arch`, `roots` (`[{"spec": name or
 capability, "constraint": ">= 1.2"}]`), `weak_deps`, `module_streams`, `disabled_modules`, `module_install`.
-Result: `nodes` (NEVRA, repo), `edges` (capability → provider among the installed set; recommends only with weak
-dependencies), `roots`, `modules` (the active streams), or `problems` when there is no solution — with the stream to
-enable when a root exists only in an inactive one (§9.8.3.6).
+Result: `nodes` (NEVRA, repo), `edges` (capability → provider among the installed set, the one libsolv installed for
+that requirement where several provide it (`describe_decision`); recommends and supplements only with weak
+dependencies, a supplements edge leading from the package supplemented), `roots`, `modules` (the active streams), or
+`problems` when there is no solution — with the stream to enable when a root exists only in an inactive one (§9.8.3.6).
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional, Set
+from typing import Any, Dict, List, Mapping, Optional, Set, Tuple
 
 import solv
 
@@ -20,6 +21,26 @@ from rpm_worker import modules, pools, repo
 
 _SELECT = (solv.Selection.SELECTION_NAME | solv.Selection.SELECTION_PROVIDES | solv.Selection.SELECTION_CANON
            | solv.Selection.SELECTION_DOTARCH | solv.Selection.SELECTION_REL | solv.Selection.SELECTION_FILELIST)
+
+
+def _decisions(solver: Any, installed: List[Any],
+               ids: Set[int]) -> Tuple[Dict[Tuple[int, str], int], List[Dict[str, str]]]:
+    """Why libsolv installed each package (`describe_decision`): the provider it took for a requirement, keyed by
+    (requiring solvable, capability), and an edge from the package each supplementing one was installed for (the only
+    way to it: nothing requires it)."""
+    decided: Dict[Tuple[int, str], int] = {}
+    supplements: List[Dict[str, str]] = []
+    for s in installed:
+        reason, rule = solver.describe_decision(s)
+        info = rule.info() if rule is not None else None
+        if info is not None and info.type == solv.Solver.SOLVER_RULE_PKG_REQUIRES and info.solvable is not None:
+            decided[(info.solvable.id, str(info.dep))] = s.id
+        elif reason == solv.Solver.SOLVER_REASON_WEAKDEP:
+            for why, other, dep in solver.describe_weakdep_decision(s):
+                if why == solv.Solver.SOLVER_REASON_SUPPLEMENTED and other is not None and other.id in ids:
+                    supplements.append({"from": display_nevra(other), "to": display_nevra(s), "capability": str(dep),
+                                        "kind": "supplements"})
+    return decided, supplements
 
 
 def nevra(s: Any) -> str:
@@ -138,18 +159,19 @@ def resolve(request: Mapping[str, Any]) -> Dict[str, Any]:
     nodes = [{"nevra": display_nevra(s), "name": s.name, "evr": s.evr, "arch": s.arch, "repo": s.repo.name}
              for s in sorted(installed, key=lambda s: (s.name, s.arch))]
     kinds = [("requires", solv.SOLVABLE_REQUIRES)] + ([("recommends", solv.SOLVABLE_RECOMMENDS)] if weak else [])
-    edges: List[Dict[str, str]] = []
+    decided, edges = _decisions(solver, installed, ids)
     for s in installed:
         for kind, attribute in kinds:
             for dep in s.lookup_deparray(attribute):
                 text = str(dep)
                 if text.startswith("rpmlib("):
                     continue
-                for provider in pool.whatprovides(dep):
-                    if provider.id in ids and provider.id != s.id:
-                        edges.append({"from": display_nevra(s), "to": display_nevra(provider), "capability": text,
-                                      "kind": kind})
-                        break
+                providers = [p.id for p in pool.whatprovides(dep) if p.id in ids and p.id != s.id]
+                if providers:
+                    chosen = decided.get((s.id, text))
+                    target = pool.solvables[chosen if chosen in providers else providers[0]]
+                    edges.append({"from": display_nevra(s), "to": display_nevra(target), "capability": text,
+                                  "kind": kind})
     roots = []
     for spec, constraint in specs:
         text = "%s %s" % (spec, constraint) if constraint else spec

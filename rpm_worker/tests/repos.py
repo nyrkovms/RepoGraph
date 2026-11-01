@@ -36,7 +36,8 @@ def _package(p: Mapping[str, Any]) -> str:
     sections = ""
     provides = list(p.get("provides", [])) + [(name, "EQ", p["evr"])]
     for kind, caps in (("provides", provides), ("requires", p.get("requires", [])), ("obsoletes", p.get("obsoletes", [])),
-                       ("recommends", p.get("recommends", [])), ("suggests", p.get("suggests", []))):
+                       ("recommends", p.get("recommends", [])), ("suggests", p.get("suggests", [])),
+                       ("supplements", p.get("supplements", []))):
         if caps:
             sections += "<rpm:%s>%s</rpm:%s>" % (kind, "".join(_entry(c) for c in caps), kind)
     files = "".join("<file>%s</file>" % escape(f) for f in p.get("files", []))
