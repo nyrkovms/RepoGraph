@@ -13,8 +13,11 @@
    (`ClassicDependencyManager`: depth 2 and below); a managed scope is kept as set. The roots keep theirs, except a
    root without a version (`*`), which takes the managed one as a versionless project dependency does.
 4. A bare version is a soft requirement taken as written; a range takes the highest version available in it; a root
-   asked for with `*` and not managed takes the highest release. A range deeper in the graph does not override a
-   nearer soft version (Maven backtracks there; not emulated).
+   asked for with `*` and not managed takes the highest release. A range is a hard constraint wherever it is reached
+   (`NearestVersionSelector`): an occurrence whose version some range of the same artifact rejects loses, and the
+   nearest acceptable one wins (a range: its highest version all ranges accept). The ranges count only below the
+   winners, so the walk is repeated with the ranges the last one reached until they stay the same; when no
+   occurrence is acceptable the resolve fails with `resolver_conflict`, as Maven does.
 5. A relocated artifact (its POM's `<relocation>`, a `details.relocation` dependency) is replaced by its target in
    the same place, as Maven's descriptor reader does; Gradle follows it as a dependency.
 6. Profiles activated by `<jdk>` apply when `environment.java_version` activates them.
@@ -65,6 +68,7 @@ from app.ecosystems.maven.versions import MavenVersionScheme
 
 UNKNOWN_DEPENDENCIES = "dependencies unknown"
 MAX_GRADLE_PASSES = 20
+MAX_MAVEN_PASSES = 20
 MAX_RELOCATIONS = 16
 MAX_PATH_EXCLUSIONS = 8
 # Gradle writes this into the POM of everything it publishes together with a `.module` file.
@@ -129,6 +133,17 @@ def _ga(ref: PackageRef) -> GA:
     return (ref.namespace, ref.name)
 
 
+def _is_range(raw: str) -> bool:
+    try:
+        return raw not in ("", "*") and _SCHEME.constraint(raw).recommended is None
+    except InvalidVersion:
+        return False
+
+
+def _accepted(version: str, ranges: Sequence[str] | frozenset[str]) -> bool:
+    return all(_SCHEME.constraint(raw).contains(version) for raw in ranges)
+
+
 def _exclusions(dep: NormalizedDependency) -> frozenset[GA]:
     listed = (dep.details or {}).get("exclusions")
     out: set[GA] = set()
@@ -185,8 +200,10 @@ class _Resolve:
             self.versions[ga] = versions
         return self.versions[ga]
 
-    async def pick(self, ref: PackageRef, raw: str) -> CatalogVersion | None:
-        versions = await self.candidates(ref)
+    async def pick(self, ref: PackageRef, raw: str, ranges: Sequence[str] = ()) -> CatalogVersion | None:
+        """The version `raw` asks for; with `ranges`, only a version every one of them accepts."""
+        versions = [v for v in await self.candidates(ref) if _accepted(v.version, ranges)] if ranges \
+            else await self.candidates(ref)
         if raw == "*":
             releases = [v for v in versions if v.status == "active" and not _SCHEME.is_prerelease(v.version)]
             return max(releases or versions, key=lambda v: _SCHEME.sort_key(v.version), default=None)
@@ -271,6 +288,29 @@ class _Resolve:
 
     async def walk(self) -> None:
         await self.import_managed()
+        missing_boms = list(self.unresolvable)
+        ranges: dict[GA, frozenset[str]] = {}
+        for _ in range(MAX_MAVEN_PASSES):
+            self.unresolvable = list(missing_boms)
+            reached, rejected = await self._maven_pass(ranges)
+            # Ranges only added and every winner acceptable to them: another pass would choose the same.
+            if all(ranges.get(ga, frozenset()) <= reached.get(ga, frozenset()) for ga in ranges) \
+                    and all(_accepted(node.version.version, reached.get(ga, ())) for ga, node in self.chosen.items()):
+                conflicts = [ga for ga in rejected if ga not in self.chosen]
+                if conflicts:
+                    raise _Aborted("resolver_conflict", "; ".join(
+                        f"could not resolve version conflict among [{', '.join(rejected[ga])}]" for ga in conflicts))
+                return
+            ranges = reached
+        self.graph.warnings.append({"code": "not_settled",
+                                    "message": f"versions still changed after {MAX_MAVEN_PASSES} passes"})
+
+    async def _maven_pass(self, ranges: dict[GA, frozenset[str]]) -> tuple[dict[GA, frozenset[str]], dict[GA, list[str]]]:
+        """One walk with the ranges known so far as hard constraints: the ranges it reaches below its winners, and
+        the occurrences a range rejected."""
+        self.chosen, self.relocated, self.roots, self.errors = {}, {}, {}, {}
+        reached: dict[GA, set[str]] = {}
+        rejected: dict[GA, list[str]] = {}
         queue: deque[_Occurrence] = deque()
         for order, root in enumerate(self.root_list):
             self.roots.setdefault(_ga(root.ref), root)
@@ -280,12 +320,21 @@ class _Resolve:
             self._check()
             occurrence = queue.popleft()
             ga = occurrence.ga
+            raw = self._requested(occurrence)
+            if _is_range(raw):
+                reached.setdefault(ga, set()).add(raw)
             if ga in self.chosen:
                 continue                                                      # nearest (or first) already won
-            raw = self._requested(occurrence)
-            found = await self.pick(occurrence.ref, raw)
+            found = await self.pick(occurrence.ref, raw, tuple(ranges.get(ga, ())))
             if found is None:
-                self._unresolvable(occurrence, raw)
+                if ranges.get(ga) and await self.pick(occurrence.ref, raw) is not None:
+                    # A range rejects it, so a farther occurrence may win; Maven's message names each one.
+                    parent = self.chosen.get(occurrence.parent) if occurrence.parent else None
+                    path = f"{parent.occurrence.ga[0]}:{parent.occurrence.ga[1]}:{parent.version.version} -> " \
+                        if parent else ""
+                    rejected.setdefault(ga, []).append(f"{path}{ga[0]}:{ga[1]}:{raw}")
+                else:
+                    self._unresolvable(occurrence, raw)
                 continue
             if len(self.chosen) >= self.request.max_nodes:
                 raise ResolveLimitExceeded("nodes", self.request.max_nodes)
@@ -310,6 +359,7 @@ class _Resolve:
                 chosen.children.append(child)
                 queue.append(_Occurrence(child.ga, dep.target, dep.constraint, occurrence.depth + 1, ga, below, order))
                 order += 1
+        return {ga: frozenset(asked) for ga, asked in reached.items()}, rejected
 
     def _unresolvable(self, occurrence: _Occurrence, raw: str) -> None:
         ga = occurrence.ga
