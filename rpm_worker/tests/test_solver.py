@@ -68,6 +68,16 @@ def _set(result) -> set:
     return {(n["name"], n["evr"]) for n in result["nodes"]}
 
 
+def _unreached(result) -> set:
+    """Nodes no edge path from a root leads to: the API would give them depth 0."""
+    reached = {r["nevra"] for r in result["roots"]}
+    while True:
+        more = {e["to"] for e in result["edges"] if e["from"] in reached} - reached
+        if not more:
+            return {n["nevra"] for n in result["nodes"]} - reached
+        reached |= more
+
+
 def test_an_install_transaction_with_weak_dependencies_and_capability_edges(source) -> None:
     result = _resolve(source, "openssl")
     assert _set(result) == {("openssl", "1:1.1.1k-12.el8"), ("openssl-libs", "1:1.1.1k-12.el8"),
@@ -95,6 +105,7 @@ def test_the_default_stream_wins_and_filters_the_non_modular_package(source) -> 
 
 
 def test_module_install_takes_the_profile_and_stream_requirements_enable_streams(source) -> None:
+    assert not _unreached(_resolve(source, module_install=["nodejs:18/common"]))      # the profile's packages are roots
     assert _set(_resolve(source, module_install=["nodejs:18/common"])) >= {
         ("nodejs", "1:18.20.4-1.module+el8.10.0+1"), ("npm", "1:10.7.0-1.18.20.4.1.module+el8.10.0+1")}
     # perl-tool:1 needs perl:5.32 (no default): it is enabled, and the non-modular perl 5.26 leaves.
@@ -148,3 +159,20 @@ def test_a_root_only_in_an_inactive_stream_gets_a_hint(source) -> None:
 def test_module_install_needs_a_profile_when_the_stream_has_no_default_one(source) -> None:
     problems = _resolve(source, module_install=["perl:5.32"])["problems"]
     assert problems[0]["code"] == "module_conflict" and "profile" in problems[0]["message"]
+
+
+def test_a_supplementing_package_hangs_off_what_it_supplements(tmp_path) -> None:
+    """Regression (#32): a package installed for its Supplements had no edge and no depth."""
+    root = tmp_path / "mirror"
+    write_repo(root / "x86_64" / "os", [BASH, {"name": "user", "evr": "1-1", "requires": ["/bin/sh"]},
+                                        {"name": "bash-langpack", "evr": "1-1", "supplements": ["bash"]}])
+    with Server(root) as server:
+        src = {"id": "88888888-8888-8888-8888-888888888888", "slug": "sup", "base_url": server.url + "$basearch/os/",
+               "config": {"namespace": "rocky-8", "arch": ["x86_64"]}}
+        result = solver.resolve({"sources": [src], "arch": "x86_64", "roots": [{"spec": "user"}], "weak_deps": True})
+        assert ("bash-langpack", "1-1") in _set(result) and not _unreached(result)
+        assert {"from": "bash-5.1.8-9.el8.x86_64", "to": "bash-langpack-1-1.x86_64", "capability": "bash",
+                "kind": "supplements"} in result["edges"]
+        quiet = solver.resolve({"sources": [src], "arch": "x86_64", "roots": [{"spec": "user"}], "weak_deps": False})
+        assert ("bash-langpack", "1-1") not in _set(quiet)
+        assert not [e for e in quiet["edges"] if e["kind"] == "supplements"]

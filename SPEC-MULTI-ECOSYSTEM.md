@@ -605,7 +605,7 @@ resolvelib (backtracking), PEP 508 markers, extras — без изменений
    5. `module_install` (`nodejs:18/common`) раскрывается в пакеты профиля модуля и включает поток.
    6. В `details` ответа — активные потоки. Если пакет есть только в неактивном потоке, в `conflicts` попадает подсказка, какой поток включить.
 4. **Задача** — `job install` корней по имени или capability. Recommends — при `weak_deps=true`.
-5. **Результат** — транзакция libsolv: пакеты с EVR и arch, рёбра «capability → провайдер» из `solver.describe_decision`.
+5. **Результат** — транзакция libsolv: пакеты с EVR и arch, рёбра «capability → провайдер» (из нескольких установленных провайдеров — тот, кого `solver.describe_decision` называет поставленным ради этого требования), и рёбра `supplements` к пакетам, поставленным ради своих `Supplements` (`describe_weakdep_decision`).
 6. Пакеты результата добавляются в каталог как `discovered`.
 - Эталон — `dnf install --assumeno --installroot=<tmp> --releasever=<N> [module enable ...]` в контейнере дистрибутива.
 
