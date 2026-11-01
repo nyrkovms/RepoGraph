@@ -323,3 +323,40 @@ def test_jdk_profiles_follow_the_java_version() -> None:
     assert _set(_resolve(catalog, ("app", "1"))) == {("app", "1"), ("jaxb", "1")}          # java 21 by default
     assert _set(_resolve(catalog, ("app", "1"), env={"java_version": "1.8"})) == {("app", "1"), ("legacy", "1")}
     assert jdk_activates("1.8", "1.8.0_392") and jdk_activates("!1.8", "21") and not jdk_activates("[1.6,1.9)", "21")
+
+
+def test_a_range_anywhere_below_the_winners_is_a_hard_constraint() -> None:
+    """Regression (#29): Maven's NearestVersionSelector backtracks from a nearer soft version a range rejects."""
+    catalog = Catalog({"app": _v("1"), "x": _v("1"), "b": _v("1.0", "2.0", "2.5", "3.0"), "d": _v("1")},
+                      {"app@1": [_dep("b", "1.0"), _dep("x", "1")], "x@1": [_dep("b", "[2.0,3.0)")],
+                       "b@1.0": [_dep("d", "1")]})
+    graph = _resolve(catalog, ("app", "1"))
+    # The nearest acceptable occurrence is the range: its highest version; what only b 1.0 asked for is gone.
+    assert _set(graph) == {("app", "1"), ("x", "1"), ("b", "2.5")}
+    assert {n.ref.name: n.depth for n in graph.nodes}["b"] == 3
+    # A soft version the range accepts stays the winner.
+    catalog.deps["app@1"] = [_dep("b", "2.0"), _dep("x", "1")]
+    assert _set(_resolve(catalog, ("app", "1"))) == {("app", "1"), ("x", "1"), ("b", "2.0")}
+
+
+def test_a_range_takes_the_highest_version_every_range_accepts_and_a_managed_version_replaces_it() -> None:
+    catalog = Catalog({"app": _v("1"), "x": _v("1"), "y": _v("1"), "b": _v("1.0", "2.0", "2.4", "2.9")},
+                      {"app@1": [_dep("x", "1"), _dep("y", "1")], "x@1": [_dep("b", "[1.0,3.0)")],
+                       "y@1": [_dep("b", "[2.0,2.5]")]})
+    assert _set(_resolve(catalog, ("app", "1"))) == {("app", "1"), ("x", "1"), ("y", "1"), ("b", "2.4")}
+    # dependencyManagement sets the version of transitive occurrences: no range is left to reject it.
+    assert ("b", "1.0") in _set(_resolve(catalog, ("app", "1"), managed=[("b", "1.0", None)]))
+
+
+def test_ranges_of_a_losing_version_do_not_count_and_disjoint_ranges_fail_the_resolve() -> None:
+    catalog = Catalog({"app": _v("1"), "x": _v("1", "2"), "y": _v("1"), "b": _v("1.0", "2.0")},
+                      {"app@1": [_dep("x", "1"), _dep("b", "1.0"), _dep("y", "1")], "y@1": [_dep("x", "2")],
+                       "x@2": [_dep("b", "[2.0,)")]})
+    assert _set(_resolve(catalog, ("app", "1"))) == {("app", "1"), ("x", "1"), ("b", "1.0"), ("y", "1")}
+    catalog.deps = {"app@1": [_dep("x", "1"), _dep("y", "1")], "x@1": [_dep("b", "[1.0,2.0)")],
+                    "y@1": [_dep("b", "[2.0,3.0)")]}
+    graph = _resolve(catalog, ("app", "1"))
+    assert graph.error is not None and graph.error["code"] == "resolver_conflict"
+    # As Maven 3.9 reports it: "Could not resolve version conflict among [g:x:jar:1 -> g:b:jar:[1.0,2.0), ...]".
+    assert graph.error["message"] == "could not resolve version conflict among [g:x:1 -> g:b:[1.0,2.0), " \
+                                     "g:y:1 -> g:b:[2.0,3.0)]"
