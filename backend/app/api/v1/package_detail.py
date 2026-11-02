@@ -29,7 +29,6 @@ from app.fetcher.pipeline import (
     UNAVAILABLE_DIGEST,
     dependency_from_row,
     find_package,
-    resolve_dependency_links,
     choose_version,
     source_dependencies,
 )
@@ -716,10 +715,11 @@ async def _build_tree_for_version(
         linked: tuple[object, object | None] | None
         if dep.dependency_ecosystem.value == "rpm" and view.plugin_env is not None:
             linked = await _rpm_provider(db, dep, fetcher, view)
+        elif dep.resolved_package_id:
+            linked = (dep.resolved_package_id, dep.resolved_version_id)
         else:
-            if not dep.resolved_package_id:
-                await _ensure_dependency_resolved(db, dep, fetcher)
-            linked = (dep.resolved_package_id, dep.resolved_version_id) if dep.resolved_package_id else None
+            found = await _ensure_dependency_resolved(dep, fetcher)
+            linked = (found, None) if found is not None else None    # the version is picked below
         child_package = await db.scalar(select(Package).where(Package.id == linked[0])) if linked else None
         # An RPM constraint is on the capability (`python(abi) = 3.9`), not on the provider's versions.
         constraint = None if dep.dependency_ecosystem.value == "rpm" else dep.version_constraint
@@ -843,14 +843,12 @@ async def _rpm_provider(db: AsyncSession, dep: Dependency, fetcher: LazyFetcher,
     return view.providers[key]
 
 
-async def _ensure_dependency_resolved(db: AsyncSession, dep: Dependency, fetcher: LazyFetcher) -> None:
-    ref = _dependency_ref(dep)
-    package = await fetcher.ensure_package(ref)
-    if not package:
-        return
-    await resolve_dependency_links(db, [dep.version_id])
-    await db.flush()
-    await db.refresh(dep)
+async def _ensure_dependency_resolved(dep: Dependency, fetcher: LazyFetcher) -> object | None:
+    """The id of the catalog package an unlinked dependency names, fetched lazily. The row is neither re-linked nor
+    re-read here: a sync of the same version running meanwhile replaces its rows, and the one held would be gone (#49).
+    The catalog links it when the package enters (`_link_dependents`) and on the next sync."""
+    package = await fetcher.ensure_package(_dependency_ref(dep))
+    return package.id if package else None
 
 
 def _measure_tree_depth(nodes: list[DependencyNode]) -> int:

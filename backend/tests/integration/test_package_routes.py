@@ -296,6 +296,29 @@ def test_tree_takes_the_variant_of_the_source_where_the_version_is_active() -> N
     _in_rolled_back_transaction(check)
 
 
+def test_the_tree_survives_a_sync_that_replaces_the_rows_it_holds(monkeypatch) -> None:
+    """Regression (#49): a sync of the version while its tree lazily fetched a dependency made the tree a 500."""
+    async def check(db: AsyncSession, pypi: Registry, mirror: Registry) -> None:
+        root, child = _name(), _name()
+        await _write(db, root, {pypi: [_version("1.0", deps=[child])]})       # child is not in the catalog yet
+        package = await pipeline.find_package(db, PackageRef(ecosystem="pypi", namespace="", name=root))
+        version_id = await db.scalar(select(PackageVersion.id).where(PackageVersion.package_id == package.id))
+
+        async def resync_then_fetch(self, ref):   # noqa: ANN001, ANN202
+            # What a sync of the same version does meanwhile: its dependency rows are deleted and written again.
+            await pipeline._replace_dependency_rows(db, version_id, None, _version("1.0", deps=[child]).dependencies)
+            await db.flush()
+            await _write(db, child, {pypi: [_version("1.0"), _version("1.2")]})
+            return await pipeline.find_package(db, ref)
+
+        monkeypatch.setattr(routes.LazyFetcher, "ensure_package", resync_then_fetch)
+        response = await routes.get_dependencies_tree("pypi", root, "1.0", db, profile=None, depth=1,
+                                                      include_optional=False, python_version=None, os=None)
+        assert [(n.name, n.resolved_version) for n in response.dependencies] == [(child, "1.2")]
+
+    _in_rolled_back_transaction(check)
+
+
 def test_npm_tree_follows_the_npm_environment() -> None:
     npm = pipeline.plugin_for("npm")
 
