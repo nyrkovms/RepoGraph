@@ -104,7 +104,7 @@ def test_numbers_of_any_size_and_unknown_qualifiers() -> None:
     assert SCHEME.sort_key("1.0-\U00010000") < SCHEME.sort_key("1.0-￿")
 
 
-@pytest.mark.parametrize("version", ["", " 1.0", "1.0 ", "1. 0", "1.0\t", "1.0\n", "1.0\x00", "1.0 ", " 1"])
+@pytest.mark.parametrize("version", ["", " 1.0", "1.0 ", "1. 0", "1.0\t", "1.0\n", "1.0\x00", "1.0\u00a0", "\u20281"])
 def test_validate_rejects_the_empty_string_whitespace_and_control_characters(version: str) -> None:
     with pytest.raises(InvalidVersion):
         SCHEME.validate(version)

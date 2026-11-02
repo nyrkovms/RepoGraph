@@ -356,7 +356,7 @@ class _Resolve:
                 self._error(ga, UNKNOWN_DEPENDENCIES)
                 continue
             for dep, child, below in self._transitive(deps, occurrence.exclusions,
-                                                       lambda g: _excluded(g, occurrence.exclusions)):
+                                                       lambda g: _excluded(g, occurrence.exclusions)):  # noqa: B023 - called now
                 chosen.children.append(child)
                 queue.append(_Occurrence(child.ga, dep.target, dep.constraint, occurrence.depth + 1, ga, below, order))
                 order += 1
@@ -402,9 +402,9 @@ class _Resolve:
             elif (found := await self.pick(node.occurrence.ref, raw)) is not None:
                 fixed.append(found)
         for raw in ranges:
-            if not any(_SCHEME.constraint(raw).contains(v.version) for v in fixed):
-                if (found := await self.pick(node.occurrence.ref, raw)) is not None:
-                    fixed.append(found)
+            if not any(_SCHEME.constraint(raw).contains(v.version) for v in fixed) \
+                    and (found := await self.pick(node.occurrence.ref, raw)) is not None:
+                fixed.append(found)
         return max(fixed or [node.version], key=lambda v: _SCHEME.sort_key(v.version))
 
     async def _gradle_pass(
@@ -442,7 +442,7 @@ class _Resolve:
             if deps is None:
                 self._error(ga, UNKNOWN_DEPENDENCIES)
             for dep, child, _ in self._transitive(deps, frozenset(),
-                                                  lambda g: all(_excluded(g, path) for path in paths)):
+                                                  lambda g: all(_excluded(g, path) for path in paths)):  # noqa: B023 - called now
                 node.children.append(child)
                 requests.setdefault(child.ga, []).append(child.raw)
                 below = {path | _exclusions(dep) for path in paths}

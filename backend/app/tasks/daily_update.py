@@ -101,13 +101,13 @@ async def _update_package(make_session: Callable[[], AsyncSession], work: _Work,
             await db.commit()
             return "failed"
 
-        stored = dict(
-            (str(registry_id), revision)
+        stored = {
+            str(registry_id): revision
             for registry_id, revision in (
                 await db.execute(select(PackageRegistry.registry_id, PackageRegistry.upstream_revision)
                                  .where(PackageRegistry.package_id == package.id))
             ).all()
-        )
+        }
     if any(is_stale(expected, stored.get(registry_id)) for registry_id, expected in work.expected.items()):
         return "stale"
     return "updated"
@@ -148,7 +148,7 @@ async def _detect(db: AsyncSession, registries: list[RegistryConfig]) -> tuple[d
         try:
             plugin = plugin_for(registry.ecosystem)
             changes = await plugin.adapter(registry).change_detector().detect(tracked, cursors.get(registry.id, {}))
-        except Exception as exc:  # noqa: BLE001 - one source failing does not stop the others
+        except Exception as exc:  # one source failing does not stop the others
             logger.exception("Daily update: change detection failed for %s", registry.slug)
             if isinstance(exc, httpx.HTTPError):
                 await discovery.record_source_failure(db, registry, exc)
@@ -239,7 +239,7 @@ async def run_ecosystem(ecosystem: str) -> dict:
 
         sources_ok = all(details["status"] == "ok" for details in per_registry.values())
         status = runs.SUCCESS if not results["failed"] and sources_ok else runs.PARTIAL
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("Daily update of %s failed", ecosystem)
         status = runs.FAILED
         error = f"{exc.__class__.__name__}: {exc}"

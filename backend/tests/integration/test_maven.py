@@ -14,12 +14,12 @@ from app.api.v1 import package_detail as routes
 from app.config import get_settings
 from app.db import loop_local_session
 from app.ecosystems.base import PackageRef
+from app.ecosystems.maven.adapters import maven2
 from app.fetcher import pipeline
 from app.models.enums import PackageOrigin
 from app.models.package_event import PackageEvent
 from app.models.run import Run
 from app.models.version import PackageVersion
-from app.ecosystems.maven.adapters import maven2
 from app.tasks import daily_update, release_dates
 
 SPRING_CORE = PackageRef("maven", "org.springframework", "spring-core")
@@ -68,7 +68,7 @@ def test_an_artifact_is_read_from_maven_central_and_followed_by_its_metadata_eta
     assert counts["dated"] == 5 and counts["failed"] == 0, counts
 
     # A source that fails (down, or refusing HEAD) marks those versions; the next run takes others.
-    async def down(self, ref, wanted):   # noqa: ANN001, ANN202
+    async def down(self, ref, wanted):
         raise httpx.ConnectError("repository down")
 
     monkeypatch.setattr(maven2.Maven2Adapter, "release_date", down)
@@ -102,9 +102,9 @@ def test_the_tree_follows_scopes_and_versions_read_lazily_through_parents_and_bo
                 coordinates = "com.fasterxml.jackson.core:jackson-databind"
                 await pipeline.sync_package(db, PackageRef("maven", "com.fasterxml.jackson.core", "jackson-databind"),
                                             origin=PackageOrigin.manual)
-                kwargs = dict(profile=None, depth=1, include_optional=False, python_version=None, os=None,
-                              node_version=None, cpu=None, target_triple=None, features=None, default_features=None,
-                              target_framework=None)
+                kwargs = {"profile": None, "depth": 1, "include_optional": False, "python_version": None, "os": None,
+                          "node_version": None, "cpu": None, "target_triple": None, "features": None,
+                          "default_features": None, "target_framework": None}
                 # 2.17.2 is not the latest: its POM, jackson-base, jackson-parent and the jackson BOM are read now.
                 tree = await routes.get_dependencies_tree("maven", coordinates, "2.17.2", db, scopes=None, **kwargs)
                 assert {(n.name, n.resolved_version) for n in tree.dependencies} == {

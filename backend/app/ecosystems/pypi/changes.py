@@ -37,7 +37,7 @@ class WarehouseChangeDetector:
         index_serial: int | None
         try:
             index_serial, serials = await self.index.fetch_all_serials()
-        except Exception:  # noqa: BLE001
+        except Exception:
             # The root index is ~10 MB; when it fails, ask project by project (same fallback as before E0).
             logger.exception("root Simple index failed, falling back to per-project serials")
             index_serial, serials = None, await self._serials_per_project(tracked)

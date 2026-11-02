@@ -113,7 +113,7 @@ def test_version_too_large_to_encode_is_invalid() -> None:
     assert SCHEME.sort_key(raw) == fallback_sort_key(raw)
 
 
-@pytest.mark.parametrize("raw", SAMPLES + ["2.5.1", "1.0.0rc1", "1.0-1", "1.0_post1", "V1.0", "1.0.post"])
+@pytest.mark.parametrize("raw", [*SAMPLES, "2.5.1", "1.0.0rc1", "1.0-1", "1.0_post1", "V1.0", "1.0.post"])
 def test_validate_accepts_what_packaging_accepts(raw: str) -> None:
     SCHEME.validate(raw)
 

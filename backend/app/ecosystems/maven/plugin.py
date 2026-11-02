@@ -58,7 +58,7 @@ class MavenPlugin:
         return dep.target
 
     def resolver(self) -> Resolver:
-        from app.ecosystems.maven.resolver import RESOLVER   # J5
+        from app.ecosystems.maven.resolver import RESOLVER  # J5
 
         return RESOLVER
 

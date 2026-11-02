@@ -9,6 +9,7 @@ short requirement version (`v1.2`) is canonical (`v1.2.0`); a malformed `module`
 `GoModError`.
 """
 
+import contextlib
 import re
 from dataclasses import dataclass, field
 
@@ -223,10 +224,8 @@ def _directive(state: _State, verb: str, args: list[str], comment: str | None, a
             state.excludes.append((args[0], _canonical(args[1])))
     elif verb == "replace":
         # Go ignores replace and exclude of a dependency's go.mod (ParseLax): one it cannot read is skipped.
-        try:
+        with contextlib.suppress(GoModError):
             state.replaces.append(_replace(args, number))
-        except GoModError:
-            pass
     elif verb == "retract":
         state.retracts.append(_retract(args, comment, above, number))
     # Anything else (godebug, tool, ignore, ...) is not ours.

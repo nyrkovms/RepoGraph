@@ -376,7 +376,7 @@ class NuGetV3Adapter:
                 if response.status_code not in (304, 404):
                     response.raise_for_status()
                 return response
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if not is_retryable_upstream_error(exc) or attempt > self.max_retries:
                     raise
                 delay = compute_backoff_delay_seconds(
@@ -399,7 +399,7 @@ class NuGetEtagChangeDetector:
         if tracked:
             try:
                 await self.adapter.service_index()   # read once here, not by every parallel check below
-            except Exception:  # noqa: BLE001 - each package then fails (and is logged) on its own
+            except Exception:  # each package then fails (and is logged) on its own
                 logger.warning("Service index of %s failed", self.adapter.registry.slug, exc_info=True)
 
         async def one(package: TrackedPackage) -> tuple[TrackedPackage, Literal["changed", "missing", "same"], str | None]:
@@ -410,7 +410,7 @@ class NuGetEtagChangeDetector:
                 async with semaphore:
                     url = await self.adapter.registration_url(package.ref)
                     response = await self.adapter.get(url, {"If-None-Match": known})
-            except Exception:  # noqa: BLE001 - one package failing must not fail the whole source for the day
+            except Exception:  # one package failing must not fail the whole source for the day
                 logger.warning("Change check of %s in %s failed", package.ref.name, self.adapter.registry.slug,
                                exc_info=True)
                 return package, "same", None

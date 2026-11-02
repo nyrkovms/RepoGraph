@@ -20,7 +20,7 @@ def decode_cursor(cursor: str | None) -> dict[str, Any] | None:
     try:
         raw = base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8")
         data = json.loads(raw)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise CursorError("invalid cursor") from exc
     if not isinstance(data, dict):
         raise CursorError("invalid cursor payload")

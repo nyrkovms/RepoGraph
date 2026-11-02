@@ -130,7 +130,7 @@ def _text(element: ElementTree.Element | None, name: str) -> str | None:
 
 def parse_metadata(content: bytes | str, url: str) -> Metadata:
     try:
-        root = ElementTree.fromstring(content)
+        root = ElementTree.fromstring(content)   # noqa: S314 - no external entities; expat caps entity expansion
     except ElementTree.ParseError as exc:
         raise ValueError(f"{url}: not a maven-metadata.xml: {exc}") from None
     if _local(root.tag) != "metadata":
@@ -342,7 +342,7 @@ class _PomLoader:
         return _document(path, *cached)
 
     async def _other(self, adapter: object, path: str) -> FetchedDocument | None:
-        fetch = cast(_Fetch, getattr(adapter, "fetch_document"))
+        fetch = cast(_Fetch, getattr(adapter, "fetch_document"))   # noqa: B009 - not on the declared type
         base = _root_of(adapter)
         cached = _POM_CACHE.get((base, path)) if base is not None else None
         if cached is not None:
@@ -540,7 +540,7 @@ class Maven2Adapter:
                 if response.status_code not in (304, *_MISSING):
                     response.raise_for_status()
                 return response
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if not is_retryable_upstream_error(exc) or attempt > self.max_retries:
                     raise
                 delay = compute_backoff_delay_seconds(
@@ -576,7 +576,7 @@ class Maven2ChangeDetector:
                     # Already known to be unavailable: nothing new to report until it comes back.
                     return package, "same" if package.unavailable else "missing", None
                 revision = known if response.status_code == 304 else self._revision(response, url)
-            except Exception:  # noqa: BLE001 - one package failing must not fail the whole source for the day
+            except Exception:  # one package failing must not fail the whole source for the day
                 logger.warning("Change check of %s in %s failed", _COORDINATES.display(package.ref),
                                self.adapter.registry.slug, exc_info=True)
                 return package, "same", None

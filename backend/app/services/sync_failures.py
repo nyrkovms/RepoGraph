@@ -11,7 +11,6 @@ from app.models.enums import Ecosystem
 from app.models.sync_failure import SyncFailure
 from app.services.retry_policy import compute_backoff_delay_seconds, is_retryable_upstream_error
 
-
 # Probe failures are not retried by retry_failed, and a successful sync of the package does not clear them:
 # re-fetching the package would not repeat the probe. The next weekly probe is the retry.
 NOT_RETRIED = ("presence_probe",)

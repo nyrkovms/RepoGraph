@@ -149,7 +149,7 @@ async def record_source_failure(db: AsyncSession, registry: RegistryConfig, erro
             await side.execute(text("SET LOCAL lock_timeout = '2s'"))
             await side.execute(stmt)
             await side.commit()
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.warning("Could not record a failure of source %s", registry.slug, exc_info=True)
 
 

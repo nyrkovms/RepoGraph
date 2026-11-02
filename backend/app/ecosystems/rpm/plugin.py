@@ -88,7 +88,7 @@ class RpmPlugin:
         return PackageRef("rpm", namespace, chosen), str(newest["evr"])
 
     def resolver(self) -> Resolver:
-        from app.ecosystems.rpm.resolver import RESOLVER   # K6
+        from app.ecosystems.rpm.resolver import RESOLVER  # K6
 
         return RESOLVER
 

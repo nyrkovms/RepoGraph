@@ -109,8 +109,8 @@ class PyPIVersionScheme:
         if cur_ver <= prev_ver:
             return "other"
 
-        prev_release = prev_ver.release + (0, 0, 0)
-        cur_release = cur_ver.release + (0, 0, 0)
+        prev_release = (*prev_ver.release, 0, 0, 0)
+        cur_release = (*cur_ver.release, 0, 0, 0)
         if cur_ver.epoch != prev_ver.epoch or cur_release[0] != prev_release[0]:
             return "major"
         if cur_release[1] != prev_release[1]:

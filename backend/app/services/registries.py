@@ -183,8 +183,8 @@ async def _views(db: AsyncSession, rows: list[Registry]) -> list[RegistryRespons
     states = {
         str(s.registry_id): s for s in (await db.scalars(select(SyncState).where(SyncState.registry_id.in_(ids)))).all()
     }
-    counts = dict(
-        (str(registry_id), count)
+    counts = {
+        str(registry_id): count
         for registry_id, count in (
             await db.execute(
                 select(PackageRegistry.registry_id, func.count())
@@ -192,7 +192,7 @@ async def _views(db: AsyncSession, rows: list[Registry]) -> list[RegistryRespons
                 .group_by(PackageRegistry.registry_id)
             )
         ).all()
-    )
+    }
     now = datetime.now(UTC)
     return [
         RegistryResponse(

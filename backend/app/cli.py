@@ -8,14 +8,14 @@ from sqlalchemy import func, select
 from app.config import get_settings
 from app.db import SessionLocal
 from app.logging_config import setup_logging
+from app.models.dependency import Dependency
 from app.models.enums import Ecosystem
+from app.models.package import Package
+from app.models.version import PackageVersion
 from app.services import registries as registries_service
 from app.tasks.fetch_deps import _fetch_package_async
 from app.tasks.retry_failed import _run_retry_failed_async
 from app.tasks.seed import _run_seed_async
-from app.models.dependency import Dependency
-from app.models.package import Package
-from app.models.version import PackageVersion
 
 
 async def _stats() -> dict[str, int]:
@@ -31,9 +31,8 @@ async def _stats() -> dict[str, int]:
     }
 
 
-async def _registries_import(path: str) -> int:
-    with open(path, encoding="utf-8") as handle:
-        document = registries_service.parse_import(handle.read())
+async def _registries_import(text: str) -> int:
+    document = registries_service.parse_import(text)
     async with SessionLocal() as db:
         results = await registries_service.import_document(db, document)
     for result in results:
@@ -67,7 +66,9 @@ async def _registries_list(ecosystem: str | None) -> int:
 def _run_registries(args: argparse.Namespace) -> int:
     try:
         if args.registries_command == "import":
-            return asyncio.run(_registries_import(args.file))
+            with open(args.file, encoding="utf-8") as handle:
+                text = handle.read()
+            return asyncio.run(_registries_import(text))
         if args.registries_command == "test":
             return asyncio.run(_registries_test(args.slug))
         return asyncio.run(_registries_list(args.ecosystem))

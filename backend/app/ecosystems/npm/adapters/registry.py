@@ -400,7 +400,7 @@ class NpmRegistryAdapter:
                 if response.status_code not in (304, 404):
                     response.raise_for_status()
                 return response
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if not is_retryable_upstream_error(exc) or attempt > self.max_retries:
                     raise
                 delay = compute_backoff_delay_seconds(
@@ -430,7 +430,7 @@ class NpmEtagChangeDetector:
                     response = await self.adapter.get(
                         self.adapter.package_url(package.ref), {"Accept": ACCEPT, "If-None-Match": known}
                     )
-            except Exception:  # noqa: BLE001 - one package failing must not fail the whole source for the day
+            except Exception:  # one package failing must not fail the whole source for the day
                 logger.warning("Change check of %s in %s failed", package.ref.name, self.adapter.registry.slug,
                                exc_info=True)
                 return package, "same", None

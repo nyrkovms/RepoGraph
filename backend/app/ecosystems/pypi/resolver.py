@@ -120,7 +120,7 @@ class _Bridge:
         except TimeoutError:
             self.loop.call_soon_threadsafe(lambda: self.task.cancel() if self.task else None)
             raise _Aborted("resolve_timeout", f"resolve took longer than {self.request.timeout_s:g} s") from None
-        except Exception as exc:  # noqa: BLE001 - an upstream or database failure ends the resolve, not the request
+        except Exception as exc:  # an upstream or database failure ends the resolve, not the request
             raise _Aborted("upstream_error", f"{type(exc).__name__}: {exc}") from exc
 
     def versions(self, ref: PackageRef) -> Sequence[CatalogVersion]:
@@ -139,7 +139,7 @@ class _Bridge:
         return found
 
 
-def _settle(task: "asyncio.Task[T]", result: Future[T]) -> None:
+def _settle[T](task: "asyncio.Task[T]", result: Future[T]) -> None:
     if task.cancelled():
         result.cancel()
     elif (error := task.exception()) is not None:

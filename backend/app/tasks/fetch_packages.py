@@ -93,7 +93,7 @@ async def _fetch_packages_async(purls: list[str], origin: PackageOrigin = Packag
                     logger.info("Fetched %s as %s", purl, stored.name)
                 await db.commit()
                 counts["fetched"] += 1
-            except Exception as exc:  # noqa: BLE001 - one bad package must not stop the batch
+            except Exception as exc:  # one bad package must not stop the batch
                 not_found = isinstance(exc, PackageNotFound)
                 counts["not_found" if not_found else "failed"] += 1
                 if not_found:

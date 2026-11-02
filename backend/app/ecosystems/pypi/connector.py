@@ -17,11 +17,11 @@ from app.connectors.base import (
     NormalizedVulnerability,
     PackageNotFound,
 )
+from app.ecosystems.pypi.pep508 import parse_pep508
 from app.normalizers.license import normalize_license
 from app.normalizers.names import normalize_package_name
-from app.ecosystems.pypi.pep508 import parse_pep508
-from app.services.retry_policy import compute_backoff_delay_seconds, is_retryable_upstream_error
 from app.services.http import make_client
+from app.services.retry_policy import compute_backoff_delay_seconds, is_retryable_upstream_error
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ class PyPIConnector(BaseConnector):
                 return response
             except PackageNotFound:
                 raise
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 is_retryable = is_retryable_upstream_error(exc)
                 if (not is_retryable) or attempt > (self.max_retries + 1):
                     raise

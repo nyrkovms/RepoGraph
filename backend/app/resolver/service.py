@@ -35,10 +35,10 @@ from app.schemas.resolve import (
     GraphNode,
     GraphResolveRequest,
     GraphResolveResponse,
-    ResolveRequest,
-    ResolveSuccessResponse,
     ResolvedDependencyNode,
     ResolvedPackage,
+    ResolveRequest,
+    ResolveSuccessResponse,
 )
 from app.services.metrics import inc_resolve_cache_hit, inc_resolve_cache_miss, observe_resolve_latency
 
@@ -148,7 +148,7 @@ async def resolve_dependencies(db: AsyncSession, payload: ResolveRequest) -> Res
     children: dict[str, list[Any]] = {}
     for edge in graph.edges:
         children.setdefault(edge.source, []).append(edge)
-    root_ids, hidden = _roots(graph, lock=payload.input_mode == "freeze")
+    _, hidden = _roots(graph, lock=payload.input_mode == "freeze")
 
     resolved: dict[str, ResolvedPackage] = {}
     hidden_roots: list[str] = []

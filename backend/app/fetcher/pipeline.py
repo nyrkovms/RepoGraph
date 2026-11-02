@@ -8,20 +8,19 @@ Callers commit; nothing here does.
 import hashlib
 import logging
 import uuid
-from typing import cast
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import delete, func, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.connectors.base import PackageNotFound
-from app.ecosystems.base import DependencyType as DependencyType_
 from app.ecosystems.base import (
     CatalogVersion,
-    Environment,
     EcosystemPlugin,
+    Environment,
     FetchedDocument,
     InvalidVersion,
     MergedPackage,
@@ -35,6 +34,7 @@ from app.ecosystems.base import (
     SourceAdapter,
     SourceProfile,
 )
+from app.ecosystems.base import DependencyType as DependencyType_
 from app.ecosystems.merge import dependencies_digest
 from app.ecosystems.registry import get_plugin, load_builtin_plugins
 from app.ecosystems.routing import is_priority
@@ -62,8 +62,7 @@ from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
 from app.models.source_document import SourceDocument
 from app.models.sync_state import SyncState
-from app.models.version import PackageVersion
-from app.models.version import VersionSource
+from app.models.version import PackageVersion, VersionSource
 from app.models.vulnerability import PackageVulnerability, Vulnerability
 
 logger = logging.getLogger(__name__)

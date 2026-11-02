@@ -65,7 +65,7 @@ async def _run(limit: int, ecosystems: tuple[Ecosystem, ...] = ECOSYSTEMS) -> di
             try:
                 async with semaphore:
                     found = await adapter.release_date(ref, version.version)  # type: ignore[attr-defined]
-            except Exception:  # noqa: BLE001 - one failing version must not stop the batch
+            except Exception:  # one failing version must not stop the batch
                 logger.warning("No release date for %s@%s in %s", package.name, version.version, registry.slug,
                                exc_info=True)
                 version.raw_metadata = {**(version.raw_metadata or {}), FAILED: now.isoformat()}
