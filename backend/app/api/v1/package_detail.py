@@ -686,6 +686,12 @@ async def _build_tree_for_version(
     plugin_env: Environment | None = None,
 ) -> list[DependencyNode]:
     deps = await view.dependencies(package, version_row)
+    # The rows are only read from here on, so they leave the session (#49): a lazy fetch below that fails against a
+    # sync of the same packages rolls back its savepoint, which expires the rows it changed (`_link_dependents` links
+    # these very ones), and an expired row cannot be loaded again in async code.
+    for dep in deps:
+        if dep in db:
+            db.expunge(dep)
     plugin_env = plugin_env or view.plugin_env
     asks = _crate_asks(plugin_env, version_row, deps)
 
