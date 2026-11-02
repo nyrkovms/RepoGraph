@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 from celery import Celery
 
@@ -43,14 +43,16 @@ def _snapshots(source: repo.Source, refresh: bool = False) -> Dict[str, repo.Sna
 
 
 class _Index:
-    """Builds by name over a source's snapshots: one pool per arch for the whole task."""
+    """Builds of the asked names over a source's snapshots: one pool per arch for the whole task. Only those names are
+    described (looked up by what provides each name): describing a whole repository takes seconds."""
 
-    def __init__(self, source: repo.Source, snapshots: Mapping[str, repo.Snapshot]) -> None:
+    def __init__(self, source: repo.Source, snapshots: Mapping[str, repo.Snapshot], names: Iterable[str]) -> None:
         from rpm_worker import pools
         self.by_name: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        wanted = list(dict.fromkeys(names))
         for arch, snap in snapshots.items():
             pool = pools.cached_pool(arch, [(source.slug, snap.solv)])
-            for solvable in pool.solvables_iter():
+            for solvable in (s for name in wanted for s in pool.whatprovides(pool.Dep(name)) if s.name == name):
                 if solvable.arch in ("src", "nosrc") or solvable.repo.name != source.slug:
                     continue
                 # noarch builds show up under every arch: one entry per NEVRA, with the arches whose repo lists it.
@@ -77,7 +79,7 @@ def fetch_package(source: Mapping[str, Any], name: str) -> Optional[Dict[str, An
     """The builds of a package in the source; None when the source's repodata, read, does not have it."""
     src = repo.source_from(source)
     snapshots = _snapshots(src)
-    builds = _Index(src, snapshots).builds(name)
+    builds = _Index(src, snapshots, [name]).builds(name)
     if not builds:
         return None
     from rpm_worker import modules
@@ -96,7 +98,7 @@ def detect_changes(source: Mapping[str, Any], tracked: Mapping[str, Optional[str
     revisions = {arch: s.revision for arch, s in snapshots.items()}
     if known_revisions and dict(known_revisions) == revisions and all(tracked.values()):
         return {"changed": {}, "missing": [], "revisions": revisions, "skipped": True}
-    index = _Index(src, snapshots)
+    index = _Index(src, snapshots, tracked)
     changed: Dict[str, str] = {}
     missing: List[str] = []
     for name, known in tracked.items():
