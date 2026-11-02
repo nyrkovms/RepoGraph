@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,6 +17,6 @@ class Author(UUIDPrimaryKeyMixin, Base):
 class PackageAuthor(Base):
     __tablename__ = "package_authors"
 
-    package_id: Mapped[str] = mapped_column(ForeignKey("packages.id"), primary_key=True)
-    author_id: Mapped[str] = mapped_column(ForeignKey("authors.id"), primary_key=True)
+    package_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("packages.id"), primary_key=True)
+    author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("authors.id"), primary_key=True)
     role: Mapped[str] = mapped_column(Enum("author", "maintainer", name="author_role_enum"), primary_key=True)

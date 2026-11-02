@@ -9,8 +9,8 @@ from app.models.registry import Registry
 from app.models.run import Run
 from app.models.source_document import SourceDocument
 from app.models.source_profile import SourceProfile, SourceProfileRegistry
-from app.models.sync_state import SyncState
 from app.models.sync_failure import SyncFailure
+from app.models.sync_state import SyncState
 from app.models.version import PackageVersion, VersionSource
 from app.models.vulnerability import PackageVulnerability, Vulnerability
 

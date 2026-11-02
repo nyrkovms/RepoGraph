@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import json
 import sys
+from collections.abc import Mapping
 
 from sqlalchemy import func, select
 
@@ -116,6 +117,7 @@ def main() -> None:
     if args.command == "registries":
         sys.exit(_run_registries(args))
 
+    result: Mapping[str, object]
     if args.command == "seed":
         packages = args.packages if args.packages else settings.seed_package_list
         result = asyncio.run(_run_seed_async(packages))

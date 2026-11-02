@@ -15,7 +15,7 @@ from app.tasks.fetch_packages import ref_from_target
 logger = logging.getLogger(__name__)
 
 
-async def _fetch_package_async(target: str) -> dict[str, str]:
+async def _fetch_package_async(target: str) -> dict[str, object]:
     """Fetch one package: `target` is a purl (`pkg:pypi/flask`) or a bare PyPI name."""
     started = perf_counter()
     ref = ref_from_target(target)
@@ -65,5 +65,5 @@ async def _fetch_package_async(target: str) -> dict[str, str]:
 
 @celery_app.task(name="app.tasks.fetch_deps.fetch_missing_dependencies")
 # `name` stays the parameter name: it is the keyword of tasks queued before purls were accepted.
-def fetch_missing_dependencies(name: str) -> dict[str, str]:
+def fetch_missing_dependencies(name: str) -> dict[str, object]:
     return asyncio.run(_fetch_package_async(name))

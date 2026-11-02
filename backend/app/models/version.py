@@ -28,7 +28,7 @@ class PackageVersion(UUIDPrimaryKeyMixin, Base):
         Index("idx_ver_pkg_sort", "package_id", text("sort_key DESC")),
     )
 
-    package_id: Mapped[str] = mapped_column(ForeignKey("packages.id"), nullable=False)
+    package_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("packages.id"), nullable=False)
     version: Mapped[str] = mapped_column(Text, nullable=False)
     release_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[PackageVersionStatus] = mapped_column(

@@ -51,7 +51,7 @@ async def _unresolved_dependency_refs(db, package_id) -> list[PackageRef]:
     return refs
 
 
-async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str, int | str]:
+async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str, object]:
     """Seed `packages` (purls, or bare PyPI names) and, up to `max_depth`, their required dependencies."""
     started = perf_counter()
     queue: deque[tuple[PackageRef, int]] = deque()
@@ -154,7 +154,7 @@ async def _finish(db, run_id, status: str, processed: int, failed: int, error: s
 
 
 @celery_app.task(name="app.tasks.seed.run_seed")
-def run_seed(packages: list[str] | None = None) -> dict[str, int | str]:
+def run_seed(packages: list[str] | None = None) -> dict[str, object]:
     settings = get_settings()
     seed_packages = packages or settings.seed_package_list
     return asyncio.run(_run_seed_async(seed_packages))

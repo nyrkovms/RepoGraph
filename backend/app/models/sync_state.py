@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Text, text
@@ -13,7 +14,7 @@ class SyncState(UUIDPrimaryKeyMixin, Base):
 
     __tablename__ = "sync_states"
 
-    registry_id: Mapped[str] = mapped_column(ForeignKey("registries.id"), unique=True, nullable=False)
+    registry_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("registries.id"), unique=True, nullable=False)
     status: Mapped[SyncStatus] = mapped_column(Enum(SyncStatus, name="sync_status_enum"), nullable=False)
     last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -17,7 +17,7 @@ class PackageEvent(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    package_id: Mapped[str] = mapped_column(ForeignKey("packages.id"), nullable=False)
+    package_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("packages.id"), nullable=False)
     version: Mapped[str | None] = mapped_column(Text, nullable=True)
     kind: Mapped[PackageEventKind] = mapped_column(Enum(PackageEventKind, name="package_event_kind_enum"), nullable=False)
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

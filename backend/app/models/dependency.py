@@ -18,7 +18,7 @@ class Dependency(UUIDPrimaryKeyMixin, Base):
         Index("idx_dep_version_variant", "version_id", "variant_registry_id"),
     )
 
-    version_id: Mapped[str] = mapped_column(ForeignKey("package_versions.id"), nullable=False)
+    version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("package_versions.id"), nullable=False)
 
     dependency_name: Mapped[str] = mapped_column(Text, nullable=False)
     dependency_namespace: Mapped[str] = mapped_column(String(255), nullable=False, server_default=text("''"))
@@ -31,8 +31,8 @@ class Dependency(UUIDPrimaryKeyMixin, Base):
     environment_markers: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     raw_spec: Mapped[str] = mapped_column(Text, nullable=False)
 
-    resolved_package_id: Mapped[str | None] = mapped_column(ForeignKey("packages.id"), nullable=True)
-    resolved_version_id: Mapped[str | None] = mapped_column(ForeignKey("package_versions.id"), nullable=True)
+    resolved_package_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("packages.id"), nullable=True)
+    resolved_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("package_versions.id"), nullable=True)
 
     # Added by 0006.
     alias: Mapped[str | None] = mapped_column(Text, nullable=True)

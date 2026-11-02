@@ -78,8 +78,8 @@ async def _run(limit: int, ecosystems: tuple[Ecosystem, ...] = ECOSYSTEMS) -> di
                 version.release_date = found
                 counts["dated"] += 1
 
-        await asyncio.gather(*(date(version, package, sources[version.id]) for version, package in rows
-                               if sources[version.id] is not None))
+        await asyncio.gather(*(date(version, package, registry) for version, package in rows
+                               if (registry := sources[version.id]) is not None))
         await db.commit()
     return {"status": "completed", "operation": "release_dates", **counts}
 

@@ -8,7 +8,6 @@ Callers commit; nothing here does.
 import hashlib
 import logging
 import uuid
-from typing import cast
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 
@@ -17,7 +16,6 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.connectors.base import PackageNotFound
-from app.ecosystems.base import DependencyType as DependencyType_
 from app.ecosystems.base import (
     CatalogVersion,
     Environment,
@@ -547,11 +545,11 @@ async def _write_version_sources(
     for merged in versions:
         for registry_id, status in merged.sources.items():
             source_version = source_versions[registry_id].get(merged.version.version)
-            known = source_version is not None and source_version.dependencies is not None
+            known = source_version.dependencies if source_version is not None else None
             rows.append({
                 "version_id": version_ids[merged.version.version], "registry_id": registry_id, "first_seen_at": now,
                 "status": PackageVersionStatus(status),
-                "metadata_digest": dependencies_digest(source_version.dependencies) if known else None,
+                "metadata_digest": dependencies_digest(known) if known is not None else None,
             })
     for chunk in _chunks(rows):
         stmt = insert(VersionSource).values(chunk)
@@ -579,7 +577,7 @@ async def _write_version_sources(
         )
 
 
-def _chunks(rows: list[dict], size: int = 1000) -> Iterable[list[dict]]:
+def _chunks[T](rows: list[T], size: int = 1000) -> Iterable[list[T]]:
     # A multi-row INSERT is one statement; asyncpg allows 32767 bind parameters per statement.
     for start in range(0, len(rows), size):
         yield rows[start:start + size]
@@ -645,11 +643,11 @@ async def _write_dependencies(
     elif metadata_moved:
         # The previous metadata source stopped publishing the version; the new one has not given its dependencies.
         # Its stored variant becomes the canonical set; without one the stale set waits for lazy hydration.
-        variant = await db.scalar(
+        variant_rows = await db.scalar(
             select(func.count(Dependency.id)).where(Dependency.version_id == row.id,
                                                     Dependency.variant_registry_id == merged.metadata_registry_id)
         )
-        if variant:
+        if variant_rows:
             await db.execute(delete(Dependency).where(Dependency.version_id == row.id, Dependency.variant_registry_id.is_(None)))
             await db.execute(
                 update(Dependency)
@@ -853,7 +851,7 @@ def dependency_from_row(dep: Dependency) -> NormalizedDependency:
         target=PackageRef(ecosystem=dep.dependency_ecosystem.value, namespace=dep.dependency_namespace or "",
                           name=dep.dependency_name),
         constraint=dep.version_constraint,
-        dependency_type=cast(DependencyType_, dep.dependency_type.value),
+        dependency_type=dep.dependency_type.value,
         raw_spec=dep.raw_spec,
         scope=dep.scope,
         alias=dep.alias,

@@ -153,17 +153,17 @@ async def resolve_dependencies(db: AsyncSession, payload: ResolveRequest) -> Res
     resolved: dict[str, ResolvedPackage] = {}
     hidden_roots: list[str] = []
     for root, edge in zip(roots, [e for e in graph.edges if e.source == "root"], strict=True):
-        node = nodes.get(edge.target)
-        if node is None:
+        target = nodes.get(edge.target)
+        if target is None:
             raise ResolveConflictError(f"Unable to resolve root dependency '{root.ref.name}'")
-        if node.id in hidden:
+        if target.id in hidden:
             hidden_roots.append(root.ref.name)
             continue
         resolved[root.ref.name] = ResolvedPackage(
-            version=node.version,
-            latest_compatible_version=node.latest_compatible,
-            has_newer_compatible_version=_is_newer_version(node.latest_compatible, node.version),
-            dependencies=_nested(nodes, children, node.id, payload.options.max_depth, 1, {node.ref.name}),
+            version=target.version,
+            latest_compatible_version=target.latest_compatible,
+            has_newer_compatible_version=_is_newer_version(target.latest_compatible, target.version),
+            dependencies=_nested(nodes, children, target.id, payload.options.max_depth, 1, {target.ref.name}),
         )
 
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
@@ -258,7 +258,8 @@ def _raise_for_error(graph: ResolveGraph) -> None:
         return
     code, message = graph.error.get("code"), str(graph.error.get("message"))
     if code == "not_found":
-        raise ResolveNotFoundError(str((graph.error.get("packages") or ["?"])[0]))
+        packages = graph.error.get("packages")
+        raise ResolveNotFoundError(str(packages[0] if isinstance(packages, list) and packages else "?"))
     if code == "resolver_conflict":
         raise ResolveConflictError(message, details={"causes": [dict(c) for c in graph.conflicts]})
     if code == "resolve_timeout":
