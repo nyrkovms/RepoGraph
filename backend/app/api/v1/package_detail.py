@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass, field
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from packaging.markers import Marker
 from sqlalchemy import and_, or_, select
@@ -80,8 +80,12 @@ class _Target:
 
 
 @router.get("/purl/{purl:path}", status_code=307)
-async def by_purl(purl: str) -> RedirectResponse:
-    """Package or version by purl: a redirect to its canonical path. Qualifiers are ignored."""
+async def by_purl(purl: str, request: Request) -> RedirectResponse:
+    """Package or version by purl: a redirect to its canonical path. Qualifiers are ignored, except where they name
+    the package (rpm `distro`)."""
+    # `?distro=rocky-9` written as is reaches the route as the query string, not as part of the path.
+    if request.url.query:
+        purl = f"{purl}?{request.url.query}"
     try:
         parsed = purls.parse(purl)
     except ValueError as exc:
