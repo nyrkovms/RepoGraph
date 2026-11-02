@@ -156,3 +156,17 @@ def test_jdk_profiles_keep_their_activation_and_shadow_active_by_default_ones() 
     deps = {d.artifact: d for d in asyncio.run(effective_model(pom, load)).dependencies}
     assert set(deps) == {"jaxb-api", "default"}
     assert deps["jaxb-api"].jdk == "[9,)" and deps["default"].unless_jdk == ("[9,)",)
+
+
+def test_the_description_is_inherited_and_the_name_is_not() -> None:
+    """Regression (#48): error_prone_annotations has no description of its own; Maven gives it its parent's."""
+    parent = _pom("""<groupId>g</groupId><artifactId>p</artifactId><version>1</version><packaging>pom</packaging>
+      <name>Parent</name><description>What the project is.</description><url>https://project.example</url>""")
+    child = _pom("<parent><groupId>g</groupId><artifactId>p</artifactId><version>1</version></parent>"
+                 "<artifactId>c</artifactId><name>Child</name>")
+    load, _ = _loader({("g", "p", "1"): parent})
+    model = asyncio.run(effective_model(parse_pom(child), load))
+    assert (model.name, model.description, model.url) == ("Child", "What the project is.", "https://project.example")
+    own = parse_pom(child.replace("<name>Child</name>", "<description>Its own.</description>"))
+    assert asyncio.run(effective_model(own, load)).description == "Its own."
+    assert asyncio.run(effective_model(own, load)).name is None
