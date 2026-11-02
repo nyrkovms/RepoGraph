@@ -4,7 +4,9 @@ A version's dependencies are not in its POM alone. The effective model:
 
 1. the `<parent>` chain, each parent loaded through `load` (the caller's channel: a parent may live in another
    repository of the profile; the documents are cached in source_documents, they are not catalog packages): groupId,
-   version, properties, dependencyManagement, dependencies, licenses and links are inherited, the child winning;
+   version, properties, dependencyManagement, dependencies, licenses, the description and links are inherited, the
+   child winning (the name is not, as in Maven); an inherited link is kept as the parent wrote it, without the child's
+   path Maven appends;
 2. profiles with `<activeByDefault>true</activeByDefault>` contribute like the POM; the dependencies of a profile
    activated by `<jdk>` are kept with that activation (`Dependency.jdk`) for the resolver to evaluate against the
    environment's `java_version` (§7.3), and when the POM has such profiles its active-by-default dependencies carry
@@ -278,7 +280,7 @@ async def effective_model(pom: Pom, load: Loader, import_depth: int = 0) -> Effe
     dependencies: list[Dependency] = []
     licenses: list[tuple[str | None, str | None]] = []
     developers: list[tuple[str | None, str | None]] = []
-    url = scm_url = None
+    url = scm_url = description = None
     for item in reversed(chain):
         group = item.group or (item.parent[0] if item.parent else None) or group
         version = item.version or (item.parent[2] if item.parent else None) or version
@@ -289,6 +291,7 @@ async def effective_model(pom: Pom, load: Loader, import_depth: int = 0) -> Effe
         developers = item.developers or developers
         url = item.url or url
         scm_url = item.scm_url or scm_url
+        description = item.description or description
     if group is None or version is None:
         raise PomError(f"{pom.artifact}: no groupId or version even after the parents")
 
@@ -320,7 +323,7 @@ async def effective_model(pom: Pom, load: Loader, import_depth: int = 0) -> Effe
     relocation = pom.relocation
     return EffectiveModel(
         group=group, artifact=pom.artifact, version=version, packaging=pom.packaging,
-        name=pom.name, description=pom.description, url=url, scm_url=scm_url, dependencies=resolved,
+        name=pom.name, description=description, url=url, scm_url=scm_url, dependencies=resolved,
         managed=[d for d in managed if d.scope != "import"], licenses=licenses, relocation=relocation,
         developers=developers, problems=problems)
 
