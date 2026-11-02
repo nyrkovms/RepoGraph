@@ -113,7 +113,7 @@ def _answer(url: str, text: str, **headers: str) -> dict[str, Route]:
 
 
 def test_gin_versions_dates_and_revision(serve) -> None:
-    serve()
+    upstream = serve()
     package = _fetch("github.com/gin-gonic/gin")
     assert package is not None
     listed = _recorded_versions("github.com/gin-gonic/gin")
@@ -123,17 +123,16 @@ def test_gin_versions_dates_and_revision(serve) -> None:
     assert (package.description, package.license_raw, package.license_spdx, package.authors) == (None, None, None, None)
     assert package.deprecation is None
 
+    # Regression (#43): only the latest is dated, from `@latest`; a `.info` per version made adding a module slow.
     dated = {v.version for v in package.versions if v.release_date is not None}
-    assert dated == {"v1.12.0", "v1.10.0", "v1.9.1", "v1.7.7"}   # the other 24 have no recorded .info
+    assert dated == {"v1.12.0"} and not [url for url in upstream.urls if url.endswith(".info")]
 
 
 def test_gin_release_dates_come_from_info(serve) -> None:
     serve()
-    package = _fetch("github.com/gin-gonic/gin")
-    assert package is not None
     expected = json.loads(_recorded("github.com/gin-gonic/gin/@v/v1.7.7.info"))["Time"]
-    assert _version(package, "v1.7.7").release_date == datetime.fromisoformat(expected)
-    assert _version(package, "v1.7.7").release_date == datetime(2021, 11, 24, 13, 54, 13, tzinfo=UTC)
+    found = asyncio.run(_adapter().release_date(_ref("github.com/gin-gonic/gin"), "v1.7.7"))
+    assert found == datetime.fromisoformat(expected) == datetime(2021, 11, 24, 13, 54, 13, tzinfo=UTC)
 
 
 def test_gin_only_the_latest_version_has_dependencies(serve) -> None:
@@ -205,8 +204,8 @@ def test_retract_block_the_latest_go_mod_gives_the_dependencies(serve) -> None:
     assert latest.dependencies is not None
     assert [d.raw_spec for d in latest.dependencies if d.details] == ["github.com/klauspost/cpuid/v2 v2.4.0 // indirect"]
     assert latest.engines == {"go": "1.26.0"}
-    assert _version(package, "v9.5.3").release_date == datetime.fromisoformat(
-        json.loads(_recorded("github.com/redis/go-redis/v9/@v/v9.5.3.info"))["Time"])
+    assert asyncio.run(_adapter().release_date(_ref("github.com/redis/go-redis/v9"), "v9.5.3")) == \
+        datetime.fromisoformat(json.loads(_recorded("github.com/redis/go-redis/v9/@v/v9.5.3.info"))["Time"])
 
 
 def test_retract_interval_covers_incompatible_versions_inclusively() -> None:
@@ -399,8 +398,8 @@ def test_a_server_error_is_raised(serve) -> None:
         _fetch("example.com/m")
 
 
-def test_a_failing_info_leaves_that_date_empty_and_is_logged(serve, caplog) -> None:
-    serve({
+def test_a_fetch_dates_the_latest_only_and_release_date_reads_one_info(serve, caplog) -> None:
+    upstream = serve({
         **_answer(f"{BASE}example.com/m/@v/list", "v1.0.0\nv1.1.0\nv1.2.0\n"),
         **_answer(f"{BASE}example.com/m/@v/v1.0.0.info", '{"Version":"v1.0.0","Time":"2020-01-01T00:00:00Z"}'),
         f"{BASE}example.com/m/@v/v1.1.0.info": httpx.Response(500),
@@ -409,38 +408,14 @@ def test_a_failing_info_leaves_that_date_empty_and_is_logged(serve, caplog) -> N
     with caplog.at_level(logging.WARNING, logger=goproxy.logger.name):
         package = _fetch("example.com/m")
     assert package is not None
-    assert {v.version: v.release_date for v in package.versions} == {
-        "v1.0.0": datetime(2020, 1, 1, tzinfo=UTC), "v1.1.0": None, "v1.2.0": None}
-    assert "v1.1.0" in caplog.text
-
-
-def test_info_requests_are_bounded_by_the_daily_update_concurrency(monkeypatch) -> None:
-    active = peak = 0
-
-    async def slow(request: httpx.Request) -> httpx.Response:
-        nonlocal active, peak
-        url = str(request.url)
-        if url.endswith("/@v/list"):
-            return httpx.Response(200, text="".join(f"v1.0.{i}\n" for i in range(12)))
-        if url.endswith(".info"):
-            active += 1
-            peak = max(peak, active)
-            await asyncio.sleep(0.01)
-            active -= 1
-            return httpx.Response(200, text='{"Version":"v1.0.0","Time":"2020-01-01T00:00:00Z"}')
-        return httpx.Response(404)
-
-    monkeypatch.setattr(goproxy, "make_client", lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(slow)))
-    adapter = _adapter()
-    adapter.concurrency = 3
-    package = _fetch("example.com/m", adapter)
-    assert package is not None and len(package.versions) == 12 and peak == 3
-
-
-def test_the_default_concurrency_is_the_daily_update_one() -> None:
-    from app.config import get_settings
-
-    assert _adapter().concurrency == get_settings().daily_update_concurrency
+    # No `@latest`: the highest tag is the latest, its `.info` is unreadable, the rest waits for the background task.
+    assert {v.version: v.release_date for v in package.versions} == {"v1.0.0": None, "v1.1.0": None, "v1.2.0": None}
+    assert [url for url in upstream.urls if url.endswith(".info")] == [f"{BASE}example.com/m/@v/v1.2.0.info"]
+    adapter, ref = _adapter(), _ref("example.com/m")
+    assert asyncio.run(adapter.release_date(ref, "v1.0.0")) == datetime(2020, 1, 1, tzinfo=UTC)
+    assert asyncio.run(adapter.release_date(ref, "v1.2.0")) is None
+    with pytest.raises(httpx.HTTPStatusError):                          # the task marks it and tries again later
+        asyncio.run(adapter.release_date(ref, "v1.1.0"))
 
 
 def test_a_missing_or_unreadable_latest_go_mod_leaves_dependencies_lazy(serve, caplog) -> None:

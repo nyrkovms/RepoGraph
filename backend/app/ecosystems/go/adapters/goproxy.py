@@ -7,6 +7,10 @@ pseudo-version as `@latest`, which is then its only version. The proxy has no ET
 checksums, description, license or authors: the revision of a package is a hash of its version list, and the rest stays
 empty (§7.1, Q11).
 
+A fetch dates the latest version (the `Time` of `@latest`, or its `.info`) and every pseudo-version (the timestamp in
+it); the other tagged versions are dated in the background (`release_date`, tasks/release_dates.py), as Maven does:
+a `.info` per version made adding a module with a long history take hundreds of requests.
+
 Dependencies are read from the go.mod of the latest version at once and lazily for the others
 (`fetch_version_dependencies`). The same go.mod gives `retract` (the covered versions are `yanked`) and
 `// Deprecated:`. `replace` and `exclude` of a dependency are not applied (§9.5).
@@ -43,7 +47,7 @@ from app.ecosystems.base import (
 from app.ecosystems.go.changes import TAGLESS, GoIndexChangesDetector
 from app.ecosystems.go.coordinates import GoCoordinates, escape_path, escape_version
 from app.ecosystems.go.gomod import GoMod, GoModError, Retract, parse_go_mod
-from app.ecosystems.go.versions import GoVersionScheme, compare, is_incompatible
+from app.ecosystems.go.versions import GoVersionScheme, compare, is_incompatible, pseudo_time
 from app.services.http import make_client
 from app.services.retry_policy import compute_backoff_delay_seconds, is_retryable_upstream_error
 
@@ -139,7 +143,6 @@ class GoProxyAdapter:
         self.registry = registry
         self.root = registry.base_url.rstrip("/") + "/"
         settings = get_settings()
-        self.concurrency = settings.daily_update_concurrency
         self.timeout_seconds = settings.sync_http_timeout_seconds
         self.max_retries = settings.sync_http_max_retries
         self.retry_base_seconds = settings.sync_http_retry_base_seconds
@@ -189,8 +192,10 @@ class GoProxyAdapter:
             raw_versions, known = [named], {named: _date(document.get("Time") if document else None)}
 
         versions = self._valid_versions(ref, raw_versions)
-        dates = await self._release_dates(ref, versions, known)
         top = named if isinstance(named, str) and named in versions else _pick_latest(versions)
+        if top is not None and top == named and document is not None:
+            known.setdefault(top, _date(document.get("Time")))
+        dates = await self._release_dates(ref, versions, known, top)
         go_mod = await self._latest_go_mod(ref, top) if top is not None else None
         # Go takes retractions from the highest version, retracted or not (a newest tag may retract itself, and then
         # `@latest` names an older one whose go.mod knows nothing of it): read both.
@@ -246,6 +251,12 @@ class GoProxyAdapter:
             etag=response.headers.get("etag"),
         )
 
+    async def release_date(self, ref: PackageRef, version: str) -> datetime | None:
+        """The `Time` of the version's `.info`; None when it is missing or unreadable. Errors of the proxy are raised,
+        so the background task tries again later."""
+        response = await self.get(self.version_url(ref, version, "info"))
+        return None if _is_missing(response) else _info_time(response)
+
     async def exists(self, ref: PackageRef) -> bool:
         response = await self.get(self.list_url(ref))
         if not _is_missing(response) and _list_lines(response):
@@ -280,22 +291,17 @@ class GoProxyAdapter:
         return versions
 
     async def _release_dates(
-        self, ref: PackageRef, versions: Sequence[str], known: Mapping[str, datetime | None],
+        self, ref: PackageRef, versions: Sequence[str], known: Mapping[str, datetime | None], top: str | None,
     ) -> dict[str, datetime | None]:
-        semaphore = asyncio.Semaphore(self.concurrency)
-
-        async def one(version: str) -> tuple[str, datetime | None]:
-            if version in known:
-                return version, known[version]
+        """What a fetch dates: what it already knows, pseudo-versions by their timestamp, and the latest version (one
+        `.info` when `@latest` did not date it). The rest is left to the background task."""
+        dates = {version: known[version] if version in known else pseudo_time(version) for version in versions}
+        if top is not None and dates.get(top) is None:
             try:
-                async with semaphore:
-                    response = await self.get(self.version_url(ref, version, "info"))
-                return version, None if _is_missing(response) else _info_time(response)
+                dates[top] = await self.release_date(ref, top)
             except Exception:  # noqa: BLE001 - a missing date must not lose the version
-                logger.warning("No release date for %s@%s in %s", ref.name, version, self.registry.slug, exc_info=True)
-                return version, None
-
-        return dict(await asyncio.gather(*(one(version) for version in versions)))
+                logger.warning("No release date for %s@%s in %s", ref.name, top, self.registry.slug, exc_info=True)
+        return dates
 
     async def _latest_go_mod(self, ref: PackageRef, version: str) -> GoMod | None:
         try:
