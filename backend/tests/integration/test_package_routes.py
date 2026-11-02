@@ -19,6 +19,7 @@ from app.api.v1 import package_detail as routes
 from app.config import get_settings
 from app.ecosystems.base import NormalizedDependency, NormalizedPackage, NormalizedVersion, PackageRef
 from app.fetcher import pipeline
+from app.models.dependency import Dependency
 from app.models.enums import Ecosystem, PackageOrigin, RegistryProtocol
 from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
@@ -315,6 +316,28 @@ def test_the_tree_survives_a_sync_that_replaces_the_rows_it_holds(monkeypatch) -
         response = await routes.get_dependencies_tree("pypi", root, "1.0", db, profile=None, depth=1,
                                                       include_optional=False, python_version=None, os=None)
         assert [(n.name, n.resolved_version) for n in response.dependencies] == [(child, "1.2")]
+
+        # The other way it failed: the fetch links the rows, then loses to the concurrent sync, rolls back its
+        # savepoint (which expires the rows it touched) and gives up, as LazyFetcher does; the tree reads them after.
+        other = _name()
+        await _write(db, other, {pypi: [_version("1.0", deps=[child + "-x"])]})
+        other_id = (await pipeline.find_package(db, PackageRef(ecosystem="pypi", namespace="", name=other))).id
+        other_version = await db.scalar(select(PackageVersion.id).where(PackageVersion.package_id == other_id))
+
+        async def link_then_lose(self, ref):   # noqa: ANN001, ANN202
+            try:
+                async with db.begin_nested():
+                    for row in (await db.scalars(select(Dependency).where(Dependency.version_id == other_version))):
+                        row.resolved_package_id = other_id
+                    await db.flush()
+                    raise RuntimeError("duplicate key: the concurrent sync wrote the package first")
+            except RuntimeError:
+                return None
+
+        monkeypatch.setattr(routes.LazyFetcher, "ensure_package", link_then_lose)
+        response = await routes.get_dependencies_tree("pypi", other, "1.0", db, profile=None, depth=1,
+                                                      include_optional=False, python_version=None, os=None)
+        assert [(n.name, n.resolved_version) for n in response.dependencies] == [(child + "-x", None)]
 
     _in_rolled_back_transaction(check)
 
