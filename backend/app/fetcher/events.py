@@ -86,8 +86,8 @@ def diff_package(
                     "bump": scheme.bump(previous_stable, version.version),
                     "prerelease": prerelease,
                     # RPM: the module stream of a modular build, `nodejs 18.20.4 (nodejs:18)` (§8.3).
-                    **({"modules": list(version.raw_metadata["modules"])}
-                       if isinstance(version.raw_metadata.get("modules"), list) else {}),
+                    **({"modules": list(modules)}
+                       if isinstance(modules := version.raw_metadata.get("modules"), list) else {}),
                 },
             )
         )

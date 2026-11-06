@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, String, Text, text
@@ -15,8 +16,8 @@ class Artifact(UUIDPrimaryKeyMixin, Base):
         Index("uq_artifacts_version_registry_filename", "version_id", "registry_id", "filename", unique=True),
     )
 
-    version_id: Mapped[str] = mapped_column(ForeignKey("package_versions.id"), nullable=False)
-    registry_id: Mapped[str] = mapped_column(ForeignKey("registries.id"), nullable=False)
+    version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("package_versions.id"), nullable=False)
+    registry_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("registries.id"), nullable=False)
 
     filename: Mapped[str] = mapped_column(Text, nullable=False)
     download_url: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -38,7 +39,7 @@ class Artifact(UUIDPrimaryKeyMixin, Base):
 class DistTag(Base):
     __tablename__ = "dist_tags"
 
-    package_id: Mapped[str] = mapped_column(ForeignKey("packages.id"), primary_key=True)
+    package_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("packages.id"), primary_key=True)
     tag: Mapped[str] = mapped_column(String(64), primary_key=True)
     version: Mapped[str] = mapped_column(String(128), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

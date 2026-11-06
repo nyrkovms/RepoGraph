@@ -29,7 +29,7 @@ _ORIGIN_BY_OPERATION = {
 }
 
 
-async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | str]:
+async def _run_retry_failed_async(limit: int | None = None) -> dict[str, object]:
     settings = get_settings()
     started = perf_counter()
     batch_limit = limit if limit is not None else settings.sync_failed_retry_batch_limit
@@ -140,5 +140,5 @@ async def _finish(db, run_id, status: str, total: int, recovered: int, failed: i
 
 
 @celery_app.task(name="app.tasks.retry_failed.run_retry_failed_sync")
-def run_retry_failed_sync(limit: int | None = None) -> dict[str, int | str]:
+def run_retry_failed_sync(limit: int | None = None) -> dict[str, object]:
     return asyncio.run(_run_retry_failed_async(limit=limit))

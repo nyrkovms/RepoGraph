@@ -115,4 +115,4 @@ async def list_due_sync_failures(db: AsyncSession, limit: int) -> list[SyncFailu
             .limit(limit)
         )
     ).all()
-    return rows
+    return list(rows)

@@ -285,7 +285,7 @@ async def fetch_last_update_runs(db: AsyncSession) -> list[EcosystemRunInfo]:
     runs = (await db.scalars(select(Run).join(newest, newest.c.id == Run.id).where(newest.c.rank == 1))).all()
     # The ecosystem filter above leaves no null ecosystems; the enum sorts by declaration, the API by name.
     return [
-        EcosystemRunInfo(**_run_fields(run), ecosystem=run.ecosystem.value)
+        EcosystemRunInfo(**_run_fields(run), ecosystem=run.ecosystem.value if run.ecosystem else "")
         for run in sorted(runs, key=lambda run: run.ecosystem.value if run.ecosystem else "")
     ]
 
@@ -309,7 +309,7 @@ def _decode_cursor_or_422(cursor: str | None) -> tuple[datetime, int] | None:
     if not cursor:
         return None
     try:
-        payload = decode_cursor(cursor)
+        payload = decode_cursor(cursor) or {}   # None only for an empty cursor, handled above
         detected_at = parse_iso_datetime(payload["detected_at"])
         event_id = int(payload["id"])
     except CursorError as exc:

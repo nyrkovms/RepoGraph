@@ -10,7 +10,7 @@ import logging
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlsplit
 
 import yaml
@@ -19,10 +19,11 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ecosystems.base import EcosystemPlugin, RegistryConfig, SourceProfile
+from app.ecosystems.base import Ecosystem as EcosystemName
+from app.ecosystems.base import EcosystemPlugin, Protocol_, RegistryConfig, SourceProfile
 from app.ecosystems.registry import UnknownEcosystem
 from app.fetcher.pipeline import plugin_for
-from app.fetcher.sources import registry_config
+from app.fetcher.sources import AuthType, registry_config
 from app.models.enums import Ecosystem, RegistryProtocol
 from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
@@ -100,9 +101,11 @@ class RegistryFields:
 
     def contract(self) -> RegistryConfig:
         return RegistryConfig(
-            id="validate", slug=self.slug, ecosystem=self.ecosystem, protocol=self.protocol,
-            base_url=self.base_url, priority=self.priority, config=self.config, routing=self.routing,
-            auth_type=self.auth_type, credentials_ref=self.credentials_ref,
+            # The fields are validated before (RegistryInput); the contract wants their literal types.
+            id="validate", slug=self.slug, ecosystem=cast(EcosystemName, self.ecosystem),
+            protocol=cast(Protocol_, self.protocol), base_url=self.base_url, priority=self.priority,
+            config=self.config, routing=self.routing, auth_type=cast(AuthType, self.auth_type),
+            credentials_ref=self.credentials_ref,
         )
 
 

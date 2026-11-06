@@ -2,17 +2,20 @@
 
 import logging
 from collections.abc import Sequence
-from typing import cast
+from typing import Literal, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ecosystems.base import Ecosystem, Protocol_, RegistryConfig, SourceProfile
+from app.ecosystems.base import Ecosystem, RegistryConfig, SourceProfile
 from app.models.enums import Ecosystem as EcosystemEnum
 from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
 from app.models.source_profile import SourceProfile as SourceProfileRow
 from app.models.source_profile import SourceProfileRegistry
+
+# RegistryConfig.auth_type; the database holds only these (ck_registries_auth_type).
+AuthType = Literal["none", "basic", "bearer", "tls_client_cert"]
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +29,13 @@ def registry_config(row: Registry, routing_override: dict | None = None) -> Regi
     return RegistryConfig(
         id=str(row.id),
         slug=row.slug,
-        ecosystem=cast(Ecosystem, row.ecosystem.value),
-        protocol=cast(Protocol_, row.protocol.value),
+        ecosystem=row.ecosystem.value,
+        protocol=row.protocol.value,
         base_url=row.base_url,
         priority=row.priority,
         config=row.config or {},
         routing=routing_override if routing_override is not None else row.routing,
-        auth_type=row.auth_type,  # checked by ck_registries_auth_type
+        auth_type=cast(AuthType, row.auth_type),
         credentials_ref=row.credentials_ref,
     )
 

@@ -255,11 +255,13 @@ async def run_ecosystem(ecosystem: str) -> dict:
     index_serial = next((d.get("cursor", {}).get("index_serial") for d in per_registry.values() if "index_serial" in d.get("cursor", {})), None)
     async with loop_local_session() as db:
         run = await db.get(Run, run_id)
+        assert run is not None   # started above; runs are not deleted
         events = await runs.finish_run(db, run, status, error=error, per_registry=per_registry, **counts)
         if status != runs.FAILED:
             await _save_cursors(db, cursors)
         await db.commit()
         finished_at = run.finished_at
+        assert finished_at is not None   # finish_run sets it
 
     summary = {
         "status": status,

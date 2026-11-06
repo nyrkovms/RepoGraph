@@ -79,16 +79,27 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "f
 
 [tool.mypy]
 python_version = "3.12"
+plugins = ["pydantic.mypy"]
+warn_unused_configs = true
+warn_redundant_casts = true
 
-# Strict typing is enforced for the plugin layer only; legacy modules it imports are not checked (yet).
+# The whole application is type-checked; the plugin layer and its contract strictly (`--strict`'s per-module
+# flags, so one run checks everything).
 [[tool.mypy.overrides]]
-module = ["app.*"]
-ignore_errors = true
+module = ["app.ecosystems", "app.ecosystems.*", "ecosystem_contract"]
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_reexport = true
+strict_equality = true
+extra_checks = true
 
 [[tool.mypy.overrides]]
-module = ["app.ecosystems", "app.ecosystems.*"]
-ignore_errors = false
-
-[[tool.mypy.overrides]]
-module = ["celery.*", "resolvelib.*", "kombu.*"]
+module = ["celery.*", "resolvelib.*", "yaml"]
 ignore_missing_imports = true

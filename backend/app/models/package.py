@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 
 from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint, text
@@ -28,7 +29,7 @@ class Package(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     namespace: Mapped[str] = mapped_column(String(255), nullable=False, server_default=text("''"))
     name: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_name: Mapped[str] = mapped_column(Text, nullable=False)
-    primary_registry_id: Mapped[str] = mapped_column(ForeignKey("registries.id"), nullable=False)
+    primary_registry_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("registries.id"), nullable=False)
 
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     homepage_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)

@@ -14,11 +14,10 @@ check: backend-lint mypy backend-unit frontend
 backend-lint:
 	cd backend && $(UV_RUN) --with $(RUFF) -- ruff check app tests
 
-# The plugin contract (design artifact) and, once it exists, the ecosystems package must pass `mypy --strict`.
-MYPY_TARGETS = ../design/ecosystem_contract.py $(if $(wildcard backend/app/ecosystems),app/ecosystems)
-
+# The application and the plugin contract (design artifact); backend/pyproject.toml makes the plugin layer and the
+# contract strict.
 mypy:
-	cd backend && $(UV_RUN) --with-editable . --with $(MYPY) -- mypy --strict $(MYPY_TARGETS)
+	cd backend && $(UV_RUN) --with-editable . --with $(MYPY) -- mypy app ../design/ecosystem_contract.py
 
 backend-unit:
 	cd backend && LOG_TO_FILE=false $(UV_RUN) --with-editable . --with $(PYTEST) --with greenlet -- pytest tests/unit
