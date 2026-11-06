@@ -16,11 +16,11 @@ from app.ecosystems.base import (
     SourceProfile,
     VersionScheme,
 )
+from app.ecosystems.merge import merge_by_priority
 from app.ecosystems.nuget.adapters.v3 import NuGetV3Adapter
 from app.ecosystems.nuget.coordinates import NuGetCoordinates
 from app.ecosystems.nuget.environment import NuGetEnvironment, dependency_applies, parse_environment
 from app.ecosystems.nuget.versions import NuGetVersionScheme
-from app.ecosystems.merge import merge_by_priority
 from app.ecosystems.registry import register
 from app.ecosystems.routing import route
 
@@ -64,7 +64,7 @@ class NuGetPlugin:
         return dep.target
 
     def resolver(self) -> Resolver:
-        from app.ecosystems.nuget.resolver import RESOLVER   # I5
+        from app.ecosystems.nuget.resolver import RESOLVER  # I5
 
         return RESOLVER
 

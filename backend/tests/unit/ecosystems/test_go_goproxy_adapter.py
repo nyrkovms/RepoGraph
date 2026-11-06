@@ -26,8 +26,7 @@ import httpx
 import pytest
 
 from app.ecosystems.base import FetchedDocument, NormalizedPackage, PackageRef, RegistryConfig, TrackedPackage
-from app.ecosystems.go.adapters import GoListChangeDetector, GoProxyAdapter
-from app.ecosystems.go.adapters import goproxy
+from app.ecosystems.go.adapters import GoListChangeDetector, GoProxyAdapter, goproxy
 from app.ecosystems.go.adapters.goproxy import list_revision, retraction
 from app.ecosystems.go.coordinates import GoCoordinates
 from app.ecosystems.go.gomod import parse_go_mod

@@ -151,7 +151,7 @@ def test_environment_and_dependency_filter() -> None:
 
 def test_superseded_compares_within_a_module_stream_and_counts_noarch_against_every_arch(worker) -> None:
     _, answers = worker
-    node = lambda evr, arch="x86_64", **extra: dict(_build(evr, arch), name="nodejs", **extra)  # noqa: E731
+    node = lambda evr, arch="x86_64", **extra: dict(_build(evr, arch), name="nodejs", **extra)
     answers["rpm.fetch_package"] = {"revision": "r", "builds": [
         node("1:18.20.4-1.module+el8.10.0+1"), node("1:18.20.2-1.module+el8.9.0+1"),
         node("1:20.16.0-1.module+el8.10.0+2"), node("1:10.24.0-1.el8"),

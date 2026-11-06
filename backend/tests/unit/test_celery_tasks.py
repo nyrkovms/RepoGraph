@@ -25,5 +25,5 @@ def test_worker_registers_every_task_and_every_scheduled_job() -> None:
     out = subprocess.run([sys.executable, "-c", _WORKER_VIEW], cwd=Path(__file__).parents[2], check=True,
                          capture_output=True, text=True).stdout
     registered, scheduled = (set(part.split()) for part in out.split("--\n"))
-    assert EXPECTED <= registered
+    assert registered >= EXPECTED
     assert scheduled <= registered

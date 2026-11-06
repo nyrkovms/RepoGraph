@@ -132,7 +132,7 @@ def test_parse_import_rejects_bad_files() -> None:
         parse_import("registries: [unclosed")
     with pytest.raises(RegistryInvalid, match="unknown top-level keys: sources"):
         parse_import("sources: []")
-    with pytest.raises(RegistryInvalid, match="registries.0.slug"):
+    with pytest.raises(RegistryInvalid, match=r"registries\.0\.slug"):
         parse_import("registries:\n  - name: no slug\n    ecosystem: pypi\n    protocol: pypi-warehouse\n    base_url: https://m/\n")
     with pytest.raises(RegistryInvalid, match="mapping"):
         parse_import("just text")

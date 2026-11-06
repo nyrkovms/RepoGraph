@@ -3,8 +3,8 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_db_session
 from app.api.v1.packages import PackageSort, _query_packages
+from app.db import get_db_session
 from app.models.enums import Ecosystem, PackageOrigin
 from app.schemas.search import SearchResponse
 

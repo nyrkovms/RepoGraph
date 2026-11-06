@@ -25,8 +25,7 @@ import httpx
 import pytest
 
 from app.ecosystems.base import InvalidVersion, NormalizedPackage, PackageRef, RegistryConfig, TrackedPackage
-from app.ecosystems.nuget.adapters import NuGetEtagChangeDetector, NuGetV3Adapter
-from app.ecosystems.nuget.adapters import v3
+from app.ecosystems.nuget.adapters import NuGetEtagChangeDetector, NuGetV3Adapter, v3
 from app.ecosystems.nuget.adapters.v3 import ServiceIndex, parse_service_index
 from app.ecosystems.nuget.changes import NuGetCatalogChangesDetector
 from app.ecosystems.nuget.coordinates import NuGetCoordinates

@@ -7,7 +7,6 @@ from packaging.utils import canonicalize_name
 from app.ecosystems.base import PackageRef
 from app.ecosystems.purl import Purl, parse
 
-
 # PEP 508 project names: letters, digits, `.`, `_`, `-`, starting and ending with a letter or digit.
 _NAME = re.compile(r"^([A-Z0-9]|[A-Z0-9][A-Z0-9._-]*[A-Z0-9])$", re.IGNORECASE)
 

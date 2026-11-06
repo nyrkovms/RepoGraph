@@ -1,10 +1,10 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from app.api.v1.updates import SummaryEvent, aggregate_summary, compute_summary_window, compute_totals
 
-T0 = datetime(2026, 10, 27, 3, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 27, 3, 0, tzinfo=UTC)
 
 
 def ev(package, kind, minutes=0, version=None, details=None, id=0, ecosystem="pypi", namespace=""):
@@ -210,55 +210,56 @@ def test_deprecated_ranks_between_yanked_and_major() -> None:
 
 # --- window computation
 
-NOW = datetime(2026, 10, 27, 1, 30, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 27, 1, 30, tzinfo=UTC)
 
 
 def test_window_day_utc() -> None:
     since, until = compute_summary_window("day", "UTC", now=NOW)
-    assert since == datetime(2026, 10, 27, 0, 0, tzinfo=timezone.utc)
+    assert since == datetime(2026, 10, 27, 0, 0, tzinfo=UTC)
     assert until == NOW
 
 
 def test_window_week_utc_is_seven_calendar_days() -> None:
     since, until = compute_summary_window("week", "UTC", now=NOW)
-    assert since == datetime(2026, 10, 21, 0, 0, tzinfo=timezone.utc)
+    assert since == datetime(2026, 10, 21, 0, 0, tzinfo=UTC)
     assert until == NOW
 
 
 def test_window_day_respects_timezone() -> None:
     # 01:30 UTC is still Oct 26 in New York (UTC-4 until Nov 1), so "today" started Oct 26 04:00 UTC.
     since, _ = compute_summary_window("day", "America/New_York", now=NOW)
-    assert since == datetime(2026, 10, 26, 4, 0, tzinfo=timezone.utc)
+    assert since == datetime(2026, 10, 26, 4, 0, tzinfo=UTC)
     # Ahead of UTC: 01:30 UTC is 10:30 Oct 27 in Tokyo, start of day = Oct 26 15:00 UTC.
     since, _ = compute_summary_window("day", "Asia/Tokyo", now=NOW)
-    assert since == datetime(2026, 10, 26, 15, 0, tzinfo=timezone.utc)
+    assert since == datetime(2026, 10, 26, 15, 0, tzinfo=UTC)
 
 
 def test_window_week_across_dst_change() -> None:
-    now = datetime(2026, 11, 3, 12, 0, tzinfo=timezone.utc)  # US DST ended Nov 1
+    now = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)  # US DST ended Nov 1
     since, _ = compute_summary_window("week", "America/New_York", now=now)
     # Oct 28 00:00 EDT (UTC-4)
-    assert since == datetime(2026, 10, 28, 4, 0, tzinfo=timezone.utc)
+    assert since == datetime(2026, 10, 28, 4, 0, tzinfo=UTC)
 
 
 def test_explicit_since_until_win_over_period_and_tz() -> None:
-    s = datetime(2026, 10, 1, tzinfo=timezone.utc)
-    u = datetime(2026, 10, 5, tzinfo=timezone.utc)
+    s = datetime(2026, 10, 1, tzinfo=UTC)
+    u = datetime(2026, 10, 5, tzinfo=UTC)
     assert compute_summary_window("week", "Asia/Tokyo", s, u, now=NOW) == (s, u)
 
 
 def test_naive_bounds_are_treated_as_utc() -> None:
-    s, u = compute_summary_window("day", "UTC", datetime(2026, 10, 1), datetime(2026, 10, 2), now=NOW)
-    assert s.tzinfo is not None and s == datetime(2026, 10, 1, tzinfo=timezone.utc)
-    assert u == datetime(2026, 10, 2, tzinfo=timezone.utc)
+    naive = datetime(2026, 10, 1), datetime(2026, 10, 2)   # noqa: DTZ001 - what the test is about
+    s, u = compute_summary_window("day", "UTC", *naive, now=NOW)
+    assert s.tzinfo is not None and s == datetime(2026, 10, 1, tzinfo=UTC)
+    assert u == datetime(2026, 10, 2, tzinfo=UTC)
 
 
 def test_single_explicit_bound_uses_period_default_for_other() -> None:
-    s = datetime(2026, 10, 20, tzinfo=timezone.utc)
+    s = datetime(2026, 10, 20, tzinfo=UTC)
     assert compute_summary_window("day", "UTC", since=s, now=NOW) == (s, NOW)
-    u = datetime(2026, 10, 27, 0, 0, tzinfo=timezone.utc)
+    u = datetime(2026, 10, 27, 0, 0, tzinfo=UTC)
     since, until = compute_summary_window("week", "UTC", until=u, now=NOW)
-    assert (since, until) == (datetime(2026, 10, 21, tzinfo=timezone.utc), u)
+    assert (since, until) == (datetime(2026, 10, 21, tzinfo=UTC), u)
 
 
 def test_invalid_timezone_and_empty_window_raise() -> None:

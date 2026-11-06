@@ -397,8 +397,8 @@ def test_document_path_is_relative_to_the_base_url_when_it_starts_with_it(serve)
 
 
 def test_dependencies_equal_what_the_warehouse_path_gives_for_the_same_requires_dist(serve, monkeypatch) -> None:
-    from app.ecosystems.pypi.adapters import warehouse
     from app.ecosystems.pypi import connector as connector_module
+    from app.ecosystems.pypi.adapters import warehouse
 
     serve({TORCH_CPU_PAGE: _html(_text("cpu-torch.html")), **_metadata_routes()})
     from_index = _deps(_adapter(), "torch", "2.9.1+cpu")

@@ -85,7 +85,7 @@ def test_vercmp_follows_the_rpm_rules() -> None:
 
 
 @pytest.mark.parametrize("raw", ["", " ", "1.0 ", " 1.0", "1.0-1 2", "1.0\t", "1.0\n-1", "1.0\x00", "1.0\x7f", "-1", "1:", "1:-1", ":1.0",
-                                 "a:1.0", "1a:1.0-1", "1.5:1.0", "-", "1.0 -1", " 1.0"])
+                                 "a:1.0", "1a:1.0-1", "1.5:1.0", "-", "1.0\u00a0-1", "\u20281.0"])
 def test_validate_rejects(raw: str) -> None:
     with pytest.raises(InvalidVersion):
         SCHEME.validate(raw)

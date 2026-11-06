@@ -70,7 +70,7 @@ class GoPlugin:
         return dep.target
 
     def resolver(self) -> Resolver:
-        from app.ecosystems.go.resolver import RESOLVER   # H5
+        from app.ecosystems.go.resolver import RESOLVER  # H5
 
         return RESOLVER
 

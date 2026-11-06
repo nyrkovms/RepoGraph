@@ -5,9 +5,9 @@ recorded upstream responses; see tests/reference/README.md for the format."""
 
 import asyncio
 import json
-from collections.abc import Callable
 import os
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest

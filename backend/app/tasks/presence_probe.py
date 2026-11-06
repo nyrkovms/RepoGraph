@@ -105,7 +105,7 @@ async def probe_packages(
             await clear_sync_failure(db, ref=ref, operation=OPERATION)
             await db.commit()
             result.updated += 1
-        except Exception as exc:  # noqa: BLE001 - one bad package must not stop the probe
+        except Exception as exc:  # one bad package must not stop the probe
             result.failed += 1
             not_found = isinstance(exc, PackageNotFound)
             if not_found:
@@ -141,7 +141,7 @@ async def _probe_sources(
             await record_source_failure(db, registry, exc)
             skipped.add(registry.id)
             continue
-        except Exception:  # noqa: BLE001 - an adapter bug would repeat for every package: stop asking this source
+        except Exception:  # an adapter bug would repeat for every package: stop asking this source
             stats["errors"] += 1
             logger.exception("Presence probe: source %s failed on %s", registry.slug, purl)
             skipped.add(registry.id)

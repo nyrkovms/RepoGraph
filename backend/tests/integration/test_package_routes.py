@@ -5,8 +5,8 @@ integration tests use stays as it is; the HTTP tests read the seeded `flask`."""
 
 import asyncio
 import uuid
-from datetime import UTC, datetime
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import HTTPException
@@ -305,7 +305,7 @@ def test_the_tree_survives_a_sync_that_replaces_the_rows_it_holds(monkeypatch) -
         package = await pipeline.find_package(db, PackageRef(ecosystem="pypi", namespace="", name=root))
         version_id = await db.scalar(select(PackageVersion.id).where(PackageVersion.package_id == package.id))
 
-        async def resync_then_fetch(self, ref):   # noqa: ANN001, ANN202
+        async def resync_then_fetch(self, ref):
             # What a sync of the same version does meanwhile: its dependency rows are deleted and written again.
             await pipeline._replace_dependency_rows(db, version_id, None, _version("1.0", deps=[child]).dependencies)
             await db.flush()
@@ -324,7 +324,7 @@ def test_the_tree_survives_a_sync_that_replaces_the_rows_it_holds(monkeypatch) -
         other_id = (await pipeline.find_package(db, PackageRef(ecosystem="pypi", namespace="", name=other))).id
         other_version = await db.scalar(select(PackageVersion.id).where(PackageVersion.package_id == other_id))
 
-        async def link_then_lose(self, ref):   # noqa: ANN001, ANN202
+        async def link_then_lose(self, ref):
             try:
                 async with db.begin_nested():
                     for row in (await db.scalars(select(Dependency).where(Dependency.version_id == other_version))):

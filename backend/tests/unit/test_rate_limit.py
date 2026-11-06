@@ -2,6 +2,8 @@
 
 import asyncio
 import time
+from itertools import pairwise
+from typing import ClassVar
 
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -13,7 +15,7 @@ from app.services import rate_limit
 class _FakeRedis:
     """SET NX PX and PTTL over one shared clock, as several processes would see one Redis."""
 
-    keys: dict[str, float] = {}
+    keys: ClassVar[dict[str, float]] = {}   # one store for every instance, as one Redis
 
     def __init__(self, fail: bool = False) -> None:
         self.fail = fail
@@ -61,13 +63,13 @@ def _times(count: int, interval: float) -> list[float]:
 def test_turns_are_spaced_by_the_interval(monkeypatch) -> None:
     monkeypatch.setattr(rate_limit.Redis, "from_url", staticmethod(lambda url: _FakeRedis()))
     stamps = _times(3, 0.05)
-    assert all(b - a >= 0.04 for a, b in zip(stamps, stamps[1:]))
+    assert all(b - a >= 0.04 for a, b in pairwise(stamps))
 
 
 def test_without_redis_the_process_limits_itself(monkeypatch) -> None:
     monkeypatch.setattr(rate_limit.Redis, "from_url", staticmethod(lambda url: _FakeRedis(fail=True)))
     stamps = _times(3, 0.05)
-    assert all(b - a >= 0.04 for a, b in zip(stamps, stamps[1:]))
+    assert all(b - a >= 0.04 for a, b in pairwise(stamps))
 
 
 def test_replayed_responses_do_not_wait(monkeypatch, tmp_path) -> None:

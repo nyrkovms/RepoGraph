@@ -26,7 +26,7 @@ def source_payload(registry: RegistryConfig) -> dict[str, Any]:
 
 
 async def call(task: str, *args: Any, timeout: float = TIMEOUT_S) -> Any:
-    from app.celery_app import celery_app      # the app's broker; imported late so plugins load without Celery
+    from app.celery_app import celery_app  # the app's broker; imported late so plugins load without Celery
 
     def run() -> Any:
         result = celery_app.send_task(task, args=list(args), queue=_QUEUES.get(task, "rpm"))
@@ -34,7 +34,7 @@ async def call(task: str, *args: Any, timeout: float = TIMEOUT_S) -> Any:
             # Inside the backend's own Celery tasks (daily update, fetch_packages, seed) Celery forbids waiting on
             # another task; this one runs elsewhere (rpm-worker), so waiting cannot deadlock the pool.
             return result.get(timeout=timeout, propagate=True, disable_sync_subtasks=False)
-        except Exception as exc:  # noqa: BLE001 - every failure of the worker is a source error to the caller
+        except Exception as exc:  # every failure of the worker is a source error to the caller
             raise WorkerError(f"{task}: {type(exc).__name__}: {exc}") from exc
         finally:
             result.forget()

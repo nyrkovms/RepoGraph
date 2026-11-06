@@ -142,7 +142,7 @@ def test_seed_follows_dependencies_of_any_ecosystem_once(monkeypatch: pytest.Mon
 
 
 def test_retry_uses_package_ref_and_the_origin_of_the_operation(monkeypatch: pytest.MonkeyPatch, since: datetime) -> None:
-    by_purl, legacy, daily, missing, bad_ref, probe = (_name(n) for n in ("purl", "legacy", "daily", "missing", "badref", "probe"))
+    by_purl, legacy, daily, missing, bad_ref, _probe = (_name(n) for n in ("purl", "legacy", "daily", "missing", "badref", "probe"))
     seen: dict[str, tuple[PackageRef, str]] = {}
 
     async def fake_sync(db, ref, *, origin, run_id=None, **kwargs):

@@ -6,8 +6,8 @@ import httpx
 
 from app.config import get_settings
 from app.normalizers.names import normalize_package_name
-from app.services.retry_policy import compute_backoff_delay_seconds, is_retryable_upstream_error
 from app.services.http import make_client
+from app.services.retry_policy import compute_backoff_delay_seconds, is_retryable_upstream_error
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class PyPISimpleIndex:
                 response.raise_for_status()
                 payload: dict[str, Any] = response.json()
                 return payload
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 not_found = isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 404
                 if not_found or not is_retryable_upstream_error(exc) or attempt > self.max_retries:
                     raise

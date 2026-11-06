@@ -31,8 +31,8 @@ __all__ = [
     "SourceDocument",
     "SourceProfile",
     "SourceProfileRegistry",
-    "SyncState",
     "SyncFailure",
+    "SyncState",
     "VersionSource",
     "Vulnerability",
 ]

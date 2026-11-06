@@ -41,7 +41,7 @@ async def _fetch_package_async(target: str) -> dict[str, object]:
             )
             await db.commit()
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("Fetch failed: package=%s", purl)
             await db.rollback()
             await upsert_sync_failure(

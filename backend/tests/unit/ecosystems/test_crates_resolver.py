@@ -293,7 +293,7 @@ def test_a_feature_no_choice_can_give_fails_at_once() -> None:
 
 def test_one_activation_per_links_value() -> None:
     # Two classes of a -sys crate linking one native library cannot both be built: the older dependent is used.
-    sys_v = lambda v: CatalogVersion(version=v, registry_id="r", registry_slug="crates-io", status="active",  # noqa: E731
+    sys_v = lambda v: CatalogVersion(version=v, registry_id="r", registry_slug="crates-io", status="active",
                                      links="git2")
     catalog = Catalog(
         {"app": [_v("1.0.0")], "git2": [_v("0.18.0"), _v("0.19.0")], "other": [_v("1.0.0")],

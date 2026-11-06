@@ -103,7 +103,7 @@ async def _run_seed_async(packages: list[str], max_depth: int = 10) -> dict[str,
                         retryable=False,
                     )
                     await db.commit()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     failed += 1
                     logger.exception("Seed processing failed: package=%s depth=%s", ref.name, depth)
                     await db.rollback()

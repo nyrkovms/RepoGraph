@@ -43,7 +43,7 @@ class ResolvedDependencyNode(BaseModel):
     dependency_type: str | None = None
     extra_name: str | None = None
     environment_markers: dict | None = None
-    dependencies: list["ResolvedDependencyNode"] = Field(default_factory=list)
+    dependencies: list[ResolvedDependencyNode] = Field(default_factory=list)
 
 
 ResolvedDependencyNode.model_rebuild()

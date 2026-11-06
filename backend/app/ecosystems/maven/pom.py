@@ -182,7 +182,7 @@ def _properties(element: ElementTree.Element | None) -> dict[str, str]:
 
 def parse_pom(content: bytes | str) -> Pom:
     try:
-        root = ElementTree.fromstring(content)
+        root = ElementTree.fromstring(content)   # noqa: S314 - no external entities; expat caps entity expansion
     except ElementTree.ParseError as exc:
         raise PomError(f"not a POM: {exc}") from None
     if _local(root.tag) != "project":

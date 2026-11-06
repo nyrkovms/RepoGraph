@@ -24,8 +24,7 @@ import httpx
 import pytest
 
 from app.ecosystems.base import NormalizedDependency, NormalizedPackage, PackageRef, RegistryConfig, TrackedPackage
-from app.ecosystems.crates.adapters import CratesSparseAdapter, enabled_by, normalize_dependencies
-from app.ecosystems.crates.adapters import sparse
+from app.ecosystems.crates.adapters import CratesSparseAdapter, enabled_by, normalize_dependencies, sparse
 from app.ecosystems.crates.adapters.sparse import (
     CratesEtagChangeDetector,
     apply_api_document,

@@ -46,7 +46,36 @@ target-version = "py312"
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E9", "F"]
+select = [
+    "E9", "F",      # syntax errors, undefined and unused names
+    "B",            # likely bugs
+    "BLE",          # a blind `except Exception` says why with `noqa: BLE001`
+    "ASYNC",        # blocking calls in async code
+    "S",            # security (application code only, see per-file-ignores)
+    "DTZ",          # naive datetimes
+    "C90",          # complexity, capped at what exists today so it does not grow
+    "I", "UP", "SIM", "C4", "PERF", "RUF", "T20",
+]
+ignore = [
+    "UP042",        # StrEnum: str() of the member changes from "Class.member" to its value
+    "ASYNC109",     # a `timeout` argument is how these coroutines bound their own work
+    "SIM114",       # branches with the same body stay apart when they say different things
+    "SIM108",       # an if/else block reads better than a nested conditional expression
+    "PERF401",      # a loop with a condition reads better than extend() over a generator
+    "S101",         # asserts state invariants for the type checker; nothing relies on them at run time
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 26
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI declares parameters by calling these in defaults.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body", "fastapi.Header"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S"]   # asserts, fixture secrets and subprocess are what tests are made of
+"app/cli.py" = ["T20"]   # printing is the command line's output
+"app/config.py" = ["S104", "S105"]   # local development defaults, overridden by the environment
 
 [tool.mypy]
 python_version = "3.12"

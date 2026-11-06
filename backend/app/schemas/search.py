@@ -1,5 +1,6 @@
-from app.schemas.packages import PackageListItem
 from pydantic import BaseModel
+
+from app.schemas.packages import PackageListItem
 
 
 class SearchResponse(BaseModel):
