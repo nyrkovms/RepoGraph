@@ -76,6 +76,50 @@ def _event(package: Package, kind: PackageEventKind, now: datetime, version: str
     return PackageEvent(package_id=package.id, kind=kind, version=version, detected_at=now, details=details or {})
 
 
+def _depends(version: PackageVersion, target: Package, kind: DependencyType) -> Dependency:
+    return Dependency(version_id=version.id, dependency_name=target.name, dependency_ecosystem=Ecosystem.npm,
+                      version_constraint="*", dependency_type=kind, raw_spec=target.name, resolved_package_id=target.id)
+
+
+async def _add_dependents(db: AsyncSession, now: datetime) -> tuple[list[uuid.UUID], list[uuid.UUID]]:
+    """Dependents for `used_by`: ui is used by `a` (runtime + peer in one version) and `c` (peer): 2. widget is used by
+    `d` only: `a` depends on it in an old version and `b` through dev. ui's own latest version depends on ui: no count."""
+    registry = await db.scalar(select(Registry).where(Registry.slug == f"{PREFIX}npm-hi"))
+    widget = await db.scalar(select(Package).where(Package.ecosystem == Ecosystem.npm, Package.name == f"{PREFIX}widget"))
+    ui = await db.scalar(select(Package).where(Package.ecosystem == Ecosystem.npm, Package.name == f"{PREFIX}ui"))
+    assert registry and widget and ui
+    a, b, c, d = (_package(registry, Ecosystem.npm, f"{PREFIX}dep-{n}", origin=PackageOrigin.dependency,
+                           latest=latest, now=now) for n, latest in (("a", "2.0.0"), ("b", "1.0.0"), ("c", "1.0.0"),
+                                                                     ("d", "1.0.0")))
+    db.add_all([a, b, c, d])
+    await db.flush()
+
+    def version(package: Package, number: str) -> PackageVersion:
+        return PackageVersion(id=uuid.uuid4(), package_id=package.id, version=number, raw_metadata={},
+                              sort_key=b"\x01", is_prerelease=False)
+
+    a_old, a_new, b1, c1, d1 = version(a, "1.0.0"), version(a, "2.0.0"), version(b, "1.0.0"), version(c, "1.0.0"), \
+        version(d, "1.0.0")
+    ui_own = version(ui, "1.0.0")  # ui's latest version depends on ui itself
+    db.add_all([a_old, a_new, b1, c1, d1, ui_own])
+    await db.flush()
+    db.add_all([
+        _depends(a_new, ui, DependencyType.runtime), _depends(a_new, ui, DependencyType.peer),
+        _depends(a_old, widget, DependencyType.runtime),
+        _depends(b1, ui, DependencyType.dev), _depends(b1, widget, DependencyType.dev),
+        _depends(c1, ui, DependencyType.peer),
+        _depends(d1, widget, DependencyType.runtime),
+        _depends(ui_own, ui, DependencyType.runtime),
+    ])
+    return [p.id for p in (a, b, c, d)], [v.id for v in (a_old, a_new, b1, c1, d1, ui_own)]
+
+
+async def _remove_dependents(db: AsyncSession, package_ids: list[uuid.UUID], version_ids: list[uuid.UUID]) -> None:
+    await db.execute(delete(Dependency).where(Dependency.version_id.in_(version_ids)))
+    await db.execute(delete(PackageVersion).where(PackageVersion.id.in_(version_ids)))
+    await db.execute(delete(Package).where(Package.id.in_(package_ids)))
+
+
 async def _build(db: AsyncSession, now: datetime) -> dict[str, Any]:
     npm_hi = _registry(f"{PREFIX}npm-hi", Ecosystem.npm, RegistryProtocol.npm_registry, 1)
     npm_lo = _registry(f"{PREFIX}npm-lo", Ecosystem.npm, RegistryProtocol.npm_registry, 200, enabled=False)
@@ -141,6 +185,14 @@ def world():
     slugs = run_db(lambda db: _build(db, now))
     yield SimpleNamespace(now=now, **slugs)
     run_db(_cleanup)
+
+
+@pytest.fixture
+def dependents(world):
+    """Apart from `world`: these share its prefix, and the search tests count everything the prefix finds."""
+    package_ids, version_ids = run_db(lambda db: _add_dependents(db, world.now))
+    yield
+    run_db(lambda db: _remove_dependents(db, package_ids, version_ids))
 
 
 @pytest.fixture
@@ -317,7 +369,8 @@ def test_updates_summary_filters_and_totals(client: TestClient, world) -> None:
     npm = client.get(f"{API}/updates/summary", params=window(world) | {"registry": world.npm_hi}).json()
     assert sorted(p["purl"] for p in npm["packages"]) == [f"pkg:npm/%40c1b/{PREFIX}ui", f"pkg:npm/{PREFIX}widget"]
     assert npm["totals"] == {"packages": 2, "releases": 2, "yanked": 0, "removed": 0, "deprecated": 1,
-                             "sources_added": 1, "vulnerabilities": 0, "unavailable": 0, "prereleases": 0}
+                             "sources_added": 1, "vulnerabilities": 0, "unavailable": 0, "prereleases": 0,
+                             "attention": 1}
 
     pypi = client.get(f"{API}/updates/summary", params=window(world) | {"ecosystem": "pypi", "registry": world.pypi2}).json()
     assert [p["purl"] for p in pypi["packages"]] == [f"pkg:pypi/{PREFIX}widget"]
@@ -330,6 +383,21 @@ def test_updates_summary_filters_and_totals(client: TestClient, world) -> None:
 
     empty = client.get(f"{API}/updates/summary", params=window(world) | {"registry": "c1b-no-such-registry"}).json()
     assert empty["packages"] == [] and empty["totals"]["packages"] == 0
+
+
+def test_updates_summary_used_by_and_origin(client: TestClient, world, dependents) -> None:
+    packages = client.get(f"{API}/updates/summary", params=window(world)).json()["packages"]
+    by_purl = {p["purl"]: p for p in packages}
+    ui = by_purl[f"pkg:npm/%40c1b/{PREFIX}ui"]
+    widget = by_purl[f"pkg:npm/{PREFIX}widget"]
+    assert (ui["used_by"], ui["origin"]) == (2, "manual")
+    assert (widget["used_by"], widget["origin"]) == (1, "seed")
+    assert by_purl[f"pkg:pypi/{PREFIX}widget"]["used_by"] == 0
+
+    npm = client.get(f"{API}/updates/summary", params=window(world) | {"registry": world.npm_hi}).json()
+    assert npm["totals"]["attention"] == 1
+    # Flags first; the unflagged ui follows the flagged widget whatever its used_by.
+    assert [p["purl"] for p in npm["packages"]] == [widget["purl"], ui["purl"]]
 
 
 async def _add_runs(db: AsyncSession, *runs: Run) -> None:

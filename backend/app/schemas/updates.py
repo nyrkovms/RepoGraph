@@ -50,6 +50,7 @@ class UpdatesSummaryTotals(BaseModel):
     vulnerabilities: int = 0
     unavailable: int = 0
     prereleases: int = 0
+    attention: int = 0
 
 
 class UpdatesSummaryPackage(BaseModel):
@@ -70,6 +71,8 @@ class UpdatesSummaryPackage(BaseModel):
     vulnerabilities: list[str] = Field(default_factory=list)
     flags: list[str] = Field(default_factory=list)
     last_detected_at: datetime
+    used_by: int = 0
+    origin: str = ""
 
 
 class UpdatesSummaryResponse(BaseModel):
