@@ -83,6 +83,8 @@ def diff_package(
         lower = bisect_left(known_all, position)
         lower_stable = bisect_left(known_stable, position)
         previous = known_all[lower - 1][1] if lower else before.latest_version
+        # Everything a new source publishes is news to us, not a release: the digest ignores it.
+        backfill = bool(new_registries) and bool(merged.sources) and all(r in new_registries for r in merged.sources)
         previous_stable = known_stable[lower_stable - 1][1] if lower_stable else before.latest_version
         events.append(
             EventDraft(
@@ -96,10 +98,12 @@ def diff_package(
                     # RPM: the module stream of a modular build, `nodejs 18.20.4 (nodejs:18)` (§8.3).
                     **({"modules": list(modules)}
                        if isinstance(modules := version.raw_metadata.get("modules"), list) else {}),
+                    **({"backfill": True} if backfill else {}),
                 },
             )
         )
-        if version.status == PackageVersionStatus.yanked.value:
+        # A backfilled version arrived yanked: nobody yanked it now.
+        if version.status == PackageVersionStatus.yanked.value and not backfill:
             events.append(_yanked_event(version.version, version.status_reason))
         insort(known_all, (position[0], version.version))
         if not prerelease:
