@@ -139,19 +139,38 @@ function CompactList({ label, items, warn = false }) {
   );
 }
 
-function RunStatus({ lastRun }) {
-  if (!lastRun) {
+// A daily run that finished more than 36 hours ago was missed: 24 hours plus slack for a long or late run.
+const STALE_RUN_HOURS = 36;
+
+// Why a run counts as a problem: a list of short reasons, empty when the run is fine.
+function runProblems(run) {
+  const reasons = [];
+  if (run.status !== "success") reasons.push(run.status);
+  const failed = run.packages_failed || 0;
+  if (failed > 0) reasons.push(`${failed} failed`);
+  const at = Date.parse(run.finished_at || run.started_at);
+  const hours = (Date.now() - at) / 3_600_000;
+  if (hours > STALE_RUN_HOURS) reasons.push(`no run for ${Math.round(hours / 24)} days`);
+  return reasons;
+}
+
+function RunStatus({ lastRun, lastRuns }) {
+  const runs = Array.isArray(lastRuns) && lastRuns.length ? lastRuns : lastRun ? [lastRun] : [];
+  if (!runs.length) {
     return <p className="muted">Data as of: no runs yet</p>;
   }
-  const asOf = lastRun.finished_at || lastRun.started_at;
-  const failed = lastRun.packages_failed || 0;
-  const problem = lastRun.status !== "success" || failed > 0;
+  const asOf = runs.map((run) => run.finished_at || run.started_at).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
+  const problems = runs
+    .map((run) => ({ name: run.ecosystem || "last run", reasons: runProblems(run) }))
+    .filter((p) => p.reasons.length);
+  const problem = problems.length > 0;
   return (
     <p className={problem ? "update-run warn-text" : "update-run muted"}>
       Data as of {formatDateTime(asOf)}
-      <span className={problem ? "tag warn" : "tag cond"}>{lastRun.status}</span>
-      {failed > 0 ? <span className="tag warn">{failed} failed</span> : null}
-      {problem ? <span> Last run was not fully successful, data may be incomplete.</span> : null}
+      {problem ? null : <span className="tag cond">success</span>}
+      {problem ? (
+        <span> Not fully updated: {problems.map((p) => `${p.name} (${p.reasons.join(", ")})`).join(", ")}</span>
+      ) : null}
     </p>
   );
 }
@@ -335,7 +354,7 @@ export default function UpdatesPage() {
 
       {summary && !waitingForRange ? (
         <>
-          <RunStatus lastRun={summary.last_run} />
+          <RunStatus lastRun={summary.last_run} lastRuns={summary.last_runs} />
 
           {totals ? (
             <dl className="totals" aria-label="Totals">
