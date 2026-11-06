@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -55,7 +56,7 @@ from app.schemas.packages import (
     VulnerabilityListResponse,
 )
 from app.services import visibility
-from app.services.cursor import encode_cursor, parse_iso_datetime, parse_uuid
+from app.services.cursor import CursorError, encode_cursor, parse_iso_datetime, parse_uuid
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -151,6 +152,23 @@ async def get_package(ecosystem: str, coordinates: str, db: AsyncSession = Depen
     )
 
 
+def _versions_cursor_or_422(cursor: str | None) -> tuple[datetime | None, uuid.UUID] | None:
+    """The (release_date, id) a versions cursor points after; 422 for a cursor whose payload is not that."""
+    payload = _decode_cursor_or_422(cursor)
+    if not payload:
+        return None
+    try:
+        raw_date = payload.get("release_date")
+        if raw_date is not None and not isinstance(raw_date, str):
+            raise TypeError("release_date")
+        rel = parse_iso_datetime(raw_date) if raw_date else None
+        return rel, parse_uuid(payload["id"])
+    except CursorError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (KeyError, TypeError, AttributeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="invalid cursor payload") from exc
+
+
 @router.get(_COORDS + "/versions", response_model=VersionListResponse)
 async def list_versions(
     ecosystem: str,
@@ -161,17 +179,16 @@ async def list_versions(
     cursor: str | None = Query(default=None),
 ) -> VersionListResponse:
     """Versions the profile's sources publish (the default profile without `profile`), newest release first."""
+    position = _versions_cursor_or_422(cursor)
     target = await _target(db, ecosystem, coordinates)
     registries = await visibility.visible_registries(db, target.plugin, target.ref, target.package.id,
                                                      await _profile(db, ecosystem, profile))
-    cursor_payload = _decode_cursor_or_422(cursor)
 
     stmt = select(PackageVersion).where(PackageVersion.package_id == target.package.id, visibility.visible_clause(registries))
     stmt = stmt.order_by(PackageVersion.release_date.desc().nullslast(), PackageVersion.id.asc())
 
-    if cursor_payload:
-        rel = parse_iso_datetime(cursor_payload["release_date"]) if cursor_payload.get("release_date") else None
-        id_value = parse_uuid(cursor_payload["id"])
+    if position:
+        rel, id_value = position
         if rel is None:
             stmt = stmt.where(PackageVersion.release_date.is_(None), PackageVersion.id > id_value)
         else:
