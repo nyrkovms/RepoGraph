@@ -317,11 +317,16 @@ def test_updates_summary_filters_and_totals(client: TestClient, world) -> None:
     npm = client.get(f"{API}/updates/summary", params=window(world) | {"registry": world.npm_hi}).json()
     assert sorted(p["purl"] for p in npm["packages"]) == [f"pkg:npm/%40c1b/{PREFIX}ui", f"pkg:npm/{PREFIX}widget"]
     assert npm["totals"] == {"packages": 2, "releases": 2, "yanked": 0, "removed": 0, "deprecated": 1,
-                             "sources_added": 1, "vulnerabilities": 0, "unavailable": 0}
+                             "sources_added": 1, "vulnerabilities": 0, "unavailable": 0, "prereleases": 0}
 
     pypi = client.get(f"{API}/updates/summary", params=window(world) | {"ecosystem": "pypi", "registry": world.pypi2}).json()
     assert [p["purl"] for p in pypi["packages"]] == [f"pkg:pypi/{PREFIX}widget"]
     assert pypi["totals"]["yanked"] == 1 and pypi["totals"]["deprecated"] == 0
+
+    deprecated = client.get(f"{API}/updates/summary", params=window(world) | {"kind": "release_deprecated"}).json()
+    assert deprecated["totals"]["releases"] == 0 and all(p["deprecated"] for p in deprecated["packages"])
+    for bad in ({"kind": "no-such-kind"}, {"ecosystem": "cobol"}):
+        assert client.get(f"{API}/updates/summary", params=window(world) | bad).status_code == 422
 
     empty = client.get(f"{API}/updates/summary", params=window(world) | {"registry": "c1b-no-such-registry"}).json()
     assert empty["packages"] == [] and empty["totals"]["packages"] == 0

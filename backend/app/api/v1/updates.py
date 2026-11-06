@@ -63,6 +63,8 @@ class SummaryEvent:
     id: int = 0
     ecosystem: str = "pypi"
     namespace: str = ""
+    description: str | None = None
+    occurred_at: datetime | None = None
 
 
 def _kind_value(kind: Any) -> str:
@@ -122,22 +124,27 @@ def compute_summary_window(
     return since_utc, until_utc
 
 
+def _scheme_for(ecosystem: str) -> Any:
+    try:
+        return get_plugin(ecosystem).versions
+    except UnknownEcosystem:  # an ecosystem without a plugin: order as PyPI does
+        return _DEFAULT_SCHEME
+
+
+def _is_prerelease(scheme: Any, event: Any) -> bool:
+    flag = (event.details or {}).get("prerelease")
+    return bool(flag) if flag is not None else scheme.is_prerelease(event.version)
+
+
 def _release_range(ecosystem: str, releases: list[Any]) -> tuple[str | None, str | None]:
     """`to` is the highest stable release of the window (the highest one if all are prereleases); `from` is where its
     chain of `previous_version` leaves the window. Backports in the window sit on their own chains and do not count."""
-    try:
-        scheme = get_plugin(ecosystem).versions
-    except UnknownEcosystem:  # an ecosystem without a plugin: order as PyPI does
-        scheme = _DEFAULT_SCHEME
+    scheme = _scheme_for(ecosystem)
     by_version = {r.version: r for r in releases if r.version is not None}
     if not by_version:
         return (releases[0].details or {}).get("previous_version"), None
 
-    def is_pre(event: Any) -> bool:
-        flag = (event.details or {}).get("prerelease")
-        return bool(flag) if flag is not None else scheme.is_prerelease(event.version)
-
-    stable = [r for r in by_version.values() if not is_pre(r)]
+    stable = [r for r in by_version.values() if not _is_prerelease(scheme, r)]
     to_event = max(stable or by_version.values(), key=lambda r: scheme.sort_key(r.version))
     current = to_event
     seen = {current.version}
@@ -156,9 +163,82 @@ def _is_backfill(event: Any) -> bool:
     return _kind_value(event.kind) == "release_added" and bool((event.details or {}).get("backfill"))
 
 
+@dataclass
+class _Kinds:
+    """Versions and ids of a package's events, by what they say."""
+
+    releases: list[Any] = field(default_factory=list)
+    yanked: list[str] = field(default_factory=list)
+    removed: list[str] = field(default_factory=list)
+    deprecated: list[str] = field(default_factory=list)
+    sources_added: list[str] = field(default_factory=list)
+    vulnerabilities: list[str] = field(default_factory=list)
+    has_unavailable: bool = False
+
+
+def _split_by_kind(items: list[Any]) -> _Kinds:
+    kinds = _Kinds()
+    versioned = {
+        "release_yanked": kinds.yanked,
+        "release_removed": kinds.removed,
+        "release_deprecated": kinds.deprecated,
+    }
+    for e in items:
+        kind = _kind_value(e.kind)
+        if kind == "release_added":
+            kinds.releases.append(e)
+        elif kind in versioned:
+            if e.version is not None:
+                versioned[kind].append(e.version)
+        elif kind == "source_added":
+            # The pipeline always names the registry; a version stands in only for an event without one.
+            source = (e.details or {}).get("registry") or e.version
+            if source is not None and str(source) not in kinds.sources_added:
+                kinds.sources_added.append(str(source))
+        elif kind == "vulnerability_added":
+            vuln_id = (e.details or {}).get("id")
+            if vuln_id:
+                kinds.vulnerabilities.append(str(vuln_id))
+        elif kind == "project_unavailable":
+            kinds.has_unavailable = True
+    return kinds
+
+
+def _max_bump(releases: list[Any]) -> str | None:
+    ranks = [BUMP_ORDER.index(b) for b in ((r.details or {}).get("bump") for r in releases) if b in BUMP_ORDER]
+    return BUMP_ORDER[max(ranks)] if ranks else None
+
+
+def _risk_flags(items: list[Any], kinds: _Kinds, max_bump: str | None) -> list[str]:
+    flags: list[str] = []
+    if kinds.has_unavailable:
+        flags.append("unavailable")
+    if any(_kind_value(e.kind) == "vulnerability_added" for e in items):
+        flags.append("vulnerability_added")
+    if kinds.removed:
+        flags.append("removed")
+    if kinds.yanked:
+        flags.append("yanked")
+    if kinds.deprecated:
+        flags.append("deprecated")
+    if max_bump == "major":
+        flags.append("major")
+    return flags
+
+
+def _release_info(ecosystem: str, releases: list[Any]) -> tuple[str | None, str | None, datetime | None, bool]:
+    """(from, to, when `to` was released, whether the window has only prereleases)."""
+    if not releases:
+        return None, None, None, False
+    from_version, to_version = _release_range(ecosystem, releases)
+    released_at = next((r.occurred_at for r in releases if r.version == to_version), None) if to_version else None
+    scheme = _scheme_for(ecosystem)
+    return from_version, to_version, released_at, all(_is_prerelease(scheme, r) for r in releases)
+
+
 def aggregate_summary(events: Iterable[Any]) -> list[UpdatesSummaryPackage]:
-    """Aggregate events (any objects with package/version/kind/detected_at/details[/id/ecosystem/namespace])
-    per package; `pkg:pypi/x` and `pkg:npm/x` are two packages.
+    """Aggregate events (any objects with package/version/kind/detected_at/details[/id/ecosystem/namespace
+    /description/occurred_at]) per package; `pkg:pypi/x` and `pkg:npm/x` are two packages.
 
     `tracking_started` and backfill events are ignored; packages with no other events are not listed.
     """
@@ -172,80 +252,27 @@ def aggregate_summary(events: Iterable[Any]) -> list[UpdatesSummaryPackage]:
     result: list[UpdatesSummaryPackage] = []
     for (ecosystem, namespace, name), items in grouped.items():
         items.sort(key=lambda e: (e.detected_at, getattr(e, "id", 0) or 0))
-        releases: list[Any] = []
-        yanked: list[str] = []
-        removed: list[str] = []
-        deprecated: list[str] = []
-        sources_added: list[str] = []
-        vulnerabilities: list[str] = []
-        has_unavailable = False
-        for e in items:
-            kind = _kind_value(e.kind)
-            if kind == "release_added":
-                releases.append(e)
-            elif kind == "release_yanked":
-                if e.version is not None:
-                    yanked.append(e.version)
-            elif kind == "release_removed":
-                if e.version is not None:
-                    removed.append(e.version)
-            elif kind == "release_deprecated":
-                if e.version is not None:
-                    deprecated.append(e.version)
-            elif kind == "source_added":
-                # The pipeline always names the registry; a version stands in only for an event without one.
-                source = (e.details or {}).get("registry") or e.version
-                if source is not None and str(source) not in sources_added:
-                    sources_added.append(str(source))
-            elif kind == "vulnerability_added":
-                vuln_id = (e.details or {}).get("id")
-                if vuln_id:
-                    vulnerabilities.append(str(vuln_id))
-            elif kind == "project_unavailable":
-                has_unavailable = True
-
-        from_version = None
-        to_version = None
-        max_bump = None
-        if releases:
-            from_version, to_version = _release_range(ecosystem, releases)
-            ranks = [
-                BUMP_ORDER.index(b)
-                for b in ((r.details or {}).get("bump") for r in releases)
-                if b in BUMP_ORDER
-            ]
-            if ranks:
-                max_bump = BUMP_ORDER[max(ranks)]
-
-        flags: list[str] = []
-        if has_unavailable:
-            flags.append("unavailable")
-        if any(_kind_value(e.kind) == "vulnerability_added" for e in items):
-            flags.append("vulnerability_added")
-        if removed:
-            flags.append("removed")
-        if yanked:
-            flags.append("yanked")
-        if deprecated:
-            flags.append("deprecated")
-        if max_bump == "major":
-            flags.append("major")
-
+        kinds = _split_by_kind(items)
+        from_version, to_version, released_at, prerelease_only = _release_info(ecosystem, kinds.releases)
+        max_bump = _max_bump(kinds.releases)
         result.append(
             UpdatesSummaryPackage(
                 ecosystem=ecosystem,
                 name=name,
                 purl=package_purl(ecosystem, namespace, name),
+                description=next((d for e in items if (d := getattr(e, "description", None))), None),
                 from_version=from_version,
                 to_version=to_version,
+                released_at=released_at,
+                prerelease_only=prerelease_only,
                 max_bump=max_bump,
-                releases=[r.version for r in releases if r.version is not None],
-                yanked=yanked,
-                removed=removed,
-                deprecated=deprecated,
-                sources_added=sources_added,
-                vulnerabilities=vulnerabilities,
-                flags=flags,
+                releases=[r.version for r in kinds.releases if r.version is not None],
+                yanked=kinds.yanked,
+                removed=kinds.removed,
+                deprecated=kinds.deprecated,
+                sources_added=kinds.sources_added,
+                vulnerabilities=kinds.vulnerabilities,
+                flags=_risk_flags(items, kinds, max_bump),
                 last_detected_at=max(e.detected_at for e in items),
             )
         )
@@ -259,7 +286,10 @@ def aggregate_summary(events: Iterable[Any]) -> list[UpdatesSummaryPackage]:
 
 
 def compute_totals(events: Iterable[Any], packages: list[UpdatesSummaryPackage]) -> UpdatesSummaryTotals:
-    totals = UpdatesSummaryTotals(packages=len(packages))
+    # Packages that are only prereleases and have no flag: the rows the page hides by default.
+    totals = UpdatesSummaryTotals(
+        packages=len(packages), prereleases=sum(1 for p in packages if p.prerelease_only and not p.flags)
+    )
     for e in events:
         kind = _kind_value(e.kind)
         if kind == "release_added":
@@ -442,6 +472,7 @@ async def updates_summary(
     tz: str = Query(default="UTC"),
     ecosystem: list[Ecosystem] | None = Query(default=None),
     registry: str | None = Query(default=None),
+    kind: list[PackageEventKind] | None = Query(default=None),
 ) -> UpdatesSummaryResponse:
     try:
         since_utc, until_utc = compute_summary_window(period.value, tz, since, until)
@@ -449,7 +480,7 @@ async def updates_summary(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     stmt = _scope(
-        select(PackageEvent, Package.ecosystem, Package.namespace, Package.normalized_name)
+        select(PackageEvent, Package.ecosystem, Package.namespace, Package.normalized_name, Package.description)
         .join(Package, Package.id == PackageEvent.package_id)
         .where(
             PackageEvent.detected_at >= since_utc,
@@ -458,7 +489,10 @@ async def updates_summary(
         ),
         ecosystem,
         registry,
-    ).order_by(PackageEvent.detected_at.asc(), PackageEvent.id.asc())
+    )
+    if kind:
+        stmt = stmt.where(PackageEvent.kind.in_(kind))
+    stmt = stmt.order_by(PackageEvent.detected_at.asc(), PackageEvent.id.asc())
     rows = (await db.execute(stmt)).all()
     events = [
         SummaryEvent(
@@ -470,8 +504,10 @@ async def updates_summary(
             id=event.id,
             ecosystem=package_ecosystem.value,
             namespace=namespace or "",
+            description=description,
+            occurred_at=event.occurred_at,
         )
-        for event, package_ecosystem, namespace, name in rows
+        for event, package_ecosystem, namespace, name, description in rows
     ]
     packages = aggregate_summary(events)
     return UpdatesSummaryResponse(

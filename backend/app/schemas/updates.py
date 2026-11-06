@@ -49,14 +49,18 @@ class UpdatesSummaryTotals(BaseModel):
     sources_added: int = 0
     vulnerabilities: int = 0
     unavailable: int = 0
+    prereleases: int = 0
 
 
 class UpdatesSummaryPackage(BaseModel):
     ecosystem: str
     name: str
     purl: str
+    description: str | None = None
     from_version: str | None
     to_version: str | None
+    released_at: datetime | None = None
+    prerelease_only: bool = False
     max_bump: str | None
     releases: list[str] = Field(default_factory=list)
     yanked: list[str] = Field(default_factory=list)
