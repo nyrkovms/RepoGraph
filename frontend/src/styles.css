@@ -466,8 +466,10 @@ button:disabled {
   gap: 6px;
 }
 
-.check-label input {
+.toolbar .check-label input {
+  flex: none;
   width: auto;
+  min-width: 0;
 }
 
 .update-description {
