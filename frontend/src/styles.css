@@ -479,6 +479,10 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
+.update-usage {
+  margin: 4px 0 0 26px;
+}
+
 .update-list {
   margin: 4px 0 0 26px;
   word-break: break-word;

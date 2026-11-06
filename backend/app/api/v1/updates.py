@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from enum import Enum
@@ -14,12 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db_session
 from app.ecosystems.pypi.versions import PyPIVersionScheme
 from app.ecosystems.registry import UnknownEcosystem, get_plugin
-from app.models.enums import Ecosystem, PackageEventKind
+from app.models.dependency import Dependency
+from app.models.enums import DependencyType, Ecosystem, PackageEventKind
 from app.models.package import Package
 from app.models.package_event import PackageEvent
 from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
 from app.models.run import Run
+from app.models.version import PackageVersion
 from app.schemas.updates import (
     EcosystemRunInfo,
     UpdateEventItem,
@@ -65,6 +67,8 @@ class SummaryEvent:
     namespace: str = ""
     description: str | None = None
     occurred_at: datetime | None = None
+    package_id: Any = None
+    origin: str = ""
 
 
 def _kind_value(kind: Any) -> str:
@@ -236,11 +240,15 @@ def _release_info(ecosystem: str, releases: list[Any]) -> tuple[str | None, str 
     return from_version, to_version, released_at, all(_is_prerelease(scheme, r) for r in releases)
 
 
-def aggregate_summary(events: Iterable[Any]) -> list[UpdatesSummaryPackage]:
+def aggregate_summary(
+    events: Iterable[Any], used_by: Mapping[Any, int] | None = None
+) -> list[UpdatesSummaryPackage]:
     """Aggregate events (any objects with package/version/kind/detected_at/details[/id/ecosystem/namespace
     /description/occurred_at]) per package; `pkg:pypi/x` and `pkg:npm/x` are two packages.
 
     `tracking_started` and backfill events are ignored; packages with no other events are not listed.
+    `used_by` maps an event's `package_id` to the number of catalog packages depending on it; it is known only after a
+    query over the digest's ids, so the one sort of the result happens here.
     """
     grouped: dict[tuple[str, str, str], list[Any]] = {}
     for event in events:
@@ -255,6 +263,7 @@ def aggregate_summary(events: Iterable[Any]) -> list[UpdatesSummaryPackage]:
         kinds = _split_by_kind(items)
         from_version, to_version, released_at, prerelease_only = _release_info(ecosystem, kinds.releases)
         max_bump = _max_bump(kinds.releases)
+        package_id = next((i for e in items if (i := getattr(e, "package_id", None)) is not None), None)
         result.append(
             UpdatesSummaryPackage(
                 ecosystem=ecosystem,
@@ -274,12 +283,14 @@ def aggregate_summary(events: Iterable[Any]) -> list[UpdatesSummaryPackage]:
                 vulnerabilities=kinds.vulnerabilities,
                 flags=_risk_flags(items, kinds, max_bump),
                 last_detected_at=max(e.detected_at for e in items),
+                used_by=(used_by or {}).get(package_id, 0),
+                origin=next((o for e in items if (o := getattr(e, "origin", ""))), ""),
             )
         )
 
-    def sort_key(pkg: UpdatesSummaryPackage) -> tuple[int, float, str, str, str]:
+    def sort_key(pkg: UpdatesSummaryPackage) -> tuple[int, int, float, str, str, str]:
         rank = min((FLAG_ORDER.index(f) for f in pkg.flags), default=len(FLAG_ORDER))
-        return (rank, -pkg.last_detected_at.timestamp(), pkg.name, pkg.ecosystem, pkg.purl)
+        return (rank, -pkg.used_by, -pkg.last_detected_at.timestamp(), pkg.name, pkg.ecosystem, pkg.purl)
 
     result.sort(key=sort_key)
     return result
@@ -288,7 +299,9 @@ def aggregate_summary(events: Iterable[Any]) -> list[UpdatesSummaryPackage]:
 def compute_totals(events: Iterable[Any], packages: list[UpdatesSummaryPackage]) -> UpdatesSummaryTotals:
     # Packages that are only prereleases and have no flag: the rows the page hides by default.
     totals = UpdatesSummaryTotals(
-        packages=len(packages), prereleases=sum(1 for p in packages if p.prerelease_only and not p.flags)
+        packages=len(packages),
+        prereleases=sum(1 for p in packages if p.prerelease_only and not p.flags),
+        attention=sum(1 for p in packages if p.flags),
     )
     for e in events:
         kind = _kind_value(e.kind)
@@ -355,6 +368,33 @@ async def fetch_last_update_runs(db: AsyncSession) -> list[EcosystemRunInfo]:
         EcosystemRunInfo(**_run_fields(run), ecosystem=run.ecosystem.value if run.ecosystem else "")
         for run in sorted(runs, key=lambda run: run.ecosystem.value if run.ecosystem else "")
     ]
+
+
+# Dependency types that make a package depend on another; dev, build and optional ones only inflate the number.
+_USED_BY_TYPES = (DependencyType.runtime, DependencyType.peer, DependencyType.provided)
+
+
+async def fetch_used_by(db: AsyncSession, package_ids: Iterable[Any]) -> dict[Any, int]:
+    """Per package id: how many other packages have it as a runtime/peer/provided dependency in their latest version."""
+    ids = set(package_ids)
+    if not ids:
+        return {}
+    latest = (
+        select(PackageVersion.id, PackageVersion.package_id)
+        .join(Package, and_(Package.id == PackageVersion.package_id, Package.latest_version == PackageVersion.version))
+        .subquery()
+    )
+    stmt = (
+        select(Dependency.resolved_package_id, func.count(func.distinct(latest.c.package_id)))
+        .join(latest, latest.c.id == Dependency.version_id)
+        .where(
+            Dependency.resolved_package_id.in_(ids),
+            Dependency.resolved_package_id != latest.c.package_id,
+            Dependency.dependency_type.in_(_USED_BY_TYPES),
+        )
+        .group_by(Dependency.resolved_package_id)
+    )
+    return dict((await db.execute(stmt)).all())
 
 
 def _scope(stmt, ecosystems: list[Ecosystem] | None, registry: str | None):
@@ -480,7 +520,8 @@ async def updates_summary(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     stmt = _scope(
-        select(PackageEvent, Package.ecosystem, Package.namespace, Package.normalized_name, Package.description)
+        select(PackageEvent, Package.ecosystem, Package.namespace, Package.normalized_name, Package.description,
+               Package.id, Package.origin)
         .join(Package, Package.id == PackageEvent.package_id)
         .where(
             PackageEvent.detected_at >= since_utc,
@@ -506,10 +547,13 @@ async def updates_summary(
             namespace=namespace or "",
             description=description,
             occurred_at=event.occurred_at,
+            package_id=package_id,
+            origin=origin.value,
         )
-        for event, package_ecosystem, namespace, name, description in rows
+        for event, package_ecosystem, namespace, name, description, package_id, origin in rows
     ]
-    packages = aggregate_summary(events)
+    used_by = await fetch_used_by(db, {e.package_id for e in events})
+    packages = aggregate_summary(events, used_by)
     return UpdatesSummaryResponse(
         since=since_utc,
         until=until_utc,

@@ -199,6 +199,8 @@ Batch refresh по `synced_at` отключается (`SYNC_REFRESH_ENABLED=fal
       "removed": [],
       "vulnerabilities": [],
       "flags": [],
+      "origin": "seed",
+      "used_by": 9,
       "last_detected_at": "2026-10-27T03:05:11Z"
     }
   ]
@@ -206,7 +208,8 @@ Batch refresh по `synced_at` отключается (`SYNC_REFRESH_ENABLED=fal
 ```
 
 - `description` — `packages.description` (`null`, если нет, например у Go). `released_at` — `occurred_at` релиза `to_version` (`null`, если неизвестно). `prerelease_only` — в окне есть релизы и все они пререлизы. `totals.prereleases` — число пакетов с `prerelease_only` и без `flags`: их страница скрывает по умолчанию.
-- Сортировка: сначала пакеты с флагами риска (`unavailable`, `vulnerability_added`, `removed`, `yanked`, `major`), затем по `last_detected_at desc`.
+- `used_by` — число других пакетов каталога, у которых в последней версии есть зависимость типа `runtime`, `peer` или `provided` на этот пакет (правило подсчёта — SPEC-UPDATES-DIGEST §3). `origin` — `packages.origin` (`seed`, `manual`, `dependency`, `discovered`). `totals.attention` — число пакетов с непустым `flags`.
+- Сортировка: сначала пакеты с флагами риска (`unavailable`, `vulnerability_added`, `removed`, `yanked`, `deprecated`, `major`) по тяжести флага, затем по `used_by desc`, затем по `last_detected_at desc` и имени; `used_by` упорядочивает и строки с флагами, и без них.
 - Окно считается по `detected_at`: при суточной частоте «сегодня» = «обнаружено сегодняшним прогоном». Для релизов в ответе также показывается точное `occurred_at`.
 
 ### 5.2 UI

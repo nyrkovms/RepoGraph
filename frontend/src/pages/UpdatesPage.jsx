@@ -54,6 +54,7 @@ function packageLink(item) {
 }
 
 const TOTAL_LABELS = [
+  ["attention", "Attention"],
   ["packages", "Packages"],
   ["releases", "Releases"],
   ["yanked", "Yanked"],
@@ -141,6 +142,16 @@ function flagsOf(item) {
     flags.push("major");
   }
   return flags;
+}
+
+// `used by 9 packages · tracked directly`: how much of the catalog depends on the package, and why it is in it.
+function usageLine(item) {
+  const parts = [];
+  const usedBy = Number(item.used_by) || 0;
+  if (usedBy > 0) parts.push(`used by ${usedBy} ${usedBy === 1 ? "package" : "packages"}`);
+  if (item.origin === "manual" || item.origin === "seed") parts.push("tracked directly");
+  else if (item.origin) parts.push("dependency");
+  return parts.join(" · ");
 }
 
 function CompactList({ label, items, warn = false }) {
@@ -369,6 +380,63 @@ export default function UpdatesPage() {
     (item) => showPrereleases || !item.prerelease_only || flagsOf(item).length > 0
   );
 
+  // The API sorts by severity and importance: each section keeps that order.
+  const attention = packages.filter((item) => flagsOf(item).length > 0);
+  const updated = packages.filter((item) => flagsOf(item).length === 0);
+
+  function renderRow(item) {
+    // purl: with several ecosystems two entries can share a name.
+    const rowKey = item.purl || item.name;
+    const isOpen = Boolean(expanded[rowKey]);
+    const bump = bumpOf(item);
+    const flags = flagsOf(item);
+    const usage = usageLine(item);
+    return (
+      <li key={rowKey}>
+        <div className="update-row-head">
+          <button
+            type="button"
+            className="tree-toggle"
+            aria-expanded={isOpen}
+            aria-label={`${isOpen ? "Hide" : "Show"} events for ${item.name}`}
+            onClick={() => toggleRow(rowKey)}
+          >
+            {isOpen ? "-" : "+"}
+          </button>
+          <Link to={packageLink(item)}>{displayName(item)}</Link>
+          <span className="tag muted-tag">{ecosystemOf(item)}</span>
+          {item.to_version ? (
+            <span className="update-versions">
+              {item.from_version ? <code>{item.from_version}</code> : <span className="muted">new</span>}
+              {" → "}
+              <code>{item.to_version}</code>
+            </span>
+          ) : null}
+          {bump && !flags.includes(bump) ? <span className="tag muted-tag">{bump}</span> : null}
+          {flags.map((flag) => (
+            <span key={flag} className={flag === "major" ? "tag warn-major" : "tag warn"}>
+              {FLAG_LABELS[flag] || flag}
+            </span>
+          ))}
+          {item.released_at ? (
+            <span className="muted update-detected">released {formatDate(item.released_at)}</span>
+          ) : item.last_detected_at ? (
+            <span className="muted update-detected">detected {formatDateTime(item.last_detected_at)}</span>
+          ) : null}
+        </div>
+        {item.description ? <p className="muted update-description">{item.description}</p> : null}
+        {usage ? <p className="muted update-usage">{usage}</p> : null}
+        <CompactList label="Releases" items={item.releases} />
+        <CompactList label="Yanked" items={item.yanked} warn />
+        <CompactList label="Removed" items={item.removed} warn />
+        <CompactList label="Vulnerabilities" items={item.vulnerabilities} warn />
+        {isOpen ? (
+          <EventTimeline state={events[rowKey]} onLoadMore={() => loadEvents(rowKey, events[rowKey]?.cursor)} />
+        ) : null}
+      </li>
+    );
+  }
+
   return (
     <section>
       <h2>Updates</h2>
@@ -457,58 +525,18 @@ export default function UpdatesPage() {
             <p className="muted">{filtered ? "No updates match these filters." : "No updates in this period."}</p>
           ) : null}
 
-          <ul className="result-list">
-            {packages.map((item) => {
-              // purl: with several ecosystems two entries can share a name.
-              const rowKey = item.purl || item.name;
-              const isOpen = Boolean(expanded[rowKey]);
-              const bump = bumpOf(item);
-              const flags = flagsOf(item);
-              return (
-                <li key={rowKey}>
-                  <div className="update-row-head">
-                    <button
-                      type="button"
-                      className="tree-toggle"
-                      aria-expanded={isOpen}
-                      aria-label={`${isOpen ? "Hide" : "Show"} events for ${item.name}`}
-                      onClick={() => toggleRow(rowKey)}
-                    >
-                      {isOpen ? "-" : "+"}
-                    </button>
-                    <Link to={packageLink(item)}>{displayName(item)}</Link>
-                    <span className="tag muted-tag">{ecosystemOf(item)}</span>
-                    {item.to_version ? (
-                      <span className="update-versions">
-                        {item.from_version ? <code>{item.from_version}</code> : <span className="muted">new</span>}
-                        {" → "}
-                        <code>{item.to_version}</code>
-                      </span>
-                    ) : null}
-                    {bump && !flags.includes(bump) ? <span className="tag muted-tag">{bump}</span> : null}
-                    {flags.map((flag) => (
-                      <span key={flag} className={flag === "major" ? "tag warn-major" : "tag warn"}>
-                        {FLAG_LABELS[flag] || flag}
-                      </span>
-                    ))}
-                    {item.released_at ? (
-                      <span className="muted update-detected">released {formatDate(item.released_at)}</span>
-                    ) : item.last_detected_at ? (
-                      <span className="muted update-detected">detected {formatDateTime(item.last_detected_at)}</span>
-                    ) : null}
-                  </div>
-                  {item.description ? <p className="muted update-description">{item.description}</p> : null}
-                  <CompactList label="Releases" items={item.releases} />
-                  <CompactList label="Yanked" items={item.yanked} warn />
-                  <CompactList label="Removed" items={item.removed} warn />
-                  <CompactList label="Vulnerabilities" items={item.vulnerabilities} warn />
-                  {isOpen ? (
-                    <EventTimeline state={events[rowKey]} onLoadMore={() => loadEvents(rowKey, events[rowKey]?.cursor)} />
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
+          {packages.length ? (
+            <>
+              <h3>Needs attention ({attention.length})</h3>
+              {attention.length ? (
+                <ul className="result-list">{attention.map(renderRow)}</ul>
+              ) : (
+                <p className="muted">Nothing needs attention</p>
+              )}
+              <h3>Updated ({updated.length})</h3>
+              <ul className="result-list">{updated.map(renderRow)}</ul>
+            </>
+          ) : null}
         </>
       ) : null}
     </section>

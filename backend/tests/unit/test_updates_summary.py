@@ -166,6 +166,7 @@ def test_totals() -> None:
         "vulnerabilities": 1,
         "unavailable": 1,
         "prereleases": 0,
+        "attention": 3,
     }
 
 
@@ -397,3 +398,50 @@ def test_totals_prereleases_ignore_flagged_rows() -> None:
     packages = aggregate_summary(events)
     assert {p.name for p in packages if p.prerelease_only} == {"plain", "yanked"}
     assert compute_totals(events, packages).prereleases == 1
+
+
+def with_id(event, package_id):
+    event.package_id = package_id
+    return event
+
+
+def test_used_by_orders_within_flagged_and_unflagged_rows() -> None:
+    events = [
+        with_id(release("old-popular", "1.0.1", "1.0.0", "patch", minutes=0, id=1), "p1"),
+        with_id(release("new-niche", "1.0.1", "1.0.0", "patch", minutes=9, id=2), "p2"),
+        with_id(ev("flagged-niche", "release_yanked", minutes=5, version="1.0", id=3), "p3"),
+        with_id(ev("flagged-popular", "release_yanked", minutes=1, version="1.0", id=4), "p4"),
+        with_id(ev("vuln-niche", "vulnerability_added", minutes=0, id=5, details={"id": "X"}), "p5"),
+    ]
+    packages = aggregate_summary(events, {"p1": 7, "p3": 0, "p4": 3, "p5": 100})
+    # A flag beats used_by (vuln-niche is more severe than the yanked ones whatever they are used by); within a rank
+    # used_by beats recency; used_by beats recency for unflagged rows too.
+    assert [p.name for p in packages] == ["vuln-niche", "flagged-popular", "flagged-niche", "old-popular", "new-niche"]
+    assert [p.used_by for p in packages] == [100, 3, 0, 7, 0]
+
+
+def test_used_by_defaults_to_zero_and_keeps_the_old_order() -> None:
+    events = [
+        release("older", "1.0.1", "1.0.0", "patch", minutes=0, id=1),
+        release("newer", "1.0.1", "1.0.0", "patch", minutes=5, id=2),
+    ]
+    packages = aggregate_summary(events)
+    assert [p.name for p in packages] == ["newer", "older"]
+    assert [p.used_by for p in packages] == [0, 0]
+
+
+def test_origin_is_taken_from_the_events() -> None:
+    event = release("a", "1.0.1", "1.0.0", "patch")
+    event.origin = "seed"
+    (pkg,) = aggregate_summary([event])
+    assert pkg.origin == "seed"
+
+
+def test_totals_attention_counts_flagged_packages() -> None:
+    events = [
+        release("plain", "1.0.1", "1.0.0", "patch", id=1),
+        release("major", "2.0.0", "1.0.0", "major", id=2),
+        ev("gone", "release_removed", version="1.0", id=3),
+    ]
+    packages = aggregate_summary(events)
+    assert compute_totals(events, packages).attention == 2

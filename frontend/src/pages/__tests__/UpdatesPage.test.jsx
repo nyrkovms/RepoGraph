@@ -577,3 +577,122 @@ describe("UpdatesPage row details and filters", () => {
     expect(await screen.findByText("No updates match these filters.")).toBeInTheDocument();
   });
 });
+
+describe("UpdatesPage sections and usage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    api.fetchUpdates.mockResolvedValue({ data: [], has_more: false, cursor: null });
+  });
+
+  const row = (name, extra = {}) => ({
+    ecosystem: "pypi",
+    name,
+    purl: `pkg:pypi/${name}`,
+    from_version: "1.0.0",
+    to_version: "1.0.1",
+    max_bump: "patch",
+    releases: [],
+    yanked: [],
+    removed: [],
+    vulnerabilities: [],
+    flags: [],
+    last_detected_at: "2026-10-27T03:05:11Z",
+    ...extra,
+  });
+
+  function withPackages(packages, totals = {}) {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      totals: { packages: packages.length, attention: 0, prereleases: 0, ...totals },
+      packages,
+    });
+  }
+
+  it("splits rows into Needs attention and Updated with their counts", async () => {
+    withPackages([row("risky", { flags: ["yanked"] }), row("plain-a"), row("plain-b")], { attention: 1 });
+    renderPage();
+
+    await screen.findByRole("link", { name: "risky" });
+    const attention = screen.getByRole("heading", { name: "Needs attention (1)" });
+    const updated = screen.getByRole("heading", { name: "Updated (2)" });
+    expect(attention.compareDocumentPosition(updated) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const lists = screen.getAllByRole("list");
+    expect(within(lists[0]).getByRole("link", { name: "risky" })).toBeInTheDocument();
+    expect(within(lists[1]).getByRole("link", { name: "plain-a" })).toBeInTheDocument();
+    expect(within(lists[1]).queryByRole("link", { name: "risky" })).toBeNull();
+    expect(screen.queryByText("Nothing needs attention")).toBeNull();
+  });
+
+  it("says nothing needs attention when no row has flags", async () => {
+    withPackages([row("plain")]);
+    renderPage();
+
+    await screen.findByRole("link", { name: "plain" });
+    expect(screen.getByRole("heading", { name: "Needs attention (0)" })).toBeInTheDocument();
+    expect(screen.getByText("Nothing needs attention")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Updated (1)" })).toBeInTheDocument();
+  });
+
+  it("keeps the sections under a filter", async () => {
+    const user = userEvent.setup();
+    withPackages([row("plain")]);
+    renderPage();
+
+    await screen.findByRole("link", { name: "plain" });
+    await user.selectOptions(screen.getByLabelText("Type"), "yanked");
+    await waitFor(() => expect(api.fetchUpdatesSummary).toHaveBeenCalledTimes(2));
+    await screen.findByRole("link", { name: "plain" });
+    expect(screen.getByText("Nothing needs attention")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Updated (1)" })).toBeInTheDocument();
+  });
+
+  it("does not count hidden prerelease rows, and shows a flagged prerelease row under attention", async () => {
+    withPackages(
+      [row("beta-only", { prerelease_only: true }), row("beta-yanked", { prerelease_only: true, flags: ["yanked"] }), row("stable")],
+      { attention: 1, prereleases: 1 }
+    );
+    renderPage();
+
+    await screen.findByRole("link", { name: "stable" });
+    expect(screen.getByRole("heading", { name: "Needs attention (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Updated (1)" })).toBeInTheDocument();
+    const first = screen.getAllByRole("list")[0];
+    expect(within(first).getByRole("link", { name: "beta-yanked" })).toBeInTheDocument();
+  });
+
+  it("shows the Attention card first", async () => {
+    withPackages([row("risky", { flags: ["removed"] })], { attention: 4 });
+    renderPage();
+
+    await screen.findByRole("link", { name: "risky" });
+    const totals = screen.getByLabelText("Totals");
+    expect(within(totals).getByText("Attention").nextSibling).toHaveTextContent("4");
+    expect(within(totals).getAllByRole("term")[0]).toHaveTextContent("Attention");
+  });
+
+  it.each([
+    [0, "manual", "tracked directly"],
+    [1, "seed", "used by 1 package · tracked directly"],
+    [9, "dependency", "used by 9 packages · dependency"],
+    [3, "discovered", "used by 3 packages · dependency"],
+    [5, undefined, "used by 5 packages"],
+    [5, "", "used by 5 packages"],
+  ])("words used_by %s with origin %s as '%s'", async (usedBy, origin, line) => {
+    withPackages([row("pkg", { used_by: usedBy, origin })]);
+    renderPage();
+
+    expect(await screen.findByText(line)).toBeInTheDocument();
+  });
+
+  it("omits the usage line when both parts are empty, and shows it for a Go row", async () => {
+    withPackages([
+      row("empty", { used_by: 0 }),
+      row("github.com/a/b", { ecosystem: "go", purl: "pkg:golang/github.com/a/b", used_by: 2, origin: "manual" }),
+    ]);
+    const { container } = renderPage();
+
+    await screen.findByRole("link", { name: "empty" });
+    expect(container.querySelectorAll(".update-usage")).toHaveLength(1);
+    expect(screen.getByText("used by 2 packages · tracked directly")).toBeInTheDocument();
+  });
+});
