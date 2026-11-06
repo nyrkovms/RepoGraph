@@ -11,11 +11,10 @@ export default function App() {
       <header className="app-header">
         <div>
           <h1>PackageHub MVP</h1>
-          <p className="muted">PyPI and npm catalog + sync + resolve</p>
+          <p className="muted">Package catalog: PyPI, npm, Maven, NuGet, Go, crates.io, RPM</p>
         </div>
         <nav>
           <Link to="/">Search</Link>
-          <Link to="/package/flask">Package</Link>
           <Link to="/resolve">Resolve</Link>
           <Link to="/updates">Updates</Link>
         </nav>
