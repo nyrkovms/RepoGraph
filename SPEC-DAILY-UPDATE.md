@@ -174,6 +174,10 @@ Batch refresh по `synced_at` отключается (`SYNC_REFRESH_ENABLED=fal
 |---|---|
 | `period` | `day` (`day` / `week`, или явные `since` / `until`) |
 | `tz` | `UTC` — граница «сегодня» |
+| `ecosystem` | все (одна из семи; неверное значение — 422) |
+| `kind` | все (те же значения, что у `/updates`, можно несколько; неверное — 422) |
+
+`ecosystem` и `kind` отбирают события до агрегации, поэтому `totals` следуют за фильтром.
 
 ```json
 {
@@ -184,8 +188,11 @@ Batch refresh по `synced_at` отключается (`SYNC_REFRESH_ENABLED=fal
   "packages": [
     {
       "name": "flask",
+      "description": "A simple framework for building complex web applications.",
       "from_version": "3.1.1",
       "to_version": "3.2.0",
+      "released_at": "2026-10-26T12:00:00Z",
+      "prerelease_only": false,
       "max_bump": "minor",
       "releases": ["3.2.0rc1", "3.2.0"],
       "yanked": [],
@@ -198,6 +205,7 @@ Batch refresh по `synced_at` отключается (`SYNC_REFRESH_ENABLED=fal
 }
 ```
 
+- `description` — `packages.description` (`null`, если нет, например у Go). `released_at` — `occurred_at` релиза `to_version` (`null`, если неизвестно). `prerelease_only` — в окне есть релизы и все они пререлизы. `totals.prereleases` — число пакетов с `prerelease_only` и без `flags`: их страница скрывает по умолчанию.
 - Сортировка: сначала пакеты с флагами риска (`unavailable`, `vulnerability_added`, `removed`, `yanked`, `major`), затем по `last_detected_at desc`.
 - Окно считается по `detected_at`: при суточной частоте «сегодня» = «обнаружено сегодняшним прогоном». Для релизов в ответе также показывается точное `occurred_at`.
 

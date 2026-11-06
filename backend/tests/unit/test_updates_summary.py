@@ -7,7 +7,10 @@ from app.api.v1.updates import SummaryEvent, aggregate_summary, compute_summary_
 T0 = datetime(2026, 10, 27, 3, 0, tzinfo=UTC)
 
 
-def ev(package, kind, minutes=0, version=None, details=None, id=0, ecosystem="pypi", namespace=""):
+def ev(
+    package, kind, minutes=0, version=None, details=None, id=0, ecosystem="pypi", namespace="", description=None,
+    occurred_at=None,
+):
     return SummaryEvent(
         package=package,
         kind=kind,
@@ -17,6 +20,8 @@ def ev(package, kind, minutes=0, version=None, details=None, id=0, ecosystem="py
         id=id,
         ecosystem=ecosystem,
         namespace=namespace,
+        description=description,
+        occurred_at=occurred_at,
     )
 
 
@@ -160,6 +165,7 @@ def test_totals() -> None:
         "sources_added": 0,
         "vulnerabilities": 1,
         "unavailable": 1,
+        "prereleases": 0,
     }
 
 
@@ -335,3 +341,59 @@ def test_a_package_with_only_backfills_and_source_added_is_still_listed() -> Non
     assert package.releases == [] and package.to_version is None and package.max_bump is None
     totals = compute_totals(events, packages)
     assert (totals.releases, totals.sources_added) == (0, 1)
+
+
+def pre_release(package, version, previous, prerelease, minutes=0, id=0, occurred_at=None, description=None):
+    return ev(
+        package,
+        "release_added",
+        minutes,
+        version,
+        {"previous_version": previous, "bump": "patch", "prerelease": prerelease},
+        id,
+        occurred_at=occurred_at,
+        description=description,
+    )
+
+
+def test_released_at_and_description_come_from_the_to_version() -> None:
+    released = T0 - timedelta(hours=5)
+    events = [
+        pre_release("flask", "3.2.0", "3.1.1", False, minutes=2, id=2, occurred_at=released, description="Web"),
+        pre_release("flask", "3.2.0rc1", "3.1.1", True, minutes=1, id=1, occurred_at=T0 - timedelta(days=2)),
+    ]
+    (pkg,) = aggregate_summary(events)
+    assert pkg.released_at == released
+    assert pkg.description == "Web"
+    assert pkg.prerelease_only is False
+
+
+def test_released_at_and_description_are_null_when_unknown() -> None:
+    (pkg,) = aggregate_summary([pre_release("go-mod", "1.0.1", "1.0.0", False)])
+    assert pkg.released_at is None
+    assert pkg.description is None
+
+
+def test_prerelease_only_when_every_release_of_the_window_is_a_prerelease() -> None:
+    mixed = [pre_release("a", "2.0.0rc1", "1.0", True, id=1), pre_release("a", "2.0.0", "2.0.0rc1", False, id=2)]
+    only = [pre_release("b", "2.0.0rc1", "1.0", True, id=3), pre_release("b", "2.0.0rc2", "2.0.0rc1", True, id=4)]
+    by_name = {p.name: p for p in aggregate_summary(mixed + only)}
+    assert by_name["a"].prerelease_only is False
+    assert by_name["b"].prerelease_only is True
+
+
+def test_package_without_releases_is_not_prerelease_only() -> None:
+    (pkg,) = aggregate_summary([ev("a", "release_yanked", version="1.0")])
+    assert pkg.prerelease_only is False
+
+
+def test_totals_prereleases_ignore_flagged_rows() -> None:
+    events = [
+        pre_release("plain", "2.0.0rc1", "1.0", True, id=1),
+        pre_release("yanked", "2.0.0rc1", "1.0", True, id=2),
+        ev("yanked", "release_yanked", version="1.9", id=3),
+        pre_release("stable", "2.0.0", "1.0", False, id=4),
+    ]
+    packages = aggregate_summary(events)
+    assert {p.name for p in packages if p.prerelease_only} == {"plain", "yanked"}
+    assert compute_totals(events, packages).prereleases == 1

@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 
 import UpdatesPage from "../UpdatesPage";
 import * as api from "../../lib/api";
@@ -53,10 +53,16 @@ const SUMMARY = {
   ],
 };
 
-function renderPage() {
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="search">{location.search}</output>;
+}
+
+function renderPage(entry = "/") {
   return render(
-    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <MemoryRouter initialEntries={[entry]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <UpdatesPage />
+      <LocationProbe />
     </MemoryRouter>
   );
 }
@@ -436,5 +442,138 @@ describe("UpdatesPage links by ecosystem", () => {
     renderPage();
     const link = await screen.findByRole("link", { name: "rocky-9/openssl" });
     expect(link).toHaveAttribute("href", "/package/rpm/rocky-9/openssl");
+  });
+});
+
+describe("UpdatesPage row details and filters", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    api.fetchUpdatesSummary.mockResolvedValue(SUMMARY);
+    api.fetchUpdates.mockResolvedValue({ data: [], has_more: false, cursor: null });
+  });
+
+  const base = {
+    ecosystem: "pypi",
+    from_version: "1.0.0",
+    max_bump: "patch",
+    releases: [],
+    yanked: [],
+    removed: [],
+    vulnerabilities: [],
+    flags: [],
+    last_detected_at: "2026-10-27T03:05:11Z",
+  };
+  const row = (name, extra = {}) => ({
+    ...base,
+    name,
+    purl: `pkg:${extra.ecosystem || "pypi"}/${name}`,
+    to_version: "1.0.1",
+    ...extra,
+  });
+  const totals = { packages: 3, releases: 3, yanked: 0, removed: 0, vulnerabilities: 0, unavailable: 0 };
+
+  function withPackages(packages, prereleases = 0) {
+    api.fetchUpdatesSummary.mockResolvedValue({ ...SUMMARY, totals: { ...totals, prereleases }, packages });
+  }
+
+  it("shows the ecosystem tag and the description, and no line without a description", async () => {
+    withPackages([
+      row("flask", { description: "A web framework" }),
+      row("example.com/mod", { ecosystem: "go", purl: "pkg:golang/example.com/mod", description: null }),
+    ]);
+    renderPage();
+
+    expect(await screen.findByText("A web framework")).toHaveClass("update-description");
+    const tags = [...document.querySelectorAll(".update-row-head .muted-tag")].map((el) => el.textContent);
+    expect(tags).toEqual(expect.arrayContaining(["pypi", "go"]));
+    expect(document.querySelectorAll(".update-description")).toHaveLength(1);
+  });
+
+  it("prefixes the release date with released and falls back to detected", async () => {
+    withPackages([
+      row("flask", { released_at: "2026-10-26T12:00:00Z" }),
+      row("requests", { released_at: null }),
+    ]);
+    renderPage();
+
+    await screen.findByRole("link", { name: "flask" });
+    const items = screen.getAllByRole("listitem");
+    const flask = items.find((li) => within(li).queryByRole("link", { name: "flask" }));
+    const requests = items.find((li) => within(li).queryByRole("link", { name: "requests" }));
+    expect(within(flask).getByText(/^released /)).toBeInTheDocument();
+    expect(within(flask).queryByText(/^detected /)).toBeNull();
+    expect(within(requests).getByText(/^detected /)).toBeInTheDocument();
+  });
+
+  it("hides prerelease-only rows until the checkbox is ticked, but never a flagged one", async () => {
+    const user = userEvent.setup();
+    withPackages(
+      [
+        row("stable"),
+        row("beta-only", { prerelease_only: true }),
+        row("beta-yanked", { prerelease_only: true, flags: ["yanked"] }),
+      ],
+      1
+    );
+    renderPage();
+
+    await screen.findByRole("link", { name: "stable" });
+    expect(screen.queryByRole("link", { name: "beta-only" })).toBeNull();
+    expect(screen.getByRole("link", { name: "beta-yanked" })).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText("Show prereleases (1)"));
+    expect(screen.getByRole("link", { name: "beta-only" })).toBeInTheDocument();
+    expect(screen.getByTestId("search")).toHaveTextContent("prereleases=1");
+  });
+
+  it("does not show the prereleases checkbox when there are none", async () => {
+    withPackages([row("stable")], 0);
+    renderPage();
+
+    await screen.findByRole("link", { name: "stable" });
+    expect(screen.queryByLabelText(/Show prereleases/)).toBeNull();
+  });
+
+  it("sends the filters to the API and puts them in the URL", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("link", { name: "flask" });
+    expect(screen.getByTestId("search")).toHaveTextContent(/^$/);
+
+    await user.selectOptions(screen.getByLabelText("Ecosystem"), "npm");
+    await waitFor(() => {
+      expect(api.fetchUpdatesSummary).toHaveBeenLastCalledWith(expect.objectContaining({ ecosystem: "npm" }));
+    });
+    await user.selectOptions(screen.getByLabelText("Type"), "yanked");
+    await waitFor(() => {
+      expect(api.fetchUpdatesSummary).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ecosystem: "npm", kind: ["release_yanked"] })
+      );
+    });
+    expect(screen.getByTestId("search")).toHaveTextContent("ecosystem=npm");
+    expect(screen.getByTestId("search")).toHaveTextContent("type=yanked");
+  });
+
+  it("restores the filters, the period and the prerelease checkbox from the URL", async () => {
+    withPackages([row("stable"), row("beta-only", { prerelease_only: true })], 1);
+    renderPage("/?period=week&ecosystem=maven&type=sources&prereleases=1");
+
+    expect(await screen.findByRole("link", { name: "beta-only" })).toBeInTheDocument();
+    expect(api.fetchUpdatesSummary).toHaveBeenCalledWith({
+      period: "week",
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      ecosystem: "maven",
+      kind: ["source_added"],
+    });
+    expect(screen.getByLabelText("Ecosystem")).toHaveValue("maven");
+    expect(screen.getByLabelText("Type")).toHaveValue("sources");
+    expect(screen.getByLabelText("Show prereleases (1)")).toBeChecked();
+  });
+
+  it("says no updates match the filters when a filtered result is empty", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({ ...SUMMARY, totals: { ...totals, prereleases: 0 }, packages: [] });
+    renderPage("/?ecosystem=rpm");
+
+    expect(await screen.findByText("No updates match these filters.")).toBeInTheDocument();
   });
 });

@@ -107,7 +107,9 @@ export async function resolveDependencies(body) {
 export async function fetchUpdatesSummary(params = {}) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
+    if (Array.isArray(value)) {
+      value.forEach((item) => search.append(key, String(item)));
+    } else if (value !== undefined && value !== null && value !== "") {
       search.set(key, String(value));
     }
   });
