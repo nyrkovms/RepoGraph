@@ -305,3 +305,33 @@ def test_cyclic_previous_versions_terminate() -> None:
     events = [release("a", "1.0.1", "1.0.2", "patch", id=1), release("a", "1.0.2", "1.0.1", "patch", id=2)]
     (pkg,) = aggregate_summary(events)
     assert pkg.to_version == "1.0.2"
+
+
+def backfill(package, version, minutes=0, id=0):
+    return ev(package, "release_added", minutes, version,
+              {"previous_version": None, "bump": "other", "backfill": True}, id)
+
+
+def test_backfilled_versions_are_not_releases_of_the_digest() -> None:
+    events = [
+        release("torch", "2.9.0", "2.8.0", "minor", minutes=1, id=1),
+        backfill("torch", "9.9.9", minutes=2, id=2),
+        backfill("torch", "0.1.8", minutes=3, id=3),
+    ]
+    (package,) = aggregate_summary(events)
+    assert package.releases == ["2.9.0"]
+    assert (package.from_version, package.to_version, package.max_bump) == ("2.8.0", "2.9.0", "minor")
+    assert compute_totals(events, [package]).releases == 1
+
+
+def test_a_package_with_only_backfills_and_source_added_is_still_listed() -> None:
+    events = [
+        ev("torch", "source_added", 1, None, {"registry": "pytorch"}),
+        backfill("torch", "0.1.8", minutes=2, id=2),
+    ]
+    packages = aggregate_summary(events)
+    (package,) = packages
+    assert package.sources_added == ["pytorch"]
+    assert package.releases == [] and package.to_version is None and package.max_bump is None
+    totals = compute_totals(events, packages)
+    assert (totals.releases, totals.sources_added) == (0, 1)

@@ -151,15 +151,20 @@ def _release_range(ecosystem: str, releases: list[Any]) -> tuple[str | None, str
         return previous, to_event.version
 
 
+def _is_backfill(event: Any) -> bool:
+    """A version that arrived with a new source: in the journal, but not a release of the digest."""
+    return _kind_value(event.kind) == "release_added" and bool((event.details or {}).get("backfill"))
+
+
 def aggregate_summary(events: Iterable[Any]) -> list[UpdatesSummaryPackage]:
     """Aggregate events (any objects with package/version/kind/detected_at/details[/id/ecosystem/namespace])
     per package; `pkg:pypi/x` and `pkg:npm/x` are two packages.
 
-    `tracking_started` events are ignored; packages with no other events are not listed.
+    `tracking_started` and backfill events are ignored; packages with no other events are not listed.
     """
     grouped: dict[tuple[str, str, str], list[Any]] = {}
     for event in events:
-        if _kind_value(event.kind) == PackageEventKind.tracking_started.value:
+        if _kind_value(event.kind) == PackageEventKind.tracking_started.value or _is_backfill(event):
             continue
         key = (getattr(event, "ecosystem", "pypi"), getattr(event, "namespace", ""), event.package)
         grouped.setdefault(key, []).append(event)
@@ -258,7 +263,8 @@ def compute_totals(events: Iterable[Any], packages: list[UpdatesSummaryPackage])
     for e in events:
         kind = _kind_value(e.kind)
         if kind == "release_added":
-            totals.releases += 1
+            if not _is_backfill(e):
+                totals.releases += 1
         elif kind == "release_yanked":
             totals.yanked += 1
         elif kind == "release_removed":

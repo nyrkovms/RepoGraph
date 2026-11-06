@@ -249,3 +249,53 @@ def test_version_below_everything_known_falls_back_to_latest_and_is_not_major() 
     events = diff_package(before, _package([_version("2.0.0"), _version("1.0.0")]))
 
     assert _release_details(events) == {"1.0.0": ("2.0.0", "other")}
+
+
+def _two_sources(primary: list[NormalizedVersion], added: list[NormalizedVersion]):
+    """pypi (known) and a second index (new to the package), merged as the pipeline does."""
+    return merge_by_priority([to_contract(_package(primary), "reg-pypi"), to_contract(_package(added), "reg-torch")])
+
+
+def _with_known_source(statuses: dict[str, str], latest: str) -> PackageSnapshot:
+    snapshot = _snapshot(statuses, latest)
+    snapshot.registry_ids = {"reg-pypi"}
+    return snapshot
+
+
+def test_versions_that_arrive_only_with_a_new_source_are_backfill() -> None:
+    before = _with_known_source({"2.0": "active"}, latest="2.0")
+    merged = _two_sources([_version("2.0")], [_version("0.1.8"), _version("2.0")])
+
+    events = _diff(before, merged, PyPIVersionScheme(), "2.0")
+
+    releases = {e.version: e.details for e in events if e.kind == PackageEventKind.release_added}
+    assert releases["0.1.8"]["backfill"] is True
+    assert [e.kind for e in events].count(PackageEventKind.source_added) == 1
+
+
+def test_a_version_in_a_new_and_a_known_source_is_not_backfill() -> None:
+    before = _with_known_source({"2.0": "active"}, latest="2.0")
+    merged = _two_sources([_version("2.0"), _version("2.1")], [_version("2.1")])
+
+    events = _diff(before, merged, PyPIVersionScheme(), "2.1")
+
+    (release,) = [e for e in events if e.kind == PackageEventKind.release_added]
+    assert "backfill" not in release.details
+
+
+def test_nothing_is_backfill_when_the_known_sources_are_not_loaded() -> None:
+    before = _snapshot({"2.0": "active"}, latest="2.0")
+    merged = _two_sources([_version("2.0")], [_version("0.1.8")])
+
+    events = _diff(before, merged, PyPIVersionScheme(), "2.0")
+
+    assert all("backfill" not in e.details for e in events)
+
+
+def test_a_backfilled_yanked_version_gets_no_yank_event() -> None:
+    before = _with_known_source({"2.0": "active"}, latest="2.0")
+    merged = _two_sources([_version("2.0")], [_version("0.1.8", "yanked", "old"), _version("2.0")])
+
+    events = _diff(before, merged, PyPIVersionScheme(), "2.0")
+
+    assert PackageEventKind.release_yanked not in [e.kind for e in events]
