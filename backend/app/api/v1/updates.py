@@ -12,6 +12,8 @@ from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db_session
+from app.ecosystems.pypi.versions import PyPIVersionScheme
+from app.ecosystems.registry import UnknownEcosystem, get_plugin
 from app.models.enums import Ecosystem, PackageEventKind
 from app.models.package import Package
 from app.models.package_event import PackageEvent
@@ -38,6 +40,7 @@ BUMP_ORDER = ["other", "pre", "patch", "minor", "major"]
 # Flag severity: lower index is more severe (also the order flags are listed in).
 FLAG_ORDER = ["unavailable", "vulnerability_added", "removed", "yanked", "deprecated", "major"]
 DAILY_UPDATE = "daily_update"
+_DEFAULT_SCHEME = PyPIVersionScheme()
 
 
 class SummaryPeriod(str, Enum):
@@ -119,6 +122,35 @@ def compute_summary_window(
     return since_utc, until_utc
 
 
+def _release_range(ecosystem: str, releases: list[Any]) -> tuple[str | None, str | None]:
+    """`to` is the highest stable release of the window (the highest one if all are prereleases); `from` is where its
+    chain of `previous_version` leaves the window. Backports in the window sit on their own chains and do not count."""
+    try:
+        scheme = get_plugin(ecosystem).versions
+    except UnknownEcosystem:  # an ecosystem without a plugin: order as PyPI does
+        scheme = _DEFAULT_SCHEME
+    by_version = {r.version: r for r in releases if r.version is not None}
+    if not by_version:
+        return (releases[0].details or {}).get("previous_version"), None
+
+    def is_pre(event: Any) -> bool:
+        flag = (event.details or {}).get("prerelease")
+        return bool(flag) if flag is not None else scheme.is_prerelease(event.version)
+
+    stable = [r for r in by_version.values() if not is_pre(r)]
+    to_event = max(stable or by_version.values(), key=lambda r: scheme.sort_key(r.version))
+    current = to_event
+    seen = {current.version}
+    while True:
+        previous = (current.details or {}).get("previous_version")
+        # Stored events may carry the old rule's values: a previous that was already visited would loop.
+        if previous in by_version and previous not in seen:
+            seen.add(previous)
+            current = by_version[previous]
+            continue
+        return previous, to_event.version
+
+
 def aggregate_summary(events: Iterable[Any]) -> list[UpdatesSummaryPackage]:
     """Aggregate events (any objects with package/version/kind/detected_at/details[/id/ecosystem/namespace])
     per package; `pkg:pypi/x` and `pkg:npm/x` are two packages.
@@ -171,8 +203,7 @@ def aggregate_summary(events: Iterable[Any]) -> list[UpdatesSummaryPackage]:
         to_version = None
         max_bump = None
         if releases:
-            from_version = (releases[0].details or {}).get("previous_version")
-            to_version = releases[-1].version
+            from_version, to_version = _release_range(ecosystem, releases)
             ranks = [
                 BUMP_ORDER.index(b)
                 for b in ((r.details or {}).get("bump") for r in releases)

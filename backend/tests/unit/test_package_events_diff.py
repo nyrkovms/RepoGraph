@@ -208,3 +208,44 @@ def test_a_tagless_go_module_s_older_pseudo_version_is_superseded_without_an_eve
     assert [(e.kind, e.version) for e in events if e.kind != PackageEventKind.release_added] == [
         (PackageEventKind.release_removed, "v1.0.0")]
     assert GO.vanished_status(old) == "superseded" and GO.vanished_status("v1.0.0") == "removed"
+
+
+def _release_details(events) -> dict[str, tuple[str | None, str | None]]:
+    return {e.version: (e.details["previous_version"], e.details["bump"]) for e in events}
+
+
+def test_backport_does_not_become_the_reference_of_the_current_line() -> None:
+    before = _snapshot({"8.12.3": "active", "7.30.1": "active"}, latest="8.12.3")
+    after = _package([_version("7.30.1"), _version("8.12.3"), _version("7.30.2"), _version("8.12.4")])
+
+    assert _release_details(diff_package(before, after)) == {
+        "7.30.2": ("7.30.1", "patch"),
+        "8.12.4": ("8.12.3", "patch"),
+    }
+
+
+def test_patches_on_three_lines_are_measured_each_against_its_own_line() -> None:
+    before = _snapshot({"6.1.2": "active", "6.0.9": "active", "5.2.18": "active"}, latest="6.1.2")
+    after = _package([_version(v) for v in ("5.2.18", "6.0.9", "6.1.2", "5.2.19", "6.0.10", "6.1.3")])
+
+    assert _release_details(diff_package(before, after)) == {
+        "5.2.19": ("5.2.18", "patch"),
+        "6.0.10": ("6.0.9", "patch"),
+        "6.1.3": ("6.1.2", "patch"),
+    }
+
+
+def test_new_major_is_still_major() -> None:
+    before = _snapshot({"3.0.0": "active"}, latest="3.0.0")
+
+    events = diff_package(before, _package([_version("3.0.0"), _version("4.0.0")]))
+
+    assert _release_details(events) == {"4.0.0": ("3.0.0", "major")}
+
+
+def test_version_below_everything_known_falls_back_to_latest_and_is_not_major() -> None:
+    before = _snapshot({"2.0.0": "active"}, latest="2.0.0")
+
+    events = diff_package(before, _package([_version("2.0.0"), _version("1.0.0")]))
+
+    assert _release_details(events) == {"1.0.0": ("2.0.0", "other")}
