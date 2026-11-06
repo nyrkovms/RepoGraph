@@ -1,5 +1,6 @@
 """Events from comparing the stored state of a package with its merged sources (SPEC-MULTI-ECOSYSTEM.md §8.3)."""
 
+from bisect import bisect_left, insort
 from collections.abc import Callable, Mapping, Set
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -69,13 +70,20 @@ def diff_package(
         merged for name, merged in incoming.items()
         if name not in before.version_statuses and merged.version.status != PackageVersionStatus.removed.value
     ]
-    # previous_version follows every new release; the bump is measured against the last stable one,
-    # so 3.1.1 -> 3.2.0rc1 -> 3.2.0 reports "pre" and then "minor".
-    previous = before.latest_version
-    previous_stable = before.latest_version
+    # Each release is measured against the nearest lower known version, not the one walked before it: a backport
+    # (7.30.2 next to 8.12.4) must not become the reference of the current line. previous_version is that
+    # neighbour, stable or not; the bump is measured against the nearest lower stable one, so
+    # 3.1.1 -> 3.2.0rc1 -> 3.2.0 reports "pre" and then "minor". Nothing lower is known: the stored latest.
+    known_all: list[tuple[bytes, str]] = sorted((scheme.sort_key(name), name) for name in before.version_statuses)
+    known_stable: list[tuple[bytes, str]] = [item for item in known_all if not scheme.is_prerelease(item[1])]
     for merged in sorted(added, key=lambda item: scheme.sort_key(item.version.version)):
         version = merged.version
         prerelease = scheme.is_prerelease(version.version)
+        position = (scheme.sort_key(version.version), "")
+        lower = bisect_left(known_all, position)
+        lower_stable = bisect_left(known_stable, position)
+        previous = known_all[lower - 1][1] if lower else before.latest_version
+        previous_stable = known_stable[lower_stable - 1][1] if lower_stable else before.latest_version
         events.append(
             EventDraft(
                 kind=PackageEventKind.release_added,
@@ -93,9 +101,9 @@ def diff_package(
         )
         if version.status == PackageVersionStatus.yanked.value:
             events.append(_yanked_event(version.version, version.status_reason))
-        previous = version.version
+        insort(known_all, (position[0], version.version))
         if not prerelease:
-            previous_stable = version.version
+            insort(known_stable, (position[0], version.version))
 
     # The same version appearing in one more source is not a new release (§8.3).
     if before.version_sources is not None:

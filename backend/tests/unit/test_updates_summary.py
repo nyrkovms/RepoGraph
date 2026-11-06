@@ -269,3 +269,39 @@ def test_invalid_timezone_and_empty_window_raise() -> None:
         compute_summary_window("day", "../etc/passwd", now=NOW)
     with pytest.raises(ValueError):
         compute_summary_window("day", "UTC", NOW, NOW, now=NOW)
+
+
+def test_backports_in_the_window_do_not_hide_the_current_line() -> None:
+    events = [
+        release("django", "5.2.19", "5.2.18", "patch", minutes=1, id=1),
+        release("django", "6.0.10", "6.0.9", "patch", minutes=2, id=2),
+        release("django", "6.1.3", "6.1.2", "patch", minutes=3, id=3),
+    ]
+    (pkg,) = aggregate_summary(events)
+    assert (pkg.from_version, pkg.to_version) == ("6.1.2", "6.1.3")
+    assert pkg.releases == ["5.2.19", "6.0.10", "6.1.3"]
+    assert pkg.max_bump == "patch"
+
+
+def test_stored_events_with_the_old_previous_chain_give_the_current_line() -> None:
+    events = [
+        ev("undici", "release_added", 1, "7.30.2", {"previous_version": "8.12.3", "bump": "major"}, 1, ecosystem="npm"),
+        ev("undici", "release_added", 2, "8.12.4", {"previous_version": "7.30.2", "bump": "major"}, 2, ecosystem="npm"),
+    ]
+    (pkg,) = aggregate_summary(events)
+    assert (pkg.from_version, pkg.to_version) == ("8.12.3", "8.12.4")
+
+
+def test_prerelease_is_not_the_target_while_a_stable_release_is_in_the_window() -> None:
+    events = [
+        ev("react", "release_added", 1, "19.3.0", {"previous_version": "19.2.0", "bump": "minor", "prerelease": False}, 1),
+        ev("react", "release_added", 2, "19.3.1-canary-1", {"previous_version": "19.3.0", "bump": "pre", "prerelease": True}, 2),
+    ]
+    (pkg,) = aggregate_summary(events)
+    assert (pkg.from_version, pkg.to_version) == ("19.2.0", "19.3.0")
+
+
+def test_cyclic_previous_versions_terminate() -> None:
+    events = [release("a", "1.0.1", "1.0.2", "patch", id=1), release("a", "1.0.2", "1.0.1", "patch", id=2)]
+    (pkg,) = aggregate_summary(events)
+    assert pkg.to_version == "1.0.2"
