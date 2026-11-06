@@ -460,6 +460,13 @@ button:disabled {
   margin-left: auto;
 }
 
+.update-description {
+  margin: 4px 0 0 26px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .update-list {
   margin: 4px 0 0 26px;
   word-break: break-word;

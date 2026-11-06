@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { fetchUpdates, fetchUpdatesSummary } from "../lib/api";
 
@@ -7,6 +7,19 @@ const PERIODS = [
   { value: "day", label: "Today" },
   { value: "week", label: "Week" },
   { value: "custom", label: "Custom" },
+];
+
+const ECOSYSTEMS = ["pypi", "npm", "maven", "nuget", "go", "crates", "rpm"];
+
+// The "Type" filter: what the analyst picks, and the event kinds the API gets for it.
+const TYPE_FILTERS = [
+  { value: "releases", label: "Releases", kinds: ["release_added"] },
+  { value: "yanked", label: "Yanked", kinds: ["release_yanked"] },
+  { value: "removed", label: "Removed", kinds: ["release_removed"] },
+  { value: "deprecated", label: "Deprecated", kinds: ["release_deprecated"] },
+  { value: "vulnerabilities", label: "Vulnerabilities", kinds: ["vulnerability_added"] },
+  { value: "unavailable", label: "Unavailable", kinds: ["project_unavailable"] },
+  { value: "sources", label: "Sources added", kinds: ["source_added"] },
 ];
 
 // The native name and package page of a digest entry: from its purl (`pkg:npm/%40angular/core` -> `@angular/core`),
@@ -84,6 +97,11 @@ function browserTimezone() {
   } catch {
     return "UTC";
   }
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
 }
 
 function formatDateTime(value) {
@@ -215,9 +233,34 @@ export default function UpdatesPage() {
   const requestId = useRef(0);
   const eventsRequestIds = useRef({});
 
-  const [period, setPeriod] = useState("day");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
+  // The view lives in the URL so a link can be shared; a default adds nothing to it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const periodParam = searchParams.get("period");
+  const period = PERIODS.some((item) => item.value === periodParam) ? periodParam : "day";
+  const customFrom = searchParams.get("from") || "";
+  const customTo = searchParams.get("to") || "";
+  const ecosystemParam = searchParams.get("ecosystem");
+  const ecosystem = ECOSYSTEMS.includes(ecosystemParam) ? ecosystemParam : "";
+  const typeParam = searchParams.get("type");
+  const typeFilter = TYPE_FILTERS.find((item) => item.value === typeParam) || null;
+  const type = typeFilter ? typeFilter.value : "";
+  const showPrereleases = searchParams.get("prereleases") === "1";
+
+  function setParam(key, value) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      { replace: true }
+    );
+  }
+
+  function setPeriod(value) {
+    setParam("period", value === "day" ? "" : value);
+  }
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -239,6 +282,9 @@ export default function UpdatesPage() {
       period === "custom"
         ? { since: customSince, until: customUntil, tz: browserTimezone() }
         : { period, tz: browserTimezone() };
+    if (ecosystem) params.ecosystem = ecosystem;
+    const kinds = TYPE_FILTERS.find((item) => item.value === type)?.kinds;
+    if (kinds) params.kind = kinds;
 
     setLoading(true);
     setError("");
@@ -261,7 +307,7 @@ export default function UpdatesPage() {
           setLoading(false);
         }
       });
-  }, [period, customSince, customUntil, waitingForRange]);
+  }, [period, customSince, customUntil, waitingForRange, ecosystem, type]);
 
   // `name` is the row key: the purl (the API takes it as `package`), or the bare name of an older API.
   async function loadEvents(name, cursor = null) {
@@ -315,8 +361,13 @@ export default function UpdatesPage() {
     }
   }
 
-  const packages = summary?.packages || [];
+  const filtered = Boolean(ecosystem || type);
   const totals = summary?.totals;
+  const hiddenPrereleases = totals?.prereleases || 0;
+  // A prerelease-only package is hidden unless it carries a flag: a flag is never hidden.
+  const packages = (summary?.packages || []).filter(
+    (item) => showPrereleases || !item.prerelease_only || flagsOf(item).length > 0
+  );
 
   return (
     <section>
@@ -338,13 +389,48 @@ export default function UpdatesPage() {
           <>
             <label>
               From
-              <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+              <input type="date" value={customFrom} onChange={(e) => setParam("from", e.target.value)} />
             </label>
             <label>
               To
-              <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+              <input type="date" value={customTo} onChange={(e) => setParam("to", e.target.value)} />
             </label>
           </>
+        ) : null}
+      </div>
+
+      <div className="toolbar" role="group" aria-label="Filters">
+        <label>
+          Ecosystem
+          <select value={ecosystem} onChange={(e) => setParam("ecosystem", e.target.value)}>
+            <option value="">All</option>
+            {ECOSYSTEMS.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Type
+          <select value={type} onChange={(e) => setParam("type", e.target.value)}>
+            <option value="">All</option>
+            {TYPE_FILTERS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {hiddenPrereleases > 0 ? (
+          <label>
+            <input
+              type="checkbox"
+              checked={showPrereleases}
+              onChange={(e) => setParam("prereleases", e.target.checked ? "1" : "")}
+            />
+            Show prereleases ({hiddenPrereleases})
+          </label>
         ) : null}
       </div>
 
@@ -367,7 +453,9 @@ export default function UpdatesPage() {
             </dl>
           ) : null}
 
-          {!packages.length && !loading ? <p className="muted">No updates in this period.</p> : null}
+          {!packages.length && !loading ? (
+            <p className="muted">{filtered ? "No updates match these filters." : "No updates in this period."}</p>
+          ) : null}
 
           <ul className="result-list">
             {packages.map((item) => {
@@ -389,6 +477,7 @@ export default function UpdatesPage() {
                       {isOpen ? "-" : "+"}
                     </button>
                     <Link to={packageLink(item)}>{displayName(item)}</Link>
+                    <span className="tag muted-tag">{ecosystemOf(item)}</span>
                     {item.to_version ? (
                       <span className="update-versions">
                         {item.from_version ? <code>{item.from_version}</code> : <span className="muted">new</span>}
@@ -402,10 +491,13 @@ export default function UpdatesPage() {
                         {FLAG_LABELS[flag] || flag}
                       </span>
                     ))}
-                    {item.last_detected_at ? (
-                      <span className="muted update-detected">{formatDateTime(item.last_detected_at)}</span>
+                    {item.released_at ? (
+                      <span className="muted update-detected">released {formatDate(item.released_at)}</span>
+                    ) : item.last_detected_at ? (
+                      <span className="muted update-detected">detected {formatDateTime(item.last_detected_at)}</span>
                     ) : null}
                   </div>
+                  {item.description ? <p className="muted update-description">{item.description}</p> : null}
                   <CompactList label="Releases" items={item.releases} />
                   <CompactList label="Yanked" items={item.yanked} warn />
                   <CompactList label="Removed" items={item.removed} warn />
