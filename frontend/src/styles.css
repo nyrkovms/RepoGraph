@@ -460,6 +460,16 @@ button:disabled {
   margin-left: auto;
 }
 
+.check-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.check-label input {
+  width: auto;
+}
+
 .update-description {
   margin: 4px 0 0 26px;
   overflow: hidden;

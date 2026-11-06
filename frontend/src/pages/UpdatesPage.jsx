@@ -423,7 +423,7 @@ export default function UpdatesPage() {
           </select>
         </label>
         {hiddenPrereleases > 0 ? (
-          <label>
+          <label className="check-label">
             <input
               type="checkbox"
               checked={showPrereleases}
