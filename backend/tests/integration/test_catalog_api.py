@@ -81,9 +81,13 @@ def _depends(version: PackageVersion, target: Package, kind: DependencyType) -> 
                       version_constraint="*", dependency_type=kind, raw_spec=target.name, resolved_package_id=target.id)
 
 
-async def _add_dependents(db: AsyncSession, now: datetime, registry: Registry, widget: Package, ui: Package) -> None:
+async def _add_dependents(db: AsyncSession, now: datetime) -> tuple[list[uuid.UUID], list[uuid.UUID]]:
     """Dependents for `used_by`: ui is used by `a` (runtime + peer in one version) and `c` (peer): 2. widget is used by
     `d` only: `a` depends on it in an old version and `b` through dev. ui's own latest version depends on ui: no count."""
+    registry = await db.scalar(select(Registry).where(Registry.slug == f"{PREFIX}npm-hi"))
+    widget = await db.scalar(select(Package).where(Package.ecosystem == Ecosystem.npm, Package.name == f"{PREFIX}widget"))
+    ui = await db.scalar(select(Package).where(Package.ecosystem == Ecosystem.npm, Package.name == f"{PREFIX}ui"))
+    assert registry and widget and ui
     a, b, c, d = (_package(registry, Ecosystem.npm, f"{PREFIX}dep-{n}", origin=PackageOrigin.dependency,
                            latest=latest, now=now) for n, latest in (("a", "2.0.0"), ("b", "1.0.0"), ("c", "1.0.0"),
                                                                      ("d", "1.0.0")))
@@ -107,6 +111,13 @@ async def _add_dependents(db: AsyncSession, now: datetime, registry: Registry, w
         _depends(d1, widget, DependencyType.runtime),
         _depends(ui_own, ui, DependencyType.runtime),
     ])
+    return [p.id for p in (a, b, c, d)], [v.id for v in (a_old, a_new, b1, c1, d1, ui_own)]
+
+
+async def _remove_dependents(db: AsyncSession, package_ids: list[uuid.UUID], version_ids: list[uuid.UUID]) -> None:
+    await db.execute(delete(Dependency).where(Dependency.version_id.in_(version_ids)))
+    await db.execute(delete(PackageVersion).where(PackageVersion.id.in_(version_ids)))
+    await db.execute(delete(Package).where(Package.id.in_(package_ids)))
 
 
 async def _build(db: AsyncSession, now: datetime) -> dict[str, Any]:
@@ -134,8 +145,6 @@ async def _build(db: AsyncSession, now: datetime) -> dict[str, Any]:
         db.add(Dependency(version_id=version.id, dependency_name="left-pad", dependency_ecosystem=Ecosystem.npm,
                           version_constraint="^1", dependency_type=DependencyType.runtime, raw_spec="left-pad@^1",
                           variant_registry_id=variant))
-
-    await _add_dependents(db, now, npm_hi, widget, ui)
 
     db.add_all([
         SyncState(registry_id=npm_hi.id, status=SyncStatus.idle, last_success_at=now + timedelta(days=1),
@@ -176,6 +185,14 @@ def world():
     slugs = run_db(lambda db: _build(db, now))
     yield SimpleNamespace(now=now, **slugs)
     run_db(_cleanup)
+
+
+@pytest.fixture
+def dependents(world):
+    """Apart from `world`: these share its prefix, and the search tests count everything the prefix finds."""
+    package_ids, version_ids = run_db(lambda db: _add_dependents(db, world.now))
+    yield
+    run_db(lambda db: _remove_dependents(db, package_ids, version_ids))
 
 
 @pytest.fixture
@@ -368,7 +385,7 @@ def test_updates_summary_filters_and_totals(client: TestClient, world) -> None:
     assert empty["packages"] == [] and empty["totals"]["packages"] == 0
 
 
-def test_updates_summary_used_by_and_origin(client: TestClient, world) -> None:
+def test_updates_summary_used_by_and_origin(client: TestClient, world, dependents) -> None:
     packages = client.get(f"{API}/updates/summary", params=window(world)).json()["packages"]
     by_purl = {p["purl"]: p for p in packages}
     ui = by_purl[f"pkg:npm/%40c1b/{PREFIX}ui"]
