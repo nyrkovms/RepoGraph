@@ -55,7 +55,7 @@ def _queue_discovered(purls: list[str]) -> None:
     try:
         from app.celery_app import celery_app
         celery_app.send_task("app.tasks.fetch_packages.fetch_packages", args=[purls, "discovered"])
-    except Exception:  # noqa: BLE001 - the catalog fills later; the resolve answer stands
+    except Exception:  # the catalog fills later; the resolve answer stands
         logger.warning("Could not queue %d discovered RPM packages", len(purls), exc_info=True)
 
 

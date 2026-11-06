@@ -42,6 +42,7 @@ from app.ecosystems.base import (
     TrackedPackage,
     VersionDependencies,
 )
+
 # A module without tags has an empty list; its revision is the pseudo-version `@latest` names (`latest:<version>`),
 # so a new commit asked for through the proxy shows up; the index detector counts pseudo-versions for it alone.
 from app.ecosystems.go.changes import TAGLESS, GoIndexChangesDetector
@@ -299,7 +300,7 @@ class GoProxyAdapter:
         if top is not None and dates.get(top) is None:
             try:
                 dates[top] = await self.release_date(ref, top)
-            except Exception:  # noqa: BLE001 - a missing date must not lose the version
+            except Exception:  # a missing date must not lose the version
                 logger.warning("No release date for %s@%s in %s", ref.name, top, self.registry.slug, exc_info=True)
         return dates
 
@@ -333,7 +334,7 @@ class GoProxyAdapter:
                 if response.status_code not in (304, *_MISSING):
                     response.raise_for_status()
                 return response
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if not is_retryable_upstream_error(exc) or attempt > self.max_retries:
                     raise
                 delay = compute_backoff_delay_seconds(
@@ -377,7 +378,7 @@ class GoListChangeDetector:
                 if not listed:
                     async with semaphore:
                         latest = await self.adapter.get(self.adapter.latest_url(package.ref))
-            except Exception:  # noqa: BLE001 - one module failing must not fail the whole source for the day
+            except Exception:  # one module failing must not fail the whole source for the day
                 logger.warning("Change check of %s in %s failed", package.ref.name, self.adapter.registry.slug,
                                exc_info=True)
                 return package, "same", None

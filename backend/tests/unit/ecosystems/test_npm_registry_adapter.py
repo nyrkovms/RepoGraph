@@ -18,12 +18,16 @@ from pathlib import Path
 import httpx
 import pytest
 
-from app.ecosystems.npm.changes import NpmChangesDetector
-
 from app.ecosystems.base import NormalizedDependency, PackageRef, RegistryConfig, TrackedPackage
 from app.ecosystems.npm.adapters import NpmRegistryAdapter, normalize_dependencies
 from app.ecosystems.npm.adapters import registry as npm_registry
-from app.ecosystems.npm.adapters.registry import ACCEPT, NpmEtagChangeDetector, package_from_packument, version_from_entry
+from app.ecosystems.npm.adapters.registry import (
+    ACCEPT,
+    NpmEtagChangeDetector,
+    package_from_packument,
+    version_from_entry,
+)
+from app.ecosystems.npm.changes import NpmChangesDetector
 from app.ecosystems.npm.coordinates import NpmCoordinates
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "npm"

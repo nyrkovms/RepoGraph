@@ -70,7 +70,7 @@ class NpmPlugin:
         return None if (dep.details or {}).get("unresolvable") else dep.target
 
     def resolver(self) -> Resolver:
-        from app.ecosystems.npm.resolver import RESOLVER   # F5
+        from app.ecosystems.npm.resolver import RESOLVER  # F5
 
         return RESOLVER
 

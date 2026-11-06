@@ -36,5 +36,5 @@ def compute_backoff_delay_seconds(
     # attempt is 1-based
     exponent = max(0, attempt - 1)
     base_delay = base_seconds * (2**exponent)
-    jitter = random.uniform(0.0, max(0.0, jitter_seconds))
+    jitter = random.uniform(0.0, max(0.0, jitter_seconds))   # noqa: S311 - spreads retries, guards nothing
     return min(max_seconds, base_delay + jitter)

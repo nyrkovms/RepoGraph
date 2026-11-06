@@ -93,7 +93,7 @@ async def _run_retry_failed_async(limit: int | None = None) -> dict[str, int | s
                     )
                     await db.commit()
                     continue
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     failed += 1
                     logger.exception("Retry failed: package=%s operation=%s", ref.name, operation)
                     await db.rollback()

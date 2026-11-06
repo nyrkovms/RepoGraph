@@ -44,7 +44,7 @@ class SemVer:
 def _compare_prerelease(a: tuple[Identifier, ...], b: tuple[Identifier, ...]) -> int:
     if not a or not b:
         return (len(b) > 0) - (len(a) > 0)   # a release is greater than any of its prereleases
-    for x, y in zip(a, b):
+    for x, y in zip(a, b, strict=False):           # the shorter one ran out: compared below
         if x == y:
             continue
         if isinstance(x, int) and isinstance(y, int):

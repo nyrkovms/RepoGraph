@@ -133,7 +133,7 @@ def update_sync_gauges(states: Iterable) -> None:
         if operation and duration_ms is not None:
             try:
                 SYNC_LAST_DURATION_SECONDS.labels(operation=operation).set(float(duration_ms) / 1000.0)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S112 - a gauge that cannot be set is skipped, not the others
                 continue
 
     SYNC_LAST_STATUS.set(max_status)

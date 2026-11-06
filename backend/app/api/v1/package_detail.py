@@ -17,19 +17,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.packages import _decode_cursor_or_422
 from app.db import get_db_session
 from app.ecosystems import purl as purls
+from app.ecosystems.base import EcosystemPlugin, Environment, PackageRef, RegistryConfig, SourceProfile
 from app.ecosystems.crates.environment import CratesEnvironment
 from app.ecosystems.crates.resolver import enabled as crate_features_enabled
 from app.ecosystems.npm.environment import NpmEnvironment
 from app.ecosystems.npm.environment import version_allows as npm_version_allows
-from app.ecosystems.base import EcosystemPlugin, Environment, PackageRef, RegistryConfig, SourceProfile
 from app.ecosystems.registry import UnknownEcosystem, get_plugin
 from app.fetcher import sources
 from app.fetcher.lazy import LazyFetcher
 from app.fetcher.pipeline import (
     UNAVAILABLE_DIGEST,
+    choose_version,
     dependency_from_row,
     find_package,
-    choose_version,
     source_dependencies,
 )
 from app.models.artifact import Artifact
@@ -628,7 +628,7 @@ class _ProfileView:
         try:
             async with self.db.begin_nested():
                 rows, _ = await source_dependencies(self.db, package, version_row, registry_id, self.profile)
-        except Exception:  # noqa: BLE001 - one source failing leaves that node unknown, not the whole tree a 500
+        except Exception:  # one source failing leaves that node unknown, not the whole tree a 500
             logger.warning("Dependencies of %s %s could not be loaded", package.normalized_name, version_row.version,
                            exc_info=True)
             rows = None
@@ -839,7 +839,7 @@ async def _rpm_provider(db: AsyncSession, dep: Dependency, fetcher: LazyFetcher,
         view.providers[key] = None
         try:
             found = await find(dependency_from_row(dep), view.plugin_env, view.profile)
-        except Exception:  # noqa: BLE001 - the worker or a source failing leaves the edge unresolved, not the tree
+        except Exception:  # the worker or a source failing leaves the edge unresolved, not the tree
             logger.warning("No provider for %s", dep.dependency_name, exc_info=True)
             return None
         provider = await fetcher.ensure_package(found[0]) if found is not None else None

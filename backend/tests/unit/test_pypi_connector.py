@@ -1,6 +1,7 @@
-import pytest
 import asyncio
 from unittest.mock import AsyncMock
+
+import pytest
 
 from app.config import get_settings
 from app.ecosystems.pypi.connector import PyPIConnector

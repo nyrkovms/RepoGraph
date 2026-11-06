@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import date, datetime, time, timedelta, timezone, tzinfo
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from enum import Enum
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -69,21 +69,21 @@ def _kind_value(kind: Any) -> str:
 def resolve_timezone(name: str) -> tzinfo:
     """Resolve an IANA name; raises ValueError for invalid names."""
     if not name or name.upper() == "UTC":
-        return timezone.utc
+        return UTC
     try:
         return ZoneInfo(name)
-    except Exception as exc:  # noqa: BLE001 - ZoneInfoNotFoundError, ValueError, OSError
+    except Exception as exc:  # ZoneInfoNotFoundError, ValueError, OSError
         raise ValueError(f"Unknown timezone '{name}'") from exc
 
 
 def _start_of_day(day: date, tz: tzinfo) -> datetime:
-    return datetime.combine(day, time.min, tzinfo=tz).astimezone(timezone.utc)
+    return datetime.combine(day, time.min, tzinfo=tz).astimezone(UTC)
 
 
 def _ensure_aware(value: datetime) -> datetime:
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def compute_summary_window(
@@ -104,7 +104,7 @@ def compute_summary_window(
     if period_value not in {"day", "week"}:
         raise ValueError(f"Unknown period '{period_value}'")
 
-    now_utc = _ensure_aware(now) if now is not None else datetime.now(timezone.utc)
+    now_utc = _ensure_aware(now) if now is not None else datetime.now(UTC)
 
     if since is not None and until is not None:
         since_utc, until_utc = _ensure_aware(since), _ensure_aware(until)
@@ -334,7 +334,7 @@ async def list_updates(
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> UpdateEventListResponse:
-    until_utc = _ensure_aware(until) if until is not None else datetime.now(timezone.utc)
+    until_utc = _ensure_aware(until) if until is not None else datetime.now(UTC)
     since_utc = _ensure_aware(since) if since is not None else until_utc - timedelta(days=1)
     if since_utc >= until_utc:
         raise HTTPException(status_code=422, detail="'since' must be earlier than 'until'")

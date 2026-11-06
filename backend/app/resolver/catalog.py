@@ -117,7 +117,7 @@ class DbCatalog:
             return None
         try:
             rows, changed = await source_dependencies(self.db, package, version_row, registry_id, self.profile)
-        except Exception:  # noqa: BLE001 - a partial graph with "dependencies unknown" beats failing the resolve
+        except Exception:  # a partial graph with "dependencies unknown" beats failing the resolve
             logger.warning("Dependencies of %s %s could not be loaded", ref.name, version, exc_info=True)
             self.failed = True
             await self.db.rollback()

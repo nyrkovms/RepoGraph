@@ -66,7 +66,7 @@ class CratesPlugin:
         return None if (dep.details or {}).get("registry") else dep.target
 
     def resolver(self) -> Resolver:
-        from app.ecosystems.crates.resolver import RESOLVER   # G5
+        from app.ecosystems.crates.resolver import RESOLVER  # G5
 
         return RESOLVER
 

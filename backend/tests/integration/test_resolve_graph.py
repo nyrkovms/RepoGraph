@@ -108,7 +108,7 @@ async def _write(db: AsyncSession, name: str, per_registry: dict[Registry, list[
     snapshots = [
         NormalizedPackage(ref=PackageRef(ecosystem="pypi", namespace="", name=name), registry_id=str(registry.id),
                           display_name=name, revision="1",
-                          versions=[NormalizedVersion(version=v.split(":")[0], status=(v.split(":") + ["active"])[1],
+                          versions=[NormalizedVersion(version=v.split(":")[0], status=[*v.split(":"), "active"][1],
                                                       dependencies=[]) for v in versions])
         for registry, versions in sorted(per_registry.items(), key=lambda item: item[0].priority)
     ]

@@ -33,8 +33,7 @@ from app.ecosystems.base import (
     RegistryConfig,
     TrackedPackage,
 )
-from app.ecosystems.maven.adapters import Maven2Adapter, Maven2ChangeDetector
-from app.ecosystems.maven.adapters import maven2
+from app.ecosystems.maven.adapters import Maven2Adapter, Maven2ChangeDetector, maven2
 from app.ecosystems.maven.adapters.maven2 import (
     dependencies_of,
     kept_versions,
@@ -213,7 +212,7 @@ def test_metadata_tolerates_a_namespace_and_missing_parts() -> None:
 
 @pytest.mark.parametrize("document", ["<metadata>", "", "<html><body>login</body></html>"])
 def test_unparseable_metadata_raises_with_the_url(document: str) -> None:
-    with pytest.raises(ValueError, match="https://x/maven-metadata.xml"):
+    with pytest.raises(ValueError, match=r"https://x/maven-metadata\.xml"):
         parse_metadata(document, "https://x/maven-metadata.xml")
 
 
@@ -361,7 +360,7 @@ def test_missing_metadata_is_no_package(serve) -> None:
 
 def test_unparseable_metadata_fails_the_package(serve) -> None:
     serve({_metadata_url("g:a"): httpx.Response(200, text="<html>")})
-    with pytest.raises(ValueError, match="maven-metadata.xml"):
+    with pytest.raises(ValueError, match=r"maven-metadata\.xml"):
         _fetch("g:a")
 
 
@@ -422,7 +421,7 @@ def test_jackson_databind_gets_its_versions_from_the_parent_and_the_bom(serve) -
 def test_own_repository_poms_are_returned_as_documents(serve) -> None:
     serve()
     result = _dependencies(JACKSON, "2.17.2")
-    assert [d.path for d in result.documents][0] == JACKSON_POM          # the version first, then what it loaded
+    assert result.documents[0].path == JACKSON_POM          # the version first, then what it loaded
     assert sorted(d.path for d in result.documents) == sorted([JACKSON_POM, *JACKSON_PARENTS])
     assert all(d.content_type == "application/xml" and d.content == _recorded(d.path) for d in result.documents)
     assert {d.path: d.etag for d in result.documents} == {path: HEADERS[path]["etag"] for path in [JACKSON_POM, *JACKSON_PARENTS]}
