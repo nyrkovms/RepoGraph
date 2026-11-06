@@ -11,6 +11,7 @@ FastAPI + SQLAlchemy async + Alembic + Celery + Postgres 16 + Redis; React/Vite 
 | `IMPL-MULTI-ECOSYSTEM.md` | Implementation plan: stages, work packages (WP), process rules, migration table |
 | `design/schema-target.sql`, `design/ecosystem_contract.py` | Target DDL and plugin contract |
 | `SPEC-DAILY-UPDATE.md`, `SPEC-MVP-API.md` | Daily update/digest and current API contracts |
+| `SPEC-UPDATES-DIGEST.md` | Proposed redesign of the Updates page (draft) |
 
 ## Layout
 
