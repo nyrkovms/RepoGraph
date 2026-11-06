@@ -121,15 +121,85 @@ describe("UpdatesPage", () => {
     expect(screen.getByText("patch")).toBeInTheDocument();
   });
 
-  it("warns when the last run was not successful or had failures", async () => {
-    api.fetchUpdatesSummary.mockResolvedValue({
-      ...SUMMARY,
-      last_run: { ...SUMMARY.last_run, status: "success", packages_failed: 3 },
+  describe("run status line", () => {
+    const NOW = "2026-10-27T12:00:00Z";
+    const run = (ecosystem, finished_at, extra = {}) => ({
+      ecosystem,
+      status: "success",
+      started_at: finished_at,
+      finished_at,
+      packages_failed: 0,
+      ...extra,
     });
-    renderPage();
 
-    expect(await screen.findByText("3 failed")).toBeInTheDocument();
-    expect(screen.getByText(/data may be incomplete/)).toBeInTheDocument();
+    async function renderWith(extra) {
+      api.fetchUpdatesSummary.mockResolvedValue({ ...SUMMARY, ...extra });
+      renderPage();
+      await screen.findByRole("link", { name: "flask" });
+      return document.querySelector(".update-run");
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(NOW));
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it("shows the latest finish time across ecosystems and no warning when all is fine", async () => {
+      const line = await renderWith({
+        last_runs: [run("pypi", "2026-10-27T08:58:30Z"), run("npm", "2026-10-27T10:03:00Z")],
+      });
+
+      const latest = new Date("2026-10-27T10:03:00Z").toLocaleString();
+      expect(line.textContent).toContain(`Data as of ${latest}`);
+      expect(within(line).getByText("success")).toBeInTheDocument();
+      expect(line).not.toHaveClass("warn-text");
+      expect(line.textContent).not.toContain("Not fully updated");
+    });
+
+    it("names an ecosystem whose run failed", async () => {
+      const line = await renderWith({
+        last_runs: [run("pypi", "2026-10-27T08:00:00Z"), run("go", "2026-10-27T09:00:00Z", { status: "failed" })],
+      });
+
+      expect(line).toHaveClass("warn-text");
+      expect(line.textContent).toContain("Not fully updated: go (failed)");
+      expect(line.textContent).not.toContain("pypi (");
+    });
+
+    it("names an ecosystem with failed packages", async () => {
+      const line = await renderWith({
+        last_runs: [run("pypi", "2026-10-27T08:00:00Z"), run("maven", "2026-10-27T09:00:00Z", { packages_failed: 3 })],
+      });
+
+      expect(line).toHaveClass("warn-text");
+      expect(line.textContent).toContain("Not fully updated: maven (3 failed)");
+    });
+
+    it("names an ecosystem that has not run for more than 36 hours", async () => {
+      const line = await renderWith({
+        last_runs: [run("pypi", "2026-10-27T08:00:00Z"), run("rpm", "2026-10-25T08:00:00Z")],
+      });
+
+      expect(line).toHaveClass("warn-text");
+      expect(line.textContent).toContain("Not fully updated: rpm (no run for 2 days)");
+    });
+
+    it("uses started_at when a run has not finished", async () => {
+      const line = await renderWith({
+        last_runs: [run("pypi", "2026-10-27T08:00:00Z"), { ...run("npm", null), started_at: "2026-10-27T11:00:00Z" }],
+      });
+
+      expect(line.textContent).toContain(new Date("2026-10-27T11:00:00Z").toLocaleString());
+    });
+
+    it("falls back to last_run when last_runs is empty or missing", async () => {
+      const fresh = { ...SUMMARY.last_run, finished_at: "2026-10-27T10:30:00Z" };
+      const line = await renderWith({ last_run: fresh, last_runs: [] });
+
+      expect(line.textContent).toContain(new Date("2026-10-27T10:30:00Z").toLocaleString());
+      expect(within(line).getByText("success")).toBeInTheDocument();
+    });
   });
 
   it("shows no runs yet when last_run is null", async () => {
