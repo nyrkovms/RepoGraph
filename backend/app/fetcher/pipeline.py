@@ -10,7 +10,6 @@ import logging
 import uuid
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
-from typing import cast
 
 from sqlalchemy import delete, func, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
@@ -34,7 +33,6 @@ from app.ecosystems.base import (
     SourceAdapter,
     SourceProfile,
 )
-from app.ecosystems.base import DependencyType as DependencyType_
 from app.ecosystems.merge import dependencies_digest
 from app.ecosystems.registry import get_plugin, load_builtin_plugins
 from app.ecosystems.routing import is_priority
