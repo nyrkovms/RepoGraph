@@ -144,7 +144,11 @@ export function PackageHeader({
             <Fact label="License">{tabLink("overview", license)}</Fact>
             {overview ? (
               <>
-                <Fact label="Used by">{overview.used_by.direct} in catalog</Fact>
+                <Fact label="Used by">
+                  {overview.used_by.direct + overview.used_by.indirect > 0
+                    ? tabLink("used-by", `${overview.used_by.direct} in catalog`)
+                    : `${overview.used_by.direct} in catalog`}
+                </Fact>
                 <Fact label="Dependencies">{dependencyFact(overview.dependencies, (text) => tabLink("dependencies", text))}</Fact>
                 <Fact label="Versions">{tabLink("versions", overview.versions.total)}</Fact>
               </>

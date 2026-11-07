@@ -10,6 +10,7 @@ import * as api from "../../lib/api";
 vi.mock("../../lib/api", () => ({
   fetchArtifacts: vi.fn(),
   fetchDependencies: vi.fn(),
+  fetchDependents: vi.fn(),
   fetchOverview: vi.fn(),
   fetchPackage: vi.fn(),
   fetchVersion: vi.fn(),
@@ -281,7 +282,7 @@ describe("package card", () => {
       await ready();
 
       const tabs = screen.getAllByRole("tab");
-      expect(tabs.map((tab) => tab.textContent)).toEqual(["Overview", "Dependencies6", "Versions211", "Sources"]);
+      expect(tabs.map((tab) => tab.textContent)).toEqual(["Overview", "Dependencies6", "Used by3", "Versions211", "Sources"]);
       expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
       expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-controls", screen.getByRole("tabpanel").id);
       expect(query().tab).toBeUndefined();

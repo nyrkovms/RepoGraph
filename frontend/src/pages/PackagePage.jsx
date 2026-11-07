@@ -18,6 +18,8 @@ import { OverviewTab } from "./package/OverviewTab";
 import { PackageHeader } from "./package/PackageHeader";
 import { PackageTabs } from "./package/PackageTabs";
 import { SourcesTab } from "./package/SourcesTab";
+import { UsedByTab } from "./package/UsedByTab";
+import { useDependents } from "./package/useDependents";
 import { VersionsTab } from "./package/VersionsTab";
 import {
   CRATES_TARGETS,
@@ -41,6 +43,7 @@ import {
   deprecationMessage,
   initialVersion,
   isNotFound,
+  readRelation,
   readTab,
 } from "./package/packageHelpers";
 
@@ -86,6 +89,8 @@ export default function PackagePage() {
   const [error, setError] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState(() => new Set());
   const [activeTab, setActiveTab] = useState(() => readTab(searchParams.get("tab")));
+  // `?relation=` of the Used by tab: "" for both.
+  const [relation, setRelation] = useState(() => readRelation(searchParams.get("relation")));
   // The Overview numbers of the selected version; `overviewState` tells "not there yet" from "failed".
   const [overview, setOverview] = useState(null);
   const [overviewState, setOverviewState] = useState("loading");
@@ -134,6 +139,7 @@ export default function PackagePage() {
     setDefaultFeatures(searchParams.get("default_features") !== "0");
     setIncludeOptional(searchParams.get("include_optional") === "1");
     setActiveTab(readTab(searchParams.get("tab")));
+    setRelation(readRelation(searchParams.get("relation")));
     setOverview(null);
     setOverviewState("loading");
     setDepsSettledFor("");
@@ -192,8 +198,11 @@ export default function PackagePage() {
     if (activeTab !== "overview") {
       next.set("tab", activeTab);
     }
+    if (activeTab === "used-by" && relation) {
+      next.set("relation", relation);
+    }
     setSearchParams(next, { replace: true });
-  }, [activeTab, isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
+  }, [activeTab, relation, isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -399,7 +408,11 @@ export default function PackagePage() {
   // The numbers belong to the version they were counted for; a stale answer is not shown under another version.
   const overviewNow = overview && overview.version === selectedVersion ? overview : null;
   const isLatest = Boolean(pkg && selectedVersion && selectedVersion === pkg.latest_version);
+  const dependents = useDependents(ecosystem, name, Boolean(pkg) && activeTab === "used-by", relation);
   const tabs = TABS.map((tab) => {
+    if (tab.id === "used-by" && overviewNow) {
+      return { ...tab, count: overviewNow.used_by.direct + overviewNow.used_by.indirect };
+    }
     if (tab.id === "dependencies" && overviewNow && overviewNow.dependencies.direct !== null) {
       return { ...tab, count: overviewNow.dependencies.direct + overviewNow.dependencies.optional };
     }
@@ -415,7 +428,7 @@ export default function PackagePage() {
     } else {
       next.set("tab", target);
     }
-    Object.entries(patch).forEach(([key, value]) => next.set(key, value));
+    Object.entries(patch).forEach(([key, value]) => (value === null ? next.delete(key) : next.set(key, value)));
     return `?${next.toString()}`;
   }
 
@@ -679,6 +692,15 @@ export default function PackagePage() {
           />
 
             </>
+          ) : null}
+          {activeTab === "used-by" ? (
+            <UsedByTab
+              list={dependents}
+              totals={overviewNow ? overviewNow.used_by : null}
+              relation={relation}
+              tabHref={tabHref}
+              onSelectRelation={setRelation}
+            />
           ) : null}
           {activeTab === "versions" ? (
             <VersionsTab versions={versions} name={name} isGo={isGo} isMaven={isMaven} isRpm={isRpm} archesByVersion={archesByVersion} />

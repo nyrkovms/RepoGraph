@@ -185,6 +185,7 @@ GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/{version}/dependencies
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/{version}/artifacts
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/vulnerabilities
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/overview
+GET /api/v1/packages/{ecosystem}/{coordinates}/-/dependents
 ```
 
 Примеры для npm (scope пишется с `@`, `/` между scope и именем остаётся как есть):
@@ -494,6 +495,28 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 - `lines` — линейки выпуска стабильных версий с `release_date`, статус не учитывается: `major.minor` для PyPI, npm, crates.io, NuGet и Maven, `v<major>` для Go; у RPM пусто. Первой идёт линейка с высшей версией (по `sort_key`). `latest` и `released_at` — высшая версия линейки, `started_at` — самый ранний выпуск линейки.
 - `version` — `null` у пакета без версий; тогда `dependencies` состоит из `null`.
 - Errors: `404/500`
+
+### 3.3.9 `GET /api/v1/packages/{ecosystem}/{coordinates}/-/dependents`
+
+Пакеты каталога, которые затронет изменение этого: вкладка Used by (SPEC-CATALOG-PAGES.md §5). Query: `relation` (`direct`, `indirect`; без него оба вида; другое значение — `422`), `limit` (по умолчанию 50, максимум 200), `cursor`.
+
+- Response `200`:
+
+```json
+{
+  "totals": {"direct": 5, "indirect": 10},
+  "data": [{"ecosystem": "go", "namespace": "", "name": "github.com/a/b", "normalized_name": "github.com/a/b",
+            "purl": "pkg:golang/github.com/a/b", "latest_version": "v1.2.3", "relation": "direct",
+            "dependency_types": ["runtime"], "requires": ["v1.5.4"]}],
+  "cursor": null,
+  "has_more": false
+}
+```
+
+- Граф тот же, что у `used_by` и Overview: рёбра из последней версии каждого пакета, типы `runtime`, `peer`, `provided`, без рёбер пакета в самого себя. `totals` равны `used_by` из `/overview` и не зависят от `relation`. Пакет, от которого никто не зависит, получает нули и пустой `data`.
+- Порядок: прямые, затем косвенные; внутри группы `normalized_name`, затем `id`. Курсор keyset, сравнение выполняется в SQL, поэтому порядок следует collation базы. Курсор от другого маршрута или испорченный — `422`.
+- `requires` — различные `version_constraint` прямых рёбер из последней версии зависимого пакета в этот, по возрастанию; значений несколько, когда у зависимого несколько строк. `dependency_types` — типы этих рёбер, по возрастанию значения. У косвенного зависимого оба поля пусты. `normalized_name` вместе с `namespace` даёт написание, по которому карточка строит ссылку.
+- Errors: `404/422/500`
 
 ## 3.4 Алиасы PyPI (deprecated до конца E7)
 
@@ -1493,6 +1516,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 
 ## 8. Изменения
 
+- **1.12-api (2026-11-07), этап UX3.** Новый `GET {coords}/dependents`: зависимые пакеты каталога, прямые и косвенные, с требуемой версией, фильтр `relation`, курсор (§3.3.9).
 - **1.11-api (2026-11-07), этап UX2.** Главная страница и `/search`. В элементах списка и поиска поле `used_by` (§3.1); сортировка `used_by`; фильтры `min_used_by`, `deprecated`, `released_before` у `GET /packages` и `GET /search` (§3.1, §3.2); новый `GET /catalog/summary` (§3.2.1).
 - **1.10-api (2026-10-31), этап E6.** Каталог содержит RPM. Слаг экосистемы `rpm`, тип purl `rpm`: `pkg:rpm/<vendor>/<имя>?distro=<namespace>`, namespace — дистрибутив и релиз (`rocky-9`), часть идентичности; в путях, в `name` и в поиске координаты пишутся `<namespace>/<имя>` (§2.1, §3.1, §3.3). Версии RPM — EVR (`1:3.0.7-27.el9`), сравнение `rpmvercmp`, prerelease — `~` в version, вытесненная сборка той же архитектуры — `status: "superseded"`, `release_date` — время сборки, `license_raw` — тег License (§3.3.4). Артефакты версии — её `.rpm` по архитектурам, с полем `arch` (§3.3.6). Дерево зависимостей принимает `arch` (`x86_64`, `aarch64`, `ppc64le`, `s390x`), узлы — возможности (capability) с `scope` (`requires`, `recommends`, `suggests`, `supplements`, `enhances`), пакет, который возможность предоставляет, — `resolved_name` (§3.3.5). Resolve для RPM: `ecosystem: "rpm"`, окружение `distro` / `arch` / `repos` / `weak_deps` / `module_streams` / `disabled_modules` / `module_install`, стратегия `libsolv` (`dnf 4`, ответ равен `dnf install --assumeno --installroot`), ошибки `unsolvable`, `module_conflict`, `not_found` с `error.problems[]` (§4.1.6). `/admin/packages` принимает purl `rpm` с `distro` (§5.3), `/admin/presence-probe` — `ecosystem: "rpm"` (§5.6); стартового источника нет, набор источников — `backend/registries.rpm.yaml`, авторизация `tls_client_cert` и `basic` по `credentials_ref`, ежедневное обновление через rpm-worker (§5.8).
 - **1.9-api (2026-10-31), этап E5.** Каталог содержит Maven. Слаг экосистемы `maven`, тип purl `maven`, идентичность — `groupId:artifactId` (регистр значим), namespace purl — `groupId`; в путях, в `name` и в поиске координаты пишутся `groupId:artifactId` (§2.1, §3.1, §3.3). Версии Maven: ComparableVersion, prerelease по квалификаторам, все версии `active`, дата — `Last-Modified` POM (кроме новейшей — фоновой задачей), релокация артефакта в `deprecation.alternative` пакета, лицензия из POM (§3.3.4). Дерево зависимостей Maven принимает `scopes` (по умолчанию `compile,runtime`), показывает рёбра effective model, у ребра `details.exclusions`, `type`, `classifier`, у узла дерева — поле `scope` (для всех экосистем) (§3.3.5). Resolve для Maven: `ecosystem: "maven"`, `managed` (`dependencyManagement`, BOM — purl с `?type=pom`), окружение `scopes` / `strategy` / `plugins` / `java_version`, стратегии `maven-nearest-wins` (`Maven 3.9`, результат равен `mvn dependency:list`) и `gradle-highest-wins` (Gradle 8 по POM, повторные проходы до устойчивого выбора, предупреждение `gradle_module_metadata`, Q15), `details.scope` узлов и рёбер (§4.1.5). Раздел 4.1.4 (NuGet) перенесён из §5.3 в §4.1 без изменений. `/admin/packages` принимает purl `maven` (§5.3), `/admin/presence-probe` — `ecosystem: "maven"` (§5.6); стартовый источник `maven-central`, ежедневное обновление по ETag `maven-metadata.xml`, routing `group_patterns` (§5.8).

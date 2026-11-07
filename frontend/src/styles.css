@@ -854,3 +854,54 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.chip {
+  padding: 3px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #334155;
+  text-decoration: none;
+}
+
+.chip.active {
+  border-color: #1d4ed8;
+  background: #e0e7ff;
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+.used-by-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.used-by-table th,
+.used-by-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.used-by-table th {
+  color: #475569;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.used-by-note {
+  margin-top: 12px;
+  font-size: 13px;
+}

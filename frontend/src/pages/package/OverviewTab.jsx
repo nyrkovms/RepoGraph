@@ -99,10 +99,11 @@ function DependenciesBlock({ dependencies, tabHref, onSelectTab }) {
   );
 }
 
-function UsedByBlock({ usedBy }) {
+function UsedByBlock({ usedBy, tabHref, onSelectTab }) {
   const max = Math.max(usedBy.direct, usedBy.indirect);
+  const used = usedBy.direct + usedBy.indirect > 0;
   return (
-    <Block title="Used by, in this catalog">
+    <Block title="Used by, in this catalog" tab={used ? "used-by" : undefined} tabLabel="Open used by" tabHref={tabHref} onSelectTab={onSelectTab}>
       {usedBy.direct + usedBy.indirect === 0 ? (
         <p>No packages in this catalog depend on it</p>
       ) : (
@@ -159,7 +160,7 @@ export function OverviewTab({ overview, overviewState, pkg, ecosystem, vulns, vu
         <>
           <LicensesBlock license={license} overview={overview} />
           <DependenciesBlock dependencies={overview.dependencies} tabHref={tabHref} onSelectTab={onSelectTab} />
-          <UsedByBlock usedBy={overview.used_by} />
+          <UsedByBlock usedBy={overview.used_by} tabHref={tabHref} onSelectTab={onSelectTab} />
           <ActivityBlock activity={overview.activity} tabHref={tabHref} onSelectTab={onSelectTab} />
           {ecosystem !== "rpm" && overview.lines.length ? (
             <LinesBlock lines={overview.lines} tabHref={tabHref} onSelectTab={onSelectTab} />

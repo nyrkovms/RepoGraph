@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Select, and_, exists, func, select
+from sqlalchemy import Select, and_, case, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dependency import Dependency
@@ -176,3 +176,91 @@ async def unresolved_edges(db: AsyncSession, package_ids: Iterable[uuid.UUID]) -
         .distinct()
     )
     return {(ecosystem.value, namespace or "", name) for ecosystem, namespace, name in rows}
+
+
+# --- dependents: who breaks when the package changes ------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Dependent:
+    package: Package
+    direct: bool
+    dependency_types: tuple[DependencyType, ...]   # of the direct edges; empty for an indirect dependent
+    requires: tuple[str, ...]                      # distinct constraints of the direct edges; empty for an indirect one
+
+
+@dataclass(frozen=True, slots=True)
+class DependentsPage:
+    direct_total: int
+    indirect_total: int
+    rows: list[Dependent]
+    has_more: bool
+
+
+async def direct_dependent_ids(db: AsyncSession, package_id: uuid.UUID) -> set[uuid.UUID]:
+    """Packages with an edge to `package_id`: the `used_by` count is the size of this set."""
+    edges = _edges()
+    return set((await db.scalars(select(edges.c.src).where(edges.c.dst == package_id))).all())
+
+
+async def fetch_dependents(
+    db: AsyncSession,
+    package_id: uuid.UUID,
+    *,
+    relation: str | None,
+    limit: int,
+    after: tuple[bool, str, uuid.UUID] | None,
+) -> DependentsPage:
+    """Dependents of the package over the same graph as `used_by` and the overview, direct first, then by
+    `normalized_name` and id. `relation` is `direct`, `indirect` or None for both; `after` is the (indirect, name, id)
+    of the last row of the previous page. The ordering and the cursor comparison are in SQL, so they follow the
+    database's collation."""
+    direct_ids = await direct_dependent_ids(db, package_id)
+    everyone = (await reachable(db, [package_id], forward=False)) - {package_id}
+    indirect_ids = everyone - direct_ids
+    wanted = {"direct": direct_ids, "indirect": indirect_ids}.get(relation or "", everyone)
+    page = DependentsPage(direct_total=len(direct_ids), indirect_total=len(indirect_ids), rows=[], has_more=False)
+    if not wanted:
+        return page
+
+    is_indirect = case((Package.id.in_(direct_ids), 0), else_=1)
+    stmt = select(Package, is_indirect.label("indirect")).where(Package.id.in_(wanted))
+    if after is not None:
+        was_indirect, name, last_id = after
+        stmt = stmt.where(or_(
+            is_indirect > int(was_indirect),
+            and_(is_indirect == int(was_indirect),
+                 or_(Package.normalized_name > name, and_(Package.normalized_name == name, Package.id > last_id))),
+        ))
+    found = (await db.execute(
+        stmt.order_by(is_indirect, Package.normalized_name, Package.id).limit(limit + 1)
+    )).all()
+    chosen = found[:limit]
+
+    asked: dict[uuid.UUID, set[tuple[DependencyType, str]]] = {}
+    direct_on_page = [row.id for row, indirect in chosen if not indirect]
+    if direct_on_page:
+        latest = _latest_versions()
+        edges = await db.execute(
+            select(latest.c.package_id, Dependency.dependency_type, Dependency.version_constraint)
+            .join(latest, latest.c.id == Dependency.version_id)
+            .where(
+                Dependency.resolved_package_id == package_id,
+                latest.c.package_id.in_(direct_on_page),
+                Dependency.dependency_type.in_(_USED_BY_TYPES),
+            )
+        )
+        for src, dep_type, constraint in edges:
+            asked.setdefault(src, set()).add((dep_type, constraint))
+
+    rows = [
+        Dependent(
+            package=row,
+            direct=not indirect,
+            dependency_types=tuple(sorted({t for t, _ in asked.get(row.id, ())}, key=lambda t: t.value)),
+            requires=tuple(sorted({c for _, c in asked.get(row.id, ()) if c})),
+        )
+        for row, indirect in chosen
+    ]
+    return DependentsPage(direct_total=page.direct_total, indirect_total=page.indirect_total, rows=rows,
+                          has_more=len(found) > limit)

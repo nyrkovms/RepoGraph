@@ -166,6 +166,30 @@ class OverviewUsedBy(BaseModel):
     indirect: int
 
 
+class DependentItem(BaseModel):
+    ecosystem: str
+    namespace: str
+    name: str
+    normalized_name: str                   # with `namespace`, the native spelling the card links by
+    purl: str
+    latest_version: str | None
+    relation: Literal["direct", "indirect"]
+    dependency_types: list[str]            # of the direct edges; empty for an indirect dependent
+    requires: list[str]                    # distinct constraints it puts on this package; empty for an indirect one
+
+
+class DependentTotals(BaseModel):
+    direct: int
+    indirect: int
+
+
+class DependentListResponse(BaseModel):
+    totals: DependentTotals                # over the whole list, whatever `relation` filters
+    data: list[DependentItem]
+    cursor: str | None
+    has_more: bool
+
+
 class OverviewLicense(BaseModel):
     license: str
     count: int

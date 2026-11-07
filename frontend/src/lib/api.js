@@ -101,6 +101,10 @@ export async function fetchOverview(ecosystem, coordinates, version) {
   return request(withQuery(`${packagePath(ecosystem, coordinates)}/overview`, { version }));
 }
 
+export async function fetchDependents(ecosystem, coordinates, params = {}) {
+  return request(withQuery(`${packagePath(ecosystem, coordinates)}/dependents`, params));
+}
+
 export async function fetchVulnerabilities(ecosystem, coordinates) {
   return request(`${packagePath(ecosystem, coordinates)}/vulnerabilities`);
 }

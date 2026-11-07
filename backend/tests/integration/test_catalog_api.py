@@ -867,3 +867,136 @@ def test_catalog_summary(client: TestClient, usage_graph, world) -> None:
     linked = client.get(f"{API}/search", params={"q": UX, "released_before": stale["released_before"],
                                                  "min_used_by": stale["min_used_by"], "limit": 50}).json()
     assert ux_names(linked) == ["old"]
+
+
+# --------------------------------------------------------------------------- dependents
+
+DPD = "dpd-"   # outside the `c1b-` prefix: the search tests count everything with that prefix
+
+
+@pytest.fixture
+def dependents_graph(world):
+    """npm, latest versions. `core` is used directly by d1 (runtime ^1 and peer ^2: two rows), d2 (runtime ~1.5), d3
+    (provided) and indirectly by i1 (-> d1, d2), i2 (-> d2) and i3 (-> i1). Left out: dv (dev), old (an old version of
+    `core` needs it, its latest does not), self (depends on itself). `core` depends on d1: a cycle."""
+    now = world.now
+    ids: list[uuid.UUID] = []
+
+    async def add(db: AsyncSession) -> None:
+        profile = await sources.default_profile(db, "npm")
+        registry = await db.scalar(select(Registry).where(Registry.id == uuid.UUID(profile.registries[0].id)))
+        assert registry
+        names = ("core", "d1", "d2", "d3", "i1", "i2", "i3", "dv", "old", "self", "lonely")
+        packages = {name: _package(registry, Ecosystem.npm, f"{DPD}{name}", origin=PackageOrigin.manual,
+                                   latest="2.0.0" if name == "old" else "1.0.0", now=now) for name in names}
+        db.add_all(packages.values())
+        await db.flush()
+        ids.extend(p.id for p in packages.values())
+
+        def version(name: str, number: str) -> PackageVersion:
+            return PackageVersion(id=uuid.uuid4(), package_id=packages[name].id, version=number, raw_metadata={},
+                                  sort_key=b"\x01", is_prerelease=False, release_date=now,
+                                  metadata_registry_id=registry.id, dependencies_state=DependenciesState.hydrated)
+
+        latest = {name: version(name, "2.0.0" if name == "old" else "1.0.0") for name in names}
+        old_old = version("old", "1.0.0")
+        db.add_all([*latest.values(), old_old])
+        await db.flush()
+        for row in [*latest.values(), old_old]:
+            db.add(VersionSource(version_id=row.id, registry_id=registry.id, first_seen_at=now))
+
+        def edge(src: PackageVersion, dst: str, kind: DependencyType, constraint: str) -> Dependency:
+            return Dependency(version_id=src.id, dependency_name=f"{DPD}{dst}", dependency_ecosystem=Ecosystem.npm,
+                              version_constraint=constraint, dependency_type=kind, raw_spec=f"{dst}@{constraint}",
+                              resolved_package_id=packages[dst].id)
+
+        db.add_all([
+            edge(latest["d1"], "core", DependencyType.runtime, "^1"), edge(latest["d1"], "core", DependencyType.peer, "^2"),
+            edge(latest["d2"], "core", DependencyType.runtime, "~1.5"),
+            edge(latest["d3"], "core", DependencyType.provided, "1.0.0"),
+            edge(latest["i1"], "d1", DependencyType.runtime, "*"), edge(latest["i1"], "d2", DependencyType.runtime, "*"),
+            edge(latest["i2"], "d2", DependencyType.runtime, "*"), edge(latest["i3"], "i1", DependencyType.runtime, "*"),
+            edge(latest["dv"], "core", DependencyType.dev, "^1"),
+            edge(old_old, "core", DependencyType.runtime, "^0"),
+            edge(latest["self"], "self", DependencyType.runtime, "*"),
+            edge(latest["core"], "d1", DependencyType.runtime, "*"),
+        ])
+
+    async def remove(db: AsyncSession) -> None:
+        version_ids = (await db.scalars(select(PackageVersion.id).where(PackageVersion.package_id.in_(ids)))).all()
+        await db.execute(delete(Dependency).where(Dependency.version_id.in_(version_ids)))
+        await db.execute(delete(VersionSource).where(VersionSource.version_id.in_(version_ids)))
+        await db.execute(delete(PackageVersion).where(PackageVersion.id.in_(version_ids)))
+        await db.execute(delete(Package).where(Package.id.in_(ids)))
+
+    run_db(add)
+    yield
+    run_db(remove)
+
+
+def _dependents_path(name: str) -> str:
+    return f"{API}/packages/npm/{DPD}{name}/-/dependents"
+
+
+def _dpd(rows: list[dict]) -> set[str]:
+    return {row["name"].removeprefix(DPD) for row in rows}
+
+
+def test_dependents_split_direct_and_indirect(client: TestClient, dependents_graph) -> None:
+    payload = client.get(_dependents_path("core")).json()
+    assert payload["totals"] == {"direct": 3, "indirect": 3}
+    assert payload["cursor"] is None and payload["has_more"] is False
+
+    rows = payload["data"]
+    assert [row["relation"] for row in rows] == ["direct"] * 3 + ["indirect"] * 3   # direct first
+    assert _dpd(rows[:3]) == {"d1", "d2", "d3"} and _dpd(rows[3:]) == {"i1", "i2", "i3"}   # none of dv, old, self
+    by_name = {row["name"].removeprefix(DPD): row for row in rows}
+    assert by_name["d1"]["purl"] == f"pkg:npm/{DPD}d1" and by_name["d1"]["latest_version"] == "1.0.0"
+    assert by_name["d1"]["ecosystem"] == "npm" and by_name["d1"]["namespace"] == ""
+    assert by_name["d1"]["normalized_name"] == f"{DPD}d1"
+    assert by_name["i1"]["dependency_types"] == [] and by_name["i1"]["requires"] == []
+
+
+def test_dependents_requires_lists_every_row_of_a_dependent(client: TestClient, dependents_graph) -> None:
+    by_name = {row["name"].removeprefix(DPD): row
+               for row in client.get(_dependents_path("core"), params={"relation": "direct"}).json()["data"]}
+    assert (by_name["d1"]["requires"], by_name["d1"]["dependency_types"]) == (["^1", "^2"], ["peer", "runtime"])
+    assert (by_name["d2"]["requires"], by_name["d2"]["dependency_types"]) == (["~1.5"], ["runtime"])
+    assert (by_name["d3"]["requires"], by_name["d3"]["dependency_types"]) == (["1.0.0"], ["provided"])
+
+
+def test_dependents_relation_filter_keeps_the_totals(client: TestClient, dependents_graph) -> None:
+    direct = client.get(_dependents_path("core"), params={"relation": "direct"}).json()
+    indirect = client.get(_dependents_path("core"), params={"relation": "indirect"}).json()
+    assert _dpd(direct["data"]) == {"d1", "d2", "d3"} and _dpd(indirect["data"]) == {"i1", "i2", "i3"}
+    assert direct["totals"] == indirect["totals"] == {"direct": 3, "indirect": 3}
+    assert client.get(_dependents_path("core"), params={"relation": "both"}).status_code == 422
+
+
+@pytest.mark.parametrize("limit", [1, 2, 3, 4])
+def test_dependents_cursor_walks_across_the_boundary(client: TestClient, dependents_graph, limit: int) -> None:
+    whole = client.get(_dependents_path("core")).json()["data"]
+    rows, pages = _walk(client, _dependents_path("core").removeprefix(f"{API}/"), {}, limit=limit)
+    assert [row["purl"] for row in rows] == [row["purl"] for row in whole]   # the same order, no row twice or missed
+    assert pages == -(-6 // limit)
+
+
+def test_dependents_cursor_belongs_to_the_route(client: TestClient, dependents_graph) -> None:
+    page = client.get(_dependents_path("core"), params={"limit": 1}).json()
+    assert page["has_more"] and page["cursor"]
+    assert client.get(_dependents_path("core"), params={"cursor": "!!!"}).status_code == 422
+
+
+def test_dependents_of_a_package_nobody_uses_and_of_an_unknown_one(client: TestClient, dependents_graph) -> None:
+    payload = client.get(_dependents_path("lonely")).json()
+    assert payload == {"totals": {"direct": 0, "indirect": 0}, "data": [], "cursor": None, "has_more": False}
+    self_user = client.get(_dependents_path("self")).json()
+    assert self_user["totals"] == {"direct": 0, "indirect": 0}   # an edge to itself is no dependent
+    assert client.get(f"{API}/packages/npm/{DPD}nope-not-here/-/dependents").status_code == 404
+
+
+@pytest.mark.parametrize("name", ["core", "d1", "d2", "i1", "lonely", "self", "old"])
+def test_dependents_totals_equal_the_overview(client: TestClient, dependents_graph, name: str) -> None:
+    totals = client.get(_dependents_path(name)).json()["totals"]
+    used_by = client.get(f"{API}/packages/npm/{DPD}{name}/-/overview").json()["used_by"]
+    assert totals == used_by

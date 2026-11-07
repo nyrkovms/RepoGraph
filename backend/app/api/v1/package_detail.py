@@ -7,6 +7,7 @@ import logging
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from typing import Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -46,6 +47,9 @@ from app.schemas.packages import (
     ArtifactListResponse,
     DependencyNode,
     DependencyTreeResponse,
+    DependentItem,
+    DependentListResponse,
+    DependentTotals,
     OverviewDependencies,
     OverviewLicense,
     OverviewLine,
@@ -64,6 +68,7 @@ from app.schemas.packages import (
 )
 from app.services import release_lines, usage, visibility
 from app.services.cursor import CursorError, encode_cursor, parse_iso_datetime, parse_uuid
+from app.services.purls import package_purl
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -436,6 +441,63 @@ async def get_overview(
         versions=OverviewVersions(total=total, prereleases=prereleases, not_active=not_active),
         activity=[OverviewMonth(**month) for month in release_lines.fill_months(month_counts, now)],
         lines=[OverviewLine(**asdict(line)) for line in lines],
+    )
+
+
+def _dependents_cursor_or_422(cursor: str | None) -> tuple[bool, str, uuid.UUID] | None:
+    """The (indirect, normalized_name, id) a dependents cursor points after; 422 for a cursor that is not one."""
+    payload = _decode_cursor_or_422(cursor)
+    if not payload:
+        return None
+    try:
+        indirect, name = payload["indirect"], payload["name"]
+        if not isinstance(indirect, bool) or not isinstance(name, str):
+            raise TypeError("cursor")
+        return indirect, name, parse_uuid(payload["id"])
+    except CursorError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (KeyError, TypeError, AttributeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="invalid cursor payload") from exc
+
+
+@router.get(_COORDS + "/dependents", response_model=DependentListResponse)
+async def list_dependents(
+    ecosystem: str,
+    coordinates: str,
+    relation: Literal["direct", "indirect"] | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    cursor: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db_session),
+) -> DependentListResponse:
+    """The catalog packages that break if this one changes, direct first: the same graph as `used_by` (latest
+    versions, runtime/peer/provided, no self-edges). `totals` are those of the overview, whatever `relation` is."""
+    after = _dependents_cursor_or_422(cursor)
+    target = await _target(db, ecosystem, coordinates)
+    page = await usage.fetch_dependents(db, target.package.id, relation=relation, limit=limit, after=after)
+
+    next_cursor = None
+    if page.has_more and page.rows:
+        last = page.rows[-1]
+        next_cursor = encode_cursor({"indirect": not last.direct, "name": last.package.normalized_name,
+                                     "id": str(last.package.id)})
+    return DependentListResponse(
+        totals=DependentTotals(direct=page.direct_total, indirect=page.indirect_total),
+        data=[
+            DependentItem(
+                ecosystem=row.package.ecosystem.value,
+                namespace=row.package.namespace or "",
+                name=row.package.name,
+                normalized_name=row.package.normalized_name,
+                purl=package_purl(row.package.ecosystem.value, row.package.namespace, row.package.normalized_name),
+                latest_version=row.package.latest_version,
+                relation="direct" if row.direct else "indirect",
+                dependency_types=[t.value for t in row.dependency_types],
+                requires=list(row.requires),
+            )
+            for row in page.rows
+        ],
+        cursor=next_cursor,
+        has_more=page.has_more,
     )
 
 

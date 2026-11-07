@@ -211,6 +211,7 @@ export function emptyVulnerabilitiesText(coverage, isLatest) {
 export const TABS = [
   { id: "overview", label: "Overview" },
   { id: "dependencies", label: "Dependencies" },
+  { id: "used-by", label: "Used by" },
   { id: "versions", label: "Versions" },
   { id: "sources", label: "Sources" },
 ];
@@ -218,6 +219,11 @@ export const TABS = [
 // `?tab=`: absent or unknown means Overview.
 export function readTab(value) {
   return TABS.some((tab) => tab.id === value) ? value : "overview";
+}
+
+// `?relation=` of the Used by tab: absent or unknown means both.
+export function readRelation(value) {
+  return value === "direct" || value === "indirect" ? value : "";
 }
 
 // A catalog 404: the API's error object carries `status`; a rejected mock or an older client has only the message.
