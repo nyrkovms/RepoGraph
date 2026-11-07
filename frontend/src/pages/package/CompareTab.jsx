@@ -80,8 +80,9 @@ function DiffTable({ data }) {
 }
 
 // What changed in the dependencies between `from` and `to` (the header's version). An empty `from` is the API's default,
-// the nearest lower stable version; the answer says which one that is.
-export function CompareTab({ ecosystem, name, to, from, versions, onSelectFrom, isGo }) {
+// the nearest lower stable version; the answer says which one that is. `hold` keeps the request back while the page is
+// still hydrating `to` for the tree, so two requests do not load one version's dependencies at once.
+export function CompareTab({ ecosystem, name, to, from, hold = false, versions, onSelectFrom, isGo }) {
   // An answer is kept with the request it belongs to: for another one the tab reads as loading, and an answer that
   // arrives after a newer request was made is dropped.
   const requestKey = `${ecosystem}/${name}|${from}|${to}`;
@@ -89,7 +90,7 @@ export function CompareTab({ ecosystem, name, to, from, versions, onSelectFrom, 
   const latestKey = useRef("");
 
   useEffect(() => {
-    if (!to) {
+    if (!to || hold) {
       return;
     }
     latestKey.current = requestKey;
@@ -101,7 +102,7 @@ export function CompareTab({ ecosystem, name, to, from, versions, onSelectFrom, 
     fetchCompare(ecosystem, name, { from, to })
       .then((data) => settle("ready", data))
       .catch(() => settle("error", null));
-  }, [ecosystem, name, from, to, requestKey]);
+  }, [ecosystem, name, from, to, hold, requestKey]);
 
   const result = answer.key === requestKey ? answer : { state: "loading", data: null };
   const data = result.state === "ready" ? result.data : null;

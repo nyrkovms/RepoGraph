@@ -168,7 +168,7 @@ describe("Dependencies tab", () => {
     expect(within(rows[0]).queryByText(/^via/)).not.toBeInTheDocument();
   });
 
-  it("filters by relation from the chips, in ?relation=, and by name without touching the address", async () => {
+  it("filters by relation from the chips, in ?dep_relation=, and by name without touching the address", async () => {
     const user = userEvent.setup();
     await open("/package/pypi/root?tab=dependencies");
     await screen.findByRole("table");
@@ -177,12 +177,12 @@ describe("Dependencies tab", () => {
 
     await user.click(screen.getByRole("link", { name: "Indirect 3" }));
     expect(bodyRows()).toHaveLength(3);
-    expect(where()).toBe("?tab=dependencies&relation=indirect");
+    expect(where()).toBe("?tab=dependencies&dep_relation=indirect");
 
     await user.type(screen.getByLabelText("Filter by name"), "GH");
     expect(bodyRows()).toHaveLength(1);
     expect(cells(bodyRows()[0])[0]).toBe("ghostvia a");
-    expect(where()).toBe("?tab=dependencies&relation=indirect");
+    expect(where()).toBe("?tab=dependencies&dep_relation=indirect");
 
     await user.click(screen.getByRole("link", { name: "All 5" }));
     expect(bodyRows()).toHaveLength(1);
@@ -194,11 +194,18 @@ describe("Dependencies tab", () => {
     expect(screen.getByText("No dependencies match")).toBeInTheDocument();
   });
 
-  it("shares ?relation= with Used by", async () => {
-    await open("/package/pypi/root?tab=dependencies&relation=direct");
+  it("reads ?dep_relation= and leaves ?relation= to Used by", async () => {
+    await open("/package/pypi/root?tab=dependencies&dep_relation=direct");
     await screen.findByRole("table");
     expect(bodyRows()).toHaveLength(2);
     expect(screen.getByRole("link", { name: "Direct 2" })).toHaveAttribute("aria-current", "true");
+  });
+
+  it("ignores ?relation=, which belongs to Used by", async () => {
+    await open("/package/pypi/root?tab=dependencies&relation=direct");
+    await screen.findByRole("table");
+    expect(bodyRows()).toHaveLength(5);
+    expect(screen.getByRole("link", { name: "All 5" })).toHaveAttribute("aria-current", "true");
   });
 
   it("refetches for another environment and the table follows", async () => {

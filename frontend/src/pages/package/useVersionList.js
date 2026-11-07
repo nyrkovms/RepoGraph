@@ -27,12 +27,22 @@ export function useVersionList(ecosystem, name, listKey, seed = null) {
   // The store belongs to one package: for another one it reads as empty, and a late answer for the old one is dropped.
   const [store, setStore] = useState({ key, entries: {} });
   const inflight = useRef(new Set());
+  const latestKey = useRef(key);
+  useEffect(() => {
+    latestKey.current = key;
+  }, [key]);
   const current = store.key === key ? store : { key, entries: {} };
   const seeded = seed && listKey === "all" ? { ...seed, state: "ready", loadingMore: false } : null;
 
   const load = useCallback(
     (which, cursor) => {
-      const change = (update) => setStore((before) => update(before.key === key ? before : { key, entries: {} }));
+      const change = (update) =>
+        setStore((before) => {
+          if (key !== latestKey.current) {
+            return before;   // the page moved to another package while this request ran
+          }
+          return update(before.key === key ? before : { key, entries: {} });
+        });
       fetchVersions(ecosystem, name, { ...paramsOf(which), cursor })
         .then((payload) =>
           change((base) => {

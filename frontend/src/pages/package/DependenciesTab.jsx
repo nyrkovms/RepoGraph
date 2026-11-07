@@ -56,7 +56,7 @@ function RelationChips({ relation, summary, tabHref, onSelectRelation }) {
       {chips.map((chip) => (
         <ActionLink
           key={chip.value}
-          href={tabHref("dependencies", { relation: chip.value || null })}
+          href={tabHref("dependencies", { dep_relation: chip.value || null })}
           onSelect={() => onSelectRelation(chip.value)}
           className={`chip${chip.value === relation ? " active" : ""}`}
           aria-current={chip.value === relation ? "true" : undefined}

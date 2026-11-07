@@ -460,12 +460,15 @@ describe("package card", () => {
       expect(screen.getByRole("tab", { name: "Dependencies" })).toBeInTheDocument();
     });
 
-    it("waits for the dependency tree before asking for the overview", async () => {
+    it("waits for the dependency tree before asking for the overview of a version still pending", async () => {
+      api.fetchVersion.mockImplementation((e, n, version) => Promise.resolve({ name: n, version, status: "active", dependencies_state: "pending", sources: [] }));
       let release;
       api.fetchDependencies.mockReturnValue(new Promise((resolve) => { release = resolve; }));
       renderCard();
       await screen.findByLabelText("Version");
       await waitFor(() => expect(api.fetchDependencies).toHaveBeenCalled());
+      await waitFor(() => expect(api.fetchVersion).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 20));
       expect(api.fetchOverview).not.toHaveBeenCalled();
       release({ package: "pydantic", version: "2.14.3", depth: 0, dependencies: [] });
       await waitFor(() => expect(api.fetchOverview).toHaveBeenCalledWith("pypi", "pydantic", "2.14.3"));

@@ -92,8 +92,10 @@ export default function PackagePage() {
   const [error, setError] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState(() => new Set());
   const [activeTab, setActiveTab] = useState(() => readTab(searchParams.get("tab")));
-  // `?relation=` of the Used by and Dependencies tabs: "" for both. `?deps=` of the Dependencies tab: "" is the table.
+  // `?relation=` of the Used by tab and `?dep_relation=` of the Dependencies tab: "" for both. `?deps=` of the
+  // Dependencies tab: "" is the table. Each tab keeps its own filter.
   const [relation, setRelation] = useState(() => readRelation(searchParams.get("relation")));
+  const [depRelation, setDepRelation] = useState(() => readRelation(searchParams.get("dep_relation")));
   const [depsView, setDepsView] = useState(() => readDepsView(searchParams.get("deps")));
   // `?view=` and `?line=` of the Versions tab: the requested view ("lines" by default) and the expanded line.
   const [versionsView, setVersionsView] = useState(() => readVersionsView(searchParams.get("view")));
@@ -106,6 +108,13 @@ export default function PackagePage() {
   // The version the tree request last settled for: the overview waits for it, so the two do not load the same
   // version's dependencies at once.
   const [depsSettledFor, setDepsSettledFor] = useState("");
+  // The version `fetchVersion` last answered for (found or not): its `dependencies_state` tells whether the tree request
+  // is about to hydrate it.
+  const [detailSettledFor, setDetailSettledFor] = useState("");
+  // Each tree and package request takes a number; an answer whose number is no longer the latest is dropped, so a slow
+  // answer for another version or package never writes over the current one.
+  const depsRequest = useRef(0);
+  const packageRequest = useRef(0);
   // A version in the URL that the catalog does not have (`fetchVersion` answered 404).
   const [missingVersion, setMissingVersion] = useState("");
 
@@ -149,6 +158,7 @@ export default function PackagePage() {
     setIncludeOptional(searchParams.get("include_optional") === "1");
     setActiveTab(readTab(searchParams.get("tab")));
     setRelation(readRelation(searchParams.get("relation")));
+    setDepRelation(readRelation(searchParams.get("dep_relation")));
     setDepsView(readDepsView(searchParams.get("deps")));
     setVersionsView(readVersionsView(searchParams.get("view")));
     setExpandedLine(searchParams.get("line") || "");
@@ -156,7 +166,10 @@ export default function PackagePage() {
     setOverview(null);
     setOverviewState("loading");
     setDepsSettledFor("");
+    setDetailSettledFor("");
     setMissingVersion("");
+    depsRequest.current += 1;   // a tree still loading for the previous package is dropped
+    setDepsLoading(false);
     setDeps([]);
     setDepsUnknown(false);
     setVersionDetail(null);
@@ -211,11 +224,16 @@ export default function PackagePage() {
     if (activeTab !== "overview") {
       next.set("tab", activeTab);
     }
-    if ((activeTab === "used-by" || activeTab === "dependencies") && relation) {
+    if (activeTab === "used-by" && relation) {
       next.set("relation", relation);
     }
-    if (activeTab === "dependencies" && depsView) {
-      next.set("deps", depsView);
+    if (activeTab === "dependencies") {
+      if (depRelation) {
+        next.set("dep_relation", depRelation);
+      }
+      if (depsView) {
+        next.set("deps", depsView);
+      }
     }
     if (activeTab === "versions") {
       if (versionsView !== "lines") {
@@ -229,7 +247,7 @@ export default function PackagePage() {
       next.set("from", compareFrom);
     }
     setSearchParams(next, { replace: true });
-  }, [activeTab, relation, depsView, versionsView, expandedLine, compareFrom, isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
+  }, [activeTab, relation, depRelation, depsView, versionsView, expandedLine, compareFrom, isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -276,6 +294,7 @@ export default function PackagePage() {
       .then((payload) => {
         if (!cancelled) {
           setVersionDetail(payload);
+          setDetailSettledFor(selectedVersion);
         }
       })
       .catch((err) => {
@@ -285,6 +304,7 @@ export default function PackagePage() {
           if (isNotFound(err)) {
             setMissingVersion(selectedVersion);
           }
+          setDetailSettledFor(selectedVersion);
         }
       });
     return () => {
@@ -292,8 +312,14 @@ export default function PackagePage() {
     };
   }, [ecosystem, name, selectedVersion]);
 
+  // The overview and the Compare tab load a version's dependencies on the server as the tree does; a version still in
+  // `pending` is hydrated by one request at a time, so they wait for the tree. A hydrated one needs no waiting.
+  const detailNow = versionDetail && versionDetail.version === selectedVersion ? versionDetail : null;
+  const hydrationClear =
+    detailSettledFor === selectedVersion && !(detailNow?.dependencies_state === "pending" && depsSettledFor !== selectedVersion);
+
   useEffect(() => {
-    if (!name || !selectedVersion || depsSettledFor !== selectedVersion) {
+    if (!name || !selectedVersion || !hydrationClear) {
       return undefined;
     }
     let cancelled = false;
@@ -315,21 +341,32 @@ export default function PackagePage() {
     return () => {
       cancelled = true;
     };
-  }, [ecosystem, name, selectedVersion, depsSettledFor]);
+  }, [ecosystem, name, selectedVersion, hydrationClear]);
 
   async function loadPackage(requestedVersion) {
+    const token = (packageRequest.current += 1);
+    const current = () => token === packageRequest.current;
     setLoading(true);
     setError("");
     try {
       const packagePayload = await fetchPackage(ecosystem, name);
+      if (!current()) {
+        return;
+      }
       setPkg(packagePayload);
 
       const versionsPayload = await fetchVersions(ecosystem, name, { limit: 30 });
+      if (!current()) {
+        return;
+      }
       const loadedVersions = versionsPayload.data || [];
       setVersions(loadedVersions);
       setVersionsPage({ key: `${ecosystem}/${name}`, cursor: versionsPayload.cursor || null, hasMore: Boolean(versionsPayload.has_more) });
 
       const vulnerabilitiesPayload = await fetchVulnerabilities(ecosystem, name);
+      if (!current()) {
+        return;
+      }
       setVulns(vulnerabilitiesPayload.data || []);
       setVulnCoverage(vulnerabilitiesPayload.coverage || "not_collected");
 
@@ -340,6 +377,9 @@ export default function PackagePage() {
         setOverviewState("error");   // nothing to count
       }
     } catch (err) {
+      if (!current()) {
+        return;
+      }
       setError(err?.message || "Package request failed");
       setPkg(null);
       setVersions([]);
@@ -348,11 +388,14 @@ export default function PackagePage() {
       setDepsUnknown(false);
       setSelectedVersion("");
     } finally {
-      setLoading(false);
+      if (current()) {
+        setLoading(false);
+      }
     }
   }
 
   async function loadDependencies(packageName, version) {
+    const token = (depsRequest.current += 1);
     setDepsLoading(true);
     setError("");
     try {
@@ -366,17 +409,25 @@ export default function PackagePage() {
           includeOptional
         )
       );
+      if (token !== depsRequest.current) {
+        return;
+      }
       setDeps(depPayload.dependencies || []);
       setDepsUnknown(Boolean(depPayload.dependencies_unknown));
       setCollapsedNodes(new Set());
     } catch (err) {
+      if (token !== depsRequest.current) {
+        return;
+      }
       // An unknown version is reported by the page itself, not as a failed tree.
       setError(isNotFound(err) ? "" : err?.message || "Dependency tree request failed");
       setDeps([]);
       setDepsUnknown(false);
     } finally {
-      setDepsLoading(false);
-      setDepsSettledFor(version);
+      if (token === depsRequest.current) {
+        setDepsLoading(false);
+        setDepsSettledFor(version);
+      }
     }
   }
 
@@ -543,10 +594,10 @@ export default function PackagePage() {
           {activeTab === "dependencies" ? (
             <DependenciesTab
               view={depsView}
-              relation={relation}
+              relation={depRelation}
               tabHref={tabHref}
               onSelectView={setDepsView}
-              onSelectRelation={setRelation}
+              onSelectRelation={setDepRelation}
               isNpm={isNpm}
               isGo={isGo}
               isRpm={isRpm}
@@ -635,6 +686,7 @@ export default function PackagePage() {
               name={name}
               to={selectedVersion}
               from={compareFrom}
+              hold={!hydrationClear}
               versions={versions}
               onSelectFrom={setCompareFrom}
               isGo={isGo}

@@ -12,12 +12,19 @@ export function useDependents(ecosystem, name, active, relation) {
   // The store belongs to one package: for another one it reads as empty, and a late answer for the old one is dropped.
   const [store, setStore] = useState({ key, entries: {}, totals: null });
   const inflight = useRef(new Set());
+  const latestKey = useRef(key);
+  useEffect(() => {
+    latestKey.current = key;
+  }, [key]);
   const current = store.key === key ? store : { key, entries: {}, totals: null };
 
   const load = useCallback(
     (filter, cursor) => {
       const change = (update) =>
         setStore((before) => {
+          if (key !== latestKey.current) {
+            return before;   // the page moved to another package while this request ran
+          }
           const base = before.key === key ? before : { key, entries: {}, totals: null };
           return update(base);
         });
