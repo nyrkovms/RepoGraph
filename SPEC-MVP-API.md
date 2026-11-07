@@ -2,14 +2,14 @@
 
 > Source of truth для контрактов HTTP API каталога из семи экосистем.
 
-**Source of truth:** [SPEC-MVP.md](./SPEC-MVP.md); адресация по purl, источники и формат resolve — [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §9.1, §11  
+**Source of truth:** [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md); адресация по purl, источники и формат resolve — §9.1, §11  
 **Версия:** 1.19-api  
 **Дата:** 2026-11-07
 
 ## 1. Область и правила владения
 
 - Этот документ владеет только HTTP-контрактами каталога из семи экосистем: PyPI, npm, crates.io, Go, NuGet, Maven и RPM.
-- Он не меняет продуктовые требования и SLA; SLA берутся только из `SPEC-MVP.md`.
+- Он не меняет продуктовые требования и SLA; SLA берутся только из [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §1.1.
 - Описывает API, каким он стал после этапов E0-C, E1, E2, E3, E4, E5 и E6, страниц каталога UX0–UX6 (SPEC-CATALOG-PAGES) и дайджеста Updates U0–U2 (SPEC-UPDATES-DIGEST): пакеты адресуются по purl, маршруты `/packages/pypi/{name}/…` остаются deprecated-алиасами до конца E7 (§3.4), resolve отдаёт граф (§4); в каталоге есть PyPI, npm, crates.io, Go, NuGet, Maven и RPM.
 
 `Decisions fixed`
@@ -30,7 +30,7 @@
 ### 2.2 Аутентификация
 
 - Read-эндпоинты открыты, токен не нужен. Это каталог (§3), `POST /resolve` (§4), `/registries` и `/profiles` (§5.8), дайджест `/updates` (§6.3, §6.4) и системные эндпоинты (§6).
-- Доступ к ним ограничивается на уровне сети: внутренний контур или VPN. Позже перед UI и API встанет OIDC-прокси (SPEC.md §7).
+- Доступ к ним ограничивается на уровне сети: внутренний контур или VPN. Позже перед UI и API встанет OIDC-прокси ([архивный SPEC.md](./docs/archive/SPEC.md) §7).
 - Admin-эндпоинты (§5, `/admin/*`) требуют заголовок `Authorization: Bearer <token>` с токеном `API_TOKEN_ADMIN`. Если токена нет или он неверный, ответ `401`.
 - Роли `viewer` нет. Раньше её токен был вшит в бандл UI, поэтому доступ он не ограничивал, а только требовал общеизвестный заголовок.
 - Открытый доступ включает запись: `POST /resolve` и дерево зависимостей делают lazy fetch (§2.5), то есть загружают незнакомые пакеты из источников и сохраняют их в БД (`origin=discovered`). Любой клиент, которому сеть даёт доступ к API, может пополнять каталог.
@@ -1563,9 +1563,8 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 
 ## 7. Связь с другими документами
 
-- Product intent, scope, SLA: [SPEC-MVP.md](./SPEC-MVP.md)
-- DB schema, upsert semantics, migration order: [SPEC-MVP-DB.md](./SPEC-MVP-DB.md)
-- Delivery plan и тестовые срезы: [SPEC-MVP-EXECUTION.md](./SPEC-MVP-EXECUTION.md)
+- SLA: [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §1.1; правила записи и производные поля: §8.4
+- Архив MVP (PyPI-only, не обновляется): [SPEC-MVP.md](./docs/archive/SPEC-MVP.md), [SPEC-MVP-DB.md](./docs/archive/SPEC-MVP-DB.md), [SPEC-MVP-EXECUTION.md](./docs/archive/SPEC-MVP-EXECUTION.md)
 - Мульти-экосистемный каталог (purl, источники, профили, граф resolve): [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md)
 - Ежедневное обновление и дайджест: [SPEC-DAILY-UPDATE.md](./SPEC-DAILY-UPDATE.md)
 - Главная страница, поиск и карточка пакета (UX0–UX6): [SPEC-CATALOG-PAGES.md](./SPEC-CATALOG-PAGES.md)

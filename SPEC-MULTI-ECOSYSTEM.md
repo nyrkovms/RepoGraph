@@ -13,7 +13,7 @@
 
 **Статус:** реализовано для 7 экосистем (E0–E6), E7 — отдельный этап позже (§15).
 **Исходная база (2026-10-28):** `main`. Работают PyPI-only каталог, ежедневное обновление и дайджест ([SPEC-DAILY-UPDATE.md](./SPEC-DAILY-UPDATE.md)), resolve для PyPI.
-**Заменяет:** часть [SPEC.md](./SPEC.md) и [RESOLVER.md](./RESOLVER.md), подробности в §0.2.
+**Заменяет:** часть [архивного SPEC.md](./docs/archive/SPEC.md) и [RESOLVER.md](./RESOLVER.md), подробности в §0.2. Живые части MVP-спецификаций перенесены сюда (§1.1, §7.5, §8.4, §8.5), сами они лежат в [docs/archive/](./docs/archive/).
 **Артефакты проектирования:** [design/schema-target.sql](./design/schema-target.sql), [design/ecosystem_contract.py](./design/ecosystem_contract.py), [design/schema-check/](./design/schema-check/).
 
 ---
@@ -34,14 +34,15 @@
 | D8 | **deps.dev** — только вспомогательный инструмент разработчика | Не используется ни в рантайме, ни в CI, ни в эталонах тестов |
 | D9 | **В экосистеме несколько внешних источников:** PyPI + PyTorch и другие индексы, десятки Maven-репозиториев и Gradle Plugin Portal, дополнительные npm-реестры | Источник (`registry`) с протоколом, правила routing, профили источников, слияние данных из нескольких источников (§6) |
 
-### 0.2 Что устаревает в SPEC.md и RESOLVER.md
+### 0.2 Что устаревает в архивном SPEC.md и RESOLVER.md
 
 Эти разделы описывали полное зеркало реестров. При D1 они больше не действуют:
 
-- SPEC.md §2.1, колонка «Sync-механизм». Механизмы описаны в §8 этого документа.
-- SPEC.md §3.13 (needed packages), §4.1 (Rust Resolver Microservice), §6.1–6.2, §8.2–8.3, §11, §12.3–12.6, приложение C.
-- SPEC.md §3.5–3.6 (Registry, PackageRegistry) уточнены в §6. Tier'ы заменены протоколом, routing и профилями.
-- RESOLVER.md: in-memory индекс, расчёты RAM и стоимости. Описания алгоритмов по экосистемам остаются справочником.
+- Архивный [SPEC.md](./docs/archive/SPEC.md) §2.1, колонка «Sync-механизм». Механизмы описаны в §8 этого документа.
+- Архивный SPEC.md §3.13 (needed packages), §4.1 (Rust Resolver Microservice), §6.1–6.2, §8.2–8.3, §11, §12.3–12.6, приложение C.
+- Архивный SPEC.md §3.5–3.6 (Registry, PackageRegistry) уточнены в §6. Tier'ы заменены протоколом, routing и профилями.
+- Архивный SPEC.md §3.3 и приложения A, B (зависимости) перенесены в §7.5, его §6.4 (лицензии) — в §8.5; SPEC-MVP.md §7 (SLA) — в §1.1; SPEC-MVP-DB.md §5–§6 (upsert, производные поля) — в §8.4.
+- RESOLVER.md: in-memory индекс, расчёты RAM и стоимости. Описания алгоритмов по экосистемам остаются справочником (обзор проблемы, needed packages и фазы внедрения из него убраны).
 
 ### 0.3 Что не делаем в этой волне
 
@@ -219,7 +220,7 @@ rpm_worker/                   — Dockerfile; rpm_worker/: worker.py, modules.py
 | 2 | `package_versions.features` | Флаг `dependencies_hydrated` хранится в одном JSON с данными features. У crates.io в `features` будут настоящие features пакета | Отдельная колонка `dependencies_state` |
 | 3 | `package_versions` | Два одинаковых уникальных индекса на `(package_id, version)` | Один ключ |
 | 4 | `version_status` | `deprecated` — статус жизненного цикла, хотя deprecation с ним не связана: версия npm может быть одновременно deprecated и unlisted | `deprecation jsonb` отдельно, `deprecated` из статусов убран |
-| 5 | `artifacts.metadata_blob` (план SPEC.md) | Parent POM и `go.mod` транзитивных модулей не принадлежат версиям каталога, а `artifacts` ссылается на версию | Таблица `source_documents` |
+| 5 | `artifacts.metadata_blob` (план архивного SPEC.md) | Parent POM и `go.mod` транзитивных модулей не принадлежат версиям каталога, а `artifacts` ссылается на версию | Таблица `source_documents` |
 | 6 | Связь пакета и источника | Ничто не мешает связать пакет PyPI с npm-реестром или сделать основным источником Maven-репозиторий | Составные FK `(registry_id, ecosystem)`. Проверено: такие вставки отвергаются |
 | 7 | `sync_failures` | Ключ `(operation, package_name)`: имена разных экосистем и источников конфликтуют | Ключ с экосистемой, источником и purl |
 
