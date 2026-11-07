@@ -1,16 +1,16 @@
-# PackageHub MVP — API Appendix
+# PackageHub — HTTP API
 
-> Source of truth для контрактов HTTP API MVP.
+> Source of truth для контрактов HTTP API каталога из семи экосистем.
 
 **Source of truth:** [SPEC-MVP.md](./SPEC-MVP.md); адресация по purl, источники и формат resolve — [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §9.1, §11  
-**Версия:** 1.18-api  
+**Версия:** 1.19-api  
 **Дата:** 2026-11-07
 
 ## 1. Область и правила владения
 
-- Этот документ владеет только HTTP-контрактами.
+- Этот документ владеет только HTTP-контрактами каталога из семи экосистем: PyPI, npm, crates.io, Go, NuGet, Maven и RPM.
 - Он не меняет продуктовые требования и SLA; SLA берутся только из `SPEC-MVP.md`.
-- Описывает API, каким он стал после этапов E0-C, E1, E2, E3, E4, E5 и E6: пакеты адресуются по purl, маршруты `/packages/pypi/{name}/…` остаются deprecated-алиасами до конца E7 (§3.4), resolve отдаёт граф (§4); в каталоге есть PyPI, npm, crates.io, Go, NuGet, Maven и RPM.
+- Описывает API, каким он стал после этапов E0-C, E1, E2, E3, E4, E5 и E6, страниц каталога UX0–UX6 (SPEC-CATALOG-PAGES) и дайджеста Updates U0–U2 (SPEC-UPDATES-DIGEST): пакеты адресуются по purl, маршруты `/packages/pypi/{name}/…` остаются deprecated-алиасами до конца E7 (§3.4), resolve отдаёт граф (§4); в каталоге есть PyPI, npm, crates.io, Go, NuGet, Maven и RPM.
 
 `Decisions fixed`
 - Все request/response/error контракты описываются только здесь.
@@ -1464,7 +1464,8 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
   - `period: enum(day|week)=day`; `since`, `until` — явное окно, перекрывает `period`;
   - `tz: string="UTC"` — IANA-зона, по которой считается граница «сегодня»;
   - `ecosystem: enum?` — можно повторять;
-  - `registry: string?`
+  - `registry: string?` — slug источника, в котором есть пакет, как в §6.3;
+  - `kind: enum?` — можно повторять; виды событий — как в §6.3. Сужает и пакеты, и `totals`.
 - Response `200`:
 
 ```json
@@ -1504,15 +1505,20 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
     "deprecated": 0,
     "sources_added": 0,
     "vulnerabilities": 0,
-    "unavailable": 0
+    "unavailable": 0,
+    "prereleases": 0,
+    "attention": 0
   },
   "packages": [
     {
       "ecosystem": "pypi",
       "name": "flask",
       "purl": "pkg:pypi/flask",
+      "description": "A simple framework for building complex web applications.",
       "from_version": "3.1.2",
       "to_version": "3.1.3",
+      "released_at": "2026-03-07T12:00:00Z",
+      "prerelease_only": false,
       "max_bump": "patch",
       "releases": ["3.1.3"],
       "yanked": [],
@@ -1521,7 +1527,9 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
       "sources_added": [],
       "vulnerabilities": [],
       "flags": [],
-      "last_detected_at": "2026-03-08T06:01:00Z"
+      "last_detected_at": "2026-03-08T06:01:00Z",
+      "used_by": 9,
+      "origin": "seed"
     }
   ]
 }
@@ -1529,7 +1537,22 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 
 - `last_run` — последнее ежедневное обновление PyPI (`null`, если не было). `last_runs` — последнее обновление каждой экосистемы, по алфавиту; пустой список, если обновлений не было.
 - `flags` — по убыванию важности: `unavailable`, `vulnerability_added`, `removed`, `yanked`, `deprecated`, `major`. `sources_added` — slug источников, в которых пакет появился в окне. `max_bump` — `major|minor|patch|pre|other`.
+- Поля пакета:
+  - `description: string?` — описание пакета, `null`, если источник его не публикует;
+  - `released_at: datetime?` — когда вышла версия `to_version` (`occurred_at` её события); `null`, если в окне нет релизов или источник не отдал дату;
+  - `prerelease_only: bool` — в окне только пререлизы; `false`, если релизов нет;
+  - `used_by: int` — сколько других пакетов каталога зависят от пакета: правило подсчёта — SPEC-UPDATES-DIGEST §3;
+  - `origin: string` — как пакет попал в каталог: `seed`, `manual`, `dependency` или `discovered`; пустая строка, если неизвестно.
+- Порядок `packages`: сначала пакеты с флагами (по порядку `flags`), затем по убыванию `used_by`, затем по `last_detected_at`, затем по имени.
+- Поля `totals`: `prereleases` — пакеты, у которых в окне только пререлизы и нет флагов (их страница по умолчанию скрывает); `attention` — пакеты хотя бы с одним флагом.
 - Errors: `422` (неизвестная зона, `since >= until`)`/500`
+
+## 6.5 `GET /api/v1/metrics`
+
+- Auth: none
+- Behavior: метрики Prometheus в текстовом формате. Перед выдачей обновляются gauge-метрики состояния синхронизации и источников. Список метрик — в README, раздел `Metrics exposed`; здесь он не дублируется.
+- Response `200`: `text/plain; version=0.0.4; charset=utf-8` (формат экспозиции Prometheus), не JSON.
+- Errors: `500`
 
 `Decisions fixed`
 - `health` остаётся публичным для orchestration probes.
@@ -1545,15 +1568,19 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 - Delivery plan и тестовые срезы: [SPEC-MVP-EXECUTION.md](./SPEC-MVP-EXECUTION.md)
 - Мульти-экосистемный каталог (purl, источники, профили, граф resolve): [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md)
 - Ежедневное обновление и дайджест: [SPEC-DAILY-UPDATE.md](./SPEC-DAILY-UPDATE.md)
+- Главная страница, поиск и карточка пакета (UX0–UX6): [SPEC-CATALOG-PAGES.md](./SPEC-CATALOG-PAGES.md)
+- Страница Updates (U0–U5): [SPEC-UPDATES-DIGEST.md](./SPEC-UPDATES-DIGEST.md)
 
 `Decisions fixed`
 - Любые изменения контрактов API правятся сначала в этом документе.
+- Спеки функций (SPEC-CATALOG-PAGES, SPEC-UPDATES-DIGEST) описывают поведение и ссылаются сюда за полями и параметрами.
 
 `Open questions`
 - Нет.
 
 ## 8. Изменения
 
+- **1.19-api (2026-11-07), сверка с кодом.** Документ назван HTTP-контрактом каталога из семи экосистем, область включает UX0–UX6 и Updates U0–U2. Новый `GET /metrics` (§6.5). `GET /updates/summary`: поля пакета `description`, `released_at`, `prerelease_only`, `used_by`, `origin`, поля `totals.prereleases` и `totals.attention`, параметр `kind`, порядок пакетов (§6.4). Связанные документы: ссылки на SPEC-CATALOG-PAGES и SPEC-UPDATES-DIGEST, правило о спеках функций (§7).
 - **1.18-api (2026-11-07), этап UX7.** `GET {coords}/versions` принимает `deprecated` (§3.3.3), `/overview` отдаёт `versions.deprecated`; `GET {coords}/versions/{version}` возвращает эффективный статус, как список (§3.3.4). Overview: для RPM `dependencies.indirect`, `dependencies.not_in_catalog`, `used_by.indirect` — `null`, `licenses` пуст; зависимость от самого себя не считается; в `lines` входят стабильные версии без даты, их `released_at` и `started_at` — `null`; эпоха PEP 440 не входит в линейку (§3.3.8). Compare: `from` по умолчанию — стабильная и `active`, `name` — написание экосистемы (§3.3.10). `GET /catalog/summary`: до пяти `deprecated_in_use` и `deprecated_in_use_total` (§3.2.1). Поиск: `%` и `_` в `q` — текст, `_` и `.` ищутся и как `-`; испорченный курсор `/packages` и `/search` — `422` вместо `500` (§3.2).
 - **1.17-api (2026-11-07), этап UX6.** Новый `GET {coords}/versions/compare?from=&to=`: различия зависимостей двух версий, `dependencies_unknown`, эффективный статус сторон (§3.3.10).
 - **1.16-api (2026-11-07), этап UX4.** `GET {coords}/versions`: поля `line`, `is_prerelease`, фильтры `prerelease`, `not_active`, `line` (§3.3.3); `/overview` отдаёт счётчики версий, активность за 12 месяцев и линейки (§3.3.8).
