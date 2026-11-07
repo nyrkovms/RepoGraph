@@ -7,7 +7,7 @@ RUFF = ruff==0.17.3
 MYPY = mypy==2.4.0
 PYTEST = pytest==9.2.0
 
-.PHONY: check backend-lint mypy backend-unit frontend
+.PHONY: check backend-lint mypy backend-unit openapi frontend
 
 check: backend-lint mypy backend-unit frontend
 
@@ -21,6 +21,10 @@ mypy:
 
 backend-unit:
 	cd backend && LOG_TO_FILE=false $(UV_RUN) --with-editable . --with $(PYTEST) --with greenlet -- pytest tests/unit
+
+# Refresh the OpenAPI snapshot after an intended API change; update SPEC-MVP-API.md in the same PR.
+openapi:
+	cd backend && LOG_TO_FILE=false UPDATE_OPENAPI_SNAPSHOT=1 $(UV_RUN) --with-editable . --with $(PYTEST) --with greenlet -- pytest tests/unit/test_openapi_snapshot.py
 
 frontend:
 	@test -d frontend/node_modules || { echo "frontend/node_modules is missing: run 'cd frontend && npm ci'"; exit 1; }
