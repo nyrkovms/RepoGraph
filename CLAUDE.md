@@ -82,6 +82,15 @@ scripts/record_fixtures.sh       # re-record upstream responses for offline CI (
    (`claude/hotfix-<topic>`) that goes to auto-merge when checks are green, without waiting for the stage.
 9. **Models.** Every task, not only stage WPs, goes to the cheapest model that can be trusted with it (see
    *Models and subagents*); Opus keeps the decisions and checks the result.
+10. **Docs land with the change.** Every PR — stage, hotfix or other — updates in the same PR the documents its change
+    makes stale, before it is marked ready; "later" does not exist. Each fact has one home, others link to it:
+    - stage or WP finished: the spec's header (version, date, status) and stage table together with the "Сделано в …"
+      note; a decision or a deviation goes into the spec (rule 1);
+    - endpoint, field or parameter: `SPEC-MVP-API.md` (feature specs only link to it);
+    - behaviour of daily update, sources, pipeline: `SPEC-DAILY-UPDATE.md` or `SPEC-MULTI-ECOSYSTEM.md`;
+    - command, script, setting, layout, CI job: `README.md` and, if agents need it, this file;
+    - migration: the list in `IMPL-MULTI-ECOSYSTEM.md` §2.
+    A PR that changes none of these says "docs: none affected" in its description.
 
 ## Models and subagents
 

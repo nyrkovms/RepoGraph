@@ -16,6 +16,9 @@
 ## Files you may change
 - <paths; anything else is out of scope>
 
+## Docs to update (CLAUDE.md rule 10)
+- <documents and sections this change makes stale, or "none"; list them under "Files you may change" too>
+
 ## Sample to follow
 - <existing file or function whose structure, naming and style to copy>
 

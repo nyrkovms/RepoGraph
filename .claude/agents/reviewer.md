@@ -18,6 +18,9 @@ Check, citing file:line:
 4. Compatibility: old API routes, response fields, CLI, stand data and the acceptance smoke keep working until the
    plan says otherwise.
 5. Protected paths changed without the task allowing it; other CLAUDE.md rules broken.
+6. Docs (CLAUDE.md rule 10): every document the change makes stale is updated in the same diff — spec header and
+   stage table, `SPEC-MVP-API.md` for endpoints and fields, README/CLAUDE.md for commands, settings and layout, the
+   migration list. Grep the docs for names the diff renames or removes. A stale document is a major finding.
 
 Report in Russian: numbered findings with severity (critical / major / minor), location, problem, concrete fix;
 then a short "в порядке" list. Only report what you verified by reading code or running read-only commands; mark
