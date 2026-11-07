@@ -68,6 +68,25 @@ scripts/record_fixtures.sh       # re-record upstream responses for offline CI (
    where. The fixing commit says `Fixes #N`, and every fix comes with a regression test that fails on the old code.
    A bug already in `main` that breaks the running app or the stand is fixed right away in a small PR from `main`
    (`claude/hotfix-<topic>`) that goes to auto-merge when checks are green, without waiting for the stage.
+9. **Models.** Every task, not only stage WPs, goes to the cheapest model that can be trusted with it (see
+   *Models and subagents*); Opus keeps the decisions and checks the result.
+
+## Models and subagents
+
+Applies to all work in the repo: stages, hotfixes, investigations, stand checks, docs.
+
+| Model | Takes |
+|---|---|
+| Haiku (`Explore` or any agent with `model: haiku`) | Read-only lookups with a clear question: where something is done, callers and usages, reading logs, test output and CI results, stand status, summarizing a section of a spec |
+| Sonnet (`implementer`, or `model: sonnet`) | Well-specified changes: WPs, bug fixes with a known cause and a failing case, fixtures, tests from a case list, frontend or routes after a sample, scripts, docs updates; research that needs reading code and judging, not deciding |
+| Opus (the main session, `reviewer`) | Specs and owner questions, contracts, algorithms, data migrations, bugs with an unclear cause, reviews, and checking every subagent result |
+
+- Keep a task in the main session when it is a few tool calls or leans on what the conversation already knows: a
+  subagent starts cold, re-reads the context and costs more than it saves.
+- Give the brief everything it needs: files or area, the question or the done criterion, the check command.
+  Writers get `.claude/templates/wp-task.md` and their own worktree (see *Process*).
+- A subagent's report is not proof: check the diff, the test run or the file it names before relying on it or
+  reporting it to the owner.
 
 ## Process (IMPL-MULTI-ECOSYSTEM.md §0)
 
