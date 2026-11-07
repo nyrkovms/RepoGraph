@@ -1,22 +1,24 @@
 import { ActionLink } from "./Links";
+import { overviewSummary } from "./overviewSummary";
 import { RPM_NOTE } from "./UsedByTab";
 import { emptyVulnerabilitiesText, formatDate, monthLabel, plural } from "./packageHelpers";
 
 const LINES_SHOWN = 3;
 const LICENSES_SHOWN = 6;
 
-function Block({ title, tab, tabLabel, tabHref, onSelectTab, children }) {
+// A section without a box: the heading, a plain `View all` where a tab exists, then the content.
+function Section({ title, tab, tabHref, onSelectTab, children }) {
   return (
-    <section className="overview-block">
-      <h3>{title}</h3>
-      {children}
-      {tab ? (
-        <p className="overview-more">
+    <section className="overview-section">
+      <div className="overview-section-head">
+        <h3>{title}</h3>
+        {tab ? (
           <ActionLink href={tabHref(tab)} onSelect={() => onSelectTab(tab)}>
-            {tabLabel}
+            View all
           </ActionLink>
-        </p>
-      ) : null}
+        ) : null}
+      </div>
+      {children}
     </section>
   );
 }
@@ -37,8 +39,13 @@ function BarRow({ label, value, max }) {
 
 function SecurityBlock({ vulns, coverage, isLatest }) {
   return (
-    <Block title="Security">
+    <Section title="Security">
       {vulns.length === 0 ? <p>{emptyVulnerabilitiesText(coverage, isLatest)}</p> : null}
+      {vulns.length > 0 ? (
+        <p>
+          <b>{plural(vulns.length, "advisory", "advisories")}</b>
+        </p>
+      ) : null}
       {vulns.length > 0 && !isLatest ? <p className="muted">Listed for the package, not for this version</p> : null}
       {vulns.length > 0 ? (
         <ul className="result-list">
@@ -51,7 +58,7 @@ function SecurityBlock({ vulns, coverage, isLatest }) {
           ))}
         </ul>
       ) : null}
-    </Block>
+    </Section>
   );
 }
 
@@ -73,12 +80,12 @@ function LicensesBlock({ license, overview, isRpm, tabHref, onSelectTab }) {
     text = `Dependencies: ${shown.join(" · ")}${rest > 0 ? ` · ${rest} more` : ""}`;
   }
   return (
-    <Block title="Licenses" tab="dependencies" tabLabel="Open dependency licenses" tabHref={tabHref} onSelectTab={onSelectTab}>
+    <Section title="Licenses" tab="dependencies" tabHref={tabHref} onSelectTab={onSelectTab}>
       <p>
         <b>This package</b>: {license}
       </p>
       {text ? <p>{text}</p> : null}
-    </Block>
+    </Section>
   );
 }
 
@@ -86,7 +93,7 @@ function DependenciesBlock({ dependencies, tabHref, onSelectTab }) {
   const { direct, indirect, optional, not_in_catalog: missing } = dependencies;
   const max = Math.max(direct || 0, indirect || 0);
   return (
-    <Block title="Dependencies" tab="dependencies" tabLabel="Open dependencies" tabHref={tabHref} onSelectTab={onSelectTab}>
+    <Section title="Dependencies" tab="dependencies" tabHref={tabHref} onSelectTab={onSelectTab}>
       {direct === null ? (
         <p>Dependencies unknown: the source has no metadata for this version</p>
       ) : (
@@ -98,7 +105,7 @@ function DependenciesBlock({ dependencies, tabHref, onSelectTab }) {
           {direct > 0 && indirect !== null ? <p className="muted">Indirect counts only packages in this catalog: a lower bound.</p> : null}
         </>
       )}
-    </Block>
+    </Section>
   );
 }
 
@@ -107,7 +114,7 @@ function UsedByBlock({ usedBy, tabHref, onSelectTab }) {
   const max = Math.max(usedBy.direct, usedBy.indirect || 0);
   const used = usedBy.direct + (usedBy.indirect || 0) > 0;
   return (
-    <Block title="Used by, in this catalog" tab={used ? "used-by" : undefined} tabLabel="Open used by" tabHref={tabHref} onSelectTab={onSelectTab}>
+    <Section title="Used by, in this catalog" tab={used ? "used-by" : undefined} tabHref={tabHref} onSelectTab={onSelectTab}>
       {!used ? (
         <p>{rpm ? RPM_NOTE : "No packages in this catalog depend on it"}</p>
       ) : (
@@ -116,7 +123,7 @@ function UsedByBlock({ usedBy, tabHref, onSelectTab }) {
           {rpm ? <p className="muted">{RPM_NOTE}</p> : <BarRow label="Indirect" value={usedBy.indirect} max={max} />}
         </>
       )}
-    </Block>
+    </Section>
   );
 }
 
@@ -124,7 +131,7 @@ function ActivityBlock({ activity, tabHref, onSelectTab }) {
   const total = activity.reduce((sum, item) => sum + item.releases, 0);
   const max = Math.max(...activity.map((item) => item.releases), 1);
   return (
-    <Block title="Release activity" tab="versions" tabLabel="Open versions" tabHref={tabHref} onSelectTab={onSelectTab}>
+    <Section title="Release activity" tab="versions" tabHref={tabHref} onSelectTab={onSelectTab}>
       <ol className="activity" aria-label="Releases per month">
         {activity.map((item) => (
           <li key={item.month} aria-label={`${monthLabel(item.month)}: ${plural(item.releases, "release")}`}>
@@ -137,13 +144,13 @@ function ActivityBlock({ activity, tabHref, onSelectTab }) {
         <span>{activity.length ? monthLabel(activity[activity.length - 1].month) : ""}</span>
       </p>
       <p>{plural(total, "release")} in 12 months, prereleases included</p>
-    </Block>
+    </Section>
   );
 }
 
 function LinesBlock({ lines, tabHref, onSelectTab }) {
   return (
-    <Block title="Release lines" tab="versions" tabLabel="Open versions" tabHref={tabHref} onSelectTab={onSelectTab}>
+    <Section title="Release lines" tab="versions" tabHref={tabHref} onSelectTab={onSelectTab}>
       <ul className="line-list">
         {lines.slice(0, LINES_SHOWN).map((line) => (
           <li key={line.line}>
@@ -151,20 +158,24 @@ function LinesBlock({ lines, tabHref, onSelectTab }) {
           </li>
         ))}
       </ul>
-    </Block>
+    </Section>
   );
 }
 
 export function OverviewTab({ overview, overviewState, pkg, ecosystem, vulns, vulnCoverage, isLatest, tabHref, onSelectTab }) {
   const license = pkg.license_spdx || pkg.license_raw || "Not published by the source";
+  // One tree for both states, so Security keeps its place (and its DOM) when the numbers arrive.
   return (
-    <div className="overview-grid">
+    <div className="overview">
+      {overview ? <p className="overview-summary">{overviewSummary(overview, pkg)}</p> : null}
       <SecurityBlock vulns={vulns} coverage={vulnCoverage} isLatest={isLatest} />
       {overview ? (
         <>
+          <div className="overview-pair">
+            <DependenciesBlock dependencies={overview.dependencies} tabHref={tabHref} onSelectTab={onSelectTab} />
+            <UsedByBlock usedBy={overview.used_by} tabHref={tabHref} onSelectTab={onSelectTab} />
+          </div>
           <LicensesBlock license={license} overview={overview} isRpm={ecosystem === "rpm"} tabHref={tabHref} onSelectTab={onSelectTab} />
-          <DependenciesBlock dependencies={overview.dependencies} tabHref={tabHref} onSelectTab={onSelectTab} />
-          <UsedByBlock usedBy={overview.used_by} tabHref={tabHref} onSelectTab={onSelectTab} />
           <ActivityBlock activity={overview.activity} tabHref={tabHref} onSelectTab={onSelectTab} />
           {ecosystem !== "rpm" && overview.lines.length ? (
             <LinesBlock lines={overview.lines} tabHref={tabHref} onSelectTab={onSelectTab} />

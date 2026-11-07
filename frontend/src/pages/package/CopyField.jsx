@@ -12,6 +12,7 @@ function selectText(element) {
   selection.addRange(range);
 }
 
+// `label` names the field for the button's accessible name; the visible label is the fact's own term above it.
 export function CopyField({ label, text }) {
   const [state, setState] = useState("idle");
   const textRef = useRef(null);
@@ -44,7 +45,6 @@ export function CopyField({ label, text }) {
 
   return (
     <div className="copy-field">
-      <span className="copy-field-label">{label}</span>
       <code ref={textRef}>{text}</code>
       <button type="button" className="copy-button" onClick={copy} aria-label={`Copy ${label}`}>
         Copy

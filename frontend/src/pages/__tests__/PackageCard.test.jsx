@@ -112,19 +112,38 @@ describe("package card", () => {
     api.fetchOverview.mockImplementation((ecosystem, name, version) => Promise.resolve(overviewOf(version)));
   });
 
+  // An Overview section by its heading.
+  const section = (name) => screen.getByRole("heading", { name }).closest(".overview-section");
+
   async function ready() {
     await screen.findByText("Data validation using Python type hints");
     await screen.findByRole("tab", { name: /Versions\s*211/ });
   }
 
-  it("names the Dependencies tab without a version in the title when the package has none", async () => {
+  it("has no heading in the Dependencies tab that repeats the tab, and no version placeholder, without a latest version", async () => {
     api.fetchPackage.mockResolvedValue({ ...PYDANTIC, latest_version: null });
     api.fetchVersions.mockResolvedValue({ data: [], cursor: null, has_more: false });
     renderCard("/package/pydantic?tab=dependencies");
     await screen.findByText("Data validation using Python type hints");
-    const heading = await screen.findByRole("heading", { level: 3, name: /Dependencies/ });
-    expect(heading).toHaveTextContent(/^Dependencies$/);
+    expect(await screen.findByRole("tab", { name: /Dependencies/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("heading", { level: 3 })).not.toBeInTheDocument();
     expect(screen.queryByText(/n\/a/)).not.toBeInTheDocument();
+  });
+
+  it.each(["dependencies", "versions"])("repeats no heading of the %s tab inside it", async (tab) => {
+    renderCard(`/package/pydantic?tab=${tab}`);
+    await ready();
+    expect(screen.queryByRole("heading", { name: /^(Dependencies|Dependency tree|Versions|Used by)\b/ })).not.toBeInTheDocument();
+  });
+
+  it("puts the environment controls and include optional on one compact row", async () => {
+    renderCard("/package/pydantic?tab=dependencies");
+    await ready();
+    const row = document.querySelector(".env-row");
+    expect(within(row).getByLabelText("Python version")).toBeInTheDocument();
+    const optional = within(row).getByLabelText("include optional");
+    expect(optional).toHaveAttribute("type", "checkbox");
+    expect(optional.closest("label")).toHaveTextContent("include optional");
   });
 
   describe("header", () => {
@@ -139,14 +158,16 @@ describe("package card", () => {
       expect(screen.queryByText("Version", { selector: "label" })).not.toBeInTheDocument();
     });
 
-    it("shows the copy controls as small text buttons in one wrapping line", async () => {
+    it("shows the copy controls as small text buttons stacked at the end of the facts panel", async () => {
       renderCard();
       await ready();
       const buttons = screen.getAllByRole("button", { name: /^Copy / });
       expect(buttons.map((button) => button.textContent)).toEqual(["Copy", "Copy"]);
       buttons.forEach((button) => expect(button).toHaveClass("copy-button"));
-      const identifiers = document.querySelector(".identifiers");
-      expect(identifiers.querySelectorAll(".copy-field")).toHaveLength(2);
+      const panel = document.querySelector(".package-facts");
+      expect(panel.querySelectorAll(".copy-field")).toHaveLength(2);
+      const terms = [...panel.querySelectorAll("dt")].map((node) => node.textContent);
+      expect(terms.slice(-2)).toEqual(["Install", "purl"]);
     });
 
     it("shows the name, ecosystem, version, latest tag, description, facts and links", async () => {
@@ -159,25 +180,31 @@ describe("package card", () => {
       expect(screen.getByText("latest", { selector: ".tag" })).toBeInTheDocument();
       expect(screen.queryByText(/Not the latest version/)).not.toBeInTheDocument();
 
-      const facts = document.querySelector(".fact-strip");
+      // The panel keeps the facts in the spec's order, label above value; the counts are on the tabs.
+      const facts = document.querySelector(".package-facts");
+      expect([...facts.querySelectorAll("dt")].map((node) => node.textContent)).toEqual([
+        "Released", "License", "Repository", "Homepage", "Install", "purl",
+      ]);
       expect(within(facts).getByText("Released").nextSibling).toHaveTextContent(day("2026-11-05T09:00:00Z"));
       expect(within(facts).getByText("License").nextSibling).toHaveTextContent("MIT");
-      expect(within(facts).getByText("Used by").nextSibling).toHaveTextContent("1 in catalog");
-      expect(within(facts).getByText("Dependencies").nextSibling).toHaveTextContent("4 + 2 optional");
-      expect(within(facts).getByText("Versions").nextSibling).toHaveTextContent("211");
+      expect(within(facts).queryByText("Used by")).not.toBeInTheDocument();
+      expect(within(facts).queryByText("Versions")).not.toBeInTheDocument();
+      expect(document.querySelector(".fact-strip")).toBeNull();
 
-      expect(screen.getByRole("link", { name: "Repository" })).toHaveAttribute("href", "https://github.com/pydantic/pydantic");
-      expect(screen.getByRole("link", { name: "Homepage" })).toHaveAttribute("href", "https://docs.pydantic.dev");
-      expect(screen.queryByRole("link", { name: "Documentation" })).not.toBeInTheDocument();
+      expect(within(facts).getByRole("link", { name: "github.com/pydantic/pydantic" })).toHaveAttribute("href", "https://github.com/pydantic/pydantic");
+      expect(within(facts).getByRole("link", { name: "docs.pydantic.dev" })).toHaveAttribute("href", "https://docs.pydantic.dev");
+      expect(within(facts).queryByText("Documentation")).not.toBeInTheDocument();
     });
 
-    it("omits the optional part of the dependency fact at zero", async () => {
-      api.fetchOverview.mockImplementation((e, n, version) =>
-        Promise.resolve(overviewOf(version, { dependencies: { direct: 4, optional: 0, dev: 0, indirect: 0, not_in_catalog: 0 } }))
-      );
+    it("lays the card out as a full-width top and a grid of the tabs and the facts panel", async () => {
       renderCard();
       await ready();
-      expect(within(document.querySelector(".fact-strip")).getByText("Dependencies").nextSibling).toHaveTextContent(/^4$/);
+      const layout = document.querySelector(".package-layout");
+      expect(layout.querySelector(".package-main [role=tablist]")).not.toBeNull();
+      expect(layout.querySelector(".package-facts")).not.toBeNull();
+      // Title, description and banners are above the grid, not in a column.
+      expect(layout.contains(document.querySelector(".package-title"))).toBe(false);
+      expect(layout.contains(document.querySelector(".package-description"))).toBe(false);
     });
 
     it("hides the description row when the package has none, on any ecosystem", async () => {
@@ -201,12 +228,12 @@ describe("package card", () => {
       await screen.findByRole("tab", { name: /Versions/ });
 
       expect(document.querySelector(".package-description")).toBeNull();
-      expect(within(document.querySelector(".fact-strip")).getByText("License").nextSibling).toHaveTextContent("Not published by the source");
-      expect(screen.queryByRole("link", { name: "Repository" })).not.toBeInTheDocument();
+      expect(within(document.querySelector(".package-facts")).getByText("License").nextSibling).toHaveTextContent("Not published by the source");
+      expect(screen.queryByText("Repository")).not.toBeInTheDocument();
       expect(screen.getByText("go get github.com/BurntSushi/toml@v1.4.0")).toBeInTheDocument();
     });
 
-    it("shows Maven groupId and artifactId and RPM distro and name in the header", async () => {
+    it("shows Maven groupId and artifactId in the facts panel", async () => {
       api.fetchPackage.mockResolvedValue({
         ...PYDANTIC, ecosystem: "maven", name: "org.springframework:spring-core", normalized_name: "spring-core",
         namespace: "org.springframework", purl: "pkg:maven/org.springframework/spring-core", latest_version: "6.1.14",
@@ -216,6 +243,19 @@ describe("package card", () => {
       await screen.findByText("org.springframework", { selector: "code" });
       expect(screen.getByText("spring-core", { selector: "code" })).toBeInTheDocument();
       expect(screen.getByText("org.springframework:spring-core:6.1.14")).toBeInTheDocument();
+    });
+
+    it("shows the Maven coordinates and the RPM distro and name as facts", async () => {
+      api.fetchPackage.mockResolvedValue({
+        ...PYDANTIC, ecosystem: "maven", name: "org.springframework:spring-core", normalized_name: "spring-core",
+        namespace: "org.springframework", purl: "pkg:maven/org.springframework/spring-core", latest_version: "6.1.14",
+      });
+      api.fetchVersions.mockResolvedValue({ data: [{ version: "6.1.14", status: "active", release_date: null }], cursor: null, has_more: false });
+      renderCard("/package/maven/org.springframework:spring-core");
+      await screen.findByRole("tab", { name: /Versions/ });
+      const maven = within(document.querySelector(".package-facts"));
+      expect(maven.getByText("groupId").nextSibling).toHaveTextContent("org.springframework");
+      expect(maven.getByText("artifactId").nextSibling).toHaveTextContent("spring-core");
     });
   });
 
@@ -283,13 +323,12 @@ describe("package card", () => {
       const children = [...header.children];
       expect(children[0]).toHaveClass("package-title");
       expect(children[1]).toBe(message.closest(".banner"));   // right under the title row
-      expect(document.querySelector(".fact-strip")).toBeNull();
-      expect(document.querySelector(".identifiers")).toBeNull();
+      expect(document.querySelector(".package-facts")).toBeNull();
+      expect(document.querySelector(".package-layout")).toBeNull();
       expect(screen.queryByText("Not the latest version")).not.toBeInTheDocument();
       expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
       // What belongs to the package stays.
       expect(screen.getByText("Data validation using Python type hints")).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "Repository" })).toBeInTheDocument();
     });
 
     it("does not ask for the tree or the overview of a version the detail says is missing", async () => {
@@ -329,7 +368,7 @@ describe("package card", () => {
       expect(write).toHaveBeenCalledWith("pkg:pypi/pydantic@2.14.3");
       expect(await screen.findByText("Copied")).toBeInTheDocument();
 
-      await user.click(screen.getByRole("button", { name: "Copy install" }));
+      await user.click(screen.getByRole("button", { name: "Copy Install" }));
       expect(write).toHaveBeenLastCalledWith("pip install pydantic==2.14.3");
     });
 
@@ -339,7 +378,7 @@ describe("package card", () => {
       renderCard();
       await ready();
 
-      await user.click(screen.getByRole("button", { name: "Copy install" }));
+      await user.click(screen.getByRole("button", { name: "Copy Install" }));
       expect(await screen.findByText("Copy failed")).toBeInTheDocument();
       expect(window.getSelection().toString()).toBe("pip install pydantic==2.14.3");
     });
@@ -407,18 +446,19 @@ describe("package card", () => {
       expect(screen.getByRole("tab", { name: "Overview" })).toHaveFocus();
     });
 
-    it("opens a tab from a fact link", async () => {
+    it("opens Dependencies and Versions from the View all links of the Overview", async () => {
       const user = userEvent.setup();
       renderCard("/package/pydantic?version=2.13.5");
       await ready();
 
-      const link = within(document.querySelector(".fact-strip")).getByRole("link", { name: "4 + 2 optional" });
-      expect(link).toHaveAttribute("href", "?version=2.13.5&tab=dependencies");
-      await user.click(link);
+      const deps = within(section("Dependencies")).getByRole("link", { name: "View all" });
+      expect(deps).toHaveAttribute("href", "?version=2.13.5&tab=dependencies");
+      await user.click(deps);
       expect(screen.getByRole("tab", { name: /Dependencies/ })).toHaveAttribute("aria-selected", "true");
       expect(await screen.findByText("pydantic-core")).toBeInTheDocument();
 
-      await user.click(within(document.querySelector(".fact-strip")).getByRole("link", { name: "211" }));
+      await user.click(screen.getByRole("tab", { name: "Overview" }));
+      await user.click(within(section("Release activity")).getByRole("link", { name: "View all" }));
       expect(screen.getByRole("tab", { name: /Versions/ })).toHaveAttribute("aria-selected", "true");
       expect(query().tab).toBe("versions");
     });
@@ -440,14 +480,14 @@ describe("package card", () => {
     it("shows the blocks with their numbers", async () => {
       renderCard();
       await ready();
-      const security = screen.getByRole("heading", { name: "Security" }).parentElement;
+      const security = section("Security");
       expect(within(security).getByText("No advisories found")).toBeInTheDocument();
 
-      const licenses = screen.getByRole("heading", { name: "Licenses" }).parentElement;
+      const licenses = section("Licenses");
       expect(licenses).toHaveTextContent("This package: MIT");
       expect(licenses).toHaveTextContent("Dependencies: MIT 3 · PSF-2.0 1");
 
-      const dependencies = screen.getByRole("heading", { name: "Dependencies" }).parentElement;
+      const dependencies = section("Dependencies");
       expect(dependencies).toHaveTextContent("Direct4");
       expect(dependencies).toHaveTextContent("Indirect3");
       expect(dependencies).toHaveTextContent("Plus 2 optional");
@@ -457,11 +497,11 @@ describe("package card", () => {
       expect(direct.style.width).toBe("100%");
       expect(indirect.style.width).toBe("75%");
 
-      const usedBy = screen.getByRole("heading", { name: "Used by, in this catalog" }).parentElement;
+      const usedBy = section("Used by, in this catalog");
       expect(usedBy).toHaveTextContent("Direct1");
       expect(usedBy).toHaveTextContent("Indirect2");
 
-      const lines = screen.getByRole("heading", { name: "Release lines" }).parentElement;
+      const lines = section("Release lines");
       expect(within(lines).getAllByRole("listitem")).toHaveLength(3);
       expect(lines).toHaveTextContent(`2.14 2.14.3 ${day("2026-11-05T09:00:00Z")}`);
       expect(lines).not.toHaveTextContent("1.10");
@@ -495,7 +535,7 @@ describe("package card", () => {
       );
       renderCard();
       await ready();
-      expect(screen.getByRole("heading", { name: "Licenses" }).parentElement).toHaveTextContent("No dependencies");
+      expect(section("Licenses")).toHaveTextContent("No dependencies");
       expect(screen.queryByRole("heading", { name: "Release lines" })).not.toBeInTheDocument();
     });
 
@@ -525,7 +565,7 @@ describe("package card", () => {
       renderCard();
       await ready().catch(() => {});
       expect(await screen.findAllByText(/Dependencies unknown/)).not.toHaveLength(0);
-      expect(within(document.querySelector(".fact-strip")).getByText("Dependencies").nextSibling).toHaveTextContent("unknown");
+      expect(screen.queryByText(/Depends on/)).not.toBeInTheDocument();   // a clause without data is skipped
       expect(screen.getByRole("tab", { name: "Dependencies" })).toBeInTheDocument();
     });
 
@@ -543,22 +583,32 @@ describe("package card", () => {
       await waitFor(() => expect(api.fetchOverview).toHaveBeenCalledWith("pypi", "pydantic", "2.14.3"));
     });
 
-    it("links the Licenses block to the Dependencies tab", async () => {
+    it("links the Licenses section to the Dependencies tab with a plain View all", async () => {
       const user = userEvent.setup();
       renderCard();
       await ready();
-      const block = [...document.querySelectorAll(".overview-block")].find((item) => item.querySelector("h3").textContent === "Licenses");
-      await user.click(within(block).getByRole("link", { name: "Open dependency licenses" }));
+      await user.click(within(section("Licenses")).getByRole("link", { name: "View all" }));
       expect(screen.getByRole("tab", { name: /Dependencies/ })).toHaveAttribute("aria-selected", "true");
       expect(query().tab).toBe("dependencies");
     });
 
-    it("opens the Dependencies and Versions tabs from the blocks", async () => {
-      const user = userEvent.setup();
+    it("has no Open links and no bordered boxes in the Overview", async () => {
       renderCard();
       await ready();
-      await user.click(screen.getByRole("link", { name: "Open dependencies" }));
-      expect(screen.getByRole("tab", { name: /Dependencies/ })).toHaveAttribute("aria-selected", "true");
+      expect(screen.queryByRole("link", { name: /^Open / })).not.toBeInTheDocument();
+      expect(document.querySelector(".overview-block")).toBeNull();
+      const heads = [...document.querySelectorAll(".overview-section h3")].map((node) => node.textContent);
+      expect(heads).toEqual(["Security", "Dependencies", "Used by, in this catalog", "Licenses", "Release activity", "Release lines"]);
+      // Security has no tab to open.
+      expect(within(section("Security")).queryByRole("link")).not.toBeInTheDocument();
+    });
+
+    it("opens with one sentence of the direct numbers", async () => {
+      renderCard();
+      await ready();
+      expect(document.querySelector(".overview-summary")).toHaveTextContent(
+        "Depends on 4 packages directly. 1 package in this catalog uses it. 19 releases in the last 12 months."
+      );
     });
   });
 });

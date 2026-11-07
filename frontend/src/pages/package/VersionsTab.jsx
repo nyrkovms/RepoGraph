@@ -158,7 +158,6 @@ export function VersionsTab({
 }) {
   return (
     <>
-      <h3>Versions</h3>
       {chips.length > 1 ? <Chips chips={chips} view={view} tabHref={tabHref} onSelectView={onSelectView} /> : null}
       {view === "lines" ? (
         <LinesTable

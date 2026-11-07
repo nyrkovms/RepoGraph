@@ -108,6 +108,9 @@ describe("used by tab", () => {
     api.fetchOverview.mockImplementation((ecosystem, name, version) => Promise.resolve(overviewOf(version)));
   });
 
+  // An Overview section by its heading.
+  const section = (name) => screen.getByRole("heading", { name }).closest(".overview-section");
+
   async function ready() {
     await screen.findByRole("tab", { name: /Used by/ });
     await screen.findByRole("tab", { name: /Versions\s*211/ });
@@ -159,27 +162,29 @@ describe("used by tab", () => {
     expect(api.fetchDependents).toHaveBeenCalledTimes(1);
   });
 
-  it("opens from the header fact and the Overview block", async () => {
+  it("has no heading that repeats the tab name", async () => {
+    renderCard("/package/pydantic?tab=used-by");
+    await screen.findByText("left-pad");
+    expect(screen.queryByRole("heading", { name: "Used by" })).not.toBeInTheDocument();
+  });
+
+  it("opens from the tab and from the View all link of the Overview", async () => {
     const user = userEvent.setup();
     renderCard("/package/pydantic?version=2.13.5");
     await ready();
-    const fact = within(document.querySelector(".fact-strip")).getByRole("link", { name: "1 in catalog" });
-    expect(fact).toHaveAttribute("href", "?version=2.13.5&tab=used-by");
-    await user.click(fact);
+    const link = within(section("Used by, in this catalog")).getByRole("link", { name: "View all" });
+    expect(link).toHaveAttribute("href", "?version=2.13.5&tab=used-by");
+    await user.click(link);
     expect(screen.getByRole("tab", { name: /Used by/ })).toHaveAttribute("aria-selected", "true");
     expect(query().tab).toBe("used-by");
-
-    await user.click(screen.getByRole("tab", { name: "Overview" }));
-    await user.click(screen.getByRole("link", { name: "Open used by" }));
-    expect(screen.getByRole("tab", { name: /Used by/ })).toHaveAttribute("aria-selected", "true");
   });
 
-  it("keeps the fact and the block plain text when nothing depends on the package", async () => {
+  it("keeps the section plain text when nothing depends on the package", async () => {
     api.fetchOverview.mockImplementation((e, n, version) => Promise.resolve(overviewOf(version, { used_by: { direct: 0, indirect: 0 } })));
     renderCard();
     await ready();
-    expect(within(document.querySelector(".fact-strip")).queryByRole("link", { name: /in catalog/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Open used by" })).not.toBeInTheDocument();
+    expect(within(section("Used by, in this catalog")).queryByRole("link")).not.toBeInTheDocument();
+    expect(document.querySelector(".package-facts")).not.toHaveTextContent("in catalog");
   });
 
   it("shows a row per dependent with its version, requirement, type and relation", async () => {
@@ -316,12 +321,11 @@ describe("used by tab", () => {
       await screen.findByRole("tab", { name: /Versions\s*211/ });
       expect(screen.getByRole("tab", { name: /Used by/ })).toHaveTextContent("Used by0");
       expect(screen.getByRole("tab", { name: /Dependencies/ })).toHaveTextContent("Dependencies6");
-      const facts = within(document.querySelector(".fact-strip"));
-      expect(facts.getByText("Dependencies").nextSibling).toHaveTextContent("6 + 1 optional");
-      expect(facts.getByText("Used by").nextSibling).toHaveTextContent("0 in catalog");
-
-      const blocks = [...document.querySelectorAll(".overview-block")];
-      const block = (title) => blocks.find((item) => item.querySelector("h3").textContent === title);
+      // The summary sentence has direct numbers only, and the Used by one for RPM says "directly".
+      expect(document.querySelector(".overview-summary")).toHaveTextContent(
+        "Depends on 6 packages directly. No packages in this catalog use it."
+      );
+      const block = section;
       expect(within(block("Dependencies")).getByText("Direct")).toBeInTheDocument();
       expect(within(block("Dependencies")).queryByText("Indirect")).not.toBeInTheDocument();
       expect(block("Dependencies")).not.toHaveTextContent("not in catalog");
@@ -336,8 +340,9 @@ describe("used by tab", () => {
       api.fetchOverview.mockImplementation((e, n, version) => Promise.resolve(rpmOverview(version, { used_by: { direct: 3, indirect: null } })));
       renderCard("/package/rpm/rocky-9/bash");
       await screen.findByRole("tab", { name: /Versions\s*211/ });
-      expect(screen.getByRole("link", { name: "Open used by" })).toBeInTheDocument();
+      expect(within(section("Used by, in this catalog")).getByRole("link", { name: "View all" })).toBeInTheDocument();
       expect(screen.getByText(NOTE)).toBeInTheDocument();
+      expect(document.querySelector(".overview-summary")).toHaveTextContent("3 packages in this catalog use it directly.");
     });
 
     it("lists direct dependents only, without relation chips, under the note", async () => {

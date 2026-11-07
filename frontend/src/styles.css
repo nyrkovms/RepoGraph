@@ -282,13 +282,6 @@ button:disabled {
   color: #475569;
 }
 
-.meta-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
 .package-sources li {
   margin-bottom: 4px;
 }
@@ -531,7 +524,7 @@ button:disabled {
   flex-wrap: wrap;
 }
 
-/* Package card: header, fact strip, identifiers, tabs and the Overview blocks */
+/* Package card: title, tabs and the Overview bars */
 /* The name, the ecosystem and the version select share one line, wrapping on a narrow screen. */
 .package-title {
   display: flex;
@@ -559,93 +552,11 @@ button:disabled {
   color: #1e3a8a;
 }
 
-.fact-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
-  margin: 8px 0 12px;
-}
-
-.fact {
-  min-width: 0;
-}
-
-.fact dt {
-  color: #475569;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.fact dd {
-  margin: 0;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-/* Identifiers sit on one line that wraps: each field is its own unbreakable-by-default group. */
-.identifiers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 24px;
-  margin-bottom: 8px;
-}
-
-.copy-field {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 6px;
-  min-width: 0;
-}
-
-.copy-field-label {
-  color: #475569;
-  font-size: 13px;
-}
-
-.copy-field code {
-  overflow-wrap: anywhere;
-  user-select: all;
-}
-
-/* A small text button: copying is secondary to the identifier it sits next to. */
-.copy-button {
-  padding: 1px 6px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: transparent;
-  color: #1d4ed8;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.copy-button:hover {
-  background: #eff6ff;
-}
-
-.copy-field-state {
-  font-size: 12px;
-}
-
-.copy-field-state:empty {
-  display: none;
-}
-
-.package-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  margin: 0 0 12px;
-  padding: 0;
-  list-style: none;
-}
-
 .tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin: 16px 0 0;
+  margin: 0;
   border-bottom: 1px solid #cbd5e1;
 }
 
@@ -683,27 +594,8 @@ button:disabled {
   padding-top: 16px;
 }
 
-.overview-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.overview-block {
-  min-width: 0;
-  padding: 12px 14px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #fff;
-}
-
 .overview-state {
-  grid-column: 1 / -1;
-}
-
-.overview-more {
-  margin-bottom: 0;
-  font-size: 13px;
+  margin: 0;
 }
 
 .bar-row {
@@ -771,12 +663,6 @@ button:disabled {
 
 .line-list li {
   margin-bottom: 4px;
-}
-
-@media (max-width: 760px) {
-  .overview-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 /* Home page and search filters */
@@ -1076,4 +962,223 @@ button.chip[aria-pressed="true"] {
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
+}
+
+/* Package card: a full-width top, then the tabs beside a narrow facts panel (SPEC-CATALOG-PAGES.md section 5) */
+.package-page {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.package-page a {
+  color: #1d4ed8;
+  font-weight: 400;
+  text-decoration: none;
+}
+
+.package-page a:hover,
+.package-page a:focus-visible {
+  text-decoration: underline;
+}
+
+.package-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.package-header .banner,
+.package-header .package-description,
+.package-header .package-title,
+.package-header p {
+  margin: 0;
+}
+
+.package-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 32px;
+  margin-top: 20px;
+  align-items: start;
+}
+
+.package-main {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.package-facts {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.package-facts dl {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+}
+
+.fact {
+  min-width: 0;
+}
+
+.fact dt {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.fact dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.copy-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.copy-field code {
+  width: 100%;
+  font-size: 12.5px;
+  line-height: 1.4;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* A small text button: copying is secondary to the identifier above it. */
+.copy-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.copy-button:hover,
+.copy-button:focus-visible {
+  background: transparent;
+  text-decoration: underline;
+}
+
+.copy-field-state {
+  font-size: 12px;
+}
+
+.copy-field-state:empty {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .package-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .package-main,
+  .package-facts {
+    grid-column: 1;
+  }
+
+  .package-facts {
+    grid-row: 1;
+  }
+
+  .package-main {
+    grid-row: 2;
+  }
+}
+
+/* Overview: sections divided by whitespace and a 1px rule, no boxes */
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.overview p {
+  margin: 0;
+}
+
+.overview-summary {
+  font-size: 16px;
+}
+
+.overview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 24px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.overview-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.overview-pair .overview-section {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.overview-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.overview-section-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .overview-pair {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+}
+
+/* The environment controls of Dependencies: one compact row that wraps */
+.env-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+
+.env-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.env-row select,
+.env-row input:not([type="checkbox"]) {
+  min-width: 0;
+  padding: 4px 8px;
+}
+
+.env-row input[type="checkbox"] {
+  min-width: 0;
+  width: auto;
+}
+
+.env-row button {
+  padding: 5px 12px;
 }

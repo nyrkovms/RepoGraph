@@ -168,7 +168,6 @@ export function DependenciesTab({
   refreshTree,
   selectedVersion,
   deps,
-  latestVersion,
   pkg,
   ecosystem,
   collapsedNodes,
@@ -176,11 +175,7 @@ export function DependenciesTab({
 }) {
   return (
     <>
-      <h3>
-        {view === "tree" ? "Dependency tree" : "Dependencies"}
-        {latestVersion ? ` (${latestVersion})` : ""}
-      </h3>
-      <div className="toolbar">
+      <div className="env-row">
         {isNpm ? (
           <>
             <label>
@@ -244,7 +239,7 @@ export function DependenciesTab({
           <div className="scope-select" role="group" aria-label="Scopes">
             <b>Scopes</b>
             {MAVEN_SCOPES.map((scope) => (
-              <label key={scope}>
+              <label key={scope} className="check-label">
                 <input
                   type="checkbox"
                   checked={selectedScopes.includes(scope)}
@@ -304,7 +299,7 @@ export function DependenciesTab({
                 }}
               />
             </label>
-            <label>
+            <label className="check-label">
               <input
                 type="checkbox"
                 aria-label="Default features"
@@ -349,7 +344,7 @@ export function DependenciesTab({
           </>
         )}
         {isGo || isNuget || isMaven ? null : (
-          <label>
+          <label className="check-label">
             <input
               type="checkbox"
               checked={includeOptional}

@@ -48,7 +48,6 @@ export function UsedByTab({ list, totals, relation, tabHref, onSelectRelation, i
   const empty = list.state === "ready" && list.rows.length === 0;
   return (
     <>
-      <h3>Used by</h3>
       {isRpm ? <p className={empty ? undefined : "muted"}>{RPM_NOTE}</p> : null}
       {known && !isRpm ? <Chips relation={relation} totals={known} tabHref={tabHref} onSelectRelation={onSelectRelation} /> : null}
       {list.state === "loading" ? <p className="muted">Loading...</p> : null}

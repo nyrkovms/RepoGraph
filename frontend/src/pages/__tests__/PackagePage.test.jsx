@@ -734,12 +734,13 @@ describe("PackagePage", () => {
       expect(api.fetchVulnerabilities).toHaveBeenCalledWith("crates", "serde_json");
       await waitFor(() => expect(api.fetchVersion).toHaveBeenCalledWith("crates", "serde_json", "1.0.140"));
 
-      expect(screen.getByRole("link", { name: "Homepage" })).toHaveAttribute("href", "https://serde.rs");
-      expect(screen.getByRole("link", { name: "Repository" })).toHaveAttribute("href", "https://github.com/serde-rs/json");
-      expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute(
+      expect(screen.getByRole("link", { name: "serde.rs" })).toHaveAttribute("href", "https://serde.rs");
+      expect(screen.getByRole("link", { name: "github.com/serde-rs/json" })).toHaveAttribute("href", "https://github.com/serde-rs/json");
+      expect(screen.getByRole("link", { name: "docs.rs/serde_json" })).toHaveAttribute(
         "href",
         "https://docs.rs/serde_json"
       );
+      expect(["Homepage", "Repository", "Documentation"].every((label) => screen.getByText(label).tagName === "DT")).toBe(true);
       expect(screen.getByText((content) => content.includes("MIT OR Apache-2.0"))).toBeInTheDocument();
 
       expect(screen.getByText(day("2026-03-01T10:00:00Z"))).toBeInTheDocument();
@@ -1058,7 +1059,7 @@ describe("PackagePage", () => {
 
       await screen.findByText(startsWithText("pkg:golang/github.com/BurntSushi/toml"));
       expect(screen.getByText((content) => content.includes("MIT"))).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "Repository" })).toHaveAttribute("href", "https://github.com/BurntSushi/toml");
+      expect(screen.getByRole("link", { name: "github.com/BurntSushi/toml" })).toHaveAttribute("href", "https://github.com/BurntSushi/toml");
       expect(screen.queryByText(/Homepage/)).not.toBeInTheDocument();
     });
 

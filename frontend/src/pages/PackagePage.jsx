@@ -15,6 +15,7 @@ import { CompareTab } from "./package/CompareTab";
 import { DependenciesTab } from "./package/DependenciesTab";
 import { ActionLink } from "./package/Links";
 import { OverviewTab } from "./package/OverviewTab";
+import { PackageFacts } from "./package/PackageFacts";
 import { PackageHeader } from "./package/PackageHeader";
 import { PackageTabs } from "./package/PackageTabs";
 import { SourcesTab } from "./package/SourcesTab";
@@ -123,7 +124,6 @@ export default function PackagePage() {
   const treeTarget = pickOption(target, CRATES_TARGETS, DEFAULTS.crates.target);
   const treeFramework = pickOption(framework, NUGET_FRAMEWORKS, DEFAULTS.nuget.framework);
   const selectedScopes = scopes.split(",");
-  const latestVersion = useMemo(() => selectedVersion || pkg?.latest_version || versions?.[0]?.version, [selectedVersion, pkg, versions]);
   // `deprecation.message` of the package (Go: the `// Deprecated:` paragraph of go.mod; NuGet: the message or the reasons), `true` when it has no text.
   const deprecated = useMemo(() => {
     if (!pkg?.deprecation) {
@@ -563,7 +563,7 @@ export default function PackagePage() {
     ) : null;
 
   return (
-    <section>
+    <section className="package-page">
       {error ? <p className="error">{error}</p> : null}
       {loading ? <p>Loading...</p> : null}
 
@@ -576,150 +576,157 @@ export default function PackagePage() {
         loading={loading}
         isLatest={isLatest}
         versionRow={versionRow}
-        versionDetail={versionDetail && versionDetail.version === selectedVersion ? versionDetail : null}
-        overview={overviewNow}
         deprecated={deprecated}
         relocatedTo={relocatedTo}
         descriptionParagraphs={descriptionParagraphs}
         onSelectVersion={setSelectedVersion}
         tabHref={tabHref}
-        onSelectTab={setActiveTab}
         notice={notice}
         missingVersion={versionMissing}
       />
 
       {pkg && !versionMissing ? (
-        <PackageTabs tabs={tabs} active={activeTab} onSelect={setActiveTab}>
-          {activeTab === "overview" ? (
-            <OverviewTab
-              overview={overviewNow}
-              overviewState={overviewState}
-              pkg={pkg}
-              ecosystem={ecosystem}
-              vulns={vulns}
-              vulnCoverage={vulnCoverage}
-              isLatest={isLatest}
-              tabHref={tabHref}
-              onSelectTab={setActiveTab}
-            />
-          ) : null}
-          {activeTab === "dependencies" ? (
-            <DependenciesTab
-              view={depsView}
-              relation={depRelation}
-              tabHref={tabHref}
-              onSelectView={setDepsView}
-              onSelectRelation={setDepRelation}
-              isNpm={isNpm}
-              isGo={isGo}
-              isRpm={isRpm}
-              isMaven={isMaven}
-              isNuget={isNuget}
-              isCrates={isCrates}
-              nodeVersion={nodeVersion}
-              setNodeVersion={setNodeVersion}
-              treeOs={treeOs}
-              setOs={setOs}
-              os={os}
-              cpu={cpu}
-              setCpu={setCpu}
-              arch={arch}
-              setArch={setArch}
-              selectedScopes={selectedScopes}
-              toggleScope={toggleScope}
-              treeFramework={treeFramework}
-              setFramework={setFramework}
-              treeTarget={treeTarget}
-              setTarget={setTarget}
-              featuresInput={featuresInput}
-              setFeaturesInput={setFeaturesInput}
-              applyFeatures={applyFeatures}
-              defaultFeatures={defaultFeatures}
-              setDefaultFeatures={setDefaultFeatures}
-              pythonVersion={pythonVersion}
-              setPythonVersion={setPythonVersion}
-              includeOptional={includeOptional}
-              setIncludeOptional={setIncludeOptional}
-              loading={loading}
-              depsLoading={depsLoading}
-              depsUnknown={depsUnknown}
-              isTreeCollapsed={isTreeCollapsed}
-              toggleTreeCollapse={toggleTreeCollapse}
-              refreshTree={refreshTree}
-              selectedVersion={selectedVersion}
-              deps={deps}
-              latestVersion={latestVersion}
-              pkg={pkg}
-              ecosystem={ecosystem}
-              collapsedNodes={collapsedNodes}
-              toggleNodeCollapse={toggleNodeCollapse}
-            />
-          ) : null}
-          {activeTab === "used-by" ? (
-            <UsedByTab
-              list={dependents}
-              totals={overviewNow ? overviewNow.used_by : null}
-              relation={relation}
-              tabHref={tabHref}
-              onSelectRelation={setRelation}
-              isRpm={isRpm}
-            />
-          ) : null}
-          {activeTab === "versions" ? (
-            versionsInfoReady ? (
-              <VersionsTab
-                overview={versionsOverview}
-                chips={versionChipList}
-                view={shownView}
-                expandedLine={expandedLine}
-                viewingLine={versionRow?.line || ""}
-                list={flatList}
-                lineList={lineList}
-                tabHref={tabHref}
-                onSelectView={(value) => {
-                  setVersionsView(value);
-                  setExpandedLine("");
-                }}
-                onSelectLine={setExpandedLine}
-                name={name}
-                selectedVersion={selectedVersion}
-                onSelectVersion={setSelectedVersion}
-                isGo={isGo}
-                isMaven={isMaven}
-                isRpm={isRpm}
-                archesByVersion={archesByVersion}
-              />
-            ) : (
-              <p className="muted">Loading...</p>
-            )
-          ) : null}
-          {activeTab === "compare" ? (
-            <CompareTab
-              ecosystem={ecosystem}
-              name={name}
-              to={selectedVersion}
-              from={compareFrom}
-              hold={!hydrationClear}
-              versions={versions}
-              onSelectFrom={setCompareFrom}
-              isGo={isGo}
-            />
-          ) : null}
-          {activeTab === "sources" ? (
-            <SourcesTab
-              pkg={pkg}
-              name={name}
-              versionDetail={versionDetail}
-              selectedVersion={selectedVersion}
-              isGo={isGo}
-              isCrates={isCrates}
-              isNuget={isNuget}
-              isMaven={isMaven}
-              isRpm={isRpm}
-              archesByVersion={archesByVersion}
-            />
-          ) : null}
-        </PackageTabs>
+        <div className="package-layout">
+          <PackageFacts
+            ecosystem={ecosystem}
+            pkg={pkg}
+            selectedVersion={selectedVersion}
+            versionRow={versionRow}
+            versionDetail={versionDetail && versionDetail.version === selectedVersion ? versionDetail : null}
+          />
+          <div className="package-main">
+            <PackageTabs tabs={tabs} active={activeTab} onSelect={setActiveTab}>
+              {activeTab === "overview" ? (
+                <OverviewTab
+                  overview={overviewNow}
+                  overviewState={overviewState}
+                  pkg={pkg}
+                  ecosystem={ecosystem}
+                  vulns={vulns}
+                  vulnCoverage={vulnCoverage}
+                  isLatest={isLatest}
+                  tabHref={tabHref}
+                  onSelectTab={setActiveTab}
+                />
+              ) : null}
+              {activeTab === "dependencies" ? (
+                <DependenciesTab
+                  view={depsView}
+                  relation={depRelation}
+                  tabHref={tabHref}
+                  onSelectView={setDepsView}
+                  onSelectRelation={setDepRelation}
+                  isNpm={isNpm}
+                  isGo={isGo}
+                  isRpm={isRpm}
+                  isMaven={isMaven}
+                  isNuget={isNuget}
+                  isCrates={isCrates}
+                  nodeVersion={nodeVersion}
+                  setNodeVersion={setNodeVersion}
+                  treeOs={treeOs}
+                  setOs={setOs}
+                  os={os}
+                  cpu={cpu}
+                  setCpu={setCpu}
+                  arch={arch}
+                  setArch={setArch}
+                  selectedScopes={selectedScopes}
+                  toggleScope={toggleScope}
+                  treeFramework={treeFramework}
+                  setFramework={setFramework}
+                  treeTarget={treeTarget}
+                  setTarget={setTarget}
+                  featuresInput={featuresInput}
+                  setFeaturesInput={setFeaturesInput}
+                  applyFeatures={applyFeatures}
+                  defaultFeatures={defaultFeatures}
+                  setDefaultFeatures={setDefaultFeatures}
+                  pythonVersion={pythonVersion}
+                  setPythonVersion={setPythonVersion}
+                  includeOptional={includeOptional}
+                  setIncludeOptional={setIncludeOptional}
+                  loading={loading}
+                  depsLoading={depsLoading}
+                  depsUnknown={depsUnknown}
+                  isTreeCollapsed={isTreeCollapsed}
+                  toggleTreeCollapse={toggleTreeCollapse}
+                  refreshTree={refreshTree}
+                  selectedVersion={selectedVersion}
+                  deps={deps}
+                      pkg={pkg}
+                  ecosystem={ecosystem}
+                  collapsedNodes={collapsedNodes}
+                  toggleNodeCollapse={toggleNodeCollapse}
+                />
+              ) : null}
+              {activeTab === "used-by" ? (
+                <UsedByTab
+                  list={dependents}
+                  totals={overviewNow ? overviewNow.used_by : null}
+                  relation={relation}
+                  tabHref={tabHref}
+                  onSelectRelation={setRelation}
+                  isRpm={isRpm}
+                />
+              ) : null}
+              {activeTab === "versions" ? (
+                versionsInfoReady ? (
+                  <VersionsTab
+                    overview={versionsOverview}
+                    chips={versionChipList}
+                    view={shownView}
+                    expandedLine={expandedLine}
+                    viewingLine={versionRow?.line || ""}
+                    list={flatList}
+                    lineList={lineList}
+                    tabHref={tabHref}
+                    onSelectView={(value) => {
+                      setVersionsView(value);
+                      setExpandedLine("");
+                    }}
+                    onSelectLine={setExpandedLine}
+                    name={name}
+                    selectedVersion={selectedVersion}
+                    onSelectVersion={setSelectedVersion}
+                    isGo={isGo}
+                    isMaven={isMaven}
+                    isRpm={isRpm}
+                    archesByVersion={archesByVersion}
+                  />
+                ) : (
+                  <p className="muted">Loading...</p>
+                )
+              ) : null}
+              {activeTab === "compare" ? (
+                <CompareTab
+                  ecosystem={ecosystem}
+                  name={name}
+                  to={selectedVersion}
+                  from={compareFrom}
+                  hold={!hydrationClear}
+                  versions={versions}
+                  onSelectFrom={setCompareFrom}
+                  isGo={isGo}
+                />
+              ) : null}
+              {activeTab === "sources" ? (
+                <SourcesTab
+                  pkg={pkg}
+                  name={name}
+                  versionDetail={versionDetail}
+                  selectedVersion={selectedVersion}
+                  isGo={isGo}
+                  isCrates={isCrates}
+                  isNuget={isNuget}
+                  isMaven={isMaven}
+                  isRpm={isRpm}
+                  archesByVersion={archesByVersion}
+                />
+              ) : null}
+            </PackageTabs>
+          </div>
+        </div>
       ) : null}
     </section>
   );
