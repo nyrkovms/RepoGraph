@@ -118,9 +118,9 @@ PyPI JSON и packument npm отдаются через CDN и могут отс�
 | pypi, `pypi-simple` | условный GET страницы проекта по ETag | нет | нет |
 | npm, источник с `changes_url` (npmjs) | лента репликации `_changes`: страницы по 10 000 до `update_seq` на начало прогона, фильтр по именам каталога (`npm/changes.py`) | `last_seq`, `reconciled_at` | потеря или сброс ленты, первый прогон и раз в 7 дней: условный GET packument каждого пакета по ETag |
 | npm, прочие | условный GET packument по ETag | нет | нет |
-| nuget, источник с `catalog_url` (nuget.org) | каталог: страницы новее курсора, записи `PackageDetails` и `PackageDelete`, фильтр по id без учёта регистра (`nuget/changes.py`) | `commitTimeStamp` последнего прочитанного коммита, `reconciled_at` | первый прогон и раз в 7 дней: условный GET registration index каждого пакета по ETag |
+| nuget, источник с `catalog_url` (nuget.org) | каталог: страницы новее курсора, записи `PackageDetails` и `PackageDelete`, фильтр по id без учёта регистра (`nuget/changes.py`) | `commit`: `commitTimeStamp` последнего прочитанного коммита, `reconciled_at` | первый прогон и раз в 7 дней: условный GET registration index каждого пакета по ETag |
 | nuget, прочие | условный GET registration index по ETag | нет | нет |
-| go, источник с `index_url` (proxy.golang.org) | `index.golang.org`: версии, впервые отданные прокси с курсора, страницы по 2000, фильтр по путям модулей (`go/changes.py`) | время последней записи, `reconciled_at` | первый прогон, отказ индекса и раз в 7 дней: `@v/list` каждого модуля; у модулей без тегов учитываются и псевдо-версии |
+| go, источник с `index_url` (proxy.golang.org) | `index.golang.org`: версии, впервые отданные прокси с курсора, страницы по 2000, фильтр по путям модулей (`go/changes.py`) | `since`: время последней записи, `reconciled_at` | первый прогон, отказ индекса и раз в 7 дней: `@v/list` каждого модуля; у модулей без тегов учитываются и псевдо-версии |
 | go, прочие | полный GET `@v/list` каждого модуля; ревизия — хэш списка | нет | нет |
 | crates, `cargo-sparse` | условный GET файла индекса крейта по ETag | нет | нет |
 | maven, `maven2` | `maven-metadata.xml` каждого GA в каждом источнике, где он есть: условный GET, пока ревизия — ETag; иначе полный GET и сравнение `lastUpdated` или хэша | нет | нет |

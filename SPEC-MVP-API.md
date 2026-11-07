@@ -4,7 +4,7 @@
 
 **Source of truth:** [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md); адресация по purl, источники и формат resolve — §9.1, §11  
 **Версия:** 1.19-api  
-**Дата:** 2026-11-07
+**Дата:** 2026-11-08
 
 ## 1. Область и правила владения
 
@@ -1057,7 +1057,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 
 ## 5. Admin API
 
-Все `/admin/*` требуют `Authorization: Bearer <token>` (§2.2), без него `401`. Долгие операции уходят в Celery и отвечают `202` с описанием задачи:
+Все `/admin/*` требуют `Authorization: Bearer <token>` (§2.2), без него `401`. Долгие операции уходят в Celery и отвечают `200` с описанием поставленной задачи:
 
 ```json
 {
@@ -1078,7 +1078,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 }
 ```
 
-- Response `202`, `operation: "seed"`.
+- Response `200`, `operation: "seed"`.
 - Errors: `401/422/500`
 
 ## 5.2 `POST /api/v1/admin/fetch/{target}`
@@ -1086,7 +1086,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 - Auth: `admin`
 - Path: `target` — purl (`pkg:pypi/flask`; слэши purl входят в путь) или голое имя проекта PyPI (`flask`).
 - Behavior: запустить lazy fetch вручную, вместе с зависимостями.
-- Response `202`, `operation: "fetch"`.
+- Response `200`, `operation: "fetch"`.
 - Errors: `401/422` (`target` не разбирается)`/500`
 
 ## 5.3 `POST /api/v1/admin/packages`
@@ -1101,7 +1101,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 }
 ```
 
-- Response `202`, `operation: "fetch_packages"`.
+- Response `200`, `operation: "fetch_packages"`.
 - Errors: `401/422/500`
 
 Для crates purl записывается с типом `cargo`: `pkg:cargo/serde_json`. Если крейта с таким именем нет, а источник знает его под другим написанием (регистр, `-` вместо `_`), пакет сохраняется под опубликованным именем: `pkg:cargo/serde-json` добавляет `serde_json`. Остальные способы обращения к крейту требуют точного имени.
@@ -1112,7 +1112,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 
 Для Maven purl записывается с типом `maven` и обязательным namespace (`groupId`): `pkg:maven/org.springframework/spring-core`. Регистр значим; версия, `type` и `classifier` в purl идентичность не меняют (пакет — пара `groupId:artifactId`, версии каталог читает из `maven-metadata.xml` сам). purl без namespace (`pkg:maven/spring-core`) или с недопустимыми знаками неверен, и тогда не запускается ничего. Пакет ищется в источниках профиля по умолчанию с учётом routing (`group_patterns`, §5.8).
 
-Для RPM purl записывается с типом `rpm` и обязательным qualifier `distro` (namespace каталога): `pkg:rpm/rocky/openssl?distro=rocky-9`. Один и тот же `openssl` в `rocky-9` и в `rhel-9` — разные пакеты, `distro` обязателен; purl без `distro`, с названием дистрибутива, которое не похоже на `<дистрибутив>-<релиз>`, или с несколькими сегментами vendor неверен, и тогда не запускается ничего. Пакет ищется в источниках профиля rpm по умолчанию, которые обслуживают тот же namespace (`config.namespace`, §5.8): стартового источника у RPM нет, пока ни один не подключён, пакет не находится. Ответ `202` приходит сразу, пакеты читает rpm-worker из очереди `rpm`.
+Для RPM purl записывается с типом `rpm` и обязательным qualifier `distro` (namespace каталога): `pkg:rpm/rocky/openssl?distro=rocky-9`. Один и тот же `openssl` в `rocky-9` и в `rhel-9` — разные пакеты, `distro` обязателен; purl без `distro`, с названием дистрибутива, которое не похоже на `<дистрибутив>-<релиз>`, или с несколькими сегментами vendor неверен, и тогда не запускается ничего. Пакет ищется в источниках профиля rpm по умолчанию, которые обслуживают тот же namespace (`config.namespace`, §5.8): стартового источника у RPM нет, пока ни один не подключён, пакет не находится. Ответ `200` приходит сразу, пакеты читает rpm-worker из очереди `rpm`.
 
 ## 5.4 `POST /api/v1/admin/retry-failed`
 
@@ -1126,14 +1126,14 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 ```
 
 - `limit`: 1..5000, по умолчанию 100.
-- Response `202`, `operation: "retry_failed"`.
+- Response `200`, `operation: "retry_failed"`.
 - Errors: `401/422/500`
 
 ## 5.5 `POST /api/v1/admin/daily-update`
 
 - Auth: `admin`
 - Behavior: ежедневное обновление вручную для всех экосистем (SPEC-DAILY-UPDATE, SPEC-MULTI-ECOSYSTEM §8). Тело не нужно. Прогон пишется в журнал `runs`.
-- Response `202`, `operation: "daily_update"`.
+- Response `200`, `operation: "daily_update"`.
 - Errors: `401/500`
 
 ## 5.6 `POST /api/v1/admin/presence-probe`
@@ -1148,7 +1148,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 }
 ```
 
-- Response `202`, `operation: "presence_probe"`.
+- Response `200`, `operation: "presence_probe"`.
 - Errors: `401/422` (нет плагина экосистемы)`/500`
 
 Для npm: `{"ecosystem": "npm"}`, для crates: `{"ecosystem": "crates"}`, для Go: `{"ecosystem": "go"}`, для NuGet: `{"ecosystem": "nuget"}`, для Maven: `{"ecosystem": "maven"}`, для RPM: `{"ecosystem": "rpm"}`. Проверка идёт по источникам профиля экосистемы по умолчанию (стартовые — `npmjs`, `crates-io`, `proxy-golang-org`, `nuget-org` и `maven-central`, §5.8; у RPM стартовых нет, проверяются источники, которые подключили сами); у Maven — по тем из них, чей routing (`group_patterns`) подходит `groupId` пакета, у RPM — по тем, что обслуживают namespace пакета. Без тела проверяется PyPI.
@@ -1366,7 +1366,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 - Errors: `401/404/409/422/500`
 
 `Decisions fixed`
-- Admin endpoints возвращают `202` для долгих операций через Celery.
+- Admin endpoints ставят долгие операции в Celery и сразу отвечают `200` с описанием задачи.
 - Пакетного обновления (`/admin/refresh`) больше нет: пакеты обновляет ежедневный прогон (`/admin/daily-update`).
 
 `Open questions`
@@ -1544,7 +1544,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
   - `prerelease_only: bool` — в окне только пререлизы; `false`, если релизов нет;
   - `used_by: int` — сколько других пакетов каталога зависят от пакета: правило подсчёта — SPEC-UPDATES-DIGEST §3;
   - `origin: string` — как пакет попал в каталог: `seed`, `manual`, `dependency` или `discovered`; пустая строка, если неизвестно.
-- Порядок `packages`: сначала пакеты с флагами (по порядку `flags`), затем по убыванию `used_by`, затем по `last_detected_at`, затем по имени.
+- Порядок `packages`: сначала пакеты с флагами (по порядку `flags`), затем по убыванию `used_by`, затем по убыванию `last_detected_at`, затем по имени.
 - Поля `totals`: `prereleases` — пакеты, у которых в окне только пререлизы и нет флагов (их страница по умолчанию скрывает); `attention` — пакеты хотя бы с одним флагом.
 - Errors: `422` (неизвестная зона, `since >= until`)`/500`
 
@@ -1580,8 +1580,8 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 
 ## 8. Изменения
 
-- **1.19-api (2026-11-07), сверка с кодом.** Документ назван HTTP-контрактом каталога из семи экосистем, область включает UX0–UX6 и Updates U0–U2. Новый `GET /metrics` (§6.5). `GET /updates/summary`: поля пакета `description`, `released_at`, `prerelease_only`, `used_by`, `origin`, поля `totals.prereleases` и `totals.attention`, параметр `kind`, порядок пакетов (§6.4). Связанные документы: ссылки на SPEC-CATALOG-PAGES и SPEC-UPDATES-DIGEST, правило о спеках функций (§7).
-- **1.18-api (2026-11-07), этап UX7.** `GET {coords}/versions` принимает `deprecated` (§3.3.3), `/overview` отдаёт `versions.deprecated`; `GET {coords}/versions/{version}` возвращает эффективный статус, как список (§3.3.4). Overview: для RPM `dependencies.indirect`, `dependencies.not_in_catalog`, `used_by.indirect` — `null`, `licenses` пуст; зависимость от самого себя не считается; в `lines` входят стабильные версии без даты, их `released_at` и `started_at` — `null`; эпоха PEP 440 не входит в линейку (§3.3.8). Compare: `from` по умолчанию — стабильная и `active`, `name` — написание экосистемы (§3.3.10). `GET /catalog/summary`: до пяти `deprecated_in_use` и `deprecated_in_use_total` (§3.2.1). Поиск: `%` и `_` в `q` — текст, `_` и `.` ищутся и как `-`; испорченный курсор `/packages` и `/search` — `422` вместо `500` (§3.2).
+- **1.19-api (2026-11-07), сверка с кодом.** Документ назван HTTP-контрактом каталога из семи экосистем, область включает UX0–UX6 и Updates U0–U2. Новый `GET /metrics` (§6.5). `GET /updates/summary`: поля пакета `description`, `released_at`, `prerelease_only`, `used_by`, `origin`, поля `totals.prereleases` и `totals.attention`, параметр `kind`, порядок пакетов (§6.4). Связанные документы: ссылки на SPEC-CATALOG-PAGES и SPEC-UPDATES-DIGEST, правило о спеках функций (§7). Admin-маршруты отвечают `200`, как в коде (было записано `202`); порядок `/updates/summary` по `last_detected_at` — по убыванию.
+- **1.18-api (2026-11-07), доработки карточки пакета в PR #70 (UX0–UX6).** `GET {coords}/versions` принимает `deprecated` (§3.3.3), `/overview` отдаёт `versions.deprecated`; `GET {coords}/versions/{version}` возвращает эффективный статус, как список (§3.3.4). Overview: для RPM `dependencies.indirect`, `dependencies.not_in_catalog`, `used_by.indirect` — `null`, `licenses` пуст; зависимость от самого себя не считается; в `lines` входят стабильные версии без даты, их `released_at` и `started_at` — `null`; эпоха PEP 440 не входит в линейку (§3.3.8). Compare: `from` по умолчанию — стабильная и `active`, `name` — написание экосистемы (§3.3.10). `GET /catalog/summary`: до пяти `deprecated_in_use` и `deprecated_in_use_total` (§3.2.1). Поиск: `%` и `_` в `q` — текст, `_` и `.` ищутся и как `-`; испорченный курсор `/packages` и `/search` — `422` вместо `500` (§3.2).
 - **1.17-api (2026-11-07), этап UX6.** Новый `GET {coords}/versions/compare?from=&to=`: различия зависимостей двух версий, `dependencies_unknown`, эффективный статус сторон (§3.3.10).
 - **1.16-api (2026-11-07), этап UX4.** `GET {coords}/versions`: поля `line`, `is_prerelease`, фильтры `prerelease`, `not_active`, `line` (§3.3.3); `/overview` отдаёт счётчики версий, активность за 12 месяцев и линейки (§3.3.8).
 - **1.15-api (2026-11-07), этап UX1.** Новый `GET {coords}/overview?version=`: счётчики прямых и косвенных зависимостей и зависимых, не разрешённые в каталоге, лицензии, активность, линейки (§3.3.8).
