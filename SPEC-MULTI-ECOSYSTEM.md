@@ -2,15 +2,16 @@
 
 > Расширяем курируемый каталог с PyPI на RPM, npm, Maven, NuGet, Go и crates.io, с несколькими источниками в каждой экосистеме. Для каждой экосистемы нужны каталог, ежедневное обновление, дерево зависимостей, полный resolve и дайджест. Уязвимости — расширение на потом (§10).
 
-**Версия:** 0.5-draft
-**Дата:** 2026-10-28
+**Версия:** 0.6
+**Дата:** 2026-11-07
 **Changelog:**
+- 0.6 — статус закрыт: реализовано для семи экосистем (E0–E6). Решения Q18–Q25 добавлены после 0.5, по ходу этапов (§16.1). Статус этапов — в §15.
 - 0.5 — валидация по опыту Pulp, Nexus, Artifactory, deps.dev, socket.dev (§17). Исправления: варианты зависимостей по источникам (найдено на `torch 2.9.1`), режимы routing `allow/block/priority`, ошибки источника не кэшируются как «нет пакета», circuit breaker, ревизия конфига в курсоре RPM, ошибки на уровне узла графа, эмулируемые версии нативных инструментов, bundled-зависимости npm, схемы jsonb по экосистемам.
 - 0.4 — решения по Q14–Q17: зависимости без PEP 658 недоступны, Gradle Module Metadata — известное ограничение, источники добавляем вручную, при расхождении — приоритетный источник.
 - 0.3 — несколько источников в экосистеме: протоколы, routing, профили источников, слияние (§6). Целевая схема БД проверена на Postgres, а `sort_key` — по эталонам (§5, [design/](./design/)). Контракт плагинов уточнён и проверен `mypy --strict`. Найдены дефекты текущей схемы (§5.2). Решения по Q6, Q7, Q11–Q13.
 - 0.2 — уязвимости вынесены в расширение. Решения по Q1–Q5, Q8–Q10. RHEL/Fedora и модульность EL8. npm через `_changes`.
 
-**Статус:** проект, к обсуждению.
+**Статус:** реализовано для 7 экосистем (E0–E6), E7 — см. §15 и §16.2.
 **База:** `main`. Работают PyPI-only каталог, ежедневное обновление и дайджест ([SPEC-DAILY-UPDATE.md](./SPEC-DAILY-UPDATE.md)), resolve для PyPI.
 **Заменяет:** часть [SPEC.md](./SPEC.md) и [RESOLVER.md](./RESOLVER.md), подробности в §0.2.
 **Артефакты проектирования:** [design/schema-target.sql](./design/schema-target.sql), [design/ecosystem_contract.py](./design/ecosystem_contract.py), [design/schema-check/](./design/schema-check/).
@@ -137,17 +138,19 @@ backend/app/
 │   ├── base.py               — контракт (design/ecosystem_contract.py)
 │   ├── registry.py           — регистрация плагинов, get_plugin()
 │   ├── purl.py, routing.py, merge.py   — общие реализации, плагины их переопределяют
+│   ├── schemas.py, versions_common.py  — схемы jsonb по экосистемам, общие части сравнения версий
 │   ├── pypi/   plugin.py  coordinates.py  versions.py  environment.py  changes.py  resolver.py
-│   │           adapters.py (pypi-warehouse; pypi-simple в E0.5 — модуль делится на adapters/, когда адаптеров станет два)
-│   ├── npm/    adapters/registry.py  changes.py (_changes, etag)
-│   ├── maven/  adapters/maven2.py  pom.py (effective model)  resolver.py (maven | gradle)
-│   ├── nuget/  adapters/v3.py  frameworks.py (TFM)
-│   ├── go/     adapters/goproxy.py
-│   ├── crates/ adapters/sparse.py
-│   └── rpm/    adapters/repodata.py (клиент rpm-worker)
+│   │           adapters/simple.py (pypi-simple)  adapters/warehouse.py (pypi-warehouse)
+│   │           connector.py  simple_index.py  pep508.py (перенесённый прежний код)
+│   ├── npm/    adapters/registry.py  changes.py (_changes, etag)  routing.py
+│   ├── maven/  adapters/maven2.py  pom.py (effective model)  resolver.py (maven | gradle)  routing.py
+│   ├── nuget/  adapters/v3.py  frameworks.py (TFM)  changes.py (catalog)
+│   ├── go/     adapters/goproxy.py  changes.py (лента индекса)  gomod.py
+│   ├── crates/ adapters/sparse.py  cfg.py  targets.json
+│   └── rpm/    adapters/repodata.py (клиент rpm-worker)  client.py  profiles.py
 ├── fetcher/pipeline.py       — общий pipeline: снимок → merge → upsert → события
 ├── tasks/                    — seed, daily_update, presence_probe, retry: цикл по источникам
-rpm_worker/                   — Dockerfile, worker.py, modules.py, solver.py
+rpm_worker/                   — Dockerfile; rpm_worker/: worker.py, modules.py, solver.py, pools.py, repo.py, http.py
 ```
 
 ---
@@ -727,17 +730,17 @@ GET /api/v1/packages/{ecosystem}/{coordinates}/-/vulnerabilities          — п
 
 Каждый этап заканчивается PR и рабочим стендом. Резолвер — часть этапа экосистемы (D3).
 
-| Этап | Содержание | Сложность | Исполнитель |
-|---|---|---|---|
-| **E0. Ядро** | Контракт, purl, источники/протоколы/routing/профили, admin API и CLI источников с проверкой подключения, merge, `version_sources`, `source_documents`, presence probe, миграции 0006/0007 (с исправлением дефектов §5.2), перенос PyPI в плагин (`pypi-warehouse`) без изменения поведения, общий pipeline, новые маршруты API + алиасы | Высокая | Opus: контракт, merge, pipeline, миграции. Sonnet: маршруты, схемы, тесты |
-| **E0.5. PyPI-индексы** | Адаптер `pypi-simple` (PEP 503/691, PEP 658), PyTorch-индексы с routing, профили в resolve PyPI | Средняя | Sonnet: адаптер. Opus: видимость версий в resolve |
-| **E1. npm** | Адаптер `npm-registry`, лента `_changes`, semver, дерево, резолвер §9.3, дополнительные реестры | Средняя | Opus: semver-диапазоны, резолвер. Sonnet: адаптер, фикстуры |
-| **E2. crates.io** | `cargo-sparse` + API с лимитом, Cargo semver, features, cfg, резолвер §9.4 | Средняя | Opus: features + резолвер |
-| **E3. Go** | `goproxy`, лента index.golang.org, псевдоверсии, MVS §9.5 | Средняя | Sonnet в основном, Opus — ревью MVS |
-| **E4. NuGet** | `nuget-v3`, catalog, NuGetVersion + `sort_key` против эталона, современные TFM, резолвер §9.6 | Средняя | Opus: TFM и правила разрешения |
-| **E5. Maven** | `maven2` для всех репозиториев, effective model §7.4, ComparableVersion + `sort_key` против эталона, стратегии `maven` и `gradle`, Gradle Plugin Portal | Высокая | Opus |
-| **E6. RPM** | Конфиги дистрибутивов §6.4, авторизация `basic`/`tls_client_cert`, rpm-worker + libsolv, `rpmvercmp`, `superseded`, модульность §9.8 | Высокая | Opus: libsolv и модульность. Sonnet: worker и конфиги |
-| **E7. UI** | Параллельно E0–E6: экосистемы, источники, профили, формы окружения, граф resolve | Средняя | Sonnet |
+| Этап | Содержание | Сложность | Исполнитель | Статус |
+|---|---|---|---|---|
+| **E0. Ядро** | Контракт, purl, источники/протоколы/routing/профили, admin API и CLI источников с проверкой подключения, merge, `version_sources`, `source_documents`, presence probe, миграции 0006/0007 (с исправлением дефектов §5.2), перенос PyPI в плагин (`pypi-warehouse`) без изменения поведения, общий pipeline, новые маршруты API + алиасы | Высокая | Opus: контракт, merge, pipeline, миграции. Sonnet: маршруты, схемы, тесты | выполнено (PR #4, #5, #10) |
+| **E0.5. PyPI-индексы** | Адаптер `pypi-simple` (PEP 503/691, PEP 658), PyTorch-индексы с routing, профили в resolve PyPI | Средняя | Sonnet: адаптер. Opus: видимость версий в resolve | выполнено (PR #11) |
+| **E1. npm** | Адаптер `npm-registry`, лента `_changes`, semver, дерево, резолвер §9.3, дополнительные реестры | Средняя | Opus: semver-диапазоны, резолвер. Sonnet: адаптер, фикстуры | выполнено (PR #14) |
+| **E2. crates.io** | `cargo-sparse` + API с лимитом, Cargo semver, features, cfg, резолвер §9.4 | Средняя | Opus: features + резолвер | выполнено (PR #17) |
+| **E3. Go** | `goproxy`, лента index.golang.org, псевдоверсии, MVS §9.5 | Средняя | Sonnet в основном, Opus — ревью MVS | выполнено (PR #18) |
+| **E4. NuGet** | `nuget-v3`, catalog, NuGetVersion + `sort_key` против эталона, современные TFM, резолвер §9.6 | Средняя | Opus: TFM и правила разрешения | выполнено (PR #21) |
+| **E5. Maven** | `maven2` для всех репозиториев, effective model §7.4, ComparableVersion + `sort_key` против эталона, стратегии `maven` и `gradle`, Gradle Plugin Portal | Высокая | Opus | выполнено (PR #23) |
+| **E6. RPM** | Конфиги дистрибутивов §6.4, авторизация `basic`/`tls_client_cert`, rpm-worker + libsolv, `rpmvercmp`, `superseded`, модульность §9.8 | Высокая | Opus: libsolv и модульность. Sonnet: worker и конфиги | выполнено (PR #24) |
+| **E7. UI** | Параллельно E0–E6: экосистемы, источники, профили, формы окружения, граф resolve | Средняя | Sonnet | плана нет; алиасы и старый формат ещё живы, решение владельца ожидается (IMPL §7) |
 
 Порядок E1–E6 — по нарастанию сложности. E0.5 идёт сразу после ядра: на PyPI с PyTorch-индексом модель нескольких источников проверяется раньше, чем появятся новые экосистемы.
 
@@ -777,11 +780,13 @@ GET /api/v1/packages/{ecosystem}/{coordinates}/-/vulnerabilities          — п
 
 ### 16.2 Открыто
 
-Открытых вопросов нет.
+Открытых вопросов по дизайну нет. Объём E7 (удаление алиасов `/packages/pypi/{name}/…`, `requires_python`, старого формата resolve и `freeze`) ждёт решения владельца: IMPL «Открытая работа».
 
 ---
 
 ## 17. Валидация по опыту индустрии
+
+*Исторический раздел: ревью спеки до реализации (версия 0.5).*
 
 Сравнили решения спеки с тем, как ту же задачу решают Pulp, Sonatype Nexus, JFrog Artifactory, deps.dev и socket.dev. Источники — документация проектов (ссылки ниже). Спорное место модели (§6.5) проверено на реальных данных.
 
