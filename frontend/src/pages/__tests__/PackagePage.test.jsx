@@ -119,6 +119,15 @@ describe("PackagePage", () => {
     expect(screen.queryByText("unknown")).not.toBeInTheDocument();
   });
 
+  it("shows the latest version for ?version=latest", async () => {
+    await renderFlask("?version=latest");
+    await waitFor(() => {
+      expect(api.fetchDependencies).toHaveBeenCalledWith("pypi", "flask", "3.1.3", expect.anything());
+    });
+    expect(api.fetchVersion).not.toHaveBeenCalledWith("pypi", "flask", "latest");
+    expect(api.fetchDependencies).not.toHaveBeenCalledWith("pypi", "flask", "latest", expect.anything());
+  });
+
   it("says advisories are not collected instead of None (#68)", async () => {
     api.fetchVulnerabilities.mockResolvedValue({ package: "flask", coverage: "not_collected", data: [] });
     await renderFlask();

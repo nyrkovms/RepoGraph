@@ -519,6 +519,11 @@ function DependencyTree({ nodes, packageName, ecosystem, arch, parentId = "root"
   );
 }
 
+// `?version=latest` is an alias: it starts empty and `loadPackage` settles on the package's latest version.
+function initialVersion(param) {
+  return !param || param === "latest" ? "" : param;
+}
+
 // The advisory list is scoped to the package, not to a version (#68): an empty one is only a finding for the latest.
 function emptyVulnerabilitiesText(coverage, isLatest) {
   if (coverage !== "collected") {
@@ -542,7 +547,7 @@ export default function PackagePage() {
 
   const [pkg, setPkg] = useState(null);
   const [versions, setVersions] = useState([]);
-  const [selectedVersion, setSelectedVersion] = useState(() => searchParams.get("version") || "");
+  const [selectedVersion, setSelectedVersion] = useState(() => initialVersion(searchParams.get("version")));
   const [pythonVersion, setPythonVersion] = useState(() => searchParams.get("python") || DEFAULTS.pypi.python);
   const [nodeVersion, setNodeVersion] = useState(() => searchParams.get("node") || DEFAULTS.npm.node);
   const [cpu, setCpu] = useState(() => searchParams.get("cpu") || DEFAULTS.npm.cpu);
@@ -594,7 +599,7 @@ export default function PackagePage() {
     if (!name) {
       return;
     }
-    setSelectedVersion(searchParams.get("version") || "");
+    setSelectedVersion(initialVersion(searchParams.get("version")));
     setPythonVersion(searchParams.get("python") || DEFAULTS.pypi.python);
     setNodeVersion(searchParams.get("node") || DEFAULTS.npm.node);
     setCpu(searchParams.get("cpu") || DEFAULTS.npm.cpu);
