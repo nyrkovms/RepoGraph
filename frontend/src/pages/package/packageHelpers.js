@@ -207,3 +207,38 @@ export function emptyVulnerabilitiesText(coverage, isLatest) {
   }
   return isLatest ? "No advisories found" : "Not checked for this version";
 }
+
+export const TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "dependencies", label: "Dependencies" },
+  { id: "versions", label: "Versions" },
+  { id: "sources", label: "Sources" },
+];
+
+// `?tab=`: absent or unknown means Overview.
+export function readTab(value) {
+  return TABS.some((tab) => tab.id === value) ? value : "overview";
+}
+
+// A catalog 404: the API's error object carries `status`; a rejected mock or an older client has only the message.
+export function isNotFound(error) {
+  return error?.status === 404 || error?.message === "HTTP 404";
+}
+
+// The purl of a version when the API has not given one: the version goes before the qualifiers (`?distro=...`).
+export function versionedPurl(purl, version) {
+  const [base, ...qualifiers] = String(purl || "").split("?");
+  const suffix = qualifiers.length ? `?${qualifiers.join("?")}` : "";
+  return `${base}@${encodeURIComponent(version).replaceAll("%3A", ":")}${suffix}`;
+}
+
+// "2026-01-01T00:00:00Z" -> "2026-01"; the activity chart's month labels.
+export function monthLabel(month) {
+  const [year, number] = String(month).split("-");
+  const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${names[Number(number) - 1] || number} ${year}`;
+}
+
+export function plural(count, one, many = `${one}s`) {
+  return `${count} ${count === 1 ? one : many}`;
+}

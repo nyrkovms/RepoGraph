@@ -23,6 +23,7 @@ async function request(path, { method = "GET", body } = {}) {
     const error = payload?.error || {
       code: "http_error",
       message: `HTTP ${response.status}`,
+      status: response.status,
       details: payload,
     };
     throw error;
@@ -94,6 +95,10 @@ export async function fetchDependencies(ecosystem, coordinates, version, params 
 
 export async function fetchArtifacts(ecosystem, coordinates, version) {
   return request(`${packagePath(ecosystem, coordinates)}/versions/${encodeURIComponent(version)}/artifacts`);
+}
+
+export async function fetchOverview(ecosystem, coordinates, version) {
+  return request(withQuery(`${packagePath(ecosystem, coordinates)}/overview`, { version }));
 }
 
 export async function fetchVulnerabilities(ecosystem, coordinates) {

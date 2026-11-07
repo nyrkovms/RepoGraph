@@ -1,4 +1,4 @@
-import { fetchArtifacts, fetchDependencies, fetchPackage, fetchVersion, fetchVersions, fetchVulnerabilities } from "../../lib/api";
+import { fetchArtifacts, fetchDependencies, fetchOverview, fetchPackage, fetchVersion, fetchVersions, fetchVulnerabilities } from "../../lib/api";
 
 describe("package routes", () => {
   let fetchMock;
@@ -121,5 +121,14 @@ describe("package routes", () => {
     await fetchDependencies("rpm", "rocky-9/openssl", "1:3.0.7-27.el9", { include_optional: true, arch: "aarch64" });
     expect(lastUrl().pathname).toBe("/api/v1/packages/rpm/rocky-9/openssl/-/versions/1%3A3.0.7-27.el9/dependencies");
     expect(Object.fromEntries(lastUrl().searchParams)).toEqual({ include_optional: "true", arch: "aarch64" });
+  });
+
+  it("asks the overview of a version, or of the latest one without it", async () => {
+    await fetchOverview("npm", "@angular/core", "19.0.0");
+    expect(lastUrl().pathname).toBe("/api/v1/packages/npm/%40angular/core/-/overview");
+    expect(lastUrl().searchParams.get("version")).toBe("19.0.0");
+
+    await fetchOverview("pypi", "flask");
+    expect(lastUrl().searchParams.has("version")).toBe(false);
   });
 });

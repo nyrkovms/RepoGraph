@@ -1,16 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
-import { fetchArtifacts, fetchDependencies, fetchPackage, fetchVersion, fetchVersions, fetchVulnerabilities } from "../lib/api";
+import {
+  fetchArtifacts,
+  fetchDependencies,
+  fetchOverview,
+  fetchPackage,
+  fetchVersion,
+  fetchVersions,
+  fetchVulnerabilities,
+} from "../lib/api";
 import { getPackageDescriptionParagraphs } from "../lib/packageDescription";
 import { OS_OPTIONS, PYTHON_VERSIONS } from "../lib/runtimeEnv";
 import { DependencyTree } from "./package/DependencyTree";
-import { FeaturesBlock } from "./package/FeaturesBlock";
-import { RelocationLink, UrlValue } from "./package/Links";
+import { ActionLink } from "./package/Links";
+import { OverviewTab } from "./package/OverviewTab";
+import { PackageHeader } from "./package/PackageHeader";
+import { PackageTabs } from "./package/PackageTabs";
+import { SourcesTab } from "./package/SourcesTab";
+import { VersionsTab } from "./package/VersionsTab";
 import {
   CRATES_TARGETS,
   DEFAULTS,
-  ECOSYSTEM_LABELS,
   MAVEN_SCOPES,
   NPM_CPU_OPTIONS,
   NPM_NODE_VERSIONS,
@@ -25,16 +36,13 @@ import {
   treeParams,
 } from "./package/packageEnv";
 import {
+  TABS,
   collectNodeIds,
   deprecationMessage,
-  emptyVulnerabilitiesText,
-  formatDate,
-  formatDateTime,
   initialVersion,
-  packagingOf,
+  isNotFound,
+  readTab,
 } from "./package/packageHelpers";
-import { VersionStatus } from "./package/VersionStatus";
-
 
 export default function PackagePage() {
   // `/package/:ecosystem/*` carries native coordinates (`@angular/core`); `/package/:name` is the old PyPI route.
@@ -77,6 +85,15 @@ export default function PackagePage() {
   const [depsLoading, setDepsLoading] = useState(false);
   const [error, setError] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState(() => new Set());
+  const [activeTab, setActiveTab] = useState(() => readTab(searchParams.get("tab")));
+  // The Overview numbers of the selected version; `overviewState` tells "not there yet" from "failed".
+  const [overview, setOverview] = useState(null);
+  const [overviewState, setOverviewState] = useState("loading");
+  // The version the tree request last settled for: the overview waits for it, so the two do not load the same
+  // version's dependencies at once.
+  const [depsSettledFor, setDepsSettledFor] = useState("");
+  // A version in the URL that the catalog does not have (`fetchVersion` answered 404).
+  const [missingVersion, setMissingVersion] = useState("");
 
   // `os` is one URL parameter for both ecosystems, but PyPI calls Windows "windows" and npm "win32".
   const treeOs = isNpm ? pickOption(os, NPM_OS_OPTIONS.map((item) => item.value), DEFAULTS.npm.os) : os;
@@ -116,11 +133,16 @@ export default function PackagePage() {
     setFeaturesInput(normalizeFeatures(searchParams.get("features")));
     setDefaultFeatures(searchParams.get("default_features") !== "0");
     setIncludeOptional(searchParams.get("include_optional") === "1");
+    setActiveTab(readTab(searchParams.get("tab")));
+    setOverview(null);
+    setOverviewState("loading");
+    setDepsSettledFor("");
+    setMissingVersion("");
     setDeps([]);
     setDepsUnknown(false);
     setVersionDetail(null);
     setCollapsedNodes(new Set());
-    loadPackage();
+    loadPackage(initialVersion(searchParams.get("version")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ecosystem, name]);
 
@@ -167,8 +189,11 @@ export default function PackagePage() {
     if (includeOptional && !isGo && !isNuget && !isMaven) {
       next.set("include_optional", "1");
     }
+    if (activeTab !== "overview") {
+      next.set("tab", activeTab);
+    }
     setSearchParams(next, { replace: true });
-  }, [isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
+  }, [activeTab, isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -208,16 +233,20 @@ export default function PackagePage() {
       return undefined;
     }
     let cancelled = false;
+    setMissingVersion("");
     fetchVersion(ecosystem, name, selectedVersion)
       .then((payload) => {
         if (!cancelled) {
           setVersionDetail(payload);
         }
       })
-      .catch(() => {
-        // The sources block is auxiliary: the page stays usable without it.
+      .catch((err) => {
+        // The sources block is auxiliary: the page stays usable without it. Only an unknown version is reported.
         if (!cancelled) {
           setVersionDetail(null);
+          if (isNotFound(err)) {
+            setMissingVersion(selectedVersion);
+          }
         }
       });
     return () => {
@@ -225,7 +254,32 @@ export default function PackagePage() {
     };
   }, [ecosystem, name, selectedVersion]);
 
-  async function loadPackage() {
+  useEffect(() => {
+    if (!name || !selectedVersion || depsSettledFor !== selectedVersion) {
+      return undefined;
+    }
+    let cancelled = false;
+    setOverviewState("loading");
+    fetchOverview(ecosystem, name, selectedVersion)
+      .then((payload) => {
+        if (!cancelled) {
+          setOverview(payload);
+          setOverviewState("ready");
+        }
+      })
+      .catch(() => {
+        // The numbers are a summary: the page stays usable without them.
+        if (!cancelled) {
+          setOverview(null);
+          setOverviewState("error");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ecosystem, name, selectedVersion, depsSettledFor]);
+
+  async function loadPackage(requestedVersion) {
     setLoading(true);
     setError("");
     try {
@@ -240,9 +294,12 @@ export default function PackagePage() {
       setVulns(vulnerabilitiesPayload.data || []);
       setVulnCoverage(vulnerabilitiesPayload.coverage || "not_collected");
 
-      const versionExists = loadedVersions.some((row) => row.version === selectedVersion);
-      const targetVersion = versionExists ? selectedVersion : (packagePayload.latest_version || loadedVersions[0]?.version || "");
-      setSelectedVersion(targetVersion);
+      // A version outside the 30 loaded ones is still asked for; the catalog's 404 for it is shown as such.
+      const target = requestedVersion || packagePayload.latest_version || loadedVersions[0]?.version || "";
+      setSelectedVersion(target);
+      if (!target) {
+        setOverviewState("error");   // nothing to count
+      }
     } catch (err) {
       setError(err?.message || "Package request failed");
       setPkg(null);
@@ -274,11 +331,13 @@ export default function PackagePage() {
       setDepsUnknown(Boolean(depPayload.dependencies_unknown));
       setCollapsedNodes(new Set());
     } catch (err) {
-      setError(err?.message || "Dependency tree request failed");
+      // An unknown version is reported by the page itself, not as a failed tree.
+      setError(isNotFound(err) ? "" : err?.message || "Dependency tree request failed");
       setDeps([]);
       setDepsUnknown(false);
     } finally {
       setDepsLoading(false);
+      setDepsSettledFor(version);
     }
   }
 
@@ -333,147 +392,90 @@ export default function PackagePage() {
     });
   }
 
+  const versionRow = useMemo(
+    () => (versionDetail && versionDetail.version === selectedVersion ? versionDetail : versions.find((row) => row.version === selectedVersion) || null),
+    [versionDetail, versions, selectedVersion]
+  );
+  // The numbers belong to the version they were counted for; a stale answer is not shown under another version.
+  const overviewNow = overview && overview.version === selectedVersion ? overview : null;
+  const isLatest = Boolean(pkg && selectedVersion && selectedVersion === pkg.latest_version);
+  const tabs = TABS.map((tab) => {
+    if (tab.id === "dependencies" && overviewNow && overviewNow.dependencies.direct !== null) {
+      return { ...tab, count: overviewNow.dependencies.direct + overviewNow.dependencies.optional };
+    }
+    return tab.id === "versions" && overviewNow ? { ...tab, count: overviewNow.versions.total } : tab;
+  });
+
+  // The address of a tab (and, for the "latest" link, of another version) with every other parameter kept.
+  function tabHref(tab, patch = {}) {
+    const next = new URLSearchParams(searchParams);
+    const target = tab === undefined ? activeTab : tab;
+    if (target === "overview") {
+      next.delete("tab");
+    } else {
+      next.set("tab", target);
+    }
+    Object.entries(patch).forEach(([key, value]) => next.set(key, value));
+    return `?${next.toString()}`;
+  }
+
   return (
     <section>
-      <h2>
-        Package: {(isNuget || isMaven || isRpm) && pkg?.name ? pkg.name : name}
-        <span className="tag eco-badge">{ECOSYSTEM_LABELS[ecosystem] || ecosystem}</span>
-      </h2>
       {error ? <p className="error">{error}</p> : null}
       {loading ? <p>Loading...</p> : null}
 
-      {pkg ? (
-        <>
-          {deprecated ? (
-            <div className="banner warn" role="alert">
-              <b>Deprecated</b>
-              {deprecated !== true ? `: ${deprecated}` : ""}
-              {relocatedTo ? (
-                <>
-                  {" "}
-                  (moved to <RelocationLink alternative={relocatedTo} isMaven={isMaven} />)
-                </>
-              ) : null}
-            </div>
-          ) : null}
-          {/* Go modules have no description, license or authors in the catalog: no empty blocks for them. */}
-          {descriptionParagraphs.length || !isGo ? (
-            <div className="package-description">
-              {descriptionParagraphs.length ? (
-                descriptionParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)
-              ) : (
-                <p>No description</p>
-              )}
-            </div>
-          ) : null}
-          <div className="meta-grid">
-            {pkg.purl ? (
-              <span>
-                <b>purl</b>: <code>{pkg.purl}</code>
-              </span>
-            ) : null}
-            {isMaven ? (
-              <>
-                <span>
-                  <b>groupId</b>: <code>{pkg.namespace}</code>
-                </span>
-                <span>
-                  <b>artifactId</b>: <code>{pkg.normalized_name}</code>
-                </span>
-              </>
-            ) : null}
-            {isRpm ? (
-              <>
-                <span>
-                  <b>Distro</b>: <code>{pkg.namespace}</code>
-                </span>
-                <span>
-                  <b>Name</b>: <code>{pkg.normalized_name}</code>
-                </span>
-              </>
-            ) : null}
-            <span>
-              <b>Latest</b>: {latestVersion}
-            </span>
-            {!isGo || pkg.license_spdx || pkg.license_raw ? (
-              <span>
-                <b>License</b>: {pkg.license_spdx || pkg.license_raw || "Not published by the source"}
-              </span>
-            ) : null}
-            {pkg.homepage_url ? (
-              <span>
-                <b>Homepage</b>: <UrlValue url={pkg.homepage_url} />
-              </span>
-            ) : null}
-            {!isGo || pkg.repository_url ? (
-              <span>
-                <b>Repo</b>: <UrlValue url={pkg.repository_url} />
-              </span>
-            ) : null}
-            {pkg.documentation_url ? (
-              <span>
-                <b>Documentation</b>: <UrlValue url={pkg.documentation_url} />
-              </span>
-            ) : null}
-          </div>
+      <PackageHeader
+        title={(isNuget || isMaven || isRpm) && pkg?.name ? pkg.name : name}
+        ecosystem={ecosystem}
+        pkg={pkg}
+        selectedVersion={selectedVersion}
+        versions={versions}
+        loading={loading}
+        isLatest={isLatest}
+        versionRow={versionRow}
+        versionDetail={versionDetail && versionDetail.version === selectedVersion ? versionDetail : null}
+        overview={overviewNow}
+        deprecated={deprecated}
+        relocatedTo={relocatedTo}
+        descriptionParagraphs={descriptionParagraphs}
+        onSelectVersion={setSelectedVersion}
+        tabHref={tabHref}
+        onSelectTab={setActiveTab}
+      />
 
-          {pkg.sources?.length ? (
+      {pkg && missingVersion && missingVersion === selectedVersion ? (
+        <div className="banner warn" role="alert">
+          <b>Version {missingVersion} is not in the catalog</b>
+          {pkg.latest_version ? (
             <>
-              <h3>Sources</h3>
-              <ul className="result-list package-sources">
-                {pkg.sources.map((source) => (
-                  <li key={source.registry}>
-                    <code>{source.registry}</code>
-                    {source.primary ? <span className="tag">primary</span> : null}
-                    {!source.enabled ? <span className="tag muted-tag">disabled</span> : null}
-                    {source.missing_since ? (
-                      <span className="tag warn">missing since {formatDateTime(source.missing_since)}</span>
-                    ) : null}
-                    {source.checked_at ? (
-                      <span className="muted"> checked {formatDateTime(source.checked_at)}</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+              {" "}
+              <ActionLink href={tabHref(undefined, { version: pkg.latest_version })} onSelect={() => setSelectedVersion(pkg.latest_version)}>
+                Open {pkg.latest_version}, the latest
+              </ActionLink>
             </>
           ) : null}
+        </div>
+      ) : null}
 
-          <h3>Versions</h3>
-          <ul className="inline-list">
-            {versions.slice(0, VERSIONS_SHOWN).map((v) => (
-              <li key={v.version}>
-                {v.version}
-                <VersionStatus version={v} isGo={isGo} />
-                {isMaven && packagingOf(v) ? <span className="tag cond">{packagingOf(v)}</span> : null}
-                {isRpm
-                  ? (archesByVersion[`${name}/${v.version}`] || []).map((item) => (
-                      <span key={item} className="tag cond">
-                        {item}
-                      </span>
-                    ))
-                  : null}
-                {formatDate(v.release_date) ? <span className="muted version-date">{formatDate(v.release_date)}</span> : null}
-              </li>
-            ))}
-          </ul>
-
-          <h3>Dependency tree ({latestVersion || "n/a"})</h3>
+      {pkg && !(missingVersion && missingVersion === selectedVersion) ? (
+        <PackageTabs tabs={tabs} active={activeTab} onSelect={setActiveTab}>
+          {activeTab === "overview" ? (
+            <OverviewTab
+              overview={overviewNow}
+              overviewState={overviewState}
+              pkg={pkg}
+              ecosystem={ecosystem}
+              vulns={vulns}
+              vulnCoverage={vulnCoverage}
+              isLatest={isLatest}
+              tabHref={tabHref}
+              onSelectTab={setActiveTab}
+            />
+          ) : null}
+          {activeTab === "dependencies" ? (
+            <>
+              <h3>Dependency tree ({latestVersion || "n/a"})</h3>
           <div className="toolbar">
-            <label>
-              Version
-              <select
-                aria-label="Version"
-                value={selectedVersion}
-                onChange={(e) => setSelectedVersion(e.target.value)}
-                disabled={loading || versions.length === 0}
-              >
-                {versions.map((v) => (
-                  <option key={v.version} value={v.version}>
-                    {v.version}
-                  </option>
-                ))}
-              </select>
-            </label>
             {isNpm ? (
               <>
                 <label>
@@ -662,52 +664,6 @@ export default function PackagePage() {
               Refresh tree
             </button>
           </div>
-          {versionDetail && versionDetail.version === selectedVersion ? (
-            <div className="version-detail">
-              <b>Sources of {versionDetail.version}</b>:
-              {versionDetail.sources?.length ? (
-                <ul className="inline-list">
-                  {versionDetail.sources.map((source) => (
-                    <li key={source.registry}>
-                      {source.registry}: {source.status}
-                      {!source.enabled ? <span className="tag muted-tag">disabled</span> : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {versionDetail.dependencies_state === "unavailable" ? (
-                <span className="tag warn">dependencies unknown</span>
-              ) : null}
-              {isGo && versionDetail.status === "yanked" ? (
-                <p className="muted">
-                  Retracted{versionDetail.status_reason ? `: ${versionDetail.status_reason}` : ""}
-                </p>
-              ) : null}
-              {isRpm && archesByVersion[`${name}/${versionDetail.version}`]?.length ? (
-                <p className="muted">Arches: {archesByVersion[`${name}/${versionDetail.version}`].join(", ")}</p>
-              ) : null}
-              {isRpm && versionDetail.status === "superseded" ? (
-                <p className="muted">Superseded: a newer build of the same arch is in the source, this one is still in the catalog.</p>
-              ) : null}
-              {isMaven && packagingOf(versionDetail) ? (
-                <p className="muted">
-                  Packaging: <code>{packagingOf(versionDetail)}</code>
-                </p>
-              ) : null}
-              {isNuget && versionDetail.status === "unlisted" ? (
-                <p className="muted">Unlisted: the author hid this version from search, it can still be restored.</p>
-              ) : null}
-              {versionDetail.deprecation ? (
-                <p className="muted">
-                  Deprecated
-                  {deprecationMessage(versionDetail.deprecation) ? `: ${deprecationMessage(versionDetail.deprecation)}` : ""}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-          {isCrates && versionDetail && versionDetail.version === selectedVersion ? (
-            <FeaturesBlock version={versionDetail.version} features={versionDetail.features} />
-          ) : null}
           {depsLoading ? <p>Loading dependency tree...</p> : null}
           {!depsLoading && depsUnknown ? (
             <p>Dependencies unknown: the source has no metadata for this version</p>
@@ -722,21 +678,26 @@ export default function PackagePage() {
             onToggleCollapse={toggleNodeCollapse}
           />
 
-          <h3>Vulnerabilities</h3>
-          {vulns.length === 0 ? <p>{emptyVulnerabilitiesText(vulnCoverage, selectedVersion === pkg.latest_version)}</p> : null}
-          {vulns.length > 0 && selectedVersion !== pkg.latest_version ? (
-            <p className="muted">Listed for the package, not for this version</p>
+            </>
           ) : null}
-          <ul className="result-list">
-            {vulns.map((vuln) => (
-              <li key={vuln.source_id}>
-                <b>{vuln.source_id}</b>
-                {vuln.severity ? <span className="tag warn">{vuln.severity}</span> : null}
-                <p>{vuln.summary}</p>
-              </li>
-            ))}
-          </ul>
-        </>
+          {activeTab === "versions" ? (
+            <VersionsTab versions={versions} name={name} isGo={isGo} isMaven={isMaven} isRpm={isRpm} archesByVersion={archesByVersion} />
+          ) : null}
+          {activeTab === "sources" ? (
+            <SourcesTab
+              pkg={pkg}
+              name={name}
+              versionDetail={versionDetail}
+              selectedVersion={selectedVersion}
+              isGo={isGo}
+              isCrates={isCrates}
+              isNuget={isNuget}
+              isMaven={isMaven}
+              isRpm={isRpm}
+              archesByVersion={archesByVersion}
+            />
+          ) : null}
+        </PackageTabs>
       ) : null}
     </section>
   );
