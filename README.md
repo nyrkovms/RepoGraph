@@ -194,7 +194,7 @@ docker run --rm -u "$(id -u):$(id -g)" -e npm_config_cache=/tmp/.npm \
 
 ## Lint checks
 
-Локально: `make check` — всё, что запускает CI без docker: ruff, mypy, backend unit, frontend lint и тесты (frontend требует `npm ci`), `make docs-check`. Отдельно: `make backend-lint`, `make mypy`; `make docs-check` — относительные ссылки в `*.md` ведут на существующие файлы.
+Локально: `make check` — то, что CI запускает без docker (ruff, mypy, backend unit, frontend lint и тесты; frontend требует `npm ci`), плюс `make docs-check`, который в CI пока не запускается. Отдельно: `make backend-lint`, `make mypy`; `make docs-check` — относительные ссылки в `*.md` ведут на существующие файлы.
 
 Backend:
 

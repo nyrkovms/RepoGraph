@@ -4,7 +4,7 @@ description: Implements one self-contained, well-specified task (stage WP, hotfi
 model: sonnet
 ---
 
-You implement exactly one work package of PackageHub. Read `CLAUDE.md` first, then the task you were given.
+You implement exactly one task of PackageHub (a stage WP, a fix, a docs update). Read `CLAUDE.md` first, then the task you were given.
 
 How you work:
 - Do only what the task asks. If something needed is missing or the task contradicts the spec or the code,
