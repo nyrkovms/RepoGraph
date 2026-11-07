@@ -103,7 +103,10 @@ Cursor-based ответ для списков:
   - `license: string?`
   - `has_vulnerabilities: boolean?`
   - `updated_after: datetime?`
-  - `sort: enum(name|updated_at|downloads_total|relevance)=name`: `relevance` — точное имя, затем имена с префиксом запроса, затем остальные (без учёта регистра), потом `normalized_name` и id; нужен `q`, без него это `name`
+  - `min_used_by: int?` — только пакеты, от которых зависят не меньше стольких пакетов каталога (`used_by`, см. ниже); `0` — без фильтра;
+  - `deprecated: boolean?` — `true` оставляет пакеты с `deprecation`, `false` — остальные. JSON `null` в `deprecation` не считается: «объявлен устаревшим» — это непустой объект;
+  - `released_before: datetime?` — только пакеты, у которых последняя версия (`latest_version`) выпущена раньше этого момента; без даты выпуска пакет не подходит;
+  - `sort: enum(name|updated_at|downloads_total|relevance|used_by)=name`: `relevance` — точное имя, затем имена с префиксом запроса, затем остальные (без учёта регистра), потом `normalized_name` и id; нужен `q`, без него это `name`. `used_by` — по убыванию `used_by`, затем `normalized_name` и id; курсор держит число, имя и id, так что страницы не пересекаются
   - `limit: int=50 (max 200)`
   - `cursor: string?`
 - Response `200`:
@@ -122,7 +125,8 @@ Cursor-based ответ для списков:
       "license_spdx": "BSD-3-Clause",
       "latest_version": "3.0.0",
       "updated_at": "2026-03-01T10:00:00Z",
-      "has_vulnerabilities": false
+      "has_vulnerabilities": false,
+      "used_by": 12
     }
   ],
   "cursor": "...",
@@ -130,6 +134,7 @@ Cursor-based ответ для списков:
 }
 ```
 
+- `used_by` — сколько других пакетов каталога имеют этот в зависимостях `runtime`, `peer` или `provided` своей последней версии (пакет, зависящий от себя, и `dev`, `build`, `optional` не в счёт). Считается в каталоге: `0` значит, что зависимых в каталоге нет, а не что пакет никому не нужен. Один и тот же подсчёт у поля, сортировки и фильтра `min_used_by`.
 - `namespace` — пустая строка, если у экосистемы нет пространства имён (PyPI, crates, Go, NuGet, npm-пакет без scope). У npm это scope без `@`, а `name` — имя без scope: `@angular/core` приходит как `namespace: "angular"`, `name: "core"`. У Maven `namespace` — `groupId`, `normalized_name` — `artifactId`, а `name` — пара целиком: `namespace: "org.springframework"`, `normalized_name: "spring-core"`, `name: "org.springframework:spring-core"`. У RPM `namespace` — дистрибутив и релиз, `normalized_name` — имя пакета, а `name` — они вместе: `namespace: "rocky-9"`, `normalized_name: "openssl"`, `name: "rocky-9/openssl"`. `latest_version` может быть `null` (проект без релизов).
 - Errors: `422/500`
 
@@ -139,8 +144,33 @@ Cursor-based ответ для списков:
 - Query: `q: string` (обязателен, подстрока в имени или описании) и те же фильтры, сортировка и пагинация, что у `GET /packages`.
 - Сортировка по умолчанию — `relevance` (у `GET /packages` — `name`).
 - `q`, начинающийся с `pkg:`, — purl: ответ — пакет с этими координатами (версия и квалификаторы, кроме `distro` у rpm, не учитываются); purl, который не разбирается или ничего не находит, даёт пустой список, не ошибку.
-- Response `200`: как у `GET /packages` (`data` — те же элементы с `purl`, `namespace`, `origin`).
+- Response `200`: как у `GET /packages` (`data` — те же элементы с `purl`, `namespace`, `origin`, `used_by`).
 - Errors: `422/500`
+
+## 3.2.1 `GET /api/v1/catalog/summary`
+
+- Auth: none
+- Query: нет.
+- Response `200` (данные для главной страницы; считается по всему каталогу):
+
+```json
+{
+  "ecosystems": [{"ecosystem": "rpm", "packages": 218}],
+  "licenses": [{"license": "MIT", "count": 133}],
+  "most_used": [{"...": "элемент списка, как в GET /packages"}],
+  "latest_releases": [{"...": "элемент списка", "released_at": "2026-11-06T10:03:00Z"}],
+  "deprecated_in_use": [{"...": "элемент списка"}],
+  "stale_in_use": {"packages": 39, "years": 3, "min_used_by": 5, "released_before": "2023-11-07T00:00:00Z"}
+}
+```
+
+- `ecosystems` — пакеты по экосистемам: по убыванию числа, затем по имени.
+- `licenses` — двенадцать самых частых SPDX-идентификаторов (`license_spdx`) по убыванию числа, затем по идентификатору; пустые не входят.
+- `most_used` — пять пакетов с наибольшим `used_by`, не меньше 1.
+- `latest_releases` — пять пакетов, у которых новее всех дата выпуска `latest_version`; эта версия `active`, не prerelease и с датой. `released_at` — эта дата.
+- `deprecated_in_use` — до трёх устаревших пакетов (`deprecation`) с `used_by >= 1`, самые используемые первыми.
+- `stale_in_use` — сколько пакетов с `used_by >= min_used_by` не выпускали новой версии `years` лет и больше. Пороги (3 года, 5 пакетов) заданы одним местом на сервере (`services/usage.py`); `released_before` — начало суток (UTC) `years` лет назад. Ссылка на список: `GET /search?released_before=<released_before>&min_used_by=<min_used_by>&sort=used_by` (без `q` — `GET /packages` с теми же параметрами).
+- Errors: `500`
 
 ## 3.3 Адресация пакета: `/packages/{ecosystem}/{coordinates}/-/…`
 
@@ -1463,6 +1493,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 
 ## 8. Изменения
 
+- **1.11-api (2026-11-07), этап UX2.** Главная страница и `/search`. В элементах списка и поиска поле `used_by` (§3.1); сортировка `used_by`; фильтры `min_used_by`, `deprecated`, `released_before` у `GET /packages` и `GET /search` (§3.1, §3.2); новый `GET /catalog/summary` (§3.2.1).
 - **1.10-api (2026-10-31), этап E6.** Каталог содержит RPM. Слаг экосистемы `rpm`, тип purl `rpm`: `pkg:rpm/<vendor>/<имя>?distro=<namespace>`, namespace — дистрибутив и релиз (`rocky-9`), часть идентичности; в путях, в `name` и в поиске координаты пишутся `<namespace>/<имя>` (§2.1, §3.1, §3.3). Версии RPM — EVR (`1:3.0.7-27.el9`), сравнение `rpmvercmp`, prerelease — `~` в version, вытесненная сборка той же архитектуры — `status: "superseded"`, `release_date` — время сборки, `license_raw` — тег License (§3.3.4). Артефакты версии — её `.rpm` по архитектурам, с полем `arch` (§3.3.6). Дерево зависимостей принимает `arch` (`x86_64`, `aarch64`, `ppc64le`, `s390x`), узлы — возможности (capability) с `scope` (`requires`, `recommends`, `suggests`, `supplements`, `enhances`), пакет, который возможность предоставляет, — `resolved_name` (§3.3.5). Resolve для RPM: `ecosystem: "rpm"`, окружение `distro` / `arch` / `repos` / `weak_deps` / `module_streams` / `disabled_modules` / `module_install`, стратегия `libsolv` (`dnf 4`, ответ равен `dnf install --assumeno --installroot`), ошибки `unsolvable`, `module_conflict`, `not_found` с `error.problems[]` (§4.1.6). `/admin/packages` принимает purl `rpm` с `distro` (§5.3), `/admin/presence-probe` — `ecosystem: "rpm"` (§5.6); стартового источника нет, набор источников — `backend/registries.rpm.yaml`, авторизация `tls_client_cert` и `basic` по `credentials_ref`, ежедневное обновление через rpm-worker (§5.8).
 - **1.9-api (2026-10-31), этап E5.** Каталог содержит Maven. Слаг экосистемы `maven`, тип purl `maven`, идентичность — `groupId:artifactId` (регистр значим), namespace purl — `groupId`; в путях, в `name` и в поиске координаты пишутся `groupId:artifactId` (§2.1, §3.1, §3.3). Версии Maven: ComparableVersion, prerelease по квалификаторам, все версии `active`, дата — `Last-Modified` POM (кроме новейшей — фоновой задачей), релокация артефакта в `deprecation.alternative` пакета, лицензия из POM (§3.3.4). Дерево зависимостей Maven принимает `scopes` (по умолчанию `compile,runtime`), показывает рёбра effective model, у ребра `details.exclusions`, `type`, `classifier`, у узла дерева — поле `scope` (для всех экосистем) (§3.3.5). Resolve для Maven: `ecosystem: "maven"`, `managed` (`dependencyManagement`, BOM — purl с `?type=pom`), окружение `scopes` / `strategy` / `plugins` / `java_version`, стратегии `maven-nearest-wins` (`Maven 3.9`, результат равен `mvn dependency:list`) и `gradle-highest-wins` (Gradle 8 по POM, повторные проходы до устойчивого выбора, предупреждение `gradle_module_metadata`, Q15), `details.scope` узлов и рёбер (§4.1.5). Раздел 4.1.4 (NuGet) перенесён из §5.3 в §4.1 без изменений. `/admin/packages` принимает purl `maven` (§5.3), `/admin/presence-probe` — `ecosystem: "maven"` (§5.6); стартовый источник `maven-central`, ежедневное обновление по ETag `maven-metadata.xml`, routing `group_patterns` (§5.8).
 - **1.8-api (2026-10-30), этап E4.** Каталог содержит NuGet. Слаг экосистемы `nuget`, тип purl `nuget`, id без учёта регистра: каталог хранит и адресует его строчными (`normalized_name`), написание реестра приходит как `name` (§2.1, §3.3). Версии NuGet: три или четыре части, prerelease без учёта регистра, скрытые автором версии со статусом `unlisted`, `deprecation` пакета (§3.3.4); дерево зависимостей NuGet в окружении `target_framework` (по умолчанию `net8.0`), группа платформы ребра в `environment_markers.dotnet_target_framework` (§3.3.5). Resolve для NuGet: `ecosystem: "nuget"`, диапазоны версий NuGet, окружение `target_framework`, стратегия `nuget-nearest-wins` (`.NET SDK 8 (NuGet 6.x)`), результат равен `dotnet restore`, предупреждение `NU1605`, ошибка `NU1107` (§4.1.4). `/admin/packages` принимает purl `nuget` (§5.3), `/admin/presence-probe` — `ecosystem: "nuget"` (§5.6); стартовый источник `nuget-org` с лентой Catalog (§5.8).

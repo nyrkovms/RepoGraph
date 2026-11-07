@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -219,6 +219,79 @@ def relevance(world):
     ids = run_db(add)
     yield
     run_db(lambda db: remove(db, ids))
+
+
+UX = "ux2-"
+
+
+@pytest.fixture
+def usage_graph(world):
+    """Usage counts for the home page and the list sort, on names outside the `c1b-` prefix (npm, latest versions):
+
+        u1..u5 depend on old (5); u1..u3 on hub3 (3); u1, u2 on hub2 and nul (2 each); u1 on hub1 and dep (1 each).
+        old: latest released five years ago. dep: deprecated. nul: `deprecation` holds JSON null, not SQL NULL.
+        u1..u3 are released in the future (newest u3) so they top "latest releases"; the latest version of u4 is a
+        prerelease and that of u5 is yanked: both newer still, both left out of it. u1..u5 are used by nobody."""
+    now = world.now
+    ids: list[uuid.UUID] = []
+
+    async def add(db: AsyncSession) -> None:
+        registry = await db.scalar(select(Registry).where(Registry.slug == f"{PREFIX}npm-hi"))
+        assert registry
+        packages = {name: _package(registry, Ecosystem.npm, f"{UX}{name}", origin=PackageOrigin.manual, latest="1.0.0",
+                                   now=now)
+                    for name in ("old", "hub3", "hub2", "hub1", "dep", "nul", "u1", "u2", "u3", "u4", "u5")}
+        packages["dep"].deprecation = {"message": "use something else"}
+        packages["nul"].deprecation = None   # a JSONB column stores a Python None as JSON null
+        db.add_all(packages.values())
+        await db.flush()
+        ids.extend(p.id for p in packages.values())
+
+        released = {"old": now - timedelta(days=5 * 365), "hub3": now - timedelta(days=10),
+                    "hub2": now - timedelta(days=10), "hub1": now - timedelta(days=10),
+                    "dep": now - timedelta(days=100), "nul": now - timedelta(days=100),
+                    "u1": now + timedelta(days=301), "u2": now + timedelta(days=302), "u3": now + timedelta(days=303),
+                    "u4": now + timedelta(days=900), "u5": now + timedelta(days=800)}
+        versions = {name: PackageVersion(
+            id=uuid.uuid4(), package_id=package.id, version="1.0.0", raw_metadata={}, sort_key=b"\x01",
+            is_prerelease=name == "u4", release_date=released[name],
+            status=PackageVersionStatus.yanked if name == "u5" else PackageVersionStatus.active)
+            for name, package in packages.items()}
+        db.add_all(versions.values())
+        await db.flush()
+
+        uses = {"u1": ("old", "hub3", "hub2", "hub1", "dep", "nul"), "u2": ("old", "hub3", "hub2", "nul"),
+                "u3": ("old", "hub3"), "u4": ("old",), "u5": ("old",)}
+        db.add_all(_depends(versions[user], packages[target], DependencyType.runtime)
+                   for user, targets in uses.items() for target in targets)
+
+    async def remove(db: AsyncSession) -> None:
+        version_ids = (await db.scalars(select(PackageVersion.id).where(PackageVersion.package_id.in_(ids)))).all()
+        await db.execute(delete(Dependency).where(Dependency.version_id.in_(version_ids)))
+        await db.execute(delete(PackageVersion).where(PackageVersion.id.in_(version_ids)))
+        await db.execute(delete(Package).where(Package.id.in_(ids)))
+
+    run_db(add)
+    yield
+    run_db(remove)
+
+
+def ux_names(payload: dict) -> list[str]:
+    return [row["normalized_name"].removeprefix(UX) for row in payload["data"] if row["name"].startswith(UX)]
+
+
+def _walk(client: TestClient, path: str, params: dict, limit: int) -> tuple[list[dict], int]:
+    rows: list[dict] = []
+    cursor = None
+    pages = 0
+    for _ in range(30):
+        page = client.get(f"{API}/{path}", params=params | {"limit": limit} | ({"cursor": cursor} if cursor else {})).json()
+        rows += page["data"]
+        pages += 1
+        cursor = page["cursor"]
+        if not page["has_more"]:
+            break
+    return rows, pages
 
 
 @pytest.fixture
@@ -692,3 +765,105 @@ def test_overview_for_a_given_version_and_an_unknown_one(client: TestClient, ove
     old = client.get(f"{API}/packages/npm/{OVW}root/-/overview", params={"version": "0.9.0"})
     assert old.status_code == 200 and old.json()["version"] == "0.9.0"
     assert client.get(f"{API}/packages/npm/{OVW}root/-/overview", params={"version": "9.9.9"}).status_code == 404
+
+
+# --------------------------------------------------------------------------- used_by, filters and /catalog/summary
+
+
+def test_list_rows_carry_used_by(client: TestClient, usage_graph) -> None:
+    rows = {row["normalized_name"]: row["used_by"]
+            for row in client.get(f"{API}/search", params={"q": UX, "limit": 50}).json()["data"]}
+    assert (rows[f"{UX}old"], rows[f"{UX}hub3"], rows[f"{UX}hub1"], rows[f"{UX}u1"]) == (5, 3, 1, 0)
+    listed = client.get(f"{API}/packages", params={"ecosystem": "npm", "limit": 200}).json()["data"]
+    assert {row["used_by"] for row in listed if row["name"] == f"{UX}old"} == {5}
+
+
+@pytest.mark.parametrize("path", ["search", "packages"])
+def test_used_by_sort_walks_pages_with_a_cursor(client: TestClient, usage_graph, path: str) -> None:
+    expected = ["old", "hub3", "hub2", "nul", "dep", "hub1", "u1", "u2", "u3", "u4", "u5"]
+    params: dict = {"sort": "used_by"} | ({"q": UX} if path == "search" else {"ecosystem": "npm"})
+    # /packages sees the whole npm catalog: with a small page the walk is long, so take the biggest pages there.
+    rows, pages = _walk(client, path, params, limit=2 if path == "search" else 200)
+    assert ux_names({"data": rows}) == expected
+    assert len({row["purl"] for row in rows}) == len(rows)   # no row twice across pages
+    counts = [row["used_by"] for row in rows]
+    assert counts == sorted(counts, reverse=True)
+    if path == "search":
+        assert pages == 6
+
+
+def test_used_by_cursor_belongs_to_its_sort(client: TestClient, usage_graph) -> None:
+    page = client.get(f"{API}/search", params={"q": UX, "sort": "used_by", "limit": 1}).json()
+    assert page["has_more"]
+    assert client.get(f"{API}/search", params={"q": UX, "sort": "name", "cursor": page["cursor"]}).status_code == 422
+
+
+def test_min_used_by_filter(client: TestClient, usage_graph) -> None:
+    def at_least(n: int) -> list[str]:
+        return ux_names(client.get(f"{API}/search", params={"q": UX, "min_used_by": n, "sort": "used_by"}).json())
+
+    assert at_least(2) == ["old", "hub3", "hub2", "nul"]
+    assert at_least(5) == ["old"]
+    assert at_least(6) == []
+    assert len(at_least(0)) == 11   # zero is no filter
+
+
+def test_deprecated_filter_ignores_json_null(client: TestClient, usage_graph) -> None:
+    async def json_null(db: AsyncSession) -> int:
+        return await db.scalar(text("SELECT count(*) FROM packages WHERE name = :n AND deprecation = 'null'::jsonb"),
+                               {"n": f"{UX}nul"})
+    assert run_db(json_null) == 1   # the fixture really holds a JSON null, not an SQL NULL
+
+    deprecated = ux_names(client.get(f"{API}/search", params={"q": UX, "deprecated": True}).json())
+    assert deprecated == ["dep"]
+    rest = ux_names(client.get(f"{API}/search", params={"q": UX, "deprecated": False, "limit": 50}).json())
+    assert "dep" not in rest and {"nul", "old", "u1"} <= set(rest)
+    assert ux_names(client.get(f"{API}/packages", params={"deprecated": True, "limit": 200}).json()) == ["dep"]
+
+
+def test_released_before_filter_uses_the_latest_version(client: TestClient, usage_graph, world) -> None:
+    def before(days: int) -> list[str]:
+        moment = (world.now - timedelta(days=days)).isoformat()
+        params = {"q": UX, "released_before": moment, "sort": "used_by", "limit": 50}
+        return ux_names(client.get(f"{API}/search", params=params).json())
+
+    assert before(3 * 365) == ["old"]
+    assert before(50) == ["old", "nul", "dep"]   # dep and nul were released 100 days ago, the hubs 10 days ago
+    assert before(6 * 365) == []
+    both = client.get(f"{API}/search", params={"q": UX, "released_before": (world.now - timedelta(days=50)).isoformat(),
+                                               "min_used_by": 1, "sort": "used_by"}).json()
+    assert ux_names(both) == ["old", "nul", "dep"]
+
+
+def test_catalog_summary(client: TestClient, usage_graph, world) -> None:
+    payload = client.get(f"{API}/catalog/summary").json()
+
+    sizes = [(row["ecosystem"], row["packages"]) for row in payload["ecosystems"]]
+    assert dict(sizes)["npm"] >= 11
+    assert [n for _, n in sizes] == sorted((n for _, n in sizes), reverse=True)
+    assert payload["licenses"] == sorted(payload["licenses"], key=lambda row: (-row["count"], row["license"]))
+    assert len(payload["licenses"]) <= 12 and all(row["license"] for row in payload["licenses"])
+
+    most_used = ux_names({"data": payload["most_used"]})
+    assert most_used == [name for name in ["old", "hub3", "hub2", "nul", "dep", "hub1"] if name in most_used]
+    assert len(payload["most_used"]) <= 5 and all(row["used_by"] >= 1 for row in payload["most_used"])
+    assert next(row for row in payload["most_used"] if row["name"] == f"{UX}old")["used_by"] == 5
+
+    # The prerelease and the yanked latest versions are newer but do not count.
+    latest = ux_names({"data": payload["latest_releases"]})
+    assert latest[:3] == ["u3", "u2", "u1"]   # then the hubs, released ten days ago
+    assert "u4" not in latest and "u5" not in latest and len(payload["latest_releases"]) <= 5
+    released = [row["released_at"] for row in payload["latest_releases"]]
+    assert released == sorted(released, reverse=True)
+
+    # nul holds a JSON null: it is not deprecated, however much it is used.
+    deprecated = ux_names({"data": payload["deprecated_in_use"]})
+    assert deprecated == ["dep"] and len(payload["deprecated_in_use"]) <= 3
+
+    stale = payload["stale_in_use"]
+    assert stale["packages"] >= 1 and (stale["years"], stale["min_used_by"]) == (3, 5)
+    cutoff = datetime.fromisoformat(stale["released_before"])
+    assert timedelta(days=3 * 365 - 1) < world.now - cutoff < timedelta(days=3 * 365 + 3)
+    linked = client.get(f"{API}/search", params={"q": UX, "released_before": stale["released_before"],
+                                                 "min_used_by": stale["min_used_by"], "limit": 50}).json()
+    assert ux_names(linked) == ["old"]

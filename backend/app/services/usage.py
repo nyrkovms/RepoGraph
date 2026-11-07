@@ -4,9 +4,10 @@ import uuid
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Select, and_, func, select
+from sqlalchemy import Select, and_, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dependency import Dependency
@@ -27,23 +28,56 @@ def _latest_versions():
     )
 
 
-async def fetch_used_by(db: AsyncSession, package_ids: Iterable[Any]) -> dict[Any, int]:
-    """Per package id: how many other packages have it as a runtime/peer/provided dependency in their latest version."""
-    ids = set(package_ids)
-    if not ids:
-        return {}
+def used_by_counts():
+    """Subquery (package_id, used_by): how many other packages have the package as a runtime/peer/provided dependency
+    in their latest version. A package nobody uses has no row. `fetch_used_by` and the list sort/filter share it."""
     latest = _latest_versions()
-    stmt = (
-        select(Dependency.resolved_package_id, func.count(func.distinct(latest.c.package_id)))
+    return (
+        select(
+            Dependency.resolved_package_id.label("package_id"),
+            func.count(func.distinct(latest.c.package_id)).label("used_by"),
+        )
         .join(latest, latest.c.id == Dependency.version_id)
         .where(
-            Dependency.resolved_package_id.in_(ids),
+            Dependency.resolved_package_id.is_not(None),
             Dependency.resolved_package_id != latest.c.package_id,
             Dependency.dependency_type.in_(_USED_BY_TYPES),
         )
         .group_by(Dependency.resolved_package_id)
+        .subquery()
     )
+
+
+async def fetch_used_by(db: AsyncSession, package_ids: Iterable[Any]) -> dict[Any, int]:
+    """Per package id: how many other packages use it (see `used_by_counts`)."""
+    ids = set(package_ids)
+    if not ids:
+        return {}
+    counts = used_by_counts()
+    stmt = select(counts.c.package_id, counts.c.used_by).where(counts.c.package_id.in_(ids))
     return dict((await db.execute(stmt)).all())
+
+
+def latest_released_before(moment: datetime):
+    """SQL condition: the package's latest version was released before `moment`."""
+    return exists(
+        select(PackageVersion.id).where(
+            PackageVersion.package_id == Package.id,
+            PackageVersion.version == Package.latest_version,
+            PackageVersion.release_date < moment,
+        )
+    )
+
+
+# "No release in 3+ years, used by 5+": the home page's "worth a look" list (SPEC-CATALOG-PAGES section 9).
+STALE_YEARS = 3
+STALE_MIN_USED_BY = 5
+
+
+def stale_cutoff(now: datetime | None = None) -> datetime:
+    """Start of the UTC day `STALE_YEARS` ago: stable through the day, so the link built from it keeps its meaning."""
+    now = now or datetime.now(UTC)
+    return (now - timedelta(days=round(365.25 * STALE_YEARS))).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 # --- package overview: the same graph, walked past the first step -----------------------------------------------------

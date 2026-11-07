@@ -18,6 +18,7 @@ class PackageListItem(BaseModel):
     latest_version: str | None
     updated_at: datetime
     has_vulnerabilities: bool
+    used_by: int = 0                       # catalog packages that depend on it, see services/usage.used_by_counts
 
 
 class PackageListResponse(BaseModel):
@@ -197,3 +198,33 @@ class PackageOverviewResponse(BaseModel):
     versions: OverviewVersions
     activity: list[OverviewMonth]
     lines: list[OverviewLine]
+
+
+class EcosystemCount(BaseModel):
+    ecosystem: str
+    packages: int
+
+
+class LicenseCount(BaseModel):
+    license: str
+    count: int
+
+
+class LatestReleaseItem(PackageListItem):
+    released_at: datetime
+
+
+class StaleInUse(BaseModel):
+    packages: int
+    years: int
+    min_used_by: int
+    released_before: datetime
+
+
+class CatalogSummaryResponse(BaseModel):
+    ecosystems: list[EcosystemCount]
+    licenses: list[LicenseCount]
+    most_used: list[PackageListItem]
+    latest_releases: list[LatestReleaseItem]
+    deprecated_in_use: list[PackageListItem]
+    stale_in_use: StaleInUse

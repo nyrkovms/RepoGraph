@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.admin import router as admin_router
+from app.api.v1.catalog import router as catalog_router
 from app.api.v1.package_detail import router as package_detail_router
 from app.api.v1.packages import router as packages_router
 from app.api.v1.registries import admin_router as registries_admin_router
@@ -82,6 +83,7 @@ app.include_router(system_router, prefix="/api/v1", tags=["system"])
 app.include_router(packages_router, prefix="/api/v1", tags=["packages"])
 app.include_router(package_detail_router, prefix="/api/v1", tags=["packages"])
 app.include_router(search_router, prefix="/api/v1", tags=["search"])
+app.include_router(catalog_router, prefix="/api/v1", tags=["catalog"])
 app.include_router(resolve_router, prefix="/api/v1", tags=["resolve"])
 app.include_router(updates_router, prefix="/api/v1", tags=["updates"])
 app.include_router(registries_router, prefix="/api/v1", tags=["registries"])
