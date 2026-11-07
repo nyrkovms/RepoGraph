@@ -7,9 +7,9 @@ RUFF = ruff==0.17.3
 MYPY = mypy==2.4.0
 PYTEST = pytest==9.2.0
 
-.PHONY: check backend-lint mypy backend-unit openapi frontend
+.PHONY: check backend-lint mypy backend-unit openapi frontend docs-check
 
-check: backend-lint mypy backend-unit frontend
+check: backend-lint mypy backend-unit frontend docs-check
 
 backend-lint:
 	cd backend && $(UV_RUN) --with $(RUFF) -- ruff check app tests
@@ -29,3 +29,7 @@ openapi:
 frontend:
 	@test -d frontend/node_modules || { echo "frontend/node_modules is missing: run 'cd frontend && npm ci'"; exit 1; }
 	cd frontend && npm run lint && npm run test:run
+
+# Relative links in *.md must resolve to existing files.
+docs-check:
+	python3 -I scripts/check_doc_links.py

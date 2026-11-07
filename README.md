@@ -194,7 +194,7 @@ docker run --rm -u "$(id -u):$(id -g)" -e npm_config_cache=/tmp/.npm \
 
 ## Lint checks
 
-Локально: `make check` — всё, что запускает CI без docker: ruff, mypy, backend unit, frontend lint и тесты (frontend требует `npm ci`). Отдельно: `make backend-lint`, `make mypy`.
+Локально: `make check` — всё, что запускает CI без docker: ruff, mypy, backend unit, frontend lint и тесты (frontend требует `npm ci`), `make docs-check`. Отдельно: `make backend-lint`, `make mypy`; `make docs-check` — относительные ссылки в `*.md` ведут на существующие файлы.
 
 Backend:
 
@@ -225,7 +225,7 @@ docker compose down --remove-orphans
 
 ## Backend unit tests
 
-Локально: `make backend-unit`. В контейнере:
+Локально: `make backend-unit`. Схема OpenAPI зафиксирована в `backend/tests/fixtures/openapi.json`; после намеренного изменения API — `make openapi` и правка `SPEC-MVP-API.md`. В контейнере:
 
 ```bash
 docker compose build api

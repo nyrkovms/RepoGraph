@@ -41,10 +41,12 @@ design/                 design artifacts (DDL, contract, schema checks)
 ## Commands
 
 ```bash
-make check                      # everything CI runs without docker: ruff, mypy, backend unit, frontend lint+tests
+make check                      # everything CI runs without docker: ruff, mypy, backend unit, frontend lint+tests, docs-check
 make mypy                       # mypy only
 make backend-unit               # backend unit tests only
 make frontend                   # frontend lint + tests
+make docs-check                 # relative links in *.md resolve to existing files
+make openapi                    # refresh backend/tests/fixtures/openapi.json after an API change (update SPEC-MVP-API.md too)
 scripts/stand.sh status         # test stand: containers, migration, catalog size
 scripts/stand.sh migrate        # backup, stop worker/beat, alembic upgrade head, start them again
 scripts/check_migrations.sh     # migrations on synthetic data: base -> head -> downgrade -> head (own compose project)
