@@ -63,30 +63,31 @@
 
 Маршруты: `/` — главная, `/search?q=` — результаты. Сейчас обе роли у `/`.
 
+Правило страницы: строка без объяснения не показывается. Читатель должен понять, что это, почему это здесь и что делать дальше.
+
 Сверху вниз:
 
-1. **Поиск.** Одно поле: имя или purl. purl сразу ведёт на карточку. Точное совпадение первым.
-2. **Экосистемы.** Чипы со счётчиками: RPM 218, Go 214, crates.io 127, NuGet 90, PyPI 82, npm 76, Maven 41. Клик открывает `/search?ecosystem=`.
+1. **Поиск.** Одно поле: имя или purl. purl сразу ведёт на карточку. Enter открывает выдачу: подсказка выбирается только стрелками или кликом, заранее ничего не подсвечено.
+2. **Экосистемы.** Чипы со счётчиками работают на месте: `/?ecosystem=go` сужает поиск и все блоки ниже и никуда не уводит. Под выбранным чипом ссылка `Browse all 214 Go packages` ведёт в `/search?ecosystem=go`.
 3. **Строка статуса.** `7 of 7 sources updated · last run 06.11, 10:03`. Сбой или устаревание видны здесь. Рядом: `Security advisories: PyPI only`.
-4. **This week.** Один блок из Updates: `Needs attention` со строкой пакета и счётчики обновлений со ссылкой на `/updates?period=week`.
-5. **Три списка по пять строк:**
-   - `Most used in catalog`: `System.Runtime` 54, `golang.org/x/sys` 50;
-   - `Latest releases`: версия, дата;
-   - `Worth a look`: устаревшие, но используемые (`github.com/golang/protobuf` 5, `Microsoft.Rest.ClientRuntime` 3), до пяти строк со ссылкой на остальные, затем ссылка `No release in 3+ years, used by 5+: 39 packages`.
+4. **This week.** Период совпадает со страницей Updates: она теперь открывается на неделе, `day` остаётся в переключателе.
+   - `Needs attention`. Каждая строка объясняет себя: причина по флагу и два действия. `New major version: expect breaking changes.`, `Compare 3.0.0 → 4.0.0`, `Who uses it (1)`. Без зависимых: `Nothing in this catalog depends on it`. Тот же текст на странице Updates.
+   - `Updated, most used first`: пять обновлённых пакетов без флагов и не только с пререлизами: название, версии, тип обновления, описание, `used by N`. Здесь важен порядок по важности, поэтому отдельного списка последних выпусков нет.
+5. **Два списка:**
+   - `Most used in catalog`, подзаголовок `Packages the rest of the catalog depends on`: название, экосистема, описание или последняя версия, `54 dependents`;
+   - `Worth a look`: подзаголовок `Deprecated, but other packages still use them`, строки с `used by N`; затем `39 packages had no release in 3+ years and are used by 5 or more` ссылкой на список.
 
 Результаты поиска получают сортировку `Relevance` (по умолчанию), `Most used`, `Name`, фильтр по лицензии и `used by` в каждой строке.
 
 ## 5. Карточка пакета
 
-### Шапка
+### Компоновка
 
-Видна на всех вкладках:
+Сверху имя, тег экосистемы, выбор версии, описание и баннеры. Ниже две колонки: слева вкладки и содержимое, справа узкая панель с фактами. Подсчёты живут на вкладках и в обзоре, панель отвечает на вопрос «что это и как его взять». Под 760 px панель уходит под шапку.
 
-- имя, тег экосистемы, выбор версии;
-- описание;
-- строка фактов: `Released 05.11.2026` · `MIT` · `Used by 1` · `Dependencies 4 + 2 optional` · `211 versions`;
-- purl и команда установки с копированием, ссылки на репозиторий, домашнюю страницу, документацию;
-- баннер, если применимо: `Deprecated` с текстом источника, `Yanked`, `Not the latest version` со ссылкой на последнюю.
+Панель, значения друг под другом: `Released`, `License`, `Repository`, `Homepage`, `Documentation`, координаты Maven или RPM, затем `Install` и `purl` с копированием. `License`: `Not published by the source`, если пусто. Пустые строки скрыты.
+
+Баннеры, если применимо: `Deprecated` с текстом источника, `Yanked`, `Not the latest version` со ссылкой на последнюю.
 
 Значение `latest` в адресе работает как псевдоним. deps.dev на `/express/latest` отвечает `Version Not Found`.
 
@@ -94,7 +95,7 @@
 
 | Вкладка | Содержимое |
 |---|---|
-| Overview | блоки Security, Licenses (своя и лицензии зависимостей), Dependencies, Used by, Release activity за 12 месяцев, Release lines; каждый ведёт в свой раздел |
+| Overview | сначала одно предложение-сводка, затем разделы без рамок: Security, Dependencies и Used by рядом, Licenses, Release activity за 12 месяцев, Release lines; у раздела со своей вкладкой ссылка `View all` |
 | Dependencies | таблица: пакет, ограничение, разрешённая версия, тип, прямая или косвенная, лицензия, путь для косвенных; переключатель на дерево; окружение как сейчас; счётчик на вкладке — прямые |
 | Used by | пакеты каталога, прямые и косвенные, с тем, какую версию они требуют; счётчик на вкладке — прямые, как в шапке |
 | Versions | линейки выпуска, раскрытие до версий, виды `Prereleases`, `Not active`, `Deprecated`, `All`; статус показывается, только если он не `active` |
@@ -135,7 +136,7 @@ typing-inspection  >=0.4.2   → >=0.4.4
 | `GET /search` | параметр `sort=relevance` по умолчанию: точное имя, начало имени, остальное; `purl` в `q`; `used_by` в ответе |
 | `GET /packages`, `GET /search` | сортировка `used_by`, фильтры `min_used_by`, `deprecated`, `released_before`, поле `used_by` в строке |
 | Новый `GET {coords}/overview?version=` | счётчики версий, прямых и косвенных зависимостей и зависимых, не разрешённые в каталоге, лицензии, активность, линейки |
-| Новый `GET /catalog/summary` | счётчики экосистем и лицензий, списки главной |
+| Новый `GET /catalog/summary?ecosystem=` | счётчики экосистем и лицензий, списки главной; `ecosystem` сужает всё, кроме счётчиков экосистем |
 | Новый `GET {coords}/dependents` | список с курсором, `relation`, `requires` |
 | Новый `GET {coords}/versions/compare?from=&to=` | различия зависимостей, статуса, дат |
 | `GET {coords}/versions` | поля `line`, `is_prerelease`; фильтры `line`, `prerelease`, `not_active`, `deprecated` |
