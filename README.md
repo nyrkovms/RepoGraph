@@ -1,6 +1,6 @@
-# PackageHub MVP
+# PackageHub
 
-PyPI-first MVP: каталог метаданных пакетов, demand-driven sync и dependency resolve. Экосистемы каталога: PyPI, npm, crates.io, Go, NuGet, Maven и RPM.
+Внутренний каталог метаданных пакетов семи экосистем: PyPI, npm, crates.io, Go, NuGet, Maven и RPM. Страницы каталога и карточка пакета, поиск, дайджест обновлений (Updates), demand-driven sync и dependency resolve.
 
 ## Prerequisites
 
@@ -20,7 +20,7 @@ cp .env.example .env
 SYNC_PYPI_JSON_BASE_URL=https://your-proxy.example/pypi
 ```
 
-2. Поднять стек (включая `worker` и `beat`):
+2. Поднять стек (включая `worker`, `beat` и `rpm-worker`):
 
 ```bash
 docker compose up --build
@@ -53,6 +53,8 @@ curl -X POST http://localhost:8000/api/v1/admin/seed \
 - API health: `http://localhost:8000/api/v1/health`
 - API stats: `http://localhost:8000/api/v1/stats` (счётчики по экосистемам и источникам)
 - API metrics (Prometheus): `http://localhost:8000/api/v1/metrics`
+- OpenAPI docs: `http://localhost:8000/docs` (также `/redoc`, `/openapi.json`); включены по умолчанию, отключаются `API_DOCS_ENABLED=false`
+- Страницы frontend: `/` (главная), `/search` (поиск), `/updates` (обновления), `/resolve` (resolve зависимостей), `/package/<экосистема>/...` (карточка пакета)
 
 ## API: адресация по purl и resolve
 
@@ -298,8 +300,14 @@ the external volume `packagehub_stand_pg_data`: `docker compose down -v`, image 
 ```bash
 scripts/stand.sh up        # first run creates the volume; later runs rebuild and migrate
 scripts/stand.sh seed      # SEED_PACKAGES, or: scripts/stand.sh seed flask requests
-scripts/stand.sh status
-scripts/stand.sh backup    # backups/packagehub_<timestamp>.sql
+scripts/stand.sh migrate   # backup, stop worker/beat, alembic upgrade head, start them again
+scripts/stand.sh daily-update  # run the daily update now
+scripts/stand.sh status    # containers, migration revision, catalog size
+scripts/stand.sh logs [service]
+scripts/stand.sh psql
+scripts/stand.sh backup [dir]  # backups/packagehub_<timestamp>.sql
+scripts/stand.sh restore <file>  # asks for confirmation
+scripts/stand.sh down      # stop containers; the volume is kept
 ```
 
 Do not run the plain `docker compose up` alongside the stand: both use ports 5432, 6379, 8000 and 5173.
@@ -307,8 +315,8 @@ Removing the data is a deliberate manual step: `docker volume rm packagehub_stan
 
 ## Production baseline
 
-- Production env template: [`.env.prod.example`](/Users/mikhail/Documents/Work/repograph/.env.prod.example)
-- Full go-live checklist: [`PRODUCTION-CHECKLIST.md`](/Users/mikhail/Documents/Work/repograph/PRODUCTION-CHECKLIST.md)
+- Production env template: [`.env.prod.example`](.env.prod.example)
+- Full go-live checklist: [`PRODUCTION-CHECKLIST.md`](PRODUCTION-CHECKLIST.md)
 - DB backup: `./scripts/db_backup.sh`
 - DB restore: `./scripts/db_restore.sh <backup-file.sql> --yes` (перезапускает `api/worker` после восстановления)
 
@@ -323,8 +331,11 @@ Removing the data is a deliberate manual step: `docker volume rm packagehub_stan
 docker compose run --rm api python -m app.cli seed --packages flask django pkg:pypi/requests
 docker compose run --rm api python -m app.cli fetch pkg:pypi/requests
 docker compose run --rm api python -m app.cli retry-failed --limit 100
-docker compose run --rm api python -m app.cli daily-update
-docker compose run --rm api python -m app.cli presence-probe
+docker compose run --rm api python -m app.cli daily-update [--ecosystem pypi|npm|...]
+docker compose run --rm api python -m app.cli presence-probe [--ecosystem pypi]
+docker compose run --rm api python -m app.cli registries import <file.yaml>
+docker compose run --rm api python -m app.cli registries test <slug>
+docker compose run --rm api python -m app.cli registries list [--ecosystem ...]
 docker compose run --rm api python -m app.cli stats
 ```
 
@@ -343,6 +354,8 @@ curl -X POST -H "Authorization: Bearer phub_admin_dev" http://localhost:8000/api
 - `GET /api/v1/admin/sync/status` собирается из журнала `runs`: кроме сводки отдаёт `last_update_run`, `recent_runs` и состояние источников (`registries`).
 - UI: страница `/updates` («Обновления»): Сегодня / Неделя / Период, фильтр по типу события.
 - Метрики: `packagehub_daily_update_*`, `packagehub_package_events_total{kind}`.
+- Раз в неделю (воскресенье, 04:00 UTC; `PRESENCE_PROBE_ENABLED`, `PRESENCE_PROBE_DAY_OF_WEEK`, `PRESENCE_PROBE_HOUR_UTC`) beat запускает presence probe: ищет пакеты каталога в источниках, где они появились позже. Вручную: `python -m app.cli presence-probe` или `POST /api/v1/admin/presence-probe`. Время ежедневного прогона: `DAILY_UPDATE_HOUR_UTC` / `DAILY_UPDATE_MINUTE_UTC` (по умолчанию 03:00 UTC).
+- Остальные admin-триггеры (`Authorization: Bearer <API_TOKEN_ADMIN>`): `POST /admin/seed`, `/admin/fetch/{purl}`, `/admin/packages` (список purl), `/admin/retry-failed`; `GET /admin/sync/status`.
 
 ## Retry failed sync
 
@@ -360,9 +373,11 @@ docker compose run --rm api python -m app.cli retry-failed --limit 100
 ./scripts/acceptance_smoke.sh
 ```
 
-Отчёт последнего прогона: [`ACCEPTANCE-MVP.md`](/Users/mikhail/Documents/Work/repograph/ACCEPTANCE-MVP.md).
+Отчёт последнего прогона: [`ACCEPTANCE-MVP.md`](ACCEPTANCE-MVP.md).
 
 ## Frontend integration tests
+
+Локально (после `cd frontend && npm ci`): `make frontend` — lint и тесты frontend. Или:
 
 ```bash
 cd frontend
@@ -379,6 +394,8 @@ docker run --rm -u "$(id -u):$(id -g)" -e npm_config_cache=/tmp/.npm \
 ```
 
 ## Lint checks
+
+Локально: `make check` — всё, что запускает CI без docker: ruff, mypy, backend unit, frontend lint и тесты (frontend требует `npm ci`). Отдельно: `make backend-lint`, `make mypy`.
 
 Backend:
 
@@ -398,14 +415,18 @@ npm run lint
 ## Backend integration tests
 
 ```bash
-docker compose up -d --build postgres redis api
+docker compose up -d --build postgres redis api rpm-worker
 docker compose run --rm api alembic upgrade head
 docker compose run --rm api python -m app.cli seed --packages flask django requests
 docker compose run --rm api pytest tests/integration
 docker compose down --remove-orphans
 ```
 
+Тесты идут офлайн по записанным ответам источников (`HTTP_REPLAY_DIR`, см. «Offline fixtures»): перед запуском задайте `HTTP_REPLAY_DIR=/app/tests/fixtures/http`, как в CI.
+
 ## Backend unit tests
+
+Локально: `make backend-unit`. В контейнере:
 
 ```bash
 docker compose build api
@@ -414,14 +435,19 @@ docker compose run --rm --no-deps api pytest tests/unit
 
 ## CI
 
-GitHub Actions workflow: [`.github/workflows/ci.yml`](/Users/mikhail/Documents/Work/repograph/.github/workflows/ci.yml)
+GitHub Actions workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 
-- `frontend-tests`: `vitest` + production build frontend
+- `typecheck`: `mypy`
 - `backend-lint`: `ruff check app tests`
 - `frontend-lint`: `eslint .`
+- `frontend-tests`: `vitest` + production build frontend
 - `backend-unit-tests`: `pytest tests/unit`
-- `backend-integration-tests`: миграции + seed + `pytest tests/integration`
+- `rpm-worker-tests`: тесты rpm-worker в его образе (без сети)
+- `migrations`: миграции на синтетических данных (base -> head -> downgrade -> head)
+- `backend-integration-tests`: миграции + seed + `pytest tests/integration` (стек с `rpm-worker`)
 - `acceptance-smoke`: Docker Compose stack + migrations + seed + `scripts/acceptance_smoke.sh`
+
+Nightly (`nightly.yml`): `live-integration-tests` и `live-acceptance-smoke` против живых источников.
 
 ### Offline fixtures
 
@@ -434,10 +460,12 @@ compose project `packagehub-record`, does not touch the stand):
 scripts/record_fixtures.sh
 ```
 
-The nightly workflow [`.github/workflows/nightly.yml`](/Users/mikhail/Documents/Work/repograph/.github/workflows/nightly.yml)
+The nightly workflow [`.github/workflows/nightly.yml`](.github/workflows/nightly.yml)
 runs the same flow against the live sources (02:30 UTC, or manually via `workflow_dispatch`).
 
-## Implemented MVP slices
+## Implemented MVP slices (history)
+
+Срезы MVP ниже — история. Текущая работа идёт по стадиям: [`IMPL-MULTI-ECOSYSTEM.md`](IMPL-MULTI-ECOSYSTEM.md), [`SPEC-CATALOG-PAGES.md`](SPEC-CATALOG-PAGES.md), [`SPEC-UPDATES-DIGEST.md`](SPEC-UPDATES-DIGEST.md).
 
 - `S00-S04`: infra, app scaffold, DB models, Alembic migration, PyPI registry seed
 - `S05-S07`: PEP 508 parser/normalizers, PyPI connector, transactional sync pipeline
@@ -458,6 +486,10 @@ runs the same flow against the live sources (02:30 UTC, or manually via `workflo
 - `packagehub_daily_update_duration_seconds`
 - `packagehub_daily_update_packages{result}`
 - `packagehub_daily_update_last_success_timestamp`
+- `packagehub_source_degraded{ecosystem,registry}`
+- `packagehub_source_consecutive_failures{ecosystem,registry}`
+- `packagehub_source_last_success_timestamp{ecosystem,registry}`
+- `packagehub_source_cursor{ecosystem,registry,key}`
 - `packagehub_package_events_total{kind}`
 
 ## Shutdown
@@ -465,3 +497,5 @@ runs the same flow against the live sources (02:30 UTC, or manually via `workflo
 ```bash
 docker compose down
 ```
+
+Против стенда никогда не запускайте `docker compose down -v`: это удалит его данные.
