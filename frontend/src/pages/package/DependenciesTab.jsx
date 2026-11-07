@@ -36,7 +36,7 @@ function rowHref(row, ecosystem, arch) {
 function Summary({ summary }) {
   return (
     <>
-      <p className="dep-summary">{`${summary.direct} direct · ${summary.indirect} indirect · ${summary.notInCatalog} not in catalog`}</p>
+      <p className="dep-summary">{`${summary.direct} direct · ${summary.indirect} indirect · ${summary.notInCatalog} not resolved`}</p>
       {summary.licenses.length ? (
         <p className="dep-summary">{`Licenses: ${summary.licenses.map(([name, count]) => `${name} ${count}`).join(" · ")}`}</p>
       ) : null}
@@ -106,7 +106,7 @@ function DependencyTable({ deps, ecosystem, arch, relation, tabHref, onSelectRel
                     {row.path.length ? <div className="muted dep-via">{`via ${row.path.join(" → ")}`}</div> : null}
                   </td>
                   <td>{dash(row.requires)}</td>
-                  <td>{row.resolved || <span className="tag muted-tag">not in catalog</span>}</td>
+                  <td>{row.resolved || <span className="tag muted-tag">not resolved</span>}</td>
                   <td>{dash(row.types)}</td>
                   <td>{row.relation === "direct" ? "Direct" : "Indirect"}</td>
                   <td>{row.license || "unknown"}</td>

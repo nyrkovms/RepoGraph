@@ -199,6 +199,14 @@ describe("versions tab", () => {
     expect(screen.queryByRole("button", { name: /older lines/ })).not.toBeInTheDocument();
   });
 
+  it("leaves the date cells of a line without dates empty", async () => {
+    const lines = [{ line: "0.1", latest: "0.1.0", released_at: null, stable_releases: 2, started_at: null }];
+    api.fetchOverview.mockImplementation((e, n, version) => Promise.resolve(overviewOf(version, { lines })));
+    renderCard("/package/pydantic?tab=versions");
+    const row = (await screen.findByRole("link", { name: "0.1" })).closest("tr");
+    expect([...row.querySelectorAll("td")].map((cell) => cell.textContent)).toEqual(["0.1", "0.1.0", "", "2", ""]);
+  });
+
   it("hides a chip with no versions, except All", async () => {
     api.fetchOverview.mockImplementation((e, n, version) =>
       Promise.resolve(overviewOf(version, { versions: { total: 5, prereleases: 0, not_active: 0 } }))

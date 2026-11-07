@@ -282,7 +282,7 @@ describe("package card", () => {
       await ready();
 
       const tabs = screen.getAllByRole("tab");
-      expect(tabs.map((tab) => tab.textContent)).toEqual(["Overview", "Dependencies6", "Used by3", "Versions211", "Compare", "Sources"]);
+      expect(tabs.map((tab) => tab.textContent)).toEqual(["Overview", "Dependencies4", "Used by1", "Versions211", "Compare", "Sources"]);
       expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
       expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-controls", screen.getByRole("tabpanel").id);
       expect(query().tab).toBeUndefined();

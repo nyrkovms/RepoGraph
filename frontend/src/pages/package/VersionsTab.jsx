@@ -115,9 +115,9 @@ function LinesTable({ lines, expanded, viewingLine, lineList, tabHref, onSelectL
                     {item.line === viewingLine ? <span className="tag viewing">viewing</span> : null}
                   </td>
                   <td>{item.latest}</td>
-                  <td>{formatDate(item.released_at) || "—"}</td>
+                  <td>{formatDate(item.released_at)}</td>
                   <td>{item.stable_releases}</td>
-                  <td>{formatDate(item.started_at) || "—"}</td>
+                  <td>{formatDate(item.started_at)}</td>
                 </tr>,
                 open ? (
                   <tr key={`${item.line}-versions`} className="line-versions">

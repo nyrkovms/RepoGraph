@@ -99,10 +99,16 @@ class DependencySummary:
     not_in_catalog: frozenset[DependencyKey]         # direct and optional names with no catalog package
 
 
-def summarize_dependencies(rows: Iterable[tuple[DependencyKey, DependencyType, uuid.UUID | None]]) -> DependencySummary:
+def summarize_dependencies(
+    rows: Iterable[tuple[DependencyKey, DependencyType, uuid.UUID | None]], self_id: uuid.UUID | None = None
+) -> DependencySummary:
+    """`self_id` is the package the rows belong to: a row that resolves to it is a dependency on itself, which the graph's
+    edges leave out (`_edges`), so it is left out here too."""
     types: dict[DependencyKey, set[DependencyType]] = {}
     resolved: dict[DependencyKey, set[uuid.UUID]] = {}
     for key, dep_type, package_id in rows:
+        if self_id is not None and package_id == self_id:
+            continue
         types.setdefault(key, set()).add(dep_type)
         ids = resolved.setdefault(key, set())
         if package_id is not None:

@@ -507,6 +507,11 @@ async def get_overview(
     if version_row is None and version is None and package.latest_version:
         version_row = await _version(db, target, package.latest_version)
 
+    # An RPM dependency names a capability and the tree finds its package through rpm-worker (`_rpm_provider`); the
+    # catalog graph only has `resolved_package_id`, so for RPM everything counted over it would claim that capabilities
+    # no package provides. Until the owner decides how providers are resolved here, those counts are null, not zero.
+    is_rpm = target.plugin.ecosystem == "rpm"
+
     dependencies = OverviewDependencies(direct=None, optional=None, dev=None, indirect=None, not_in_catalog=None)
     licenses: list[tuple[str, int]] = []
     if version_row is not None:
@@ -518,17 +523,24 @@ async def get_overview(
         unknown = version_row.id in view.unknown
         await db.commit()
         if not unknown:
-            summary = usage.summarize_dependencies(edges)
-            reached = await usage.reachable(db, summary.direct_ids, forward=True)
-            indirect = reached - summary.direct_ids - {package.id}
-            missing = summary.not_in_catalog | await usage.unresolved_edges(db, reached - {package.id})
-            dependencies = OverviewDependencies(direct=summary.direct, optional=summary.optional, dev=summary.dev,
-                                                indirect=len(indirect), not_in_catalog=len(missing))
-            licenses = await usage.license_counts(db, reached - {package.id})
+            summary = usage.summarize_dependencies(edges, self_id=package.id)
+            if is_rpm:
+                dependencies = OverviewDependencies(direct=summary.direct, optional=summary.optional, dev=summary.dev,
+                                                    indirect=None, not_in_catalog=None)
+            else:
+                reached = await usage.reachable(db, summary.direct_ids, forward=True)
+                indirect = reached - summary.direct_ids - {package.id}
+                missing = summary.not_in_catalog | await usage.unresolved_edges(db, reached - {package.id})
+                dependencies = OverviewDependencies(direct=summary.direct, optional=summary.optional, dev=summary.dev,
+                                                    indirect=len(indirect), not_in_catalog=len(missing))
+                licenses = await usage.license_counts(db, reached - {package.id})
 
     used_by_direct = (await usage.fetch_used_by(db, [package.id])).get(package.id, 0)
-    dependents = await usage.reachable(db, [package.id], forward=False)
-    used_by = OverviewUsedBy(direct=used_by_direct, indirect=max(len(dependents - {package.id}) - used_by_direct, 0))
+    if is_rpm:
+        used_by = OverviewUsedBy(direct=used_by_direct, indirect=None)
+    else:
+        dependents = await usage.reachable(db, [package.id], forward=False)
+        used_by = OverviewUsedBy(direct=used_by_direct, indirect=max(len(dependents - {package.id}) - used_by_direct, 0))
 
     now = datetime.now(UTC)
     months = release_lines.last_months(now)
@@ -546,12 +558,11 @@ async def get_overview(
     )).all())
     stable = (await db.execute(
         select(PackageVersion.version, PackageVersion.release_date, PackageVersion.sort_key).where(
-            *in_package, PackageVersion.is_prerelease.is_(False), PackageVersion.release_date.is_not(None))
+            *in_package, PackageVersion.is_prerelease.is_(False))
     )).all()
     lines = release_lines.build_lines(
         target.plugin.ecosystem,
-        (release_lines.ReleasedVersion(name, released_at, sort_key)
-         for name, released_at, sort_key in stable if released_at is not None),
+        (release_lines.ReleasedVersion(name, released_at, sort_key) for name, released_at, sort_key in stable),
     )
 
     return PackageOverviewResponse(

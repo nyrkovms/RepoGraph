@@ -12,6 +12,9 @@ from app.services.release_lines import ReleasedVersion, build_lines, fill_months
         ("pypi", "2.14.3", "2.14"),
         ("pypi", "6.1rc1", "6.1"),
         ("pypi", "2021", "2021.0"),
+        ("pypi", "1!2.0", "2.0"),
+        ("pypi", "1!2.0.3", "2.0"),
+        ("pypi", "2!10", "10.0"),
         ("npm", "1.2.3-beta.1", "1.2"),
         ("crates", "0.23.1", "0.23"),
         ("maven", "33.4.0-jre", "33.4"),
@@ -59,6 +62,20 @@ def test_build_lines_orders_by_highest_version_and_counts_stable_releases() -> N
     top = lines[0]
     assert (top.latest, top.stable_releases, top.released_at.day, top.started_at.day) == ("2.14.3", 2, 25, 20)
     assert lines[2].latest == "1.10.2" and lines[2].started_at.day == 3
+
+
+def test_build_lines_keeps_a_stable_version_without_a_date() -> None:
+    undated = ReleasedVersion("1.0.2", None, (2).to_bytes(4, "big"))
+    lines = build_lines("pypi", [_release("1.1.0", 5, 7), ReleasedVersion("1.0.1", None, (1).to_bytes(4, "big")), undated])
+    assert [line.line for line in lines] == ["1.1", "1.0"]
+    old = lines[1]
+    assert (old.latest, old.stable_releases, old.released_at, old.started_at) == ("1.0.2", 2, None, None)
+    assert lines[0].started_at is not None
+
+
+def test_a_line_with_one_dated_release_starts_there() -> None:
+    lines = build_lines("pypi", [_release("1.0.0", 1, 3), ReleasedVersion("1.0.1", None, (2).to_bytes(4, "big"))])
+    assert lines[0].latest == "1.0.1" and lines[0].released_at is None and lines[0].started_at.day == 3
 
 
 def test_build_lines_of_rpm_is_empty() -> None:

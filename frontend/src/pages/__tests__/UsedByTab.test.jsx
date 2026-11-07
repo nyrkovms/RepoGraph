@@ -138,7 +138,7 @@ describe("used by tab", () => {
   it("puts the tab between Dependencies and Versions with the total as its count", async () => {
     renderCard();
     await ready();
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Overview", "Dependencies6", "Used by3", "Versions211", "Compare", "Sources"]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Overview", "Dependencies4", "Used by1", "Versions211", "Compare", "Sources"]);
   });
 
   it("does not ask for the list until the tab is opened, then asks once per package", async () => {
@@ -269,5 +269,90 @@ describe("used by tab", () => {
     renderCard("/package/pydantic?tab=used-by");
     expect(await screen.findByText("Used by is not available")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Versions/ })).toBeInTheDocument();
+  });
+
+  it("does not say nothing depends on the package when only a filter is empty", async () => {
+    api.fetchDependents.mockImplementation((e, n, params) =>
+      Promise.resolve({ totals: { direct: 4, indirect: 0 }, data: params.relation === "indirect" ? [] : [direct("left-pad")], cursor: null, has_more: false })
+    );
+    renderCard("/package/pydantic?tab=used-by&relation=indirect");
+    expect(await screen.findByText("No indirect dependents in this catalog")).toBeInTheDocument();
+    expect(screen.queryByText("No packages in this catalog depend on it")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Direct 4" })).toBeInTheDocument();
+  });
+
+  it("names an empty direct filter as direct", async () => {
+    api.fetchDependents.mockResolvedValue({ totals: { direct: 0, indirect: 2 }, data: [], cursor: null, has_more: false });
+    renderCard("/package/pydantic?tab=used-by&relation=direct");
+    expect(await screen.findByText("No direct dependents in this catalog")).toBeInTheDocument();
+  });
+
+  it("counts the direct dependents on the tab, as the header fact and the zero state do", async () => {
+    renderCard();
+    await ready();
+    expect(screen.getByRole("tab", { name: /Used by/ })).toHaveTextContent("Used by1");
+    expect(screen.getByRole("tab", { name: /Dependencies/ })).toHaveTextContent("Dependencies4");
+  });
+
+  describe("RPM", () => {
+    const NOTE = "Dependencies on capabilities are not counted";
+    const rpmOverview = (version, patch = {}) =>
+      overviewOf(version, {
+        dependencies: { direct: 6, optional: 1, dev: 0, indirect: null, not_in_catalog: null },
+        used_by: { direct: 0, indirect: null },
+        licenses: [],
+        lines: [],
+        ...patch,
+      });
+
+    beforeEach(() => {
+      api.fetchPackage.mockResolvedValue({ ...PYDANTIC, ecosystem: "rpm", namespace: "rocky-9", name: "rocky-9/bash", normalized_name: "bash", purl: "pkg:rpm/rocky/bash?distro=rocky-9" });
+      api.fetchOverview.mockImplementation((e, n, version) => Promise.resolve(rpmOverview(version)));
+      api.fetchArtifacts.mockResolvedValue({ data: [] });
+    });
+
+    it("shows what is counted, hides what is not, and says why on the Overview", async () => {
+      renderCard("/package/rpm/rocky-9/bash");
+      await screen.findByRole("tab", { name: /Versions\s*211/ });
+      expect(screen.getByRole("tab", { name: /Used by/ })).toHaveTextContent("Used by0");
+      expect(screen.getByRole("tab", { name: /Dependencies/ })).toHaveTextContent("Dependencies6");
+      const facts = within(document.querySelector(".fact-strip"));
+      expect(facts.getByText("Dependencies").nextSibling).toHaveTextContent("6 + 1 optional");
+      expect(facts.getByText("Used by").nextSibling).toHaveTextContent("0 in catalog");
+
+      const blocks = [...document.querySelectorAll(".overview-block")];
+      const block = (title) => blocks.find((item) => item.querySelector("h3").textContent === title);
+      expect(within(block("Dependencies")).getByText("Direct")).toBeInTheDocument();
+      expect(within(block("Dependencies")).queryByText("Indirect")).not.toBeInTheDocument();
+      expect(block("Dependencies")).not.toHaveTextContent("not in catalog");
+      expect(block("Dependencies")).not.toHaveTextContent("lower bound");
+      expect(block("Used by, in this catalog")).toHaveTextContent(NOTE);
+      expect(block("Used by, in this catalog")).not.toHaveTextContent("No packages in this catalog depend on it");
+      expect(block("Licenses")).not.toHaveTextContent("Dependencies:");
+      expect(block("Licenses")).not.toHaveTextContent("No dependency in this catalog");
+    });
+
+    it("keeps the Overview note next to the direct bar when something depends on the package by name", async () => {
+      api.fetchOverview.mockImplementation((e, n, version) => Promise.resolve(rpmOverview(version, { used_by: { direct: 3, indirect: null } })));
+      renderCard("/package/rpm/rocky-9/bash");
+      await screen.findByRole("tab", { name: /Versions\s*211/ });
+      expect(screen.getByRole("link", { name: "Open used by" })).toBeInTheDocument();
+      expect(screen.getByText(NOTE)).toBeInTheDocument();
+    });
+
+    it("lists direct dependents only, without relation chips, under the note", async () => {
+      renderCard("/package/rpm/rocky-9/bash?tab=used-by");
+      await screen.findByText("left-pad");
+      expect(api.fetchDependents).toHaveBeenCalledWith("rpm", "rocky-9/bash", { relation: "direct", limit: 50, cursor: undefined });
+      expect(screen.getByText(NOTE)).toBeInTheDocument();
+      expect(screen.queryByRole("navigation", { name: "Relation" })).not.toBeInTheDocument();
+    });
+
+    it("says the zero state is not a finding", async () => {
+      api.fetchDependents.mockResolvedValue({ totals: { direct: 0, indirect: 0 }, data: [], cursor: null, has_more: false });
+      renderCard("/package/rpm/rocky-9/bash?tab=used-by");
+      expect(await screen.findByText(NOTE)).toBeInTheDocument();
+      expect(screen.queryByText("No packages in this catalog depend on it")).not.toBeInTheDocument();
+    });
   });
 });

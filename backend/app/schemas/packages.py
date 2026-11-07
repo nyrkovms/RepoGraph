@@ -200,13 +200,13 @@ class OverviewDependencies(BaseModel):
     direct: int | None
     optional: int | None
     dev: int | None
-    indirect: int | None                   # a lower bound: counted over the catalog's latest versions
-    not_in_catalog: int | None
+    indirect: int | None                   # a lower bound: counted over the catalog's latest versions; null for RPM
+    not_in_catalog: int | None             # null for RPM
 
 
 class OverviewUsedBy(BaseModel):
     direct: int
-    indirect: int
+    indirect: int | None                   # null for RPM: a capability's package is not resolved here, see the overview route
 
 
 class DependentItem(BaseModel):
@@ -252,9 +252,9 @@ class OverviewMonth(BaseModel):
 class OverviewLine(BaseModel):
     line: str                              # 2.14 (Go: v1)
     latest: str
-    released_at: datetime
+    released_at: datetime | None           # of `latest`; null if the source gives it no date
     stable_releases: int
-    started_at: datetime
+    started_at: datetime | None            # the earliest dated release; null if none has a date
 
 
 class PackageOverviewResponse(BaseModel):

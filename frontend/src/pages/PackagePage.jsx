@@ -489,7 +489,8 @@ export default function PackagePage() {
   // The numbers belong to the version they were counted for; a stale answer is not shown under another version.
   const overviewNow = overview && overview.version === selectedVersion ? overview : null;
   const isLatest = Boolean(pkg && selectedVersion && selectedVersion === pkg.latest_version);
-  const dependents = useDependents(ecosystem, name, Boolean(pkg) && activeTab === "used-by", relation);
+  // RPM counts no indirect dependents (capabilities are not resolved), so its list is the direct one.
+  const dependents = useDependents(ecosystem, name, Boolean(pkg) && activeTab === "used-by", isRpm ? "direct" : relation);
 
   // The Versions tab counts packages by lines and filters from the overview. Those are package-wide, so the last
   // overview of this package stays in use while another version's one loads; the tab does not blank on a version click.
@@ -517,10 +518,10 @@ export default function PackagePage() {
   }, [isRpm, versionsOpen, shownView, flatList.rows]);
   const tabs = TABS.map((tab) => {
     if (tab.id === "used-by" && overviewNow) {
-      return { ...tab, count: overviewNow.used_by.direct + overviewNow.used_by.indirect };
+      return { ...tab, count: overviewNow.used_by.direct };   // what the tab opens on is the list's own filter, "All" has its chip
     }
     if (tab.id === "dependencies" && overviewNow && overviewNow.dependencies.direct !== null) {
-      return { ...tab, count: overviewNow.dependencies.direct + overviewNow.dependencies.optional };
+      return { ...tab, count: overviewNow.dependencies.direct };
     }
     return tab.id === "versions" && overviewNow ? { ...tab, count: overviewNow.versions.total } : tab;
   });
@@ -650,6 +651,7 @@ export default function PackagePage() {
               relation={relation}
               tabHref={tabHref}
               onSelectRelation={setRelation}
+              isRpm={isRpm}
             />
           ) : null}
           {activeTab === "versions" ? (

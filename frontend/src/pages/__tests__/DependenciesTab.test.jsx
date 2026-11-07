@@ -150,7 +150,7 @@ describe("Dependencies tab", () => {
 
   it("summarises the tree: relations, rows not in catalog, licenses, and the scope of the numbers", async () => {
     await open("/package/pypi/root?tab=dependencies");
-    expect(await screen.findByText("2 direct · 3 indirect · 1 not in catalog")).toBeInTheDocument();
+    expect(await screen.findByText("2 direct · 3 indirect · 1 not resolved")).toBeInTheDocument();
     expect(screen.getByText("Licenses: MIT 2 · PSF-2.0 1 · unknown 1")).toBeInTheDocument();
     expect(screen.getByText("For this environment. Overview counts latest versions across the catalog.")).toBeInTheDocument();
   });
@@ -164,7 +164,7 @@ describe("Dependencies tab", () => {
     expect(cells(rows[1])).toEqual(["d", "—", "2.0.0", "optional", "Direct", "MIT"]);
     expect(cells(rows[2])).toEqual(["bvia a", "—", "1.0.0", "runtime", "Indirect", "unknown"]);
     expect(within(rows[3]).getByText("via a → b")).toHaveClass("muted");
-    expect(cells(rows[4])).toEqual(["ghostvia a", "—", "not in catalog", "runtime", "Indirect", "unknown"]);
+    expect(cells(rows[4])).toEqual(["ghostvia a", "—", "not resolved", "runtime", "Indirect", "unknown"]);
     expect(within(rows[0]).queryByText(/^via/)).not.toBeInTheDocument();
   });
 

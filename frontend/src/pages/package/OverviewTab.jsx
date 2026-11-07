@@ -1,4 +1,5 @@
 import { ActionLink } from "./Links";
+import { RPM_NOTE } from "./UsedByTab";
 import { emptyVulnerabilitiesText, formatDate, monthLabel, plural } from "./packageHelpers";
 
 const LINES_SHOWN = 3;
@@ -54,11 +55,13 @@ function SecurityBlock({ vulns, coverage, isLatest }) {
   );
 }
 
-function LicensesBlock({ license, overview }) {
+function LicensesBlock({ license, overview, isRpm }) {
   const dependencies = overview.dependencies;
   const licenses = overview.licenses || [];
   let text;
-  if (dependencies.direct === null) {
+  if (isRpm && dependencies.direct !== null) {
+    text = null;   // the licenses of what a capability leads to are not counted
+  } else if (dependencies.direct === null) {
     text = "Dependencies unknown";
   } else if (dependencies.direct === 0) {
     text = "No dependencies";
@@ -74,7 +77,7 @@ function LicensesBlock({ license, overview }) {
       <p>
         <b>This package</b>: {license}
       </p>
-      <p>{text}</p>
+      {text ? <p>{text}</p> : null}
     </Block>
   );
 }
@@ -89,10 +92,10 @@ function DependenciesBlock({ dependencies, tabHref, onSelectTab }) {
       ) : (
         <>
           <BarRow label="Direct" value={direct} max={max} />
-          <BarRow label="Indirect" value={indirect} max={max} />
+          {indirect !== null ? <BarRow label="Indirect" value={indirect} max={max} /> : null}
           {optional > 0 ? <p>Plus {optional} optional</p> : null}
           {missing > 0 ? <p>{missing} not in catalog</p> : null}
-          {direct > 0 ? <p className="muted">Indirect counts only packages in this catalog: a lower bound.</p> : null}
+          {direct > 0 && indirect !== null ? <p className="muted">Indirect counts only packages in this catalog: a lower bound.</p> : null}
         </>
       )}
     </Block>
@@ -100,16 +103,17 @@ function DependenciesBlock({ dependencies, tabHref, onSelectTab }) {
 }
 
 function UsedByBlock({ usedBy, tabHref, onSelectTab }) {
-  const max = Math.max(usedBy.direct, usedBy.indirect);
-  const used = usedBy.direct + usedBy.indirect > 0;
+  const rpm = usedBy.indirect === null;
+  const max = Math.max(usedBy.direct, usedBy.indirect || 0);
+  const used = usedBy.direct + (usedBy.indirect || 0) > 0;
   return (
     <Block title="Used by, in this catalog" tab={used ? "used-by" : undefined} tabLabel="Open used by" tabHref={tabHref} onSelectTab={onSelectTab}>
-      {usedBy.direct + usedBy.indirect === 0 ? (
-        <p>No packages in this catalog depend on it</p>
+      {!used ? (
+        <p>{rpm ? RPM_NOTE : "No packages in this catalog depend on it"}</p>
       ) : (
         <>
           <BarRow label="Direct" value={usedBy.direct} max={max} />
-          <BarRow label="Indirect" value={usedBy.indirect} max={max} />
+          {rpm ? <p className="muted">{RPM_NOTE}</p> : <BarRow label="Indirect" value={usedBy.indirect} max={max} />}
         </>
       )}
     </Block>
@@ -158,7 +162,7 @@ export function OverviewTab({ overview, overviewState, pkg, ecosystem, vulns, vu
       <SecurityBlock vulns={vulns} coverage={vulnCoverage} isLatest={isLatest} />
       {overview ? (
         <>
-          <LicensesBlock license={license} overview={overview} />
+          <LicensesBlock license={license} overview={overview} isRpm={ecosystem === "rpm"} />
           <DependenciesBlock dependencies={overview.dependencies} tabHref={tabHref} onSelectTab={onSelectTab} />
           <UsedByBlock usedBy={overview.used_by} tabHref={tabHref} onSelectTab={onSelectTab} />
           <ActivityBlock activity={overview.activity} tabHref={tabHref} onSelectTab={onSelectTab} />

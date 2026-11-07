@@ -145,7 +145,7 @@ export function PackageHeader({
             {overview ? (
               <>
                 <Fact label="Used by">
-                  {overview.used_by.direct + overview.used_by.indirect > 0
+                  {overview.used_by.direct > 0
                     ? tabLink("used-by", `${overview.used_by.direct} in catalog`)
                     : `${overview.used_by.direct} in catalog`}
                 </Fact>

@@ -37,3 +37,17 @@ def test_a_name_resolved_in_one_variant_is_in_the_catalog() -> None:
 def test_no_dependencies() -> None:
     summary = summarize_dependencies([])
     assert (summary.direct, summary.optional, summary.dev, summary.direct_ids) == (0, 0, 0, frozenset())
+
+
+def test_a_dependency_on_the_package_itself_is_not_counted() -> None:
+    me = uuid.uuid4()
+    summary = summarize_dependencies(
+        [(key("me"), T.runtime, me), (key("me"), T.optional, me), (key("a"), T.runtime, A), (key("me2"), T.dev, me)],
+        self_id=me,
+    )
+    assert (summary.direct, summary.optional, summary.dev) == (1, 0, 0)
+    assert summary.direct_ids == {A}
+
+
+def test_without_self_id_nothing_is_dropped() -> None:
+    assert summarize_dependencies([(key("a"), T.runtime, A)]).direct == 1

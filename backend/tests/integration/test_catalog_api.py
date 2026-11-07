@@ -36,6 +36,7 @@ from app.models.package_event import PackageEvent
 from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
 from app.models.run import Run
+from app.models.source_profile import SourceProfile, SourceProfileRegistry
 from app.models.sync_state import SyncState
 from app.models.version import PackageVersion, VersionSource
 
@@ -667,6 +668,7 @@ def overview(world):
                 not in catalog)
         a -> c, ghost2 (not in catalog);  b -> c;  c -> a  (a cycle)
         user -> root, user2;  user2 -> user  (a cycle on the dependents' side)
+        loop -> loop (itself)
 
     root has four versions: 1.0.0 (latest) and 0.9.0 stable, 1.1.0-beta.1 a prerelease, 0.1.0 yanked and undated."""
     now = world.now
@@ -678,7 +680,7 @@ def overview(world):
         registry = await db.scalar(select(Registry).where(Registry.id == uuid.UUID(profile.registries[0].id)))
         assert registry
         packages = {name: _package(registry, Ecosystem.npm, f"{OVW}{name}", origin=PackageOrigin.manual, latest="1.0.0",
-                                   now=now) for name in ("root", "a", "b", "c", "opt", "user", "user2")}
+                                   now=now) for name in ("root", "a", "b", "c", "opt", "user", "user2", "loop")}
         for name, (spdx, raw) in {"a": ("MIT", None), "b": ("MIT", "MIT License"), "c": (None, "Custom"),
                                   "opt": ("Apache-2.0", None)}.items():
             packages[name].license_spdx, packages[name].license_raw = spdx, raw
@@ -715,6 +717,7 @@ def overview(world):
             edge("b", "c", DependencyType.runtime), edge("c", "a", DependencyType.runtime),
             edge("user", "root", DependencyType.runtime), edge("user", "user2", DependencyType.runtime),
             edge("user2", "user", DependencyType.runtime),
+            edge("loop", "loop", DependencyType.runtime),
         ])
 
     async def remove(db: AsyncSession) -> None:
@@ -768,6 +771,12 @@ def test_overview_of_a_leaf_and_of_a_cycle(client: TestClient, overview) -> None
     assert a["used_by"] == {"direct": 2, "indirect": 3}
 
 
+def test_overview_does_not_count_a_dependency_on_the_package_itself(client: TestClient, overview) -> None:
+    payload = client.get(f"{API}/packages/npm/{OVW}loop/-/overview").json()
+    assert payload["dependencies"] == {"direct": 0, "optional": 0, "dev": 0, "indirect": 0, "not_in_catalog": 0}
+    assert payload["used_by"] == {"direct": 0, "indirect": 0}
+
+
 def test_overview_versions_activity_and_lines(client: TestClient, world, overview) -> None:
     payload = client.get(f"{API}/packages/npm/{OVW}root/-/overview").json()
     assert payload["versions"] == {"total": 4, "prereleases": 1, "not_active": 1}
@@ -775,8 +784,87 @@ def test_overview_versions_activity_and_lines(client: TestClient, world, overvie
     by_month = {item["month"]: item["releases"] for item in payload["activity"]}
     assert by_month[world.now.strftime("%Y-%m")] >= 2   # 1.0.0 and the prerelease; 0.9.0 may share the month
     assert sum(by_month.values()) == 3                  # the yanked 0.1.0 has no date
+    # The yanked 0.1.0 is stable and has no date: it still makes a line, with empty dates.
     assert [(line["line"], line["latest"], line["stable_releases"]) for line in payload["lines"]] == [
-        ("1.0", "1.0.0", 1), ("0.9", "0.9.0", 1)]
+        ("1.0", "1.0.0", 1), ("0.9", "0.9.0", 1), ("0.1", "0.1.0", 1)]
+    assert (payload["lines"][2]["released_at"], payload["lines"][2]["started_at"]) == (None, None)
+    assert payload["lines"][0]["released_at"] is not None and payload["lines"][0]["started_at"] is not None
+
+
+# --------------------------------------------------------------------------- RPM: capabilities are not resolved here
+
+RPM = "ovwrpm-"
+
+
+@pytest.fixture
+def rpm_overview(world):
+    """rocky-9: `bash` requires the capabilities `lib` (resolved to the package `lib`, which has a license) and `ghost`
+    (nothing resolved) and the dev-only `devcap`; `user` requires `bash`."""
+    now = world.now
+    ids: list[uuid.UUID] = []
+
+    async def add(db: AsyncSession) -> None:
+        # The default rpm profile is empty until a test fills it: this one routes its packages to a registry of its own.
+        profile = await db.scalar(select(SourceProfile).where(SourceProfile.ecosystem == Ecosystem.rpm,
+                                                              SourceProfile.is_default))
+        assert profile is not None
+        registry = _registry(f"{RPM}repo", Ecosystem.rpm, RegistryProtocol.rpm_repodata, 10)
+        registry.config = {"namespace": "rocky-9", "vendor": "rocky", "arch": ["x86_64"], "releasever": "9"}
+        db.add(registry)
+        await db.flush()
+        position = await db.scalar(select(func.coalesce(func.max(SourceProfileRegistry.position), -1) + 1)
+                                   .where(SourceProfileRegistry.profile_id == profile.id))
+        db.add(SourceProfileRegistry(profile_id=profile.id, registry_id=registry.id, ecosystem=Ecosystem.rpm,
+                                     position=position))
+        packages = {name: _package(registry, Ecosystem.rpm, f"{RPM}{name}", namespace="rocky-9",
+                                   origin=PackageOrigin.manual, latest="1.0-1.el9", now=now)
+                    for name in ("bash", "lib", "user")}
+        packages["lib"].license_spdx = "MIT"
+        db.add_all(packages.values())
+        await db.flush()
+        ids.extend(p.id for p in packages.values())
+        latest = {}
+        for name, package in packages.items():
+            row = PackageVersion(id=uuid.uuid4(), package_id=package.id, version="1.0-1.el9", raw_metadata={},
+                                 sort_key=b"\x01", is_prerelease=False, release_date=now, status=PackageVersionStatus.active,
+                                 metadata_registry_id=registry.id, dependencies_state=DependenciesState.hydrated)
+            latest[name] = row
+            db.add(row)
+        await db.flush()
+        for row in latest.values():
+            db.add(VersionSource(version_id=row.id, registry_id=registry.id, first_seen_at=now, status=row.status))
+
+        def edge(src: str, name: str, kind: DependencyType, resolved: str | None) -> Dependency:
+            return Dependency(version_id=latest[src].id, dependency_name=name, dependency_ecosystem=Ecosystem.rpm,
+                              version_constraint="*", dependency_type=kind, raw_spec=name,
+                              resolved_package_id=packages[resolved].id if resolved else None)
+
+        db.add_all([edge("bash", "lib", DependencyType.runtime, "lib"), edge("bash", "ghost", DependencyType.runtime, None),
+                    edge("bash", "devcap", DependencyType.dev, None), edge("user", "bash", DependencyType.runtime, "bash")])
+
+    async def remove(db: AsyncSession) -> None:
+        version_ids = (await db.scalars(select(PackageVersion.id).where(PackageVersion.package_id.in_(ids)))).all()
+        await db.execute(delete(Dependency).where(Dependency.version_id.in_(version_ids)))
+        await db.execute(delete(VersionSource).where(VersionSource.version_id.in_(version_ids)))
+        await db.execute(delete(PackageVersion).where(PackageVersion.id.in_(version_ids)))
+        await db.execute(delete(Package).where(Package.id.in_(ids)))
+        registry_ids = (await db.scalars(select(Registry.id).where(Registry.slug == f"{RPM}repo"))).all()
+        await db.execute(delete(SourceProfileRegistry).where(SourceProfileRegistry.registry_id.in_(registry_ids)))
+        await db.execute(delete(Registry).where(Registry.id.in_(registry_ids)))
+
+    run_db(add)
+    yield
+    run_db(remove)
+
+
+def test_rpm_overview_does_not_claim_what_it_cannot_count(client: TestClient, rpm_overview) -> None:
+    payload = client.get(f"{API}/packages/rpm/rocky-9/{RPM}bash/-/overview").json()
+    # The names are counted; which of them a catalog package answers to, and what is reached through it, is not known.
+    assert payload["dependencies"] == {"direct": 2, "optional": 0, "dev": 1, "indirect": None, "not_in_catalog": None}
+    assert payload["used_by"] == {"direct": 1, "indirect": None}
+    assert payload["licenses"] == []
+    # The same package through the rest of the card: the version counts do not depend on the graph.
+    assert payload["versions"]["total"] == 1 and payload["lines"] == []
 
 
 def test_overview_for_a_given_version_and_an_unknown_one(client: TestClient, overview) -> None:

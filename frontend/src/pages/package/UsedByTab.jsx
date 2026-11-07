@@ -6,7 +6,18 @@ import { ActionLink } from "./Links";
 const NOTE =
   "Counted among latest versions in this catalog: runtime, peer and provided dependencies. It shows what is affected here, not how popular the package is.";
 
+// RPM: a dependency names a capability, and the catalog does not resolve which package provides it.
+export const RPM_NOTE = "Dependencies on capabilities are not counted";
+
 const dash = (items) => (items.length ? items.join(", ") : "—");
+
+// What an empty list says: only a catalog with no dependents at all may say nobody depends on the package.
+function emptyText(relation, totals) {
+  if (!totals || totals.direct + totals.indirect === 0 || !relation) {
+    return "No packages in this catalog depend on it";
+  }
+  return `No ${relation} dependents in this catalog`;
+}
 
 function Chips({ relation, totals, tabHref, onSelectRelation }) {
   const chips = [
@@ -32,15 +43,17 @@ function Chips({ relation, totals, tabHref, onSelectRelation }) {
 }
 
 // The catalog packages that break if this one changes (SPEC-CATALOG-PAGES.md §5): `list` comes from useDependents.
-export function UsedByTab({ list, totals, relation, tabHref, onSelectRelation }) {
+export function UsedByTab({ list, totals, relation, tabHref, onSelectRelation, isRpm = false }) {
   const known = list.totals || totals;
+  const empty = list.state === "ready" && list.rows.length === 0;
   return (
     <>
       <h3>Used by</h3>
-      {known ? <Chips relation={relation} totals={known} tabHref={tabHref} onSelectRelation={onSelectRelation} /> : null}
+      {isRpm ? <p className={empty ? undefined : "muted"}>{RPM_NOTE}</p> : null}
+      {known && !isRpm ? <Chips relation={relation} totals={known} tabHref={tabHref} onSelectRelation={onSelectRelation} /> : null}
       {list.state === "loading" ? <p className="muted">Loading...</p> : null}
       {list.state === "error" ? <p className="error">Used by is not available</p> : null}
-      {list.state === "ready" && list.rows.length === 0 ? <p>No packages in this catalog depend on it</p> : null}
+      {empty && !isRpm ? <p>{emptyText(relation, known)}</p> : null}
       {list.rows.length > 0 ? (
         <div className="table-wrap">
           <table className="used-by-table">
