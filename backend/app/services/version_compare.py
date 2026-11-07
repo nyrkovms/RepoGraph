@@ -14,6 +14,7 @@ class DepRow:
     name: str
     dependency_type: str
     constraint: str
+    display: str = ""   # the name as the ecosystem writes it (`@babel/core`, `group:artifact`); `name` when empty
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +51,12 @@ def _constraints(rows: Iterable[DepRow]) -> dict[_Key, str]:
     return {key: ", ".join(sorted(values)) for key, values in grouped.items()}
 
 
+def _shown(rows: Iterable[DepRow]) -> dict[_Key, str]:
+    """The name a key is shown under: the namespace is part of the key, so it has to be part of what the reader sees,
+    or two packages with one bare name (`@a/core`, `@b/core`) read as the same row."""
+    return {(row.ecosystem, row.namespace, row.name, row.dependency_type): row.display or row.name for row in rows}
+
+
 def _order(key: _Key) -> tuple[str, str, str, str]:
     ecosystem, namespace, name, dep_type = key
     return (dep_type, name, namespace, ecosystem)
@@ -57,10 +64,13 @@ def _order(key: _Key) -> tuple[str, str, str, str]:
 
 def compare_dependencies(old: Iterable[DepRow], new: Iterable[DepRow]) -> Comparison:
     """Differences by key (ecosystem, namespace, name, type). A move between types is one removed and one added.
-    Lists are sorted by type, then name, so the result does not depend on the input order."""
+    Lists are sorted by type, then name, so the result does not depend on the input order; names are shown as
+    `DepRow.display` gives them."""
+    old, new = list(old), list(new)
     before, after = _constraints(old), _constraints(new)
-    added = [Added(k[2], after[k], k[3]) for k in sorted(after.keys() - before.keys(), key=_order)]
-    removed = [Added(k[2], before[k], k[3]) for k in sorted(before.keys() - after.keys(), key=_order)]
+    shown = {**_shown(old), **_shown(new)}
+    added = [Added(shown[k], after[k], k[3]) for k in sorted(after.keys() - before.keys(), key=_order)]
+    removed = [Added(shown[k], before[k], k[3]) for k in sorted(before.keys() - after.keys(), key=_order)]
     both = before.keys() & after.keys()
-    changed = [Changed(k[2], k[3], before[k], after[k]) for k in sorted(both, key=_order) if before[k] != after[k]]
+    changed = [Changed(shown[k], k[3], before[k], after[k]) for k in sorted(both, key=_order) if before[k] != after[k]]
     return Comparison(added=added, removed=removed, changed=changed, unchanged=len(both) - len(changed))

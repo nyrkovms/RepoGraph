@@ -17,7 +17,7 @@ from packaging.markers import Marker
 from sqlalchemy import ColumnElement, and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.packages import _decode_cursor_or_422
+from app.api.v1.packages import _decode_cursor_or_422, deprecated_clause
 from app.db import get_db_session
 from app.ecosystems import purl as purls
 from app.ecosystems.base import EcosystemPlugin, Environment, PackageRef, RegistryConfig, SourceProfile
@@ -213,13 +213,15 @@ async def list_versions(
     cursor: str | None = Query(default=None),
     prerelease: bool | None = Query(default=None),
     not_active: bool | None = Query(default=None),
+    deprecated: bool | None = Query(default=None),
     line: str | None = Query(default=None),
 ) -> VersionListResponse:
     """Versions the profile's sources publish (the default profile without `profile`), newest release first.
 
     `prerelease=true|false` keeps only prereleases or only stable versions; `not_active=true` keeps versions whose
-    effective status (the one the rows show) is not `active`, `false` the active ones. Both are SQL filters and work
-    with the cursor.
+    effective status (the one the rows show) is not `active`, `false` the active ones. `deprecated=true|false` keeps
+    versions that carry a deprecation (npm and NuGet keep it with status `active`; JSON `null` is none), or those that
+    do not. All three are SQL filters and work with the cursor.
 
     `line` (`2.14`, `v1`) cannot be expressed in SQL for every ecosystem (the line is derived from the version string,
     see `release_lines.line_of`), so it is applied in Python over the visible rows in the usual order: stable and
@@ -236,6 +238,9 @@ async def list_versions(
     if not_active is not None:
         clause = _not_active_clause(registries)
         stmt = stmt.where(clause if not_active else ~clause)
+    if deprecated is not None:
+        clause = deprecated_clause(PackageVersion.deprecation)
+        stmt = stmt.where(clause if deprecated else ~clause)
     stmt = stmt.order_by(PackageVersion.release_date.desc().nullslast(), PackageVersion.id.asc())
 
     if line is not None:
@@ -301,7 +306,7 @@ async def compare_versions(
     to: str | None = Query(default=None),
 ) -> VersionCompareResponse:
     """Dependencies that differ between two versions: `to` is the latest by default, `from` the nearest lower stable
-    visible version. Declared before `/versions/{version}`, which would take `compare` for a version. A version whose
+    visible version whose effective status is `active` (a yanked one is a poor default; an explicit `from` is free). Declared before `/versions/{version}`, which would take `compare` for a version. A version whose
     dependencies are unknown makes the lists empty and `dependencies_unknown` true."""
     target = await _target(db, ecosystem, coordinates)
     package = target.package
@@ -320,7 +325,8 @@ async def compare_versions(
         old_row = (await db.scalars(
             select(PackageVersion)
             .where(PackageVersion.package_id == package.id, visibility.visible_clause(registries),
-                   PackageVersion.is_prerelease.is_(False), PackageVersion.sort_key < new_row.sort_key)
+                   PackageVersion.is_prerelease.is_(False), ~_not_active_clause(registries),
+                   PackageVersion.sort_key < new_row.sort_key)
             .order_by(PackageVersion.sort_key.desc()).limit(1)
         )).first()
 
@@ -333,7 +339,8 @@ async def compare_versions(
 
     def rows_of(deps: list[Dependency]) -> list[version_compare.DepRow]:
         return [version_compare.DepRow(dep.dependency_ecosystem.value, dep.dependency_namespace or "",
-                                       dep.dependency_name, dep.dependency_type.value, dep.version_constraint)
+                                       dep.dependency_name, dep.dependency_type.value, dep.version_constraint,
+                                       display=_dependency_display(dep))
                 for dep in deps]
 
     comparison = version_compare.Comparison(added=[], removed=[], changed=[], unchanged=0)
@@ -369,6 +376,11 @@ async def get_version(
 ) -> VersionDetailResponse:
     target = await _target(db, ecosystem, coordinates)
     row = await _version(db, target, version)
+    # The status a reader sees is the effective one, as in the versions list; the stored one is the merged view.
+    registries = await visibility.visible_registries(db, target.plugin, target.ref, target.package.id,
+                                                     await _profile(db, ecosystem, None))
+    statuses = await visibility.source_statuses(db, registries, [row.id])
+    status = visibility.effective_status(statuses.get(row.id, [])) or row.status
     source_rows = (
         await db.execute(
             select(Registry, VersionSource)
@@ -382,7 +394,7 @@ async def get_version(
         purl=target.plugin.coordinates.to_purl(target.ref, row.version),
         version=row.version,
         release_date=row.release_date,
-        status=row.status.value,
+        status=status.value,
         status_reason=row.status_reason,
         deprecation=row.deprecation,
         requires_python=_requires_python(row),
@@ -546,11 +558,12 @@ async def get_overview(
     months = release_lines.last_months(now)
     month_of = func.to_char(func.timezone("UTC", PackageVersion.release_date), "YYYY-MM")
     in_package = (PackageVersion.package_id == package.id, visible)
-    total, prereleases, not_active = (await db.execute(
+    total, prereleases, not_active, deprecated = (await db.execute(
         select(
             func.count(),
             func.count().filter(PackageVersion.is_prerelease.is_(True)),
             func.count().filter(_not_active_clause(registries)),
+            func.count().filter(deprecated_clause(PackageVersion.deprecation)),
         ).where(*in_package)
     )).one()
     month_counts: dict[str, int] = dict((await db.execute(
@@ -570,7 +583,7 @@ async def get_overview(
         dependencies=dependencies,
         used_by=used_by,
         licenses=[OverviewLicense(license=name, count=count) for name, count in licenses],
-        versions=OverviewVersions(total=total, prereleases=prereleases, not_active=not_active),
+        versions=OverviewVersions(total=total, prereleases=prereleases, not_active=not_active, deprecated=deprecated),
         activity=[OverviewMonth(**month) for month in release_lines.fill_months(month_counts, now)],
         lines=[OverviewLine(**asdict(line)) for line in lines],
     )
@@ -712,7 +725,7 @@ async def list_versions_alias(
     cursor: str | None = Query(default=None),
 ) -> VersionListResponse:
     return await list_versions("pypi", name, db, profile=None, limit=limit, cursor=cursor, prerelease=None,
-                               not_active=None, line=None)
+                               not_active=None, deprecated=None, line=None)
 
 
 @router.get("/packages/pypi/{name}/versions/{ver}", response_model=VersionDetailResponse, deprecated=True)

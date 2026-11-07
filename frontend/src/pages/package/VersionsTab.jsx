@@ -19,6 +19,9 @@ export function versionChips(overview, isRpm) {
   if (counts?.not_active > 0) {
     chips.push({ value: "not-active", label: "Not active", count: counts.not_active });
   }
+  if (counts?.deprecated > 0) {
+    chips.push({ value: "deprecated", label: "Deprecated", count: counts.deprecated });
+  }
   chips.push({ value: "all", label: "All", count: counts?.total });
   return chips;
 }

@@ -16,10 +16,13 @@ function paramsOf(key) {
   if (key === "not-active") {
     return { not_active: true, limit: VERSIONS_PAGE };
   }
+  if (key === "deprecated") {
+    return { deprecated: true, limit: VERSIONS_PAGE };
+  }
   return { limit: VERSIONS_PAGE };
 }
 
-// A list of versions of the package for one `listKey` ("all", "prereleases", "not-active" or "line:<line>"), loaded when
+// A list of versions of the package for one `listKey` ("all", "prereleases", "not-active", "deprecated" or "line:<line>"), loaded when
 // `listKey` is set and kept for the package: going back to a list does not ask again. Each key has its own cursor.
 // `seed` ({ rows, cursor, hasMore }) is a first page of "all" the page already has, so that list does not ask for it.
 export function useVersionList(ecosystem, name, listKey, seed = null) {

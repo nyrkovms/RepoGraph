@@ -2,7 +2,8 @@ from app.services.version_compare import Added, Changed, DepRow, compare_depende
 
 
 def dep(name: str, constraint: str, kind: str = "runtime", namespace: str = "") -> DepRow:
-    return DepRow("pypi", namespace, name, kind, constraint)
+    # An npm-style scope: `@a/x`, the way the route builds the display name.
+    return DepRow("npm", namespace, name, kind, constraint, display=f"@{namespace}/{name}" if namespace else name)
 
 
 def test_added_removed_changed_and_the_unchanged_count() -> None:
@@ -33,6 +34,22 @@ def test_a_move_between_types_is_one_removed_and_one_added() -> None:
 def test_the_namespace_is_part_of_the_key() -> None:
     result = compare_dependencies([dep("x", "1", namespace="a")], [dep("x", "1", namespace="b")])
     assert len(result.added) == 1 and len(result.removed) == 1
+    # The two are different packages and read as different rows, not as `x` twice.
+    assert [row.name for row in result.added] == ["@b/x"]
+    assert [row.name for row in result.removed] == ["@a/x"]
+
+
+def test_two_namespaces_with_one_bare_name_are_two_distinct_displayed_rows() -> None:
+    old = [dep("core", "^1", namespace="babel"), dep("core", "^1", namespace="other"), dep("core", "^1")]
+    new = [dep("core", "^2", namespace="babel"), dep("core", "^2", namespace="other"), dep("core", "^2")]
+    names = [row.name for row in compare_dependencies(old, new).changed]
+    assert sorted(names) == ["@babel/core", "@other/core", "core"]
+    assert len(set(names)) == 3
+
+
+def test_without_a_display_the_name_is_shown() -> None:
+    result = compare_dependencies([], [DepRow("pypi", "", "requests", "runtime", ">=2")])
+    assert result.added == [Added("requests", ">=2", "runtime")]
 
 
 def test_the_result_does_not_depend_on_the_input_order() -> None:

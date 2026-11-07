@@ -234,7 +234,7 @@ export function readDepsView(value) {
 
 // `?view=` of the Versions tab: absent or unknown means the release lines.
 export function readVersionsView(value) {
-  return value === "prereleases" || value === "not-active" || value === "all" ? value : "lines";
+  return value === "prereleases" || value === "not-active" || value === "deprecated" || value === "all" ? value : "lines";
 }
 
 // A catalog 404: the API's error object carries `status`; a rejected mock or an older client has only the message.

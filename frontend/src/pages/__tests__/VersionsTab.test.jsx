@@ -207,6 +207,31 @@ describe("versions tab", () => {
     expect([...row.querySelectorAll("td")].map((cell) => cell.textContent)).toEqual(["0.1", "0.1.0", "", "2", ""]);
   });
 
+  it("opens the deprecated versions from their own chip, with the deprecation shown on the row", async () => {
+    const user = userEvent.setup();
+    api.fetchOverview.mockImplementation((e, n, version) =>
+      Promise.resolve(overviewOf(version, { versions: { total: 290, prereleases: 0, not_active: 0, deprecated: 173 } }))
+    );
+    api.fetchVersions.mockImplementation((e, n, params) =>
+      Promise.resolve({
+        data: params.deprecated
+          ? [{ version: "2.14.2", line: "2.14", is_prerelease: false, status: "active", deprecation: { message: "use 2.14.3" }, release_date: "2026-10-05T09:00:00Z" }]
+          : VERSIONS,
+        cursor: null,
+        has_more: false,
+      })
+    );
+    renderCard("/package/pydantic?tab=versions");
+    await screen.findByRole("table");
+    expect(chipNames()).toEqual(["Lines", "Deprecated 173", "All 290"]);
+    await user.click(screen.getByRole("link", { name: "Deprecated 173" }));
+    await waitFor(() => expect(query().view).toBe("deprecated"));
+    expect(api.fetchVersions).toHaveBeenCalledWith("pypi", "pydantic", { deprecated: true, limit: 50, cursor: undefined });
+    const row = (await screen.findByRole("link", { name: "2.14.2" })).closest("li");
+    expect(within(row).getByText("deprecated")).toHaveClass("warn");
+    expect(within(row).getByText("use 2.14.3")).toBeInTheDocument();
+  });
+
   it("hides a chip with no versions, except All", async () => {
     api.fetchOverview.mockImplementation((e, n, version) =>
       Promise.resolve(overviewOf(version, { versions: { total: 5, prereleases: 0, not_active: 0 } }))

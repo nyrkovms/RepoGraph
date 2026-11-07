@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, func, select, text, update
+from sqlalchemy import delete, func, null, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -779,7 +779,7 @@ def test_overview_does_not_count_a_dependency_on_the_package_itself(client: Test
 
 def test_overview_versions_activity_and_lines(client: TestClient, world, overview) -> None:
     payload = client.get(f"{API}/packages/npm/{OVW}root/-/overview").json()
-    assert payload["versions"] == {"total": 4, "prereleases": 1, "not_active": 1}
+    assert payload["versions"] == {"total": 4, "prereleases": 1, "not_active": 1, "deprecated": 0}
     assert len(payload["activity"]) == 12
     by_month = {item["month"]: item["releases"] for item in payload["activity"]}
     assert by_month[world.now.strftime("%Y-%m")] >= 2   # 1.0.0 and the prerelease; 0.9.0 may share the month
@@ -1117,8 +1117,10 @@ VSN = "vsn-"   # outside the `c1b-` prefix: the search tests count everything wi
 def versions_graph(world):
     """One npm package, `vsn-pkg`, newest release first:
 
-        2.2.0-beta.1 (prerelease), 2.1.2-rc.1 (prerelease), 2.1.1, 2.1.0, 2.0.5 (stored active, its source says yanked),
-        1.9.0 (stored yanked, its source says active), 1.8.0 (deprecated in both), 1.0.0 (stable, undated)."""
+        2.2.0-beta.1 (prerelease), 2.1.2-rc.1 (prerelease), 2.1.1, 2.1.0 (status active, deprecated: a message in
+        `deprecation`, as npm keeps it), 2.0.5 (stored active, its source says yanked), 1.9.0 (stored yanked, its source
+        says active), 1.8.0 (status deprecated in both, no `deprecation`), 1.0.0 (stable, undated, SQL NULL deprecation).
+    Every other row holds JSON null in `deprecation`, which is what the sources write for no deprecation."""
     now = world.now
     package_ids: list[uuid.UUID] = []
 
@@ -1138,9 +1140,11 @@ def versions_graph(world):
             ("1.8.0", False, 30, PackageVersionStatus.deprecated, PackageVersionStatus.deprecated),
             ("1.0.0", False, None, active, active),
         ]
+        deprecations = {"2.1.0": {"message": "use 2.1.1"}, "1.0.0": null()}
         for number, prerelease, days, stored, in_source in rows:
             row = PackageVersion(id=uuid.uuid4(), package_id=package.id, version=number, raw_metadata={},
                                  sort_key=number.encode(), is_prerelease=prerelease, status=stored,
+                                 deprecation=deprecations.get(number),
                                  release_date=now - timedelta(days=days) if days is not None else None,
                                  metadata_registry_id=registry.id, dependencies_state=DependenciesState.hydrated)
             db.add(row)
@@ -1204,9 +1208,32 @@ def test_versions_not_active_is_the_effective_status(client: TestClient, version
     assert [row["version"] for row in rows] == ["2.0.5", "1.8.0"]
 
 
+def test_versions_deprecated_filter_reads_the_deprecation_not_the_status(client: TestClient, versions_graph) -> None:
+    # 2.1.0 is active with a deprecation; 1.8.0 has the status `deprecated` and none; JSON and SQL nulls are none.
+    flagged = _versions(client, deprecated="true")
+    assert _numbers(flagged) == ["2.1.0"]
+    assert flagged["data"][0]["status"] == "active" and flagged["data"][0]["deprecation"] == {"message": "use 2.1.1"}
+    assert _numbers(_versions(client, deprecated="false")) == [
+        "2.2.0-beta.1", "2.1.2-rc.1", "2.1.1", "2.0.5", "1.9.0", "1.8.0", "1.0.0"]
+    assert _numbers(_versions(client, deprecated="true", prerelease="true")) == []
+    rows, _ = _walk(client, f"packages/npm/{VSN}pkg/-/versions", {"deprecated": "false"}, 3)
+    assert [row["version"] for row in rows] == _numbers(_versions(client, deprecated="false"))
+
+
 def test_overview_not_active_agrees_with_the_versions_filter(client: TestClient, versions_graph) -> None:
     counts = client.get(f"{API}/packages/npm/{VSN}pkg/-/overview").json()["versions"]
-    assert counts == {"total": 8, "prereleases": 2, "not_active": len(_versions(client, not_active="true")["data"])}
+    assert counts == {"total": 8, "prereleases": 2, "not_active": len(_versions(client, not_active="true")["data"]),
+                      "deprecated": len(_versions(client, deprecated="true")["data"])}
+    assert counts["deprecated"] == 1
+
+
+def test_version_detail_has_the_effective_status_of_the_list(client: TestClient, versions_graph) -> None:
+    listed = {row["version"]: row["status"] for row in _versions(client)["data"]}
+    assert listed["2.0.5"] == "yanked" and listed["1.9.0"] == "active"      # the sources, not the stored column
+    for number, status in listed.items():
+        detail = client.get(f"{VSN_PATH}/{number}").json()
+        assert detail["status"] == status, number
+        assert detail["version"] == number and "dependencies_state" in detail   # what consumers read stays
 
 
 # --------------------------------------------------------------------------- the dependency comparison of two versions
@@ -1220,9 +1247,11 @@ def compare_graph(world):
     """One npm package, `cmp-pkg`, oldest first: 0.5.0 (dependencies unavailable), 1.0.0, 1.1.0-rc.1 (prerelease),
     1.2.0 (its source says yanked), 2.0.0 (latest). Dependencies by version:
 
-        1.0.0: core ^1 (runtime), same ^1 (runtime), gone ^1 (runtime), moved ^1 (runtime)
+        1.0.0: core ^1 (runtime), same ^1 (runtime), gone ^1 (runtime), moved ^1 (runtime), @babel/core ^7 and
+               @other/core ^1 (scoped: namespace babel and other, name core)
         1.1.0-rc.1: core ^9 (runtime)
-        1.2.0: core ^2, same ^1, fresh ^1 (runtime), moved ^1 (dev), several ^1 and ^2 in two rows (runtime)
+        1.2.0: core ^2, same ^1, fresh ^1 (runtime), moved ^1 (dev), several ^1 and ^2 in two rows (runtime),
+               @babel/core ^8 and @other/core ^2
         2.0.0: as 1.2.0"""
     now = world.now
     package_ids: list[uuid.UUID] = []
@@ -1237,11 +1266,13 @@ def compare_graph(world):
         package_ids.append(package.id)
         runtime, dev = DependencyType.runtime, DependencyType.dev
         newer = [("core", "^2", runtime), ("same", "^1", runtime), ("fresh", "^1", runtime), ("moved", "^1", dev),
-                 ("several", "^1", runtime), ("several", "^2", runtime)]
+                 ("several", "^1", runtime), ("several", "^2", runtime), ("@babel/core", "^8", runtime),
+                 ("@other/core", "^2", runtime)]
         rows = [  # version, key, prerelease, source status, dependencies state, dependencies
             ("0.5.0", 1, False, "active", DependenciesState.unavailable, []),
             ("1.0.0", 2, False, "active", DependenciesState.hydrated,
-             [("core", "^1", runtime), ("same", "^1", runtime), ("gone", "^1", runtime), ("moved", "^1", runtime)]),
+             [("core", "^1", runtime), ("same", "^1", runtime), ("gone", "^1", runtime), ("moved", "^1", runtime),
+              ("@babel/core", "^7", runtime), ("@other/core", "^1", runtime)]),
             ("1.1.0-rc.1", 3, True, "active", DependenciesState.hydrated, [("core", "^9", runtime)]),
             ("1.2.0", 4, False, "yanked", DependenciesState.hydrated, newer),
             ("2.0.0", 5, False, "active", DependenciesState.hydrated, newer),
@@ -1255,8 +1286,11 @@ def compare_graph(world):
             db.add(row)
             await db.flush()
             db.add(VersionSource(version_id=row.id, registry_id=registry.id, first_seen_at=now, status=status))
-            db.add_all(Dependency(version_id=row.id, dependency_name=name, dependency_ecosystem=Ecosystem.npm,
-                                  version_constraint=constraint, dependency_type=kind, raw_spec=f"{name}@{constraint}")
+            # The catalog keeps an npm scope apart from the name: `@babel/core` is namespace `babel`, name `core`.
+            db.add_all(Dependency(version_id=row.id, dependency_name=name.rpartition("/")[2],
+                                  dependency_namespace=name[1:].partition("/")[0] if name.startswith("@") else None,
+                                  dependency_ecosystem=Ecosystem.npm, version_constraint=constraint,
+                                  dependency_type=kind, raw_spec=f"{name}@{constraint}")
                        for name, constraint, kind in deps)
 
     async def remove(db: AsyncSession) -> None:
@@ -1271,14 +1305,20 @@ def compare_graph(world):
     run_db(remove)
 
 
-def test_compare_defaults_to_the_latest_and_the_nearest_lower_stable(client: TestClient, compare_graph) -> None:
+def test_compare_defaults_to_the_latest_and_the_nearest_lower_stable_active(client: TestClient, compare_graph) -> None:
     payload = client.get(CMP_PATH).json()
-    # 2.0.0 against 1.2.0: the prerelease 1.1.0-rc.1 is not a candidate, and 1.2.0 is lower than 2.0.0.
-    assert payload["from"]["version"] == "1.2.0" and payload["to"]["version"] == "2.0.0"
-    assert payload["from"]["status"] == "yanked"      # effective status, the stored one is active
-    assert payload["to"]["status"] == "active"
-    assert payload["dependencies"] == {"added": [], "removed": [], "changed": [], "unchanged": 5}
+    # 2.0.0 against 1.0.0: the prerelease 1.1.0-rc.1 is not a candidate, and 1.2.0, the nearest lower stable one, is
+    # yanked in its source (the stored status says active): a poor default.
+    assert payload["from"]["version"] == "1.0.0" and payload["to"]["version"] == "2.0.0"
+    assert payload["from"]["status"] == "active" and payload["to"]["status"] == "active"
     assert payload["dependencies_unknown"] is False
+
+
+def test_compare_explicit_from_may_be_a_yanked_version(client: TestClient, compare_graph) -> None:
+    payload = client.get(CMP_PATH, params={"from": "1.2.0"}).json()
+    assert payload["from"]["version"] == "1.2.0"
+    assert payload["from"]["status"] == "yanked"      # effective status, the stored one is active
+    assert payload["dependencies"] == {"added": [], "removed": [], "changed": [], "unchanged": 7}
 
 
 def test_compare_default_from_skips_prereleases(client: TestClient, compare_graph) -> None:
@@ -1289,7 +1329,10 @@ def test_compare_default_from_skips_prereleases(client: TestClient, compare_grap
 def test_compare_explicit_versions(client: TestClient, compare_graph) -> None:
     payload = client.get(CMP_PATH, params={"from": "1.0.0", "to": "2.0.0"}).json()
     deps = payload["dependencies"]
-    assert deps["changed"] == [{"name": "core", "dependency_type": "runtime", "from": "^1", "to": "^2"}]
+    # Two scoped packages with the bare name `core` are two rows, each under its own name.
+    assert deps["changed"] == [{"name": "core", "dependency_type": "runtime", "from": "^1", "to": "^2"},
+                               {"name": "@babel/core", "dependency_type": "runtime", "from": "^7", "to": "^8"},
+                               {"name": "@other/core", "dependency_type": "runtime", "from": "^1", "to": "^2"}]
     assert deps["added"] == [{"name": "moved", "constraint": "^1", "dependency_type": "dev"},
                              {"name": "fresh", "constraint": "^1", "dependency_type": "runtime"},
                              {"name": "several", "constraint": "^1, ^2", "dependency_type": "runtime"}]

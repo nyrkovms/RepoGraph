@@ -3,10 +3,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, case, exists, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.db import get_db_session
@@ -36,9 +38,10 @@ class PackageSort(str, Enum):
     used_by = "used_by"
 
 
-def deprecated_clause():
-    """SQL condition: the package is deprecated. `deprecation` is JSONB and most rows hold JSON `null`, not SQL NULL."""
-    return and_(Package.deprecation.is_not(None), Package.deprecation != text("'null'::jsonb"))
+def deprecated_clause(column: InstrumentedAttribute[dict[Any, Any] | None] = Package.deprecation):
+    """SQL condition: the package (or, given `PackageVersion.deprecation`, the version) is deprecated. `deprecation` is
+    JSONB and most rows hold JSON `null`, not SQL NULL."""
+    return and_(column.is_not(None), column != text("'null'::jsonb"))
 
 
 @router.get("/packages", response_model=PackageListResponse)

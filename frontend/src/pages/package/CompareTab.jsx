@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { fetchCompare } from "../../lib/api";
+import { fetchCompare, fetchVersions } from "../../lib/api";
 import { VersionStatus } from "./VersionStatus";
 import { formatDate } from "./packageHelpers";
 
@@ -10,6 +10,9 @@ function fromOptions(versions, to, from) {
   const names = (at < 0 ? versions : versions.slice(at + 1)).map((row) => row.version);
   return from && !names.includes(from) ? [from, ...names] : names;
 }
+
+// The newest versions the From select offers: the page's first screen of versions is too short for a long history.
+export const FROM_VERSIONS = 200;
 
 function Side({ info, isGo }) {
   return (
@@ -104,10 +107,30 @@ export function CompareTab({ ecosystem, name, to, from, hold = false, versions, 
       .catch(() => settle("error", null));
   }, [ecosystem, name, from, to, hold, requestKey]);
 
+  // The select's own list, loaded when the tab opens. It belongs to one package, and an answer for another is dropped.
+  const packageKey = `${ecosystem}/${name}`;
+  const [choices, setChoices] = useState({ key: "", rows: null });
+  useEffect(() => {
+    let cancelled = false;
+    fetchVersions(ecosystem, name, { limit: FROM_VERSIONS })
+      .then((payload) => {
+        if (!cancelled) {
+          setChoices({ key: packageKey, rows: payload.data || [] });
+        }
+      })
+      .catch(() => {
+        // The select then offers the versions the page has: comparing still works.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ecosystem, name, packageKey]);
+  const offered = choices.key === packageKey && choices.rows ? choices.rows : versions;
+
   const result = answer.key === requestKey ? answer : { state: "loading", data: null };
   const data = result.state === "ready" ? result.data : null;
   const shownFrom = from || data?.from?.version || "";
-  const options = fromOptions(versions, to, shownFrom);
+  const options = fromOptions(offered, to, shownFrom);
   const { added, removed, changed, unchanged } = data?.dependencies || {};
   const differences = data ? added.length + removed.length + changed.length : 0;
 

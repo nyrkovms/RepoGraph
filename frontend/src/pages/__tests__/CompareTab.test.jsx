@@ -154,6 +154,50 @@ describe("compare tab", () => {
     expect(options[0]).toBe("1.0.0");
   });
 
+  it("offers the newest 200 versions in the select, not only the header's first screen", async () => {
+    const long = Array.from({ length: 120 }, (_, index) => ({
+      version: `1.${119 - index}.0`, status: "active", release_date: "2020-01-01T00:00:00Z",
+    }));
+    api.fetchVersions.mockImplementation((e, n, params) =>
+      Promise.resolve({ data: params.limit === 200 ? [...VERSIONS, ...long] : VERSIONS, cursor: null, has_more: false })
+    );
+    await open();
+    await waitFor(() => expect(within(screen.getByLabelText("From")).getAllByRole("option").length).toBeGreaterThan(100));
+    expect(api.fetchVersions).toHaveBeenCalledWith("pypi", "pydantic", { limit: 200 });
+    const options = within(screen.getByLabelText("From")).getAllByRole("option").map((option) => option.textContent);
+    expect(options).toContain("1.0.0");
+    expect(options).not.toContain("2.14.3");   // the compared version is not its own base
+  });
+
+  it("keeps the header's versions in the select when the longer list cannot be loaded", async () => {
+    api.fetchVersions.mockImplementation((e, n, params) =>
+      params.limit === 200 ? Promise.reject({ message: "HTTP 500", status: 500 }) : Promise.resolve({ data: VERSIONS, cursor: null, has_more: false })
+    );
+    await open();
+    expect(within(screen.getByLabelText("From")).getAllByRole("option").map((option) => option.textContent)).toEqual(["2.13.5", "2.12.0", "2.0.0"]);
+  });
+
+  it("shows scoped dependencies under their own names, one row each", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    api.fetchCompare.mockResolvedValue({
+      ...DIFF,
+      dependencies: {
+        ...NONE,
+        changed: [
+          { name: "core", dependency_type: "runtime", from: "^1", to: "^2" },
+          { name: "@babel/core", dependency_type: "runtime", from: "^7", to: "^8" },
+          { name: "@other/core", dependency_type: "runtime", from: "^1", to: "^2" },
+        ],
+      },
+    });
+    await open();
+    const table = await screen.findByRole("table");
+    const names = within(table).getAllByRole("row").slice(1).map((row) => within(row).getAllByRole("cell")[0].textContent);
+    expect(names).toEqual(["core runtime", "@babel/core runtime", "@other/core runtime"]);
+    expect(error).not.toHaveBeenCalled();   // no duplicate React keys
+    error.mockRestore();
+  });
+
   it("asks again when the header's version changes", async () => {
     const user = userEvent.setup();
     await open("/package/pydantic?tab=compare&from=2.0.0");

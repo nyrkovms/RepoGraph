@@ -241,7 +241,8 @@ class OverviewLicense(BaseModel):
 class OverviewVersions(BaseModel):
     total: int
     prereleases: int
-    not_active: int
+    not_active: int                        # by effective status (yanked, unlisted, ...); `deprecated` is counted apart
+    deprecated: int                        # versions carrying a deprecation (npm, NuGet keep it with status `active`)
 
 
 class OverviewMonth(BaseModel):
