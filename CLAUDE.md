@@ -41,7 +41,8 @@ scripts/check_migrations.sh     # migrations on synthetic data: base -> head -> 
 scripts/record_fixtures.sh       # re-record upstream responses for offline CI (live network)
 ```
 
-- Backend tools run through `uv` (the local `.venv` is not complete): see the Makefile targets.
+- Backend tools run through `uv` (the local `.venv` is not complete): see the Makefile targets. Versions are pinned in
+  `backend/uv.lock`, which the `api` image installs from; after changing dependencies run `uv lock` in `backend/`.
 - Integration tests need the stack: `docker compose up -d --build postgres redis api`, then
   `docker compose run --rm api pytest tests/integration`. They run offline against recorded upstream responses
   (`HTTP_REPLAY_DIR`); never add tests that need the live internet to the default suite.
