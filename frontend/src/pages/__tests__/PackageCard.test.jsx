@@ -282,7 +282,7 @@ describe("package card", () => {
       await ready();
 
       const tabs = screen.getAllByRole("tab");
-      expect(tabs.map((tab) => tab.textContent)).toEqual(["Overview", "Dependencies6", "Used by3", "Versions211", "Sources"]);
+      expect(tabs.map((tab) => tab.textContent)).toEqual(["Overview", "Dependencies6", "Used by3", "Versions211", "Compare", "Sources"]);
       expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
       expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-controls", screen.getByRole("tabpanel").id);
       expect(query().tab).toBeUndefined();
@@ -313,7 +313,7 @@ describe("package card", () => {
     });
 
     it("shows Overview for an unknown ?tab= and drops it from the address", async () => {
-      renderCard("/package/pydantic?tab=compare&version=2.13.5");
+      renderCard("/package/pydantic?tab=bogus&version=2.13.5");
       await ready();
       expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
       await waitFor(() => expect(query()).toEqual({ version: "2.13.5" }));

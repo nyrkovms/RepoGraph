@@ -46,6 +46,10 @@ from app.models.vulnerability import PackageVulnerability, Vulnerability
 from app.schemas.packages import (
     ArtifactItem,
     ArtifactListResponse,
+    CompareChange,
+    CompareDependencies,
+    CompareDependency,
+    CompareVersion,
     DependencyNode,
     DependencyTreeResponse,
     DependentItem,
@@ -60,6 +64,7 @@ from app.schemas.packages import (
     PackageDetailResponse,
     PackageOverviewResponse,
     PackageSourceItem,
+    VersionCompareResponse,
     VersionDetailResponse,
     VersionItem,
     VersionListResponse,
@@ -67,7 +72,7 @@ from app.schemas.packages import (
     VulnerabilityItem,
     VulnerabilityListResponse,
 )
-from app.services import release_lines, usage, visibility
+from app.services import release_lines, usage, version_compare, visibility
 from app.services.cursor import CursorError, encode_cursor, parse_iso_datetime, parse_uuid
 from app.services.purls import package_purl
 
@@ -285,6 +290,77 @@ async def _version_items(db: AsyncSession, registries: Sequence[RegistryConfig],
         )
         for row in rows
     ]
+
+
+@router.get(_COORDS + "/versions/compare", response_model=VersionCompareResponse)
+async def compare_versions(
+    ecosystem: str,
+    coordinates: str,
+    db: AsyncSession = Depends(get_db_session),
+    from_: str | None = Query(default=None, alias="from"),
+    to: str | None = Query(default=None),
+) -> VersionCompareResponse:
+    """Dependencies that differ between two versions: `to` is the latest by default, `from` the nearest lower stable
+    visible version. Declared before `/versions/{version}`, which would take `compare` for a version. A version whose
+    dependencies are unknown makes the lists empty and `dependencies_unknown` true."""
+    target = await _target(db, ecosystem, coordinates)
+    package = target.package
+    profile = await _profile(db, ecosystem, None)
+    registries = await visibility.visible_registries(db, target.plugin, target.ref, package.id, profile)
+
+    if to is None:
+        to = package.latest_version
+        if to is None:
+            raise HTTPException(status_code=404, detail="Package has no versions")
+    new_row = await _version(db, target, to)
+    old_row: PackageVersion | None
+    if from_ is not None:
+        old_row = await _version(db, target, from_)
+    else:
+        old_row = (await db.scalars(
+            select(PackageVersion)
+            .where(PackageVersion.package_id == package.id, visibility.visible_clause(registries),
+                   PackageVersion.is_prerelease.is_(False), PackageVersion.sort_key < new_row.sort_key)
+            .order_by(PackageVersion.sort_key.desc()).limit(1)
+        )).first()
+
+    shown = [row for row in (old_row, new_row) if row is not None]
+    statuses = await visibility.source_statuses(db, registries, [row.id for row in shown])
+
+    def describe(row: PackageVersion) -> CompareVersion:
+        status = visibility.effective_status(statuses.get(row.id, [])) or row.status
+        return CompareVersion(version=row.version, release_date=row.release_date, status=status.value)
+
+    def rows_of(deps: list[Dependency]) -> list[version_compare.DepRow]:
+        return [version_compare.DepRow(dep.dependency_ecosystem.value, dep.dependency_namespace or "",
+                                       dep.dependency_name, dep.dependency_type.value, dep.version_constraint)
+                for dep in deps]
+
+    comparison = version_compare.Comparison(added=[], removed=[], changed=[], unchanged=0)
+    unknown = False
+    if old_row is not None:
+        view = _ProfileView(db, profile)
+        old_deps = await view.dependencies(package, old_row)
+        new_deps = await view.dependencies(package, new_row)
+        unknown = old_row.id in view.unknown or new_row.id in view.unknown
+        await db.commit()
+        if not unknown:
+            comparison = version_compare.compare_dependencies(rows_of(old_deps), rows_of(new_deps))
+
+    return VersionCompareResponse(
+        from_=describe(old_row) if old_row is not None else None,
+        to=describe(new_row),
+        dependencies=CompareDependencies(
+            added=[CompareDependency(name=d.name, constraint=d.constraint, dependency_type=d.dependency_type)
+                   for d in comparison.added],
+            removed=[CompareDependency(name=d.name, constraint=d.constraint, dependency_type=d.dependency_type)
+                     for d in comparison.removed],
+            changed=[CompareChange(name=c.name, dependency_type=c.dependency_type, from_=c.old, to=c.new)
+                     for c in comparison.changed],
+            unchanged=comparison.unchanged,
+        ),
+        dependencies_unknown=unknown,
+    )
 
 
 @router.get(_COORDS + "/versions/{version}", response_model=VersionDetailResponse)

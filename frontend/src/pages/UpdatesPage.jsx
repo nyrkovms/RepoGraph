@@ -6,6 +6,7 @@ import {
   FLAG_LABELS,
   browserTimezone,
   bumpOf,
+  compareLink,
   displayName,
   ecosystemOf,
   flagsOf,
@@ -323,6 +324,9 @@ export default function UpdatesPage() {
               {" → "}
               <code>{item.to_version}</code>
             </span>
+          ) : null}
+          {item.from_version && item.to_version ? (
+            <Link to={compareLink(item)}>Compare</Link>
           ) : null}
           {bump && !flags.includes(bump) ? <span className="tag muted-tag">{bump}</span> : null}
           {flags.map((flag) => (

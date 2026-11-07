@@ -11,6 +11,7 @@ import {
   fetchVulnerabilities,
 } from "../lib/api";
 import { getPackageDescriptionParagraphs } from "../lib/packageDescription";
+import { CompareTab } from "./package/CompareTab";
 import { DependenciesTab } from "./package/DependenciesTab";
 import { ActionLink } from "./package/Links";
 import { OverviewTab } from "./package/OverviewTab";
@@ -97,6 +98,8 @@ export default function PackagePage() {
   // `?view=` and `?line=` of the Versions tab: the requested view ("lines" by default) and the expanded line.
   const [versionsView, setVersionsView] = useState(() => readVersionsView(searchParams.get("view")));
   const [expandedLine, setExpandedLine] = useState(() => searchParams.get("line") || "");
+  // `?from=` of the Compare tab: the version compared with the header's one; "" is the API's default.
+  const [compareFrom, setCompareFrom] = useState(() => searchParams.get("from") || "");
   // The Overview numbers of the selected version; `overviewState` tells "not there yet" from "failed".
   const [overview, setOverview] = useState(null);
   const [overviewState, setOverviewState] = useState("loading");
@@ -149,6 +152,7 @@ export default function PackagePage() {
     setDepsView(readDepsView(searchParams.get("deps")));
     setVersionsView(readVersionsView(searchParams.get("view")));
     setExpandedLine(searchParams.get("line") || "");
+    setCompareFrom(searchParams.get("from") || "");
     setOverview(null);
     setOverviewState("loading");
     setDepsSettledFor("");
@@ -221,8 +225,11 @@ export default function PackagePage() {
         next.set("line", expandedLine);
       }
     }
+    if (activeTab === "compare" && compareFrom) {
+      next.set("from", compareFrom);
+    }
     setSearchParams(next, { replace: true });
-  }, [activeTab, relation, depsView, versionsView, expandedLine, isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
+  }, [activeTab, relation, depsView, versionsView, expandedLine, compareFrom, isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -621,6 +628,17 @@ export default function PackagePage() {
             ) : (
               <p className="muted">Loading...</p>
             )
+          ) : null}
+          {activeTab === "compare" ? (
+            <CompareTab
+              ecosystem={ecosystem}
+              name={name}
+              to={selectedVersion}
+              from={compareFrom}
+              versions={versions}
+              onSelectFrom={setCompareFrom}
+              isGo={isGo}
+            />
           ) : null}
           {activeTab === "sources" ? (
             <SourcesTab

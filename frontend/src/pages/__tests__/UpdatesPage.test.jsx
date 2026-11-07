@@ -695,4 +695,22 @@ describe("UpdatesPage sections and usage", () => {
     expect(container.querySelectorAll(".update-usage")).toHaveLength(1);
     expect(screen.getByText("used by 2 packages · tracked directly")).toBeInTheDocument();
   });
+
+  it("links a row with both versions to the Compare tab and suppresses it for a new package", async () => {
+    api.fetchUpdates.mockResolvedValue({ data: [], has_more: false, cursor: null });
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...SUMMARY,
+      packages: [
+        SUMMARY.packages[0],
+        { ...SUMMARY.packages[1], name: "fresh", purl: "pkg:pypi/fresh", from_version: null, to_version: "1.0.0" },
+        { ...SUMMARY.packages[1], ecosystem: "npm", name: "@scope/pkg", purl: "pkg:npm/%40scope/pkg", from_version: "1.0.0", to_version: "1.1.0" },
+      ],
+    });
+    renderPage();
+    await screen.findByRole("link", { name: "fresh" });
+    const links = screen.getAllByRole("link", { name: "Compare" });
+    expect(links).toHaveLength(2);
+    expect(links[0]).toHaveAttribute("href", "/package/pypi/flask?version=3.2.0&tab=compare&from=3.1.1");
+    expect(links[1]).toHaveAttribute("href", "/package/npm/%40scope/pkg?version=1.1.0&tab=compare&from=1.0.0");
+  });
 });

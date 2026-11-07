@@ -1117,3 +1117,125 @@ def test_versions_not_active_is_the_effective_status(client: TestClient, version
 def test_overview_not_active_agrees_with_the_versions_filter(client: TestClient, versions_graph) -> None:
     counts = client.get(f"{API}/packages/npm/{VSN}pkg/-/overview").json()["versions"]
     assert counts == {"total": 8, "prereleases": 2, "not_active": len(_versions(client, not_active="true")["data"])}
+
+
+# --------------------------------------------------------------------------- the dependency comparison of two versions
+
+CMP = "cmp-"   # outside the `c1b-` prefix: the search tests count everything with that prefix
+CMP_PATH = f"{API}/packages/npm/{CMP}pkg/-/versions/compare"
+
+
+@pytest.fixture
+def compare_graph(world):
+    """One npm package, `cmp-pkg`, oldest first: 0.5.0 (dependencies unavailable), 1.0.0, 1.1.0-rc.1 (prerelease),
+    1.2.0 (its source says yanked), 2.0.0 (latest). Dependencies by version:
+
+        1.0.0: core ^1 (runtime), same ^1 (runtime), gone ^1 (runtime), moved ^1 (runtime)
+        1.1.0-rc.1: core ^9 (runtime)
+        1.2.0: core ^2, same ^1, fresh ^1 (runtime), moved ^1 (dev), several ^1 and ^2 in two rows (runtime)
+        2.0.0: as 1.2.0"""
+    now = world.now
+    package_ids: list[uuid.UUID] = []
+
+    async def add(db: AsyncSession) -> None:
+        profile = await sources.default_profile(db, "npm")
+        registry = await db.scalar(select(Registry).where(Registry.id == uuid.UUID(profile.registries[0].id)))
+        assert registry
+        package = _package(registry, Ecosystem.npm, f"{CMP}pkg", origin=PackageOrigin.manual, latest="2.0.0", now=now)
+        db.add(package)
+        await db.flush()
+        package_ids.append(package.id)
+        runtime, dev = DependencyType.runtime, DependencyType.dev
+        newer = [("core", "^2", runtime), ("same", "^1", runtime), ("fresh", "^1", runtime), ("moved", "^1", dev),
+                 ("several", "^1", runtime), ("several", "^2", runtime)]
+        rows = [  # version, key, prerelease, source status, dependencies state, dependencies
+            ("0.5.0", 1, False, "active", DependenciesState.unavailable, []),
+            ("1.0.0", 2, False, "active", DependenciesState.hydrated,
+             [("core", "^1", runtime), ("same", "^1", runtime), ("gone", "^1", runtime), ("moved", "^1", runtime)]),
+            ("1.1.0-rc.1", 3, True, "active", DependenciesState.hydrated, [("core", "^9", runtime)]),
+            ("1.2.0", 4, False, "yanked", DependenciesState.hydrated, newer),
+            ("2.0.0", 5, False, "active", DependenciesState.hydrated, newer),
+        ]
+        for number, key, prerelease, source_status, state, deps in rows:
+            status = PackageVersionStatus(source_status)
+            row = PackageVersion(id=uuid.uuid4(), package_id=package.id, version=number, raw_metadata={},
+                                 sort_key=bytes([key]), is_prerelease=prerelease, status=PackageVersionStatus.active,
+                                 release_date=now - timedelta(days=100 - key), metadata_registry_id=registry.id,
+                                 dependencies_state=state)
+            db.add(row)
+            await db.flush()
+            db.add(VersionSource(version_id=row.id, registry_id=registry.id, first_seen_at=now, status=status))
+            db.add_all(Dependency(version_id=row.id, dependency_name=name, dependency_ecosystem=Ecosystem.npm,
+                                  version_constraint=constraint, dependency_type=kind, raw_spec=f"{name}@{constraint}")
+                       for name, constraint, kind in deps)
+
+    async def remove(db: AsyncSession) -> None:
+        version_ids = (await db.scalars(select(PackageVersion.id).where(PackageVersion.package_id.in_(package_ids)))).all()
+        await db.execute(delete(Dependency).where(Dependency.version_id.in_(version_ids)))
+        await db.execute(delete(VersionSource).where(VersionSource.version_id.in_(version_ids)))
+        await db.execute(delete(PackageVersion).where(PackageVersion.id.in_(version_ids)))
+        await db.execute(delete(Package).where(Package.id.in_(package_ids)))
+
+    run_db(add)
+    yield
+    run_db(remove)
+
+
+def test_compare_defaults_to_the_latest_and_the_nearest_lower_stable(client: TestClient, compare_graph) -> None:
+    payload = client.get(CMP_PATH).json()
+    # 2.0.0 against 1.2.0: the prerelease 1.1.0-rc.1 is not a candidate, and 1.2.0 is lower than 2.0.0.
+    assert payload["from"]["version"] == "1.2.0" and payload["to"]["version"] == "2.0.0"
+    assert payload["from"]["status"] == "yanked"      # effective status, the stored one is active
+    assert payload["to"]["status"] == "active"
+    assert payload["dependencies"] == {"added": [], "removed": [], "changed": [], "unchanged": 5}
+    assert payload["dependencies_unknown"] is False
+
+
+def test_compare_default_from_skips_prereleases(client: TestClient, compare_graph) -> None:
+    payload = client.get(CMP_PATH, params={"to": "1.2.0"}).json()
+    assert payload["from"]["version"] == "1.0.0"
+
+
+def test_compare_explicit_versions(client: TestClient, compare_graph) -> None:
+    payload = client.get(CMP_PATH, params={"from": "1.0.0", "to": "2.0.0"}).json()
+    deps = payload["dependencies"]
+    assert deps["changed"] == [{"name": "core", "dependency_type": "runtime", "from": "^1", "to": "^2"}]
+    assert deps["added"] == [{"name": "moved", "constraint": "^1", "dependency_type": "dev"},
+                             {"name": "fresh", "constraint": "^1", "dependency_type": "runtime"},
+                             {"name": "several", "constraint": "^1, ^2", "dependency_type": "runtime"}]
+    assert deps["removed"] == [{"name": "gone", "constraint": "^1", "dependency_type": "runtime"},
+                               {"name": "moved", "constraint": "^1", "dependency_type": "runtime"}]
+    assert deps["unchanged"] == 1                      # same
+
+
+def test_compare_with_a_prerelease_given_explicitly(client: TestClient, compare_graph) -> None:
+    payload = client.get(CMP_PATH, params={"from": "1.1.0-rc.1", "to": "1.0.0"}).json()
+    assert payload["dependencies"]["changed"] == [
+        {"name": "core", "dependency_type": "runtime", "from": "^9", "to": "^1"}]
+
+
+def test_compare_unknown_dependencies(client: TestClient, compare_graph) -> None:
+    payload = client.get(CMP_PATH, params={"from": "0.5.0", "to": "1.0.0"}).json()
+    assert payload["dependencies_unknown"] is True
+    assert payload["dependencies"] == {"added": [], "removed": [], "changed": [], "unchanged": 0}
+    assert payload["from"]["version"] == "0.5.0"
+
+
+def test_compare_the_first_version_has_nothing_to_compare_with(client: TestClient, compare_graph) -> None:
+    payload = client.get(CMP_PATH, params={"to": "0.5.0"}).json()
+    assert payload["from"] is None and payload["to"]["version"] == "0.5.0"
+    assert payload["dependencies"] == {"added": [], "removed": [], "changed": [], "unchanged": 0}
+    assert payload["dependencies_unknown"] is False
+
+
+def test_compare_unknown_version_or_ecosystem_is_404(client: TestClient, compare_graph) -> None:
+    assert client.get(CMP_PATH, params={"to": "9.9.9"}).status_code == 404
+    assert client.get(CMP_PATH, params={"from": "9.9.9"}).status_code == 404
+    # An unknown ecosystem: an unknown package would be fetched lazily from the upstream and count against its breaker.
+    assert client.get(f"{API}/packages/nosuch/{CMP}pkg/-/versions/compare").status_code == 404
+
+
+def test_compare_is_not_taken_for_a_version(client: TestClient, compare_graph) -> None:
+    response = client.get(CMP_PATH)
+    assert response.status_code == 200 and "dependencies" in response.json()
+    assert client.get(f"{CMP_PATH[:-len('/compare')]}/2.0.0").json()["version"] == "2.0.0"

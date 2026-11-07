@@ -29,6 +29,11 @@ export function packageLink(item) {
   return `/package/${ecosystem}/${displayName(item).split("/").map((part) => encodeURIComponent(part).replaceAll("%3A", ":")).join("/")}`;
 }
 
+// The Compare tab of the package card for the version the row moved from and to.
+export function compareLink(item) {
+  const query = new URLSearchParams({ version: item.to_version, tab: "compare", from: item.from_version });
+  return `${packageLink(item)}?${query.toString()}`;
+}
 
 export const FLAG_LABELS = {
   unavailable: "unavailable",

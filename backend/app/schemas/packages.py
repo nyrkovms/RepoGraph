@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 
 class PackageListItem(BaseModel):
@@ -72,6 +72,43 @@ class VersionListResponse(BaseModel):
     data: list[VersionItem]
     cursor: str | None
     has_more: bool
+
+
+class CompareVersion(BaseModel):
+    version: str
+    release_date: datetime | None
+    status: str
+
+
+class CompareDependency(BaseModel):
+    name: str
+    constraint: str
+    dependency_type: str
+
+
+class CompareChange(BaseModel):
+    name: str
+    dependency_type: str
+    from_: str = Field(serialization_alias="from")
+    to: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CompareDependencies(BaseModel):
+    added: list[CompareDependency]
+    removed: list[CompareDependency]
+    changed: list[CompareChange]
+    unchanged: int
+
+
+class VersionCompareResponse(BaseModel):
+    from_: CompareVersion | None = Field(serialization_alias="from")
+    to: CompareVersion
+    dependencies: CompareDependencies
+    dependencies_unknown: bool
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class VersionSourceItem(BaseModel):

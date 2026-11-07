@@ -213,6 +213,7 @@ export const TABS = [
   { id: "dependencies", label: "Dependencies" },
   { id: "used-by", label: "Used by" },
   { id: "versions", label: "Versions" },
+  { id: "compare", label: "Compare" },
   { id: "sources", label: "Sources" },
 ];
 

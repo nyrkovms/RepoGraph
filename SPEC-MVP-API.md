@@ -180,6 +180,7 @@ Cursor-based ответ для списков:
 GET /api/v1/purl/{purl}
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions
+GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/compare?from=&to=
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/{version}
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/{version}/dependencies
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/{version}/artifacts
@@ -525,6 +526,31 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 - Порядок: прямые, затем косвенные; внутри группы `normalized_name`, затем `id`. Курсор keyset, сравнение выполняется в SQL, поэтому порядок следует collation базы. Курсор от другого маршрута или испорченный — `422`.
 - `requires` — различные `version_constraint` прямых рёбер из последней версии зависимого пакета в этот, по возрастанию; значений несколько, когда у зависимого несколько строк. `dependency_types` — типы этих рёбер, по возрастанию значения. У косвенного зависимого оба поля пусты. `normalized_name` вместе с `namespace` даёт написание, по которому карточка строит ссылку.
 - Errors: `404/422/500`
+
+### 3.3.10 `GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/compare`
+
+Чем отличаются зависимости двух версий (вкладка Compare). Маршрут объявлен раньше `/versions/{version}`, иначе `compare` читалось бы как версия.
+
+Параметры:
+- `to: string?` — по умолчанию последняя версия пакета.
+- `from: string?` — по умолчанию ближайшая меньшая по `sort_key` стабильная версия среди видимых. Если такой нет, `from` в ответе `null`, списки пусты. Явно заданная `from` может быть пререлизом и может быть больше `to`.
+- Неизвестная версия или пакет: 404.
+
+```json
+{"from": {"version": "2.13.5", "release_date": "2026-09-01T09:00:00Z", "status": "active"},
+ "to": {"version": "2.14.3", "release_date": "2026-11-05T09:00:00Z", "status": "active"},
+ "dependencies": {
+   "added": [{"name": "x", "constraint": ">=1", "dependency_type": "runtime"}],
+   "removed": [],
+   "changed": [{"name": "pydantic-core", "dependency_type": "runtime", "from": "==2.46.5", "to": "==2.50.4"}],
+   "unchanged": 1},
+ "dependencies_unknown": false}
+```
+
+- Ключ зависимости: экосистема, пространство имён, имя и тип. Несколько строк одного ключа (маркеры, варианты) сводятся к отсортированным различным ограничениям через `, `. Переход между типами даёт одну запись в `removed` и одну в `added`. Списки отсортированы по типу, затем по имени; порядок не зависит от порядка строк в источнике.
+- `status` версий эффективный, как в списке версий, а не сохранённый.
+- Зависимости загружаются так же, как для `/overview`: версия в состоянии `pending` подгружается при чтении. Если зависимости одной из сторон неизвестны, `dependencies_unknown` равно `true`, списки пусты, `unchanged` равно 0.
+- Лицензии, описания и артефакты не сравниваются.
 
 ## 3.4 Алиасы PyPI (deprecated до конца E7)
 

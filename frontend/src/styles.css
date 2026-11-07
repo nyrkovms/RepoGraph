@@ -938,3 +938,37 @@ button:disabled {
 .dep-via {
   font-size: 12px;
 }
+
+.compare-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  align-items: center;
+  margin: 0 0 8px;
+}
+
+.compare-from,
+.compare-to {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.compare-dates {
+  margin: 0 0 12px;
+}
+
+.compare-table .diff-old {
+  background: #fee2e2;
+}
+
+.compare-table .diff-new {
+  background: #dcfce7;
+}
+
+.diff-marker {
+  margin-right: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}

@@ -87,6 +87,11 @@ export async function fetchVersions(ecosystem, coordinates, params = {}) {
   return request(withQuery(`${packagePath(ecosystem, coordinates)}/versions`, params));
 }
 
+// `from` and `to` are optional: the API compares the latest version with the nearest lower stable one by default.
+export async function fetchCompare(ecosystem, coordinates, params = {}) {
+  return request(withQuery(`${packagePath(ecosystem, coordinates)}/versions/compare`, params));
+}
+
 export async function fetchDependencies(ecosystem, coordinates, version, params = {}) {
   return request(
     withQuery(`${packagePath(ecosystem, coordinates)}/versions/${encodeURIComponent(version)}/dependencies`, params)

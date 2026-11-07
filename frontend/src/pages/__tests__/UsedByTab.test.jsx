@@ -138,7 +138,7 @@ describe("used by tab", () => {
   it("puts the tab between Dependencies and Versions with the total as its count", async () => {
     renderCard();
     await ready();
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Overview", "Dependencies6", "Used by3", "Versions211", "Sources"]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Overview", "Dependencies6", "Used by3", "Versions211", "Compare", "Sources"]);
   });
 
   it("does not ask for the list until the tab is opened, then asks once per package", async () => {
