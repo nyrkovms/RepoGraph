@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -144,4 +145,6 @@ class VulnerabilityItem(BaseModel):
 
 class VulnerabilityListResponse(BaseModel):
     package: str
+    # `not_collected`: no source feeds advisories for the ecosystem, so an empty `data` says nothing about safety.
+    coverage: Literal["collected", "not_collected"]
     data: list[VulnerabilityItem]

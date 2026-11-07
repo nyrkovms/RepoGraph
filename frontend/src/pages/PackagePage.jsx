@@ -519,6 +519,14 @@ function DependencyTree({ nodes, packageName, ecosystem, arch, parentId = "root"
   );
 }
 
+// The advisory list is scoped to the package, not to a version (#68): an empty one is only a finding for the latest.
+function emptyVulnerabilitiesText(coverage, isLatest) {
+  if (coverage !== "collected") {
+    return "Not collected for this ecosystem";
+  }
+  return isLatest ? "No advisories found" : "Not checked for this version";
+}
+
 export default function PackagePage() {
   // `/package/:ecosystem/*` carries native coordinates (`@angular/core`); `/package/:name` is the old PyPI route.
   const params = useParams();
@@ -550,6 +558,8 @@ export default function PackagePage() {
   const [featuresInput, setFeaturesInput] = useState(() => normalizeFeatures(searchParams.get("features")));
   const [defaultFeatures, setDefaultFeatures] = useState(() => searchParams.get("default_features") !== "0");
   const [vulns, setVulns] = useState([]);
+  // Whether any source feeds advisories for this ecosystem: an empty list means nothing without it (#68).
+  const [vulnCoverage, setVulnCoverage] = useState("not_collected");
   const [deps, setDeps] = useState([]);
   const [depsUnknown, setDepsUnknown] = useState(false);
   const [versionDetail, setVersionDetail] = useState(null);
@@ -719,6 +729,7 @@ export default function PackagePage() {
 
       const vulnerabilitiesPayload = await fetchVulnerabilities(ecosystem, name);
       setVulns(vulnerabilitiesPayload.data || []);
+      setVulnCoverage(vulnerabilitiesPayload.coverage || "not_collected");
 
       const versionExists = loadedVersions.some((row) => row.version === selectedVersion);
       const targetVersion = versionExists ? selectedVersion : (packagePayload.latest_version || loadedVersions[0]?.version || "");
@@ -1203,7 +1214,10 @@ export default function PackagePage() {
           />
 
           <h3>Vulnerabilities</h3>
-          {vulns.length === 0 ? <p>None</p> : null}
+          {vulns.length === 0 ? <p>{emptyVulnerabilitiesText(vulnCoverage, selectedVersion === pkg.latest_version)}</p> : null}
+          {vulns.length > 0 && selectedVersion !== pkg.latest_version ? (
+            <p className="muted">Listed for the package, not for this version</p>
+          ) : null}
           <ul className="result-list">
             {vulns.map((vuln) => (
               <li key={vuln.source_id}>

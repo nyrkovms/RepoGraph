@@ -63,6 +63,9 @@ logger = logging.getLogger(__name__)
 FULL_TREE_MAX_DEPTH = 200
 API_PREFIX = "/api/v1"
 _COORDS = "/packages/{ecosystem}/{coordinates:path}/-"
+# Only the PyPI connector stores advisories; NuGet receives them and drops them (D6), the other ecosystems have no
+# source. For the rest an empty list must not read as "checked and clean" (#68).
+_ADVISORY_ECOSYSTEMS = frozenset({"pypi"})
 
 
 @dataclass(slots=True)
@@ -399,6 +402,7 @@ async def list_vulnerabilities(
 
     return VulnerabilityListResponse(
         package=target.display,
+        coverage="collected" if target.ref.ecosystem in _ADVISORY_ECOSYSTEMS else "not_collected",
         data=[
             VulnerabilityItem(
                 source=row.source.value,

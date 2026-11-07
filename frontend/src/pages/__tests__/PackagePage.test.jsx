@@ -55,6 +55,7 @@ describe("PackagePage", () => {
     });
     api.fetchVulnerabilities.mockResolvedValue({
       package: "flask",
+      coverage: "collected",
       data: [],
     });
     api.fetchVersion.mockResolvedValue({
@@ -83,6 +84,43 @@ describe("PackagePage", () => {
     });
   });
 
+  async function renderFlask(search = "") {
+    render(
+      <MemoryRouter
+        initialEntries={[`/package/flask${search}`]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route path="/package/:name" element={<PackagePage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await screen.findByText("A lightweight WSGI framework");
+  }
+
+  it("says advisories are not collected instead of None (#68)", async () => {
+    api.fetchVulnerabilities.mockResolvedValue({ package: "flask", coverage: "not_collected", data: [] });
+    await renderFlask();
+    expect(await screen.findByText("Not collected for this ecosystem")).toBeInTheDocument();
+    expect(screen.queryByText("None")).not.toBeInTheDocument();
+  });
+
+  it("does not call an old version clean when advisories are collected (#68)", async () => {
+    await renderFlask("?version=3.1.2");
+    expect(await screen.findByText("Not checked for this version")).toBeInTheDocument();
+  });
+
+  it("notes that listed advisories belong to the package for an old version (#68)", async () => {
+    api.fetchVulnerabilities.mockResolvedValue({
+      package: "flask",
+      coverage: "collected",
+      data: [{ source: "pypi_native", source_id: "PYSEC-1", summary: "Bad", severity: "high", fixed_in: null, link: "" }],
+    });
+    await renderFlask("?version=3.1.2");
+    expect(await screen.findByText("PYSEC-1")).toBeInTheDocument();
+    expect(screen.getByText("Listed for the package, not for this version")).toBeInTheDocument();
+  });
+
   it("renders package details, versions and dependency tree", async () => {
     render(
       <MemoryRouter
@@ -100,7 +138,7 @@ describe("PackagePage", () => {
     expect(await screen.findByText("werkzeug")).toBeInTheDocument();
     expect(screen.getByText(">=3.1.0")).toBeInTheDocument();
     expect(screen.getByText("3.1.0")).toBeInTheDocument();
-    expect(screen.getByText("None")).toBeInTheDocument();
+    expect(screen.getByText("No advisories found")).toBeInTheDocument();
 
     await waitFor(() => {
       expect(api.fetchDependencies).toHaveBeenCalledWith("pypi", "flask", "3.1.3", {
