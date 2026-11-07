@@ -888,10 +888,10 @@ export default function PackagePage() {
             </span>
             {!isGo || pkg.license_spdx || pkg.license_raw ? (
               <span>
-                <b>License</b>: {pkg.license_spdx || pkg.license_raw || "unknown"}
+                <b>License</b>: {pkg.license_spdx || pkg.license_raw || "Not published by the source"}
               </span>
             ) : null}
-            {!isGo || pkg.homepage_url ? (
+            {pkg.homepage_url ? (
               <span>
                 <b>Homepage</b>: <UrlValue url={pkg.homepage_url} />
               </span>

@@ -98,6 +98,27 @@ describe("PackagePage", () => {
     await screen.findByText("A lightweight WSGI framework");
   }
 
+  it("names an empty license and hides empty homepage and docs rows (§3 rule 4)", async () => {
+    api.fetchPackage.mockResolvedValue({
+      ecosystem: "pypi",
+      name: "Flask",
+      normalized_name: "flask",
+      description: "A lightweight WSGI framework",
+      homepage_url: null,
+      documentation_url: "",
+      repository_url: null,
+      license_raw: null,
+      license_spdx: null,
+      latest_version: "3.1.3",
+      synced_at: "2026-03-09T00:00:00Z",
+    });
+    await renderFlask();
+    expect(screen.getByText((content) => content.includes("Not published by the source"))).toBeInTheDocument();
+    expect(screen.queryByText("Homepage")).not.toBeInTheDocument();
+    expect(screen.queryByText("Documentation")).not.toBeInTheDocument();
+    expect(screen.queryByText("unknown")).not.toBeInTheDocument();
+  });
+
   it("says advisories are not collected instead of None (#68)", async () => {
     api.fetchVulnerabilities.mockResolvedValue({ package: "flask", coverage: "not_collected", data: [] });
     await renderFlask();
