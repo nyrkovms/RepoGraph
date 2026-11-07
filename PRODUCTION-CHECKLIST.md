@@ -39,7 +39,7 @@
 
 ## 5. Quality gates
 
-- [x] CI lint и типы (`typecheck`, `backend-lint`, `frontend-lint`).
+- [x] CI lint, типы и ссылки в документах (`typecheck`, `backend-lint`, `frontend-lint`, `docs-check`).
 - [x] CI unit-тесты (`backend-unit-tests`, `frontend-tests`, `rpm-worker-tests`) и миграции (`migrations`).
 - [x] CI integration tests (`backend-integration-tests`).
 - [x] CI acceptance smoke.

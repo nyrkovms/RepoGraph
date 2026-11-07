@@ -42,7 +42,7 @@ design/                 design artifacts (DDL, contract, schema checks)
 ## Commands
 
 ```bash
-make check                      # ruff, mypy, backend unit, frontend lint+tests (what CI runs without docker) + docs-check (local only)
+make check                      # everything CI runs without docker: ruff, mypy, backend unit, frontend lint+tests, docs-check
 make mypy                       # mypy only
 make backend-unit               # backend unit tests only
 make frontend                   # frontend lint + tests
