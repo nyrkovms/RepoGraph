@@ -171,6 +171,52 @@ describe("SearchPage", () => {
     });
   });
 
+  it("runs the search on Enter instead of opening the first suggestion", async () => {
+    api.searchPackages.mockResolvedValue({
+      data: [{ ecosystem: "pypi", name: "Requests", normalized_name: "requests", latest_version: "2.32.5" }],
+      cursor: null,
+      has_more: false,
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/search"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Routes>
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/package/:ecosystem/*" element={<div>Package page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await user.type(screen.getByLabelText("Search query"), "requests");
+    await screen.findByRole("listbox", { name: "Search suggestions" });
+    expect(document.querySelector(".autocomplete-item.active")).toBeNull();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByText("Package page")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(api.searchPackages).toHaveBeenCalledWith(expect.objectContaining({ q: "requests", limit: 20 }));
+    });
+  });
+
+  it("opens the suggestion the reader moved onto with the arrows", async () => {
+    api.searchPackages.mockResolvedValue({
+      data: [{ ecosystem: "pypi", name: "Requests", normalized_name: "requests", latest_version: "2.32.5" }],
+      cursor: null,
+      has_more: false,
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/search"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Routes>
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/package/:ecosystem/*" element={<div>Package page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await user.type(screen.getByLabelText("Search query"), "requests");
+    await screen.findByRole("listbox", { name: "Search suggestions" });
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(await screen.findByText("Package page")).toBeInTheDocument();
+  });
+
   it("sends the chosen ecosystem to the list and search calls", async () => {
     const user = userEvent.setup();
     render(

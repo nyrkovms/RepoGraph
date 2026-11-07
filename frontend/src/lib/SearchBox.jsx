@@ -43,7 +43,8 @@ export default function SearchBox({ value, onChange, onSubmit, placeholder, aria
         }
         setSuggestions(payload.data || []);
         setSuggestionsOpen(Boolean(payload.data?.length));
-        setHighlightedIndex((payload.data || []).length ? 0 : -1);
+        // Nothing is preselected: Enter runs the search unless the reader moved onto a suggestion with the arrows.
+        setHighlightedIndex(-1);
       } catch {
         if (autocompleteRequestId.current !== requestId) {
           return;

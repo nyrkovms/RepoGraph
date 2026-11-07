@@ -256,6 +256,20 @@ describe("HomePage", () => {
     expect(api.searchPackages).not.toHaveBeenCalledWith(expect.objectContaining({ limit: 2 }));
   });
 
+  it("runs the search on Enter even when suggestions are showing", async () => {
+    const user = userEvent.setup();
+    api.searchPackages.mockResolvedValue({
+      data: [{ ...item("left-pad"), ecosystem: "npm", purl: "pkg:npm/left-pad", normalized_name: "left-pad" }],
+      cursor: null,
+      has_more: false,
+    });
+    renderHome();
+    await user.type(screen.getByLabelText("Name or purl"), "left");
+    await screen.findByRole("listbox", { name: "Search suggestions" });
+    await user.keyboard("{Enter}");
+    expect(await screen.findByTestId("where")).toHaveTextContent("/search?q=left");
+  });
+
   it("opens the card when a purl names exactly one package", async () => {
     const user = userEvent.setup();
     api.searchPackages.mockResolvedValue({
