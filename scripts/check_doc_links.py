@@ -2,8 +2,11 @@
 """Check that relative links in *.md files point to existing files (stdlib only).
 
 Run from anywhere: `python3 -I scripts/check_doc_links.py` (or `make docs-check`).
+Inline links `[text](path)` and `[text](<path>)` and reference definitions `[x]: path` are checked; fenced code and
+inline code are skipped, external links and anchors are not checked.
 """
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -12,21 +15,36 @@ from urllib.parse import unquote
 ROOT = Path(__file__).resolve().parent.parent
 SKIP_PATHS = {"frontend/dist", ".claude/worktrees"}
 SKIP_DIR_NAMES = {"node_modules", ".venv", ".git"}
-LINK = re.compile(r"\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+# Hidden directories are not docs, except these (agents, templates, workflow docs are markdown too).
+HIDDEN_KEPT = {".claude", ".github"}
+INLINE_CODE = re.compile(r"(`+).*?\1")
+LINK = re.compile(r"\]\(\s*(?:<([^>]+)>|([^)\s]+))(?:\s+\"[^\"]*\")?\s*\)")
+REFERENCE = re.compile(r"^\s{0,3}\[[^\]]+\]:\s*(?:<([^>]+)>|(\S+))")
 FENCE = re.compile(r"^\s*(```|~~~)")
 ABSOLUTE_PREFIXES = ("/Users/", "/home/")
 EXTERNAL_PREFIXES = ("http://", "https://", "mailto:")
 
 
-def skipped(path: Path) -> bool:
-    rel = path.relative_to(ROOT)
-    rel_posix = rel.as_posix()
-    if any(rel_posix == s or rel_posix.startswith(s + "/") for s in SKIP_PATHS):
-        return True
-    if SKIP_DIR_NAMES.intersection(rel.parts):
-        return True
-    # Hidden directories are not docs, except .claude (agents and templates are markdown too).
-    return any(part.startswith(".") and part != ".claude" for part in rel.parts[:-1])
+def markdown_files() -> list[Path]:
+    found = []
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        rel = Path(dirpath).relative_to(ROOT).as_posix()
+        dirnames[:] = [
+            d for d in dirnames
+            if d not in SKIP_DIR_NAMES
+            and (not d.startswith(".") or d in HIDDEN_KEPT)
+            and (f"{rel}/{d}" if rel != "." else d) not in SKIP_PATHS
+        ]
+        found.extend(Path(dirpath) / name for name in filenames if name.endswith(".md"))
+    return sorted(found)
+
+
+def targets(line: str) -> list[str]:
+    reference = REFERENCE.match(line)
+    if reference:
+        return [reference.group(1) or reference.group(2)]
+    line = INLINE_CODE.sub("", line)
+    return [angle or bare for angle, bare in LINK.findall(line)]
 
 
 def problems_in(path: Path) -> list[str]:
@@ -38,7 +56,7 @@ def problems_in(path: Path) -> list[str]:
             continue
         if in_fence:
             continue
-        for target in LINK.findall(line):
+        for target in targets(line):
             if target.startswith(EXTERNAL_PREFIXES) or target.startswith("#"):
                 continue
             where = f"{path.relative_to(ROOT)}:{number} -> {target}"
@@ -56,9 +74,8 @@ def problems_in(path: Path) -> list[str]:
 
 def main() -> int:
     problems = []
-    for path in sorted(ROOT.rglob("*.md")):
-        if not skipped(path):
-            problems.extend(problems_in(path))
+    for path in markdown_files():
+        problems.extend(problems_in(path))
     for problem in problems:
         print(problem)
     print(f"{len(problems)} broken link(s)")
