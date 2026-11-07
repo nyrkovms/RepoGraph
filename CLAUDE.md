@@ -12,6 +12,7 @@ FastAPI + SQLAlchemy async + Alembic + Celery + Postgres 16 + Redis; React/Vite 
 | `design/schema-target.sql`, `design/ecosystem_contract.py` | Target DDL and plugin contract |
 | `SPEC-DAILY-UPDATE.md`, `SPEC-MVP-API.md` | Daily update/digest and current API contracts |
 | `SPEC-UPDATES-DIGEST.md` | Proposed redesign of the Updates page (draft) |
+| `SPEC-CATALOG-PAGES.md` | Home page, search and package card: behaviour and stages UX0–UX6 |
 
 ## Layout
 
