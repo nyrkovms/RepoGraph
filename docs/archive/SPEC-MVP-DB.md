@@ -1,3 +1,6 @@
+> **Исторический документ (MVP, PyPI-only).** Актуальное: схема — [SPEC-MULTI-ECOSYSTEM.md](../../SPEC-MULTI-ECOSYSTEM.md) §5 и [design/schema-target.sql](../../design/schema-target.sql), миграции — `backend/alembic/versions/`.
+> Перенесено: правила upsert и производные поля (§5–§6) — [§8.4](../../SPEC-MULTI-ECOSYSTEM.md).
+
 # PackageHub MVP — DB Appendix
 
 > Source of truth для схемы данных, миграций и правил записи в PostgreSQL.
@@ -336,7 +339,7 @@ Pipeline: `fetch -> normalize -> validate -> license -> upsert_pkg -> upsert_ver
 ## 8. Связь с другими документами
 
 - Product intent, SLA, acceptance criteria: [SPEC-MVP.md](./SPEC-MVP.md)
-- HTTP contracts и error taxonomy: [SPEC-MVP-API.md](./SPEC-MVP-API.md)
+- HTTP contracts и error taxonomy: [SPEC-MVP-API.md](../../SPEC-MVP-API.md)
 - Delivery slices и required tests: [SPEC-MVP-EXECUTION.md](./SPEC-MVP-EXECUTION.md)
 
 `Decisions fixed`

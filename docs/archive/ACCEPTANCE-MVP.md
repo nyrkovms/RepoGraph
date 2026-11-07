@@ -1,3 +1,6 @@
+> **Исторический документ (MVP, PyPI-only).** Актуальное: живая проверка API — `scripts/acceptance_smoke.sh`, SLA — [SPEC-MULTI-ECOSYSTEM.md](../../SPEC-MULTI-ECOSYSTEM.md) [§1.1](../../SPEC-MULTI-ECOSYSTEM.md).
+> Отчёт о приёмке MVP от 2026-03-09, не обновляется.
+
 # PackageHub MVP — Acceptance Report
 
 Дата прогона: 2026-03-09  
@@ -30,8 +33,8 @@ docker compose run --rm api python -m app.cli seed --packages flask django reque
 
 - Seed падал на реальных данных PyPI из-за ограничения `packages.license_raw VARCHAR(512)`.
 - Исправление:
-  - модель: `license_raw -> Text` в [`backend/app/models/package.py`](/Users/mikhail/Documents/Work/repograph/backend/app/models/package.py)
-  - миграция: [`backend/alembic/versions/20260309_0002_license_raw_text.py`](/Users/mikhail/Documents/Work/repograph/backend/alembic/versions/20260309_0002_license_raw_text.py)
+  - модель: `license_raw -> Text` в [`backend/app/models/package.py`](../../backend/app/models/package.py)
+  - миграция: [`backend/alembic/versions/20260309_0002_license_raw_text.py`](../../backend/alembic/versions/20260309_0002_license_raw_text.py)
 
 ## Итог
 

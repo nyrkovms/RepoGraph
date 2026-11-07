@@ -4,48 +4,11 @@
 
 **Версия:** 1.0
 **Дата:** 2026-03-04
-**Связанный документ:** SPEC.md v0.4, раздел 12
+**Связанные документы:** [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §9 (контракт и алгоритмы resolve первой волны), архивный [SPEC.md](./docs/archive/SPEC.md) v0.4, раздел 12
 
-> **2026-10-27:** in-memory индекс и расчёты ресурсов устарели (курируемый каталог). Алгоритмы остаются справочником; правила первой волны — [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §8.
+> Справочник по алгоритмам разрешения зависимостей в экосистемах. Код — `backend/app/ecosystems/<eco>/resolver.py`; RPM (libsolv, модульность) здесь не описан — см. [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §9.8.
 
----
-
-## 1. Обзор проблемы
-
-Dependency resolution — задача построения полного дерева (или графа) транзитивных зависимостей проекта с выбором конкретной версии каждого пакета. Сложность задачи фундаментально зависит от правил экосистемы.
-
-### 1.1 Ключевой вопрос: сколько версий одного пакета допустимо?
-
-```
-Одна версия (Python, Java, Rust, Go, .NET):
-  → Если A хочет X>=2 и B хочет X<2, это КОНФЛИКТ
-  → Нужен constraint solver или эвристика разрешения конфликтов
-
-Множественные версии (npm/JavaScript):
-  → Если A хочет lodash@3, B хочет lodash@4 — ставим ОБЕ
-  → Нет конфликтов*, задача сводится к обходу графа
-  
-  *Исключение: peerDependencies — создают real constraints
-```
-
-### 1.2 Классификация алгоритмов
-
-```
-Тип 1: SAT/CDCL (NP-complete, но быстро на практике)
-  Экосистемы: PyPI (uv/PubGrub), crates.io (Cargo/PubGrub)
-  Суть: формализация как задача удовлетворимости ограничений
-  При конфликте: анализ причины, запись learned clause, targeted backjump
-  
-Тип 2: Greedy с эвристикой (линейный)
-  Экосистемы: Maven (nearest-wins), Gradle/NuGet (highest-wins), Go (MVS)
-  Суть: детерминированный обход, конфликт = одна сторона молча проигрывает
-  При конфликте: нет backtracking, просто выбрать победителя по правилу
-
-Тип 3: Tree builder (линейный, без конфликтов)
-  Экосистемы: npm (множественные версии)
-  Суть: для каждого constraint — выбрать latest, рекурсивно обойти
-  При конфликте: нет конфликтов (кроме peer deps)
-```
+> **2026-10-27:** in-memory индекс и расчёты ресурсов устарели (курируемый каталог, [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §0.2). Из документа убраны обзор проблемы, оптимизация needed packages и план внедрения по фазам. Нумерация разделов сохранена.
 
 ---
 
@@ -623,7 +586,7 @@ Enterprise monolith (100+ direct, ~500-1500 transitive):
 
 ### 4.10 Repository Tiers
 
-Подробно описано в SPEC.md 3.8. Для резолвера это означает:
+Подробно описано в [архивном SPEC.md](./docs/archive/SPEC.md) §3.12 (Repository Tiers; в мульти-экосистемной модели их заменяют протокол, routing и профили, [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §6.2). Для резолвера это означает:
 
 ```
 Tier 1 (Central + Google): всё в in-memory индексе
@@ -886,123 +849,4 @@ Peak (scaled up): ~$810-1060/мес
 
 Один бинарник, флаг --ecosystems определяет какие экосистемы загружать.
 Масштабирование по группам: HPA на CPU utilization.
-```
-
----
-
-## 9. Needed Packages Optimization
-
-### 9.1 Проблема
-
-Публичные registry содержат огромное количество мёртвых пакетов. Хранить ВСЁ в RAM дорого и бессмысленно.
-
-Но обрезка на уровне **версий** некорректна: резолвер не знает заранее какую версию выберет. Если constraint `jackson-core >= 2.10, < 2.16` — нужны все версии jackson-core в диапазоне. Поэтому обрезка идёт на уровне **пакетов (GA)**: пакет либо нужен целиком (все версии), либо не нужен вообще.
-
-### 9.2 Определение
-
-Пакет (GA для Maven, name для остальных) **нужен в индексе** если:
-1. Имеет хотя бы одну версию, опубликованную за последние 5 лет, ИЛИ
-2. На него ссылается зависимость из другого нужного пакета (транзитивно)
-
-Если пакет нужен — в индекс загружаются **все его версии**, кроме yanked и SNAPSHOT.
-
-### 9.3 Вычисление
-
-```sql
--- Запускается еженедельно после sync
--- Время: 10-30 минут per ecosystem
-
--- Шаг 1: Reset
-UPDATE package_versions SET needed_in_index = FALSE;
-
--- Шаг 2: Найти нужные пакеты (рекурсивно)
-WITH RECURSIVE needed_pkgs AS (
-    -- Корни: пакеты с недавней публикацией
-    SELECT DISTINCT p.id FROM packages p
-    JOIN package_versions pv ON pv.package_id = p.id
-    WHERE pv.release_date > now() - interval '5 years'
-
-    UNION
-
-    -- Транзитивно: пакеты, от которых зависят нужные
-    SELECT DISTINCT d.resolved_package_id FROM dependencies d
-    JOIN package_versions pv ON d.version_id = pv.id
-    WHERE pv.package_id IN (SELECT id FROM needed_pkgs)
-      AND d.resolved_package_id IS NOT NULL
-)
--- Шаг 3: Пометить ВСЕ версии нужных пакетов (минус yanked/SNAPSHOT)
-UPDATE package_versions SET needed_in_index = TRUE
-WHERE package_id IN (SELECT id FROM needed_pkgs)
-  AND status != 'yanked'
-  AND version NOT LIKE '%-SNAPSHOT';
-```
-
-### 9.4 Результаты по экосистемам
-
-```
-             Total pkgs → Needed pkgs → Total vers → In index → Reduction
-Maven        700K GA       550K          14.5M        10M        31%
-npm          2.5M          1M            60M          28M        53%
-PyPI         550K          400K          4M           3.2M       20%
-NuGet        400K          280K          3M           2.2M       27%
-crates.io    170K          140K          500K         420K       16%
-Go           200K          150K          1M           750K       25%
-```
-
-npm выигрывает больше всех — огромное количество мёртвых пакетов. crates.io меньше всех — молодая экосистема.
-
-Обрезка скромнее чем при подходе "reachable versions" (65%/87%), но корректная: резолвер гарантированно найдёт любую версию нужного пакета.
-
-### 9.5 Fallback при промахе
-
-```
-1. Пакет не найден в in-memory индексе
-2. Запрос в PostgreSQL — загрузить ВСЕ версии этого пакета
-3. Добавить в LRU cache (100K entries, ~50 MB)
-4. Пометить needed_in_index при следующем пересчёте
-5. Если не найден в PostgreSQL: вернуть "unknown dependency"
-
-Latency overhead: +5-20 ms per miss
-Expected miss rate: <2% запросов
-```
-
----
-
-## 10. Phased Implementation
-
-### Phase 0: Best-effort в PostgreSQL (MVP, этапы 2-6)
-
-```
-Что: resolved_version_id заполняется при sync (latest stable matching constraint)
-Как: SQL при sync pipeline
-Ограничения: не учитывает транзитивные конфликты, no BOM/parent resolution
-Для кого: UI дерево зависимостей, простой API
-```
-
-### Phase 1: Resolver Microservice (этап 11)
-
-```
-Что: Rust сервис с PubGrub + greedy resolvers
-Как: gRPC сервис, in-memory индекс из PostgreSQL
-Объём: все 6 экосистем
-RAM: 32 GB (all-in-one)
-```
-
-### Phase 2: Production hardening (этап 12)
-
-```
-Что: Redis cache, monitoring, rate limiting, Tier 3 proxy
-Как: Redis layer перед resolver, Prometheus metrics
-SLA: p95 < 50ms, 99.9% availability
-```
-
-### Phase 3: Advanced features (backlog)
-
-```
-Что:
-  - Forking resolver для PyPI (multi-environment resolution)
-  - npm deduplicated tree (Arborist-like hoisting)
-  - Maven Gradle-mode (highest-wins) + mixed resolution
-  - Conflict explanation (PubGrub derivation trees)
-  - Pre-computed resolution for popular package combinations
 ```

@@ -1,3 +1,6 @@
+> **Исторический документ (MVP, PyPI-only).** Актуальное: [SPEC-MULTI-ECOSYSTEM.md](../../SPEC-MULTI-ECOSYSTEM.md) (§0.2 — что устарело), [RESOLVER.md](../../RESOLVER.md), [SPEC-MVP-API.md](../../SPEC-MVP-API.md).
+> Перенесено: зависимости (§3.3, приложения A и B) — [§7.5](../../SPEC-MULTI-ECOSYSTEM.md), записи в БД — [§8.4](../../SPEC-MULTI-ECOSYSTEM.md), лицензии (§6.4) — [§8.5](../../SPEC-MULTI-ECOSYSTEM.md); resolve (§12) — [§9](../../SPEC-MULTI-ECOSYSTEM.md).
+
 # PackageHub — Спецификация сервиса
 
 > Внутренний корпоративный каталог метаданных пакетов из публичных репозиториев
@@ -6,7 +9,7 @@
 **Дата:** 2026-03-04
 **Changelog:** v0.5 — Registry как first-class entity (таблица Registry, PackageRegistry, привязка к источникам), таблица Artifact (файлы/артефакты per version per registry, checksums, download URLs, raw metadata blob), DistTag, SyncState привязан к registry (не ecosystem), пересмотренная reachability (needed packages вместо reachable versions), готовность к registry proxy mode. v0.4 — Resolver Microservice (Rust), стратегии per-ecosystem, in-memory индекс, RESOLVER.md. v0.3 — structured environment_markers, resolved_version_id. v0.2 — 6 экосистем, SyncState, Vulnerability.
 
-> **2026-10-27:** модель покрытия сменилась на курируемый каталог. Разделы §2.1 (sync-механизмы), §3.13, §4.1 (Rust Resolver), §6.1–6.2, §8.2–8.3, §11, §12.3–12.6 и приложение C устарели — см. [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §0.2.
+> **2026-10-27:** модель покрытия сменилась на курируемый каталог. Разделы §2.1 (sync-механизмы), §3.13, §4.1 (Rust Resolver), §6.1–6.2, §8.2–8.3, §11, §12.3–12.6 и приложение C устарели — см. [SPEC-MULTI-ECOSYSTEM.md](../../SPEC-MULTI-ECOSYSTEM.md) §0.2.
 
 ---
 
@@ -1059,7 +1062,7 @@ packagehub/
 
 ## 12. Dependency Resolution Architecture
 
-> Подробный анализ алгоритмов, сравнение подходов, расчёты ресурсов — см. **RESOLVER.md**
+> Подробный анализ алгоритмов, сравнение подходов, расчёты ресурсов — см. **[RESOLVER.md](../../RESOLVER.md)**
 
 ### 12.1 Обзор
 
