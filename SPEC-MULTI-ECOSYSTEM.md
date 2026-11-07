@@ -11,8 +11,8 @@
 - 0.3 — несколько источников в экосистеме: протоколы, routing, профили источников, слияние (§6). Целевая схема БД проверена на Postgres, а `sort_key` — по эталонам (§5, [design/](./design/)). Контракт плагинов уточнён и проверен `mypy --strict`. Найдены дефекты текущей схемы (§5.2). Решения по Q6, Q7, Q11–Q13.
 - 0.2 — уязвимости вынесены в расширение. Решения по Q1–Q5, Q8–Q10. RHEL/Fedora и модульность EL8. npm через `_changes`.
 
-**Статус:** реализовано для 7 экосистем (E0–E6), E7 — см. §15 и §16.2.
-**База:** `main`. Работают PyPI-only каталог, ежедневное обновление и дайджест ([SPEC-DAILY-UPDATE.md](./SPEC-DAILY-UPDATE.md)), resolve для PyPI.
+**Статус:** реализовано для 7 экосистем (E0–E6), E7 — отдельный этап позже (§15).
+**Исходная база (2026-10-28):** `main`. Работают PyPI-only каталог, ежедневное обновление и дайджест ([SPEC-DAILY-UPDATE.md](./SPEC-DAILY-UPDATE.md)), resolve для PyPI.
 **Заменяет:** часть [SPEC.md](./SPEC.md) и [RESOLVER.md](./RESOLVER.md), подробности в §0.2.
 **Артефакты проектирования:** [design/schema-target.sql](./design/schema-target.sql), [design/ecosystem_contract.py](./design/ecosystem_contract.py), [design/schema-check/](./design/schema-check/).
 
@@ -740,7 +740,7 @@ GET /api/v1/packages/{ecosystem}/{coordinates}/-/vulnerabilities          — п
 | **E4. NuGet** | `nuget-v3`, catalog, NuGetVersion + `sort_key` против эталона, современные TFM, резолвер §9.6 | Средняя | Opus: TFM и правила разрешения | выполнено (PR #21) |
 | **E5. Maven** | `maven2` для всех репозиториев, effective model §7.4, ComparableVersion + `sort_key` против эталона, стратегии `maven` и `gradle`, Gradle Plugin Portal | Высокая | Opus | выполнено (PR #23) |
 | **E6. RPM** | Конфиги дистрибутивов §6.4, авторизация `basic`/`tls_client_cert`, rpm-worker + libsolv, `rpmvercmp`, `superseded`, модульность §9.8 | Высокая | Opus: libsolv и модульность. Sonnet: worker и конфиги | выполнено (PR #24) |
-| **E7. UI** | Параллельно E0–E6: экосистемы, источники, профили, формы окружения, граф resolve | Средняя | Sonnet | плана нет; алиасы и старый формат ещё живы, решение владельца ожидается (IMPL §7) |
+| **E7. UI** | Параллельно E0–E6: экосистемы, источники, профили, формы окружения, граф resolve | Средняя | Sonnet | отдельный этап, сроки не назначены (решение 2026-11-07); UI, кроме страницы Resolve, уже на новых маршрутах; состав — IMPL §7 |
 
 Порядок E1–E6 — по нарастанию сложности. E0.5 идёт сразу после ядра: на PyPI с PyTorch-индексом модель нескольких источников проверяется раньше, чем появятся новые экосистемы.
 
@@ -780,7 +780,7 @@ GET /api/v1/packages/{ecosystem}/{coordinates}/-/vulnerabilities          — п
 
 ### 16.2 Открыто
 
-Открытых вопросов по дизайну нет. Объём E7 (удаление алиасов `/packages/pypi/{name}/…`, `requires_python`, старого формата resolve и `freeze`) ждёт решения владельца: IMPL «Открытая работа».
+Открытых вопросов по дизайну нет. Объём E7 решён 2026-11-07: отдельный этап, сроки не назначены, состав — IMPL §7 «Открытая работа».
 
 ---
 

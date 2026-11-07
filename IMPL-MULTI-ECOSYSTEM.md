@@ -455,8 +455,8 @@ Rocky 8 AppStream), seed `openssl`, `nodejs`, `python3`, дерево, resolve �
 
 ## 7. Открытая работа
 
-Состояние на 2026-11-07. Факты, без решений.
+Состояние на 2026-11-07.
 
-1. **E7 без плана.** Алиасы `/packages/pypi/{name}/…` (`backend/app/api/v1/package_detail.py`, `deprecated=True`), `requires_python` в схемах ответов, старый формат resolve и режим `freeze` (`backend/app/schemas/resolve.py`, `backend/app/resolver/service.py`) работают. Удаляются отдельным PR после E7 (§0, п. 7). Решение владельца ожидается.
+1. **E7 — отдельный этап, сроки не назначены** (решение владельца 2026-11-07). Состав: (а) страница Resolve переходит на граф и режим `lock`: сейчас она шлёт `freeze` и читает поля старого формата (`frontend/src/pages/ResolvePage.jsx:212`, `:281`); остальные страницы на старые маршруты не ходят; (б) удалить алиасы `/packages/pypi/{name}/…` (`backend/app/api/v1/package_detail.py`, `deprecated=True`), `requires_python` в ответах, старый формат resolve и `freeze` (`backend/app/schemas/resolve.py`, `backend/app/resolver/service.py`), обновить SPEC-MVP-API §3.4, §4.2 и acceptance smoke (§0, п. 7); (в) перенести типы из `connectors/base.py` в `ecosystems/` (п. 2): перенос отдельным коммитом, без изменения логики.
 2. **Устаревшие типы.** `backend/app/connectors/base.py` по-прежнему хранит старые типы (`PackageNotFound` и др.). Их импортируют `tasks/` (`fetch_deps`, `fetch_packages`, `retry_failed`, `presence_probe`, `daily_update`, `seed`), `fetcher/pipeline.py`, `resolver/catalog.py`, `ecosystems/pypi/connector.py` и `ecosystems/pypi/adapters/warehouse.py`.
 3. **Риски §6** написаны для E0 и итога не имеют.
