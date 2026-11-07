@@ -109,6 +109,10 @@ export async function resolveDependencies(body) {
   return request(`/api/v1/resolve`, { method: "POST", body });
 }
 
+export async function fetchCatalogSummary() {
+  return request("/api/v1/catalog/summary");
+}
+
 export async function fetchUpdatesSummary(params = {}) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {

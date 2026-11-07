@@ -1,11 +1,12 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 
 import SearchPage from "../SearchPage";
 import * as api from "../../lib/api";
 
 vi.mock("../../lib/api", () => ({
+  fetchCatalogSummary: vi.fn(),
   fetchPackages: vi.fn(),
   searchPackages: vi.fn(),
 }));
@@ -21,6 +22,22 @@ binary provides a **bug-free** and easy way to convert between and within binary
 
    pip install binary
 `;
+
+const FUTURE = { v7_startTransition: true, v7_relativeSplatPath: true };
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="search">{location.search}</output>;
+}
+
+function renderAt(url) {
+  return render(
+    <MemoryRouter initialEntries={[url]} future={FUTURE}>
+      <SearchPage />
+      <LocationProbe />
+    </MemoryRouter>
+  );
+}
 
 describe("SearchPage", () => {
   beforeEach(() => {
@@ -45,6 +62,12 @@ describe("SearchPage", () => {
       data: [],
       cursor: null,
       has_more: false,
+    });
+    api.fetchCatalogSummary.mockResolvedValue({
+      licenses: [
+        { license: "MIT", count: 133 },
+        { license: "Apache-2.0", count: 90 },
+      ],
     });
   });
 
@@ -585,5 +608,156 @@ describe("SearchPage", () => {
     const list = await screen.findByRole("listbox", { name: "Search suggestions" });
     await user.click(within(list).getByRole("button", { name: /rocky-9\/openssl/ }));
     expect(await screen.findByText("rpm page")).toBeInTheDocument();
+  });
+
+  it("reads the query and filters from the address and searches with them", async () => {
+    renderAt("/search?q=left&ecosystem=npm&sort=used_by&license=MIT&min_used_by=5&released_before=2023-11-07T00:00:00Z&deprecated=true");
+    await waitFor(() => {
+      expect(api.searchPackages).toHaveBeenCalledWith({
+        q: "left",
+        limit: 20,
+        sort: "used_by",
+        ecosystem: "npm",
+        license: "MIT",
+        min_used_by: "5",
+        released_before: "2023-11-07T00:00:00Z",
+        deprecated: true,
+      });
+    });
+    expect(api.fetchPackages).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Search query")).toHaveValue("left");
+    expect(screen.getByLabelText("Sort")).toHaveValue("used_by");
+    expect(screen.getByLabelText("License")).toHaveValue("MIT");
+  });
+
+  it("writes sort and license to the address and reloads", async () => {
+    const user = userEvent.setup();
+    renderAt("/search");
+    await screen.findByRole("link", { name: "Flask" });
+    // Relevance ranks the matches of a query: there is none yet.
+    expect(screen.queryByRole("option", { name: "Relevance" })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "All licenses" })).toHaveValue("");
+
+    await user.selectOptions(screen.getByLabelText("Sort"), "used_by");
+    expect(screen.getByTestId("search")).toHaveTextContent("?sort=used_by");
+    await waitFor(() => {
+      expect(api.fetchPackages).toHaveBeenLastCalledWith({ limit: 20, sort: "used_by" });
+    });
+
+    await user.selectOptions(await screen.findByRole("option", { name: "Apache-2.0" }).then((o) => o.parentElement), "Apache-2.0");
+    expect(screen.getByTestId("search").textContent).toContain("license=Apache-2.0");
+    await waitFor(() => {
+      expect(api.fetchPackages).toHaveBeenLastCalledWith({ limit: 20, sort: "used_by", license: "Apache-2.0" });
+    });
+
+    await user.type(screen.getByLabelText("Search query"), "flask");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    expect(screen.getByTestId("search").textContent).toContain("q=flask");
+    expect(await screen.findByRole("option", { name: "Relevance" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "flask", limit: 20, sort: "used_by", license: "Apache-2.0" });
+    });
+
+    await user.selectOptions(screen.getByLabelText("Sort"), "relevance");
+    expect(screen.getByTestId("search").textContent).not.toContain("sort=");
+    await waitFor(() => {
+      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "flask", limit: 20, sort: "relevance", license: "Apache-2.0" });
+    });
+  });
+
+  it("defaults to relevance with a query", async () => {
+    renderAt("/search?q=flask");
+    await waitFor(() => {
+      expect(api.searchPackages).toHaveBeenCalledWith({ q: "flask", limit: 20, sort: "relevance" });
+    });
+    expect(screen.getByLabelText("Sort")).toHaveValue("relevance");
+  });
+
+  it("falls back to the default sort when relevance is asked for without a query", async () => {
+    renderAt("/search?sort=relevance");
+    await waitFor(() => {
+      expect(api.fetchPackages).toHaveBeenCalledWith({ limit: 20, sort: "name" });
+    });
+  });
+
+  it("shows a chip for each filter without a control and clears it", async () => {
+    const user = userEvent.setup();
+    renderAt("/search?min_used_by=5&released_before=2023-11-07T00:00:00Z&deprecated=true&sort=used_by");
+    const chips = await screen.findByRole("list", { name: "Active filters" });
+    expect(within(chips).getByText("used by 5+")).toBeInTheDocument();
+    expect(within(chips).getByText(/latest release before/)).toBeInTheDocument();
+    expect(within(chips).getByText("deprecated")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear filter: used by 5+" }));
+    expect(screen.getByTestId("search").textContent).not.toContain("min_used_by");
+    expect(screen.getByTestId("search").textContent).toContain("deprecated=true");
+    await waitFor(() => {
+      expect(api.fetchPackages).toHaveBeenLastCalledWith({
+        limit: 20,
+        sort: "used_by",
+        released_before: "2023-11-07T00:00:00Z",
+        deprecated: true,
+      });
+    });
+
+    await user.click(screen.getByRole("button", { name: "Clear filter: deprecated" }));
+    await user.click(screen.getByRole("button", { name: /Clear filter: latest release before/ }));
+    expect(screen.queryByRole("list", { name: "Active filters" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("search")).toHaveTextContent("?sort=used_by");
+  });
+
+  it("shows used by in a row only when someone uses the package", async () => {
+    api.fetchPackages.mockResolvedValue({
+      data: [
+        { ecosystem: "npm", namespace: "", name: "left-pad", normalized_name: "left-pad", latest_version: "1.3.0", used_by: 12 },
+        { ecosystem: "npm", namespace: "", name: "lonely", normalized_name: "lonely", latest_version: "1.0.0", used_by: 0 },
+      ],
+      cursor: null,
+      has_more: false,
+    });
+    renderAt("/search");
+    await screen.findByRole("link", { name: "left-pad" });
+    expect(screen.getAllByText(/used by/)).toHaveLength(1);
+    expect(screen.getByText("used by 12")).toBeInTheDocument();
+  });
+
+  it("loads the next page with the cursor", async () => {
+    const user = userEvent.setup();
+    api.fetchPackages.mockResolvedValueOnce({
+      data: [{ ecosystem: "pypi", namespace: "", name: "a", normalized_name: "a", latest_version: "1" }],
+      cursor: "next-page",
+      has_more: true,
+    });
+    api.fetchPackages.mockResolvedValueOnce({
+      data: [{ ecosystem: "pypi", namespace: "", name: "b", normalized_name: "b", latest_version: "1" }],
+      cursor: null,
+      has_more: false,
+    });
+    renderAt("/search");
+    await screen.findByRole("link", { name: "a" });
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+    expect(await screen.findByRole("link", { name: "b" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "a" })).toBeInTheDocument();
+    expect(api.fetchPackages).toHaveBeenLastCalledWith({ limit: 20, sort: "name", cursor: "next-page" });
+  });
+
+  it("says what was searched when nothing matches, and names a purl", async () => {
+    renderAt("/search?q=nothing-like-this");
+    expect(await screen.findByText('No packages match "nothing-like-this"')).toBeInTheDocument();
+    expect(screen.queryByText("No package matches this purl")).not.toBeInTheDocument();
+  });
+
+  it("explains an empty purl search", async () => {
+    renderAt("/search?q=pkg:npm/missing");
+    expect(await screen.findByText('No packages match "pkg:npm/missing"')).toBeInTheDocument();
+    expect(screen.getByText("No package matches this purl")).toBeInTheDocument();
+  });
+
+  it("still lists packages when the license list cannot be loaded", async () => {
+    api.fetchCatalogSummary.mockRejectedValue({ message: "HTTP 500" });
+    renderAt("/search?license=MIT");
+    await waitFor(() => expect(api.fetchPackages).toHaveBeenCalled());
+    // The chosen license stays visible in the select.
+    expect(screen.getByLabelText("License")).toHaveValue("MIT");
   });
 });
