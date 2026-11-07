@@ -179,6 +179,8 @@ async def _cleanup(db: AsyncSession) -> None:
     await db.execute(delete(Registry).where(Registry.id.in_(registry_ids)))
     await db.execute(delete(Run).where(Run.operation.like(f"{PREFIX}%")))
     await db.execute(delete(Run).where(Run.started_at > datetime.now(UTC) + timedelta(hours=100)))
+    # A 404 for a version looks upstream first; offline that is a failed request, and the breaker must not outlive us.
+    await db.execute(update(SyncState).values(consecutive_failures=0, degraded_until=None))
 
 
 @pytest.fixture(scope="module")
@@ -1008,7 +1010,7 @@ def test_dependents_of_a_package_nobody_uses_and_of_an_unknown_one(client: TestC
     assert payload == {"totals": {"direct": 0, "indirect": 0}, "data": [], "cursor": None, "has_more": False}
     self_user = client.get(_dependents_path("self")).json()
     assert self_user["totals"] == {"direct": 0, "indirect": 0}   # an edge to itself is no dependent
-    assert client.get(f"{API}/packages/npm/{DPD}nope-not-here/-/dependents").status_code == 404
+    assert client.get(f"{API}/packages/nosuch/{DPD}nope/-/dependents").status_code == 404
 
 
 @pytest.mark.parametrize("name", ["core", "d1", "d2", "i1", "lonely", "self", "old"])

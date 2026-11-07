@@ -288,7 +288,9 @@ describe("versions tab", () => {
     renderCard("/package/pydantic?tab=versions&view=all");
     const link = await screen.findByRole("link", { name: "2.13.5" });
     expect(link).toHaveAttribute("href", "?version=2.13.5&tab=versions&view=all");
-    expect(within(screen.getByRole("link", { name: "2.14.3" }).closest("li")).getByText("viewing")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(screen.getByRole("link", { name: "2.14.3" }).closest("li")).getByText("viewing")).toBeInTheDocument();
+    });
 
     await user.click(link);
     await waitFor(() => expect(query().version).toBe("2.13.5"));
