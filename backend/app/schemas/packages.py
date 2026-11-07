@@ -63,6 +63,8 @@ class VersionItem(BaseModel):
     status_reason: str | None = None       # why yanked: Go retract rationale, PyPI yanked reason
     deprecation: dict | None = None        # npm deprecated, NuGet deprecation (reasons, message, alternate)
     requires_python: str | None
+    line: str | None = None                # release line (2.14, v1); None where the ecosystem has none
+    is_prerelease: bool = False
 
 
 class VersionListResponse(BaseModel):

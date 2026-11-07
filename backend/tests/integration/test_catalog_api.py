@@ -1000,3 +1000,103 @@ def test_dependents_totals_equal_the_overview(client: TestClient, dependents_gra
     totals = client.get(_dependents_path(name)).json()["totals"]
     used_by = client.get(f"{API}/packages/npm/{DPD}{name}/-/overview").json()["used_by"]
     assert totals == used_by
+
+
+# --------------------------------------------------------------------------- the versions list: line, prerelease, not_active
+
+VSN = "vsn-"   # outside the `c1b-` prefix: the search tests count everything with that prefix
+
+
+@pytest.fixture
+def versions_graph(world):
+    """One npm package, `vsn-pkg`, newest release first:
+
+        2.2.0-beta.1 (prerelease), 2.1.2-rc.1 (prerelease), 2.1.1, 2.1.0, 2.0.5 (stored active, its source says yanked),
+        1.9.0 (stored yanked, its source says active), 1.8.0 (deprecated in both), 1.0.0 (stable, undated)."""
+    now = world.now
+    package_ids: list[uuid.UUID] = []
+
+    async def add(db: AsyncSession) -> None:
+        profile = await sources.default_profile(db, "npm")
+        registry = await db.scalar(select(Registry).where(Registry.id == uuid.UUID(profile.registries[0].id)))
+        assert registry
+        package = _package(registry, Ecosystem.npm, f"{VSN}pkg", origin=PackageOrigin.manual, latest="2.1.1", now=now)
+        db.add(package)
+        await db.flush()
+        package_ids.append(package.id)
+        active, yanked = PackageVersionStatus.active, PackageVersionStatus.yanked
+        rows = [  # version, prerelease, days ago, stored status, source status
+            ("2.2.0-beta.1", True, 1, active, active), ("2.1.2-rc.1", True, 2, active, active),
+            ("2.1.1", False, 3, active, active), ("2.1.0", False, 4, active, active),
+            ("2.0.5", False, 10, active, yanked), ("1.9.0", False, 20, yanked, active),
+            ("1.8.0", False, 30, PackageVersionStatus.deprecated, PackageVersionStatus.deprecated),
+            ("1.0.0", False, None, active, active),
+        ]
+        for number, prerelease, days, stored, in_source in rows:
+            row = PackageVersion(id=uuid.uuid4(), package_id=package.id, version=number, raw_metadata={},
+                                 sort_key=number.encode(), is_prerelease=prerelease, status=stored,
+                                 release_date=now - timedelta(days=days) if days is not None else None,
+                                 metadata_registry_id=registry.id, dependencies_state=DependenciesState.hydrated)
+            db.add(row)
+            await db.flush()
+            db.add(VersionSource(version_id=row.id, registry_id=registry.id, first_seen_at=now, status=in_source))
+
+    async def remove(db: AsyncSession) -> None:
+        version_ids = (await db.scalars(select(PackageVersion.id).where(PackageVersion.package_id.in_(package_ids)))).all()
+        await db.execute(delete(VersionSource).where(VersionSource.version_id.in_(version_ids)))
+        await db.execute(delete(PackageVersion).where(PackageVersion.id.in_(version_ids)))
+        await db.execute(delete(Package).where(Package.id.in_(package_ids)))
+
+    run_db(add)
+    yield
+    run_db(remove)
+
+
+VSN_PATH = f"{API}/packages/npm/{VSN}pkg/-/versions"
+
+
+def _versions(client: TestClient, **params: Any) -> dict:
+    return client.get(VSN_PATH, params=params).json()
+
+
+def _numbers(payload: dict) -> list[str]:
+    return [row["version"] for row in payload["data"]]
+
+
+def test_versions_rows_carry_line_and_prerelease(client: TestClient, versions_graph) -> None:
+    rows = {row["version"]: row for row in _versions(client)["data"]}
+    assert (rows["2.1.1"]["line"], rows["2.1.1"]["is_prerelease"]) == ("2.1", False)
+    assert (rows["2.2.0-beta.1"]["line"], rows["2.2.0-beta.1"]["is_prerelease"]) == ("2.2", True)
+
+
+def test_versions_line_returns_the_whole_line_and_ignores_the_page(client: TestClient, versions_graph) -> None:
+    payload = _versions(client, line="2.1", limit=1)
+    assert _numbers(payload) == ["2.1.2-rc.1", "2.1.1", "2.1.0"]
+    assert payload["cursor"] is None and payload["has_more"] is False
+    assert _numbers(_versions(client, line="2.1", prerelease="false")) == ["2.1.1", "2.1.0"]
+    assert _numbers(_versions(client, line="2.1", prerelease="true")) == ["2.1.2-rc.1"]
+    assert _numbers(_versions(client, line="2.0")) == ["2.0.5"]
+    assert _versions(client, line="9.9")["data"] == []
+
+
+def test_versions_prerelease_filter_and_cursor(client: TestClient, versions_graph) -> None:
+    assert _numbers(_versions(client, prerelease="true")) == ["2.2.0-beta.1", "2.1.2-rc.1"]
+    stable = ["2.1.1", "2.1.0", "2.0.5", "1.9.0", "1.8.0", "1.0.0"]
+    assert _numbers(_versions(client, prerelease="false")) == stable
+    rows, pages = _walk(client, f"packages/npm/{VSN}pkg/-/versions", {"prerelease": "false"}, 2)
+    assert [row["version"] for row in rows] == stable and pages == 3
+
+
+def test_versions_not_active_is_the_effective_status(client: TestClient, versions_graph) -> None:
+    flagged = _versions(client, not_active="true")
+    # 2.0.5 is yanked in its source though stored active, 1.9.0 the other way round.
+    assert _numbers(flagged) == ["2.0.5", "1.8.0"]
+    assert [row["status"] for row in flagged["data"]] == ["yanked", "deprecated"]
+    assert "1.9.0" in _numbers(_versions(client, not_active="false"))
+    rows, _ = _walk(client, f"packages/npm/{VSN}pkg/-/versions", {"not_active": "true"}, 1)
+    assert [row["version"] for row in rows] == ["2.0.5", "1.8.0"]
+
+
+def test_overview_not_active_agrees_with_the_versions_filter(client: TestClient, versions_graph) -> None:
+    counts = client.get(f"{API}/packages/npm/{VSN}pkg/-/overview").json()["versions"]
+    assert counts == {"total": 8, "prereleases": 2, "not_active": len(_versions(client, not_active="true")["data"])}

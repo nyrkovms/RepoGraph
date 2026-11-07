@@ -10,10 +10,15 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Protocol
 
 _MAJOR_MINOR = re.compile(r"^v?(\d+)(?:\.(\d+))?")
 _GO_MAJOR = re.compile(r"^(v\d+)\.")
 _MAJOR_MINOR_ECOSYSTEMS = frozenset({"pypi", "npm", "crates", "nuget", "maven"})
+
+
+class _Named(Protocol):
+    version: str
 
 
 def line_of(ecosystem: str, version: str) -> str | None:
@@ -27,6 +32,11 @@ def line_of(ecosystem: str, version: str) -> str | None:
         return None
     found = _MAJOR_MINOR.match(version)
     return f"{found.group(1)}.{found.group(2) or '0'}" if found else None
+
+
+def filter_line[T: _Named](ecosystem: str, rows: Iterable[T], line: str) -> list[T]:
+    """The rows (anything with a `version`) that belong to `line`, in the order given."""
+    return [row for row in rows if line_of(ecosystem, row.version) == line]
 
 
 @dataclass(frozen=True, slots=True)

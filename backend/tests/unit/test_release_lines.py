@@ -1,8 +1,9 @@
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 
-from app.services.release_lines import ReleasedVersion, build_lines, fill_months, last_months, line_of
+from app.services.release_lines import ReleasedVersion, build_lines, fill_months, filter_line, last_months, line_of
 
 
 @pytest.mark.parametrize(
@@ -62,3 +63,19 @@ def test_build_lines_orders_by_highest_version_and_counts_stable_releases() -> N
 
 def test_build_lines_of_rpm_is_empty() -> None:
     assert build_lines("rpm", [_release("2.4.0-1.el8_10", 1, 1)]) == []
+
+
+@pytest.mark.parametrize(
+    ("ecosystem", "line", "expected"),
+    [
+        ("pypi", "2.14", ["2.14.3", "2.14.0rc1", "2.14.0"]),   # stable and prerelease, the order given
+        ("pypi", "2.1", []),                                    # not a prefix match
+        ("pypi", "1.10", ["1.10.4"]),
+        ("go", "v1", ["v1.2.0"]),
+        ("rpm", "2.14", []),
+    ],
+)
+def test_filter_line(ecosystem: str, line: str, expected: list[str]) -> None:
+    names = ["2.14.3", "2.13.5", "2.14.0rc1", "2.14.0", "1.10.4", "v1.2.0", "v2.0.0"]
+    rows = [SimpleNamespace(version=name) for name in names]
+    assert [row.version for row in filter_line(ecosystem, rows, line)] == expected

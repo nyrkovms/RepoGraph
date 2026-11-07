@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
@@ -13,7 +14,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from packaging.markers import Marker
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import ColumnElement, and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.packages import _decode_cursor_or_422
@@ -184,6 +185,19 @@ def _versions_cursor_or_422(cursor: str | None) -> tuple[datetime | None, uuid.U
         raise HTTPException(status_code=422, detail="invalid cursor payload") from exc
 
 
+def _not_active_clause(registries: Sequence[RegistryConfig]) -> ColumnElement[bool]:
+    """Effective status is not `active`: the status a reader sees is the best one among the visible sources
+    (`visibility.effective_status`), and `active` is the best, so a version is not active exactly when none of its
+    visible sources says `active`. The stored `PackageVersion.status` is the merged view and may differ."""
+    return ~exists(
+        select(VersionSource.version_id).where(
+            VersionSource.version_id == PackageVersion.id,
+            VersionSource.registry_id.in_([uuid.UUID(r.id) for r in registries]),
+            VersionSource.status == PackageVersionStatus.active,
+        )
+    )
+
+
 @router.get(_COORDS + "/versions", response_model=VersionListResponse)
 async def list_versions(
     ecosystem: str,
@@ -192,15 +206,37 @@ async def list_versions(
     profile: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None),
+    prerelease: bool | None = Query(default=None),
+    not_active: bool | None = Query(default=None),
+    line: str | None = Query(default=None),
 ) -> VersionListResponse:
-    """Versions the profile's sources publish (the default profile without `profile`), newest release first."""
+    """Versions the profile's sources publish (the default profile without `profile`), newest release first.
+
+    `prerelease=true|false` keeps only prereleases or only stable versions; `not_active=true` keeps versions whose
+    effective status (the one the rows show) is not `active`, `false` the active ones. Both are SQL filters and work
+    with the cursor.
+
+    `line` (`2.14`, `v1`) cannot be expressed in SQL for every ecosystem (the line is derived from the version string,
+    see `release_lines.line_of`), so it is applied in Python over the visible rows in the usual order: stable and
+    prerelease versions both, unless `prerelease` narrows it. A line is small, so all its versions come back at once:
+    `limit` and `cursor` are ignored, `cursor` is null and `has_more` false."""
     position = _versions_cursor_or_422(cursor)
     target = await _target(db, ecosystem, coordinates)
     registries = await visibility.visible_registries(db, target.plugin, target.ref, target.package.id,
                                                      await _profile(db, ecosystem, profile))
 
     stmt = select(PackageVersion).where(PackageVersion.package_id == target.package.id, visibility.visible_clause(registries))
+    if prerelease is not None:
+        stmt = stmt.where(PackageVersion.is_prerelease.is_(prerelease))
+    if not_active is not None:
+        clause = _not_active_clause(registries)
+        stmt = stmt.where(clause if not_active else ~clause)
     stmt = stmt.order_by(PackageVersion.release_date.desc().nullslast(), PackageVersion.id.asc())
+
+    if line is not None:
+        in_line = release_lines.filter_line(target.plugin.ecosystem, (await db.scalars(stmt)).all(), line)
+        return VersionListResponse(data=await _version_items(db, registries, target.plugin.ecosystem, in_line),
+                                   cursor=None, has_more=False)
 
     if position:
         rel, id_value = position
@@ -229,8 +265,14 @@ async def list_versions(
             }
         )
 
-    statuses = await visibility.source_statuses(db, registries, [row.id for row in data_rows])
-    data = [
+    data = await _version_items(db, registries, target.plugin.ecosystem, data_rows)
+    return VersionListResponse(data=data, cursor=next_cursor, has_more=has_more)
+
+
+async def _version_items(db: AsyncSession, registries: Sequence[RegistryConfig], ecosystem: str,
+                         rows: Sequence[PackageVersion]) -> list[VersionItem]:
+    statuses = await visibility.source_statuses(db, registries, [row.id for row in rows])
+    return [
         VersionItem(
             version=row.version,
             release_date=row.release_date,
@@ -238,10 +280,11 @@ async def list_versions(
             status_reason=row.status_reason,
             deprecation=row.deprecation,
             requires_python=_requires_python(row),
+            line=release_lines.line_of(ecosystem, row.version),
+            is_prerelease=row.is_prerelease,
         )
-        for row in data_rows
+        for row in rows
     ]
-    return VersionListResponse(data=data, cursor=next_cursor, has_more=has_more)
 
 
 @router.get(_COORDS + "/versions/{version}", response_model=VersionDetailResponse)
@@ -417,7 +460,7 @@ async def get_overview(
         select(
             func.count(),
             func.count().filter(PackageVersion.is_prerelease.is_(True)),
-            func.count().filter(PackageVersion.status != PackageVersionStatus.active),
+            func.count().filter(_not_active_clause(registries)),
         ).where(*in_package)
     )).one()
     month_counts: dict[str, int] = dict((await db.execute(
@@ -579,7 +622,8 @@ async def list_versions_alias(
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None),
 ) -> VersionListResponse:
-    return await list_versions("pypi", name, db, profile=None, limit=limit, cursor=cursor)
+    return await list_versions("pypi", name, db, profile=None, limit=limit, cursor=cursor, prerelease=None,
+                               not_active=None, line=None)
 
 
 @router.get("/packages/pypi/{name}/versions/{ver}", response_model=VersionDetailResponse, deprecated=True)
