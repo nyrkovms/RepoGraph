@@ -193,7 +193,7 @@ function ThisWeek({ state, ecosystem }) {
         </b> · {totals.packages ?? 0} packages updated · {totals.releases ?? 0}{" "}
         releases · <Link to={updatesLink}>All updates this week</Link>
       </p>
-      <h4>Needs attention</h4>
+      {attention.length ? <h4>Needs attention</h4> : null}
       {attention.length ? (
         <ul className="result-list">
           {attention.map((item) => (
