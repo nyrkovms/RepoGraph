@@ -196,7 +196,7 @@ def dependents(world):
 
 
 RELEVANCE = "rlv-core"
-RELEVANCE_NAMES = [RELEVANCE, f"{RELEVANCE}-extra", f"{RELEVANCE}2", f"aa-{RELEVANCE}", f"zz-{RELEVANCE}"]
+RELEVANCE_NAMES = [RELEVANCE, f"{RELEVANCE}-extra", f"{RELEVANCE}-zip", f"aa-{RELEVANCE}", f"zz-{RELEVANCE}"]
 
 
 @pytest.fixture
@@ -292,7 +292,7 @@ def test_cursor_walks_all_ecosystems(client: TestClient, world, sort: str) -> No
 
 def test_search_ranks_exact_then_prefix_then_the_rest(client: TestClient, relevance) -> None:
     order = [row["normalized_name"] for row in client.get(f"{API}/search", params={"q": RELEVANCE}).json()["data"]]
-    assert order == [RELEVANCE, f"{RELEVANCE}-extra", f"{RELEVANCE}2", f"aa-{RELEVANCE}", f"zz-{RELEVANCE}"]
+    assert order == [RELEVANCE, f"{RELEVANCE}-extra", f"{RELEVANCE}-zip", f"aa-{RELEVANCE}", f"zz-{RELEVANCE}"]
 
     upper = client.get(f"{API}/search", params={"q": RELEVANCE.upper()}).json()["data"]
     assert upper[0]["normalized_name"] == RELEVANCE
@@ -308,7 +308,7 @@ def test_relevance_cursor_walks_across_ranks(client: TestClient, relevance) -> N
         cursor = page["cursor"]
         if not page["has_more"]:
             break
-    assert seen == [RELEVANCE, f"{RELEVANCE}-extra", f"{RELEVANCE}2", f"aa-{RELEVANCE}", f"zz-{RELEVANCE}"]
+    assert seen == [RELEVANCE, f"{RELEVANCE}-extra", f"{RELEVANCE}-zip", f"aa-{RELEVANCE}", f"zz-{RELEVANCE}"]
 
 
 def test_relevance_without_a_query_behaves_as_name(client: TestClient, world) -> None:
