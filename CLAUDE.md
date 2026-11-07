@@ -1,6 +1,7 @@
 # PackageHub — guide for agents
 
-Internal catalog of package metadata: PyPI today, being extended to npm, Maven, NuGet, Go, crates.io and RPM.
+Internal catalog of package metadata for 7 ecosystems: pypi, npm, crates, go, nuget, maven, rpm.
+Done: multi-ecosystem stages E0–E6, catalog pages UX0–UX6, Updates digest U0–U2 (U3–U5 open).
 FastAPI + SQLAlchemy async + Alembic + Celery + Postgres 16 + Redis; React/Vite frontend.
 
 ## Documents (read the part your task points to, not everything)
@@ -11,20 +12,26 @@ FastAPI + SQLAlchemy async + Alembic + Celery + Postgres 16 + Redis; React/Vite 
 | `IMPL-MULTI-ECOSYSTEM.md` | Implementation plan: stages, work packages (WP), process rules, migration table |
 | `design/schema-target.sql`, `design/ecosystem_contract.py` | Target DDL and plugin contract |
 | `SPEC-DAILY-UPDATE.md`, `SPEC-MVP-API.md` | Daily update/digest and current API contracts |
-| `SPEC-UPDATES-DIGEST.md` | Proposed redesign of the Updates page (draft) |
-| `SPEC-CATALOG-PAGES.md` | Home page, search and package card: behaviour and stages UX0–UX6 |
+| `SPEC-UPDATES-DIGEST.md` | Updates page redesign: U0–U2 done, U3–U5 open |
+| `SPEC-CATALOG-PAGES.md` | Home page, search and package card: behaviour; stages UX0–UX6 implemented |
+| `README.md` | Setup, API how-to per ecosystem, ops |
+| `RESOLVER.md` | Reference: per-ecosystem dependency resolution algorithms |
 
 ## Layout
 
 ```
-backend/app/            api/v1 (routes), models, schemas, fetcher (pipeline, events), tasks (celery), resolver, services
-backend/app/ecosystems/ plugin contract (base.py), registry, purl, schemas (jsonb), versions_common; one package per
-                        ecosystem — pypi/: plugin, coordinates, versions, environment, adapters (pypi-warehouse),
-                        changes (detector), connector + simple_index + pep508 (moved legacy code);
-                        connectors/base.py = legacy types until E0-B1
+backend/app/            api/v1 (routes), models, schemas, fetcher (pipeline, events), tasks (celery), services, auth,
+                        normalizers, resolver/ (service, catalog, cache), cli.py, celery_app.py
+                        connectors/base.py: legacy exceptions/types, still imported by tasks/, fetcher/, resolver/
+backend/app/ecosystems/ shared: base.py (plugin contract), registry, routing, merge, purl, schemas (jsonb),
+                        versions_common. One package per ecosystem (pypi npm crates go nuget maven rpm):
+                        plugin, coordinates, versions, environment, resolver, adapters/ (upstream clients), and
+                        changes (change detector; pypi, npm, go, nuget) plus ecosystem-specific modules
+rpm_worker/             separate container (libsolv), Celery queues `rpm` and `rpm-batch`
+backend/registries*.yaml  sources/profiles for `app.cli registries import`
 backend/alembic/versions/
-backend/tests/unit, backend/tests/integration
-frontend/src/pages, frontend/src/lib/api.js
+backend/tests/          unit, integration, reference, migrations, fixtures (fixtures/http = recorded upstream)
+frontend/src/           pages, lib (api.js, helpers, shared components), test
 scripts/stand.sh        long-lived test stand
 design/                 design artifacts (DDL, contract, schema checks)
 ```
@@ -33,6 +40,7 @@ design/                 design artifacts (DDL, contract, schema checks)
 
 ```bash
 make check                      # everything CI runs without docker: ruff, mypy, backend unit, frontend lint+tests
+make mypy                       # mypy only
 make backend-unit               # backend unit tests only
 make frontend                   # frontend lint + tests
 scripts/stand.sh status         # test stand: containers, migration, catalog size
@@ -41,6 +49,8 @@ scripts/check_migrations.sh     # migrations on synthetic data: base -> head -> 
 scripts/record_fixtures.sh       # re-record upstream responses for offline CI (live network)
 ```
 
+- `scripts/stand.sh`: up, seed, daily-update, logs, psql, backup, restore, down, migrate, status.
+  `python -m app.cli`: seed, fetch, retry-failed, daily-update, presence-probe, stats, registries (import, test, list).
 - Backend tools run through `uv` (the local `.venv` is not complete): see the Makefile targets.
 - Integration tests need the stack: `docker compose up -d --build postgres redis api`, then
   `docker compose run --rm api pytest tests/integration`. They run offline against recorded upstream responses

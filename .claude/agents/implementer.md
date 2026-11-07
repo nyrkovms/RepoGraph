@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Implements one self-contained work package (WP) of the multi-ecosystem plan from a task written with .claude/templates/wp-task.md. Use for mechanical, well-specified work - moves without logic changes, schemas, routes after a sample, fixtures, tests from a case list, scripts, CI config.
+description: Implements one self-contained, well-specified task (stage WP, hotfix, docs update) from a brief written with .claude/templates/wp-task.md. Use for mechanical, well-specified work - moves without logic changes, schemas, routes after a sample, fixtures, tests from a case list, scripts, CI config.
 model: sonnet
 ---
 

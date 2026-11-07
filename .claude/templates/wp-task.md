@@ -2,7 +2,7 @@
 
 **Stage / branch:** <e.g. E0-A / claude/me-e0a-schema>
 **Spec:** <sections of SPEC-MULTI-ECOSYSTEM.md / IMPL-MULTI-ECOSYSTEM.md that define the behaviour>
-**WP_DIR:** `/Users/mikhail/Documents/Work/repograph/.claude/worktrees/wp-<id>`
+**WP_DIR:** `/Users/mikhail/Developer/repograph/.claude/worktrees/wp-<id>`
 **Start:**
 1. `git worktree add -b wp/<id> <WP_DIR> <stage-head-sha>`; `git -C <WP_DIR> log --oneline -1` must show `<stage-head-sha>`.
 2. `cd <WP_DIR>/frontend && npm ci` (`make check` needs it).
