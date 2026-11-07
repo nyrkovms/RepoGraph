@@ -169,7 +169,7 @@ async def _profile(db: AsyncSession, *members: tuple[Registry, dict | None]) -> 
 
 async def _versions(db: AsyncSession, name: str, profile: str | None = None) -> dict[str, str]:
     page = await routes.list_versions("pypi", name, db, profile=profile, limit=200, cursor=None, prerelease=None,
-                                       not_active=None, line=None)
+                                       not_active=None, deprecated=None, line=None)
     return {item.version: item.status for item in page.data}
 
 
@@ -248,7 +248,7 @@ def test_versions_without_release_date_page_after_dated_ones() -> None:
         seen, cursor = [], None
         while True:
             page = await routes.list_versions("pypi", name, db, profile=None, limit=2, cursor=cursor, prerelease=None,
-                                               not_active=None, line=None)
+                                               not_active=None, deprecated=None, line=None)
             seen += [item.version for item in page.data]
             if not page.has_more:
                 break

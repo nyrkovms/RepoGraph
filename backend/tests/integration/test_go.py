@@ -133,7 +133,7 @@ def test_the_api_serves_retraction_reasons_deprecation_and_dependency_details() 
                 package = await routes.get_package("go", path, db)
                 assert package.deprecation == {"message": "use example.com/n"}
                 versions = await routes.list_versions("go", path, db, profile=None, limit=50, cursor=None, prerelease=None,
-                                                       not_active=None, line=None)
+                                                       not_active=None, deprecated=None, line=None)
                 assert {v.version: v.status_reason for v in versions.data} == {
                     "v1.0.0": "Published by mistake", "v1.1.0": None}
                 assert (await routes.get_version("go", path, "v1.0.0", db)).status_reason == "Published by mistake"
