@@ -9,6 +9,7 @@
 ## 1. Область и правила владения
 
 - Этот документ владеет только HTTP-контрактами каталога из семи экосистем: PyPI, npm, crates.io, Go, NuGet, Maven и RPM.
+- Сгенерированная схема OpenAPI зафиксирована в `backend/tests/fixtures/openapi.json` и охраняется unit-тестом; этот документ хранит семантику и примеры.
 - Он не меняет продуктовые требования и SLA; SLA берутся только из [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §1.1.
 - Описывает API, каким он стал после этапов E0-C, E1, E2, E3, E4, E5 и E6, страниц каталога UX0–UX6 (SPEC-CATALOG-PAGES) и дайджеста Updates U0–U2 (SPEC-UPDATES-DIGEST): пакеты адресуются по purl, маршруты `/packages/pypi/{name}/…` остаются deprecated-алиасами до конца E7 (§3.4), resolve отдаёт граф (§4); в каталоге есть PyPI, npm, crates.io, Go, NuGet, Maven и RPM.
 
