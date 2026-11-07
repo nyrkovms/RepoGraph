@@ -398,6 +398,7 @@ async def get_dependencies_tree(
         visited={str(version_row.id)},
         fetcher=fetcher,
     )
+    await _fill_licenses(db, nodes)
     await db.commit()
 
     return DependencyTreeResponse(
@@ -979,24 +980,43 @@ async def _build_tree_for_version(
                 ecosystem=child_package.ecosystem.value, namespace=child_package.namespace or "",
                 name=child_package.normalized_name))
             resolved_name = shown if shown != name else None
-        nodes.append(
-            DependencyNode(
-                name=name,
-                resolved_name=resolved_name,
-                constraint=dep.version_constraint,
-                dependency_type=dep.dependency_type.value,
-                extra_name=dep.extra_name,
-                scope=dep.scope,
-                environment_markers=dep.environment_markers,
-                details=dep.details,
-                resolved_version=resolved_version,
-                cycle=cycle,
-                dependencies_unknown=dependencies_unknown,
-                children=children,
-            )
+        node = DependencyNode(
+            name=name,
+            resolved_name=resolved_name,
+            constraint=dep.version_constraint,
+            dependency_type=dep.dependency_type.value,
+            extra_name=dep.extra_name,
+            scope=dep.scope,
+            environment_markers=dep.environment_markers,
+            details=dep.details,
+            resolved_version=resolved_version,
+            cycle=cycle,
+            dependencies_unknown=dependencies_unknown,
+            children=children,
         )
+        node._package_id = child_package.id if child_package is not None else None
+        nodes.append(node)
 
     return nodes
+
+
+async def _fill_licenses(db: AsyncSession, nodes: list[DependencyNode]) -> None:
+    """`license` of every node, from one query for the whole tree: SPDX id, else the raw string, else None (the rule of
+    `usage.license_counts`)."""
+    found: list[DependencyNode] = []
+    stack = list(nodes)
+    while stack:
+        node = stack.pop()
+        found.append(node)
+        stack.extend(node.children)
+    ids = {node._package_id for node in found if node._package_id is not None}
+    if not ids:
+        return
+    rows = (await db.execute(select(Package.id, Package.license_spdx, Package.license_raw).where(Package.id.in_(ids)))).all()
+    licenses = {row_id: (spdx or "").strip() or (raw or "").strip() or None for row_id, spdx, raw in rows}
+    for node in found:
+        if node._package_id is not None:
+            node.license = licenses.get(node._package_id)
 
 
 def _crate_asks(env: Environment | None, version_row: PackageVersion, deps: list[Dependency]) -> dict[str, frozenset[str]]:

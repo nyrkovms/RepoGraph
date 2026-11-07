@@ -737,6 +737,22 @@ def test_overview_counts_the_graph(client: TestClient, overview) -> None:
     assert payload["licenses"] == [{"license": "MIT", "count": 2}, {"license": "Custom", "count": 1}]
 
 
+def test_dependency_tree_nodes_carry_the_license(client: TestClient, overview) -> None:
+    """SPDX id, else the raw string, else null: the rule of the overview's license list; an unresolved edge has none."""
+    payload = client.get(f"{API}/packages/npm/{OVW}root/-/versions/1.0.0/dependencies",
+                         params={"include_optional": "true"}).json()
+    top = {node["name"]: node for node in payload["dependencies"]}
+    assert top[f"{OVW}a"]["license"] == "MIT"
+    assert top[f"{OVW}b"]["license"] == "MIT"                 # `MIT License` is the raw string, the SPDX id wins
+    assert top[f"{OVW}opt"]["license"] == "Apache-2.0"
+    assert top[f"{OVW}ghost"]["license"] is None and top[f"{OVW}ghost"]["resolved_version"] is None
+    below = {node["name"]: node for node in top[f"{OVW}a"]["children"]}
+    assert below[f"{OVW}c"]["license"] == "Custom"            # no SPDX id: the raw string
+    assert below[f"{OVW}ghost2"]["license"] is None
+    cycle = below[f"{OVW}c"]["children"][0]
+    assert (cycle["name"], cycle["cycle"], cycle["license"]) == (f"{OVW}a", True, "MIT")
+
+
 def test_overview_of_a_leaf_and_of_a_cycle(client: TestClient, overview) -> None:
     opt = client.get(f"{API}/packages/npm/{OVW}opt/-/overview").json()
     assert opt["dependencies"] == {"direct": 0, "optional": 0, "dev": 0, "indirect": 0, "not_in_catalog": 0}

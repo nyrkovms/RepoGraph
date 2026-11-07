@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 
 class PackageListItem(BaseModel):
@@ -106,9 +107,11 @@ class DependencyNode(BaseModel):
     details: dict | None = None            # Go `indirect`, Cargo features and registry, npm peer `optional`
     resolved_version: str | None
     resolved_name: str | None = None       # the catalog package the edge leads to when the name is not it (RPM capability)
+    license: str | None = None             # of the resolved package: SPDX id, else the raw string, else null
     cycle: bool = False
     dependencies_unknown: bool = False   # the resolved version's source has no metadata for it (Q14)
     children: list[DependencyNode] = Field(default_factory=list)
+    _package_id: uuid.UUID | None = PrivateAttr(default=None)   # the catalog package of the node; licenses are loaded by it
 
 
 DependencyNode.model_rebuild()
