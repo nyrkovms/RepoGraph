@@ -23,6 +23,7 @@ async function request(path, { method = "GET", body } = {}) {
     const error = payload?.error || {
       code: "http_error",
       message: `HTTP ${response.status}`,
+      status: response.status,
       details: payload,
     };
     throw error;
@@ -86,6 +87,11 @@ export async function fetchVersions(ecosystem, coordinates, params = {}) {
   return request(withQuery(`${packagePath(ecosystem, coordinates)}/versions`, params));
 }
 
+// `from` and `to` are optional: the API compares the latest version with the nearest lower stable one by default.
+export async function fetchCompare(ecosystem, coordinates, params = {}) {
+  return request(withQuery(`${packagePath(ecosystem, coordinates)}/versions/compare`, params));
+}
+
 export async function fetchDependencies(ecosystem, coordinates, version, params = {}) {
   return request(
     withQuery(`${packagePath(ecosystem, coordinates)}/versions/${encodeURIComponent(version)}/dependencies`, params)
@@ -96,12 +102,25 @@ export async function fetchArtifacts(ecosystem, coordinates, version) {
   return request(`${packagePath(ecosystem, coordinates)}/versions/${encodeURIComponent(version)}/artifacts`);
 }
 
+export async function fetchOverview(ecosystem, coordinates, version) {
+  return request(withQuery(`${packagePath(ecosystem, coordinates)}/overview`, { version }));
+}
+
+export async function fetchDependents(ecosystem, coordinates, params = {}) {
+  return request(withQuery(`${packagePath(ecosystem, coordinates)}/dependents`, params));
+}
+
 export async function fetchVulnerabilities(ecosystem, coordinates) {
   return request(`${packagePath(ecosystem, coordinates)}/vulnerabilities`);
 }
 
 export async function resolveDependencies(body) {
   return request(`/api/v1/resolve`, { method: "POST", body });
+}
+
+export async function fetchCatalogSummary({ ecosystem = "" } = {}) {
+  const query = ecosystem ? `?${new URLSearchParams({ ecosystem })}` : "";
+  return request(`/api/v1/catalog/summary${query}`);
 }
 
 export async function fetchUpdatesSummary(params = {}) {

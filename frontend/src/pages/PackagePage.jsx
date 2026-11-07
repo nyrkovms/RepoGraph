@@ -1,523 +1,53 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 
-import { fetchArtifacts, fetchDependencies, fetchPackage, fetchVersion, fetchVersions, fetchVulnerabilities } from "../lib/api";
+import {
+  fetchArtifacts,
+  fetchDependencies,
+  fetchOverview,
+  fetchPackage,
+  fetchVersion,
+  fetchVersions,
+  fetchVulnerabilities,
+} from "../lib/api";
 import { getPackageDescriptionParagraphs } from "../lib/packageDescription";
-import { OS_OPTIONS, PYTHON_VERSIONS } from "../lib/runtimeEnv";
-
-const ECOSYSTEM_LABELS = { pypi: "PyPI", npm: "npm", crates: "crates.io", go: "Go", nuget: "NuGet", maven: "Maven", rpm: "RPM" };
-
-// npm environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): Node.js version, os and cpu as npm names them.
-const NPM_NODE_VERSIONS = ["22.0.0", "20.0.0", "18.0.0"];
-const NPM_OS_OPTIONS = [
-  { value: "linux", label: "Linux" },
-  { value: "darwin", label: "macOS" },
-  { value: "win32", label: "Windows" },
-];
-const NPM_CPU_OPTIONS = [
-  { value: "x64", label: "x64" },
-  { value: "arm64", label: "arm64" },
-];
-// crates environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): a Rust target triple the backend knows, features, default features.
-const CRATES_TARGETS = [
-  "x86_64-unknown-linux-gnu",
-  "x86_64-unknown-linux-musl",
-  "aarch64-unknown-linux-gnu",
-  "aarch64-unknown-linux-musl",
-  "i686-unknown-linux-gnu",
-  "armv7-unknown-linux-gnueabihf",
-  "riscv64gc-unknown-linux-gnu",
-  "powerpc64le-unknown-linux-gnu",
-  "s390x-unknown-linux-gnu",
-  "x86_64-pc-windows-msvc",
-  "x86_64-pc-windows-gnu",
-  "i686-pc-windows-msvc",
-  "aarch64-pc-windows-msvc",
-  "x86_64-apple-darwin",
-  "aarch64-apple-darwin",
-  "aarch64-apple-ios",
-  "aarch64-linux-android",
-  "x86_64-unknown-freebsd",
-  "wasm32-unknown-unknown",
-  "wasm32-wasip1",
-  "wasm32-wasip2",
-];
-// NuGet environment (SPEC-MULTI-ECOSYSTEM.md section 7.3, Q7): the project's target framework, net5.0 and newer or
-// netstandard1.0-2.1; any other value is a 422 of the API.
-const NUGET_FRAMEWORKS = [
-  "net11.0",
-  "net10.0",
-  "net9.0",
-  "net8.0",
-  "net7.0",
-  "net6.0",
-  "net5.0",
-  "netstandard2.1",
-  "netstandard2.0",
-  "netstandard1.6",
-  "netstandard1.5",
-  "netstandard1.4",
-  "netstandard1.3",
-  "netstandard1.2",
-  "netstandard1.1",
-  "netstandard1.0",
-];
-// Maven environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): the dependency scopes the tree follows; any other value is
-// a 422 of the API. `compile,runtime` is what `mvn dependency:tree` shows for a runtime classpath.
-const MAVEN_SCOPES = ["compile", "runtime", "provided", "system", "test"];
-// RPM environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): the architecture whose builds the tree follows; any other value
-// is a 422 of the API.
-const RPM_ARCHES = ["x86_64", "aarch64", "ppc64le", "s390x"];
-const VERSIONS_SHOWN = 10;
-const DEFAULTS = {
-  pypi: { python: "3.12", os: "linux" },
-  npm: { node: "20.0.0", os: "linux", cpu: "x64" },
-  crates: { target: "x86_64-unknown-linux-gnu" },
-  nuget: { framework: "net8.0" },
-  maven: { scopes: "compile,runtime" },
-  rpm: { arch: "x86_64" },
-};
-// Go has no tree environment (SPEC-MULTI-ECOSYSTEM.md section 7.3): every `require` of a go.mod applies.
-// A pseudo-version (`v0.0.0-20261014143641-f0251eb4aa3e`, `v1.2.4-0.2026...-abc`, `v1.2.4-pre.0.2026...-abc`) is a
-// commit, not a release; `+incompatible` stays part of the version string.
-const GO_PSEUDO_VERSION = /^v\d+\.(?:0\.0-|\d+\.\d+-(?:[^+]*\.)?0\.)\d{14}-[0-9A-Za-z]+(?:\+[0-9A-Za-z.-]+)?$/;
-
-function isGoPseudoVersion(version) {
-  return GO_PSEUDO_VERSION.test(String(version || ""));
-}
-
-// Internal key of the version's feature map, not a feature.
-const HIDDEN_FEATURE_KEYS = new Set(["dependencies_hydrated"]);
-
-function pickOption(value, allowed, fallback) {
-  return allowed.includes(value) ? value : fallback;
-}
-
-// "serde, std ,," -> "serde,std": the form of the `features` query parameter.
-function normalizeFeatures(text) {
-  return String(text || "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .join(",");
-}
-
-// "test, compile,bogus" -> "compile,test": the form of the `scopes` query parameter (known scopes, fixed order); the
-// default when nothing valid is left.
-function normalizeScopes(text) {
-  const wanted = new Set(String(text || "").split(",").map((item) => item.trim()));
-  const scopes = MAVEN_SCOPES.filter((scope) => wanted.has(scope));
-  return scopes.length ? scopes.join(",") : DEFAULTS.maven.scopes;
-}
-
-// Query of the dependency tree request: PyPI `python_version` and `os`, npm `node_version`, `os` and `cpu`,
-// crates `target`, `features` and `default_features`, NuGet `target_framework`, Maven `scopes`, RPM `arch`, Go none.
-function treeParams(ecosystem, env, includeOptional) {
-  if (ecosystem === "go") {
-    return {};
-  }
-  if (ecosystem === "nuget") {
-    return { target_framework: env.framework };
-  }
-  if (ecosystem === "maven") {
-    return { scopes: env.scopes };
-  }
-  if (ecosystem === "rpm") {
-    return { include_optional: includeOptional, arch: env.arch };
-  }
-  if (ecosystem === "npm") {
-    return { include_optional: includeOptional, node_version: env.node, os: env.os, cpu: env.cpu };
-  }
-  if (ecosystem === "crates") {
-    return { include_optional: includeOptional, target: env.target, features: env.features, default_features: env.defaultFeatures };
-  }
-  return { include_optional: includeOptional, python_version: env.python, os: env.os };
-}
-
-function formatMarkerLabel(condition) {
-  const marker = condition?.marker;
-  const op = condition?.op;
-  const value = condition?.value;
-  if (!marker || !op || !value) {
-    return null;
-  }
-
-  if (marker === "python_version" || marker === "python_full_version") {
-    return `Python ${op} ${value}`;
-  }
-
-  if (marker === "sys_platform") {
-    return { linux: "Linux", win32: "Windows", darwin: "macOS" }[value] || value;
-  }
-
-  if (marker === "platform_system") {
-    return value;
-  }
-
-  if (marker === "platform_machine") {
-    return value;
-  }
-
-  if (marker === "os_name") {
-    return null;
-  }
-
-  if (marker === "extra") {
-    return `extra: ${value}`;
-  }
-
-  return null;
-}
-
-function formatDateTime(value) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
-}
-
-// Maven edge: the declared scope, exclusions, classifier and non-jar type. The scope is the edge's own when the API
-// gives it; otherwise it follows from `dependency_type` where that is unambiguous (compile and runtime both map to
-// `runtime`, so no label for them).
-function mavenEdgeLabels(node) {
-  const labels = [];
-  const scope = node.scope || node.details?.scope || { dev: "test", provided: "provided" }[node.dependency_type];
-  if (scope) {
-    labels.push(`scope ${scope}`);
-  }
-  const exclusions = Array.isArray(node.details?.exclusions) ? node.details.exclusions : [];
-  if (exclusions.length) {
-    labels.push(`excludes ${exclusions.map((item) => `${item.group}:${item.artifact}`).join(", ")}`);
-  }
-  if (node.details?.classifier) {
-    labels.push(`classifier ${node.details.classifier}`);
-  }
-  if (node.details?.type) {
-    labels.push(`type ${node.details.type}`);
-  }
-  return labels;
-}
-
-// RPM edge: the kind of dependency when it is not a hard `requires` (recommends, suggests, supplements, enhances) and
-// the arches a dependency is limited to.
-function rpmEdgeLabels(node) {
-  const labels = [];
-  const kind = node.scope || node.details?.kind;
-  if (kind && kind !== "requires") {
-    labels.push(kind);
-  }
-  const arches = node.environment_markers?.arch;
-  if (Array.isArray(arches) && arches.length) {
-    labels.push(`arch ${arches.join(", ")}`);
-  }
-  return labels;
-}
-
-// The arch of an RPM artifact: the API's `arch` where it has one, otherwise the one the file name carries
-// (`openssl-3.0.7-27.el9.x86_64.rpm`).
-function artifactArch(artifact) {
-  if (artifact?.arch) {
-    return String(artifact.arch);
-  }
-  return /\.([A-Za-z0-9_]+)\.rpm$/.exec(artifact?.filename || "")?.[1] || "";
-}
-
-// The arches of a version in a stable order: the four the catalog serves first, then the rest (noarch, src...).
-function archesOf(artifacts) {
-  const arches = [...new Set((artifacts || []).map(artifactArch).filter(Boolean))];
-  const rank = (arch) => (RPM_ARCHES.includes(arch) ? RPM_ARCHES.indexOf(arch) : RPM_ARCHES.length);
-  return arches.sort((left, right) => rank(left) - rank(right) || left.localeCompare(right));
-}
-
-function collectDependencyConditions(node, ecosystem) {
-  const labels = [];
-  const extraValues = new Set();
-  const conditions = Array.isArray(node.environment_markers?.conditions) ? node.environment_markers.conditions : [];
-
-  if (node.dependency_type === "optional") {
-    labels.push("optional dependency");
-  }
-
-  if (node.dependency_type === "build") {
-    labels.push("build dependency");
-  }
-
-  // crates: a platform-specific dependency carries the `cfg(...)` or target triple it is declared under.
-  if (typeof node.environment_markers?.rust_cfg === "string") {
-    labels.push(node.environment_markers.rust_cfg);
-  }
-
-  // Go: a requirement the module's go.mod marks `// indirect`.
-  if (node.details?.indirect) {
-    labels.push("indirect");
-  }
-
-  // NuGet: the dependency group (target framework, as the registration writes it) the edge is taken from.
-  if (typeof node.environment_markers?.dotnet_target_framework === "string") {
-    labels.push(node.environment_markers.dotnet_target_framework);
-  }
-
-  if (ecosystem === "maven") {
-    labels.push(...mavenEdgeLabels(node));
-  }
-
-  if (ecosystem === "rpm") {
-    labels.push(...rpmEdgeLabels(node));
-  }
-
-  if (node.extra_name) {
-    extraValues.add(node.extra_name);
-  }
-
-  for (const condition of conditions) {
-    if (condition.marker === "extra" && condition.value) {
-      extraValues.add(condition.value);
-      continue;
-    }
-
-    const label = formatMarkerLabel(condition);
-    if (label) {
-      labels.push(label);
-    }
-  }
-
-  for (const extraValue of extraValues) {
-    labels.push(`extra ${extraValue}`);
-  }
-
-  return {
-    labels: [...new Set(labels)].sort((left, right) => {
-      const leftExtra = left.startsWith("extra ");
-      const rightExtra = right.startsWith("extra ");
-      if (leftExtra !== rightExtra) {
-        return leftExtra ? 1 : -1;
-      }
-      return left.localeCompare(right);
-    }),
-    extras: [...extraValues],
-  };
-}
-
-function formatDate(value) {
-  const match = /^\d{4}-\d{2}-\d{2}/.exec(String(value || ""));
-  return match ? match[0] : "";
-}
-
-function isWebUrl(value) {
-  return typeof value === "string" && /^https?:\/\//i.test(value);
-}
-
-function UrlValue({ url }) {
-  if (!url) {
-    return "n/a";
-  }
-  return isWebUrl(url) ? (
-    <a href={url} target="_blank" rel="noreferrer noopener">
-      {url}
-    </a>
-  ) : (
-    url
-  );
-}
-
-// Cargo feature map of a version: feature name -> what it enables (other features, `dep:crate`, `crate/feature`).
-function featureEntries(features) {
-  if (!features || typeof features !== "object") {
-    return [];
-  }
-  return Object.entries(features)
-    .filter(([name]) => !HIDDEN_FEATURE_KEYS.has(name))
-    .sort(([left], [right]) => Number(right === "default") - Number(left === "default") || left.localeCompare(right));
-}
-
-function FeaturesBlock({ version, features }) {
-  const entries = featureEntries(features);
-  return (
-    <div className="version-features">
-      <h3>Features of {version}</h3>
-      {entries.length === 0 ? <p className="muted">No features.</p> : null}
-      {entries.length ? (
-        <dl className="feature-list">
-          {entries.map(([name, enables]) => {
-            const list = Array.isArray(enables) ? enables : [];
-            return (
-              <div key={name} className="feature-item">
-                <dt>
-                  <code>{name}</code>
-                </dt>
-                <dd>{list.length ? list.map((item) => <code key={item}>{item}</code>) : <span className="muted">enables nothing</span>}</dd>
-              </div>
-            );
-          })}
-        </dl>
-      ) : null}
-    </div>
-  );
-}
-
-// Deprecation of a package or version: {message, ...} (Go `// Deprecated:` in go.mod, npm, NuGet).
-function deprecationMessage(deprecation) {
-  if (!deprecation) {
-    return "";
-  }
-  return typeof deprecation === "string" ? deprecation : String(deprecation.message || "");
-}
-
-// Maven relocation: `deprecation.alternative` is `groupId:artifactId[:version]`, the package the POM moved to.
-function relocationTarget(alternative) {
-  const [group, artifact, version] = String(alternative || "").split(":");
-  if (!group || !artifact) {
-    return null;
-  }
-  return { name: `${group}:${artifact}`, version: version || "" };
-}
-
-function RelocationLink({ alternative, isMaven }) {
-  const target = isMaven ? relocationTarget(alternative) : null;
-  if (!target) {
-    return alternative;
-  }
-  const query = target.version ? `?version=${encodeURIComponent(target.version)}` : "";
-  return <Link to={`/package/maven/${target.name}${query}`}>{alternative}</Link>;
-}
-
-// Packaging of a Maven version (`jar`, `pom`, `aar`...), from its POM; the version payload carries it where it is known.
-function packagingOf(version) {
-  const packaging = version?.packaging ?? version?.raw_metadata?.packaging;
-  return typeof packaging === "string" ? packaging : "";
-}
-
-function VersionStatus({ version, isGo }) {
-  // A Go module's author retracts a version in go.mod with a rationale; the catalog keeps it as yanked.
-  const retracted = isGo && version.status === "yanked";
-  // A NuGet version is unlisted by its author: hidden from search, still restorable, so it stays in the list.
-  // An RPM build is superseded by a newer build of the same arch in its repository: it still exists, so it stays listed.
-  const statusClass =
-    version.status === "yanked" ? "tag warn" : version.status === "unlisted" || version.status === "superseded" ? "tag muted-tag" : "tag";
-  const deprecation = version.deprecation ? deprecationMessage(version.deprecation) : "";
-  return (
-    <>
-      <span
-        className={statusClass}
-        title={version.status === "superseded" ? "A newer build of the same arch is in the source" : undefined}
-      >
-        {retracted ? "retracted" : version.status}
-      </span>
-      {isGoPseudoVersion(version.version) ? <span className="tag cond">pseudo-version</span> : null}
-      {retracted && version.status_reason ? <span className="muted version-reason">{version.status_reason}</span> : null}
-      {version.deprecation ? <span className="tag warn">deprecated</span> : null}
-      {deprecation ? <span className="muted version-reason">{deprecation}</span> : null}
-    </>
-  );
-}
-
-function collectNodeIds(nodes, parentId = "root") {
-  const ids = [];
-  nodes.forEach((node, index) => {
-    const nodeId = `${parentId}/${node.name}-${index}`;
-    ids.push(nodeId);
-    ids.push(...collectNodeIds(node.children || [], nodeId));
-  });
-  return ids;
-}
-
-// The package that provides an RPM capability (`resolved_name`, found by rpm-worker), linked to its page at the
-// version the tree resolved.
-function ProviderLink({ node, arch }) {
-  const query = new URLSearchParams();
-  if (node.resolved_version) {
-    query.set("version", node.resolved_version);
-  }
-  if (arch && arch !== DEFAULTS.rpm.arch) {
-    query.set("arch", arch);
-  }
-  const suffix = query.toString() ? `?${query.toString()}` : "";
-  return (
-    <span className="muted dep-provider">
-      provided by <Link to={`/package/rpm/${node.resolved_name}${suffix}`}>{node.resolved_name}</Link>
-    </span>
-  );
-}
-
-function DependencyTreeNode({ node, nodeId, packageName, ecosystem, arch, collapsedNodes, onToggleCollapse }) {
-  const conditions = collectDependencyConditions(node, ecosystem);
-  const installHints = conditions.extras.map((extra) => `${packageName}[${extra}]`);
-  const hasChildren = Boolean(node.children?.length);
-  const isCollapsed = collapsedNodes.has(nodeId);
-
-  return (
-    <li className="dep-tree-item">
-      <div className="dep-node">
-        <div className="dep-node-main">
-          {hasChildren ? (
-            <button
-              type="button"
-              className="tree-toggle"
-              onClick={() => onToggleCollapse(nodeId)}
-              aria-label={isCollapsed ? `Expand ${node.name}` : `Collapse ${node.name}`}
-            >
-              {isCollapsed ? "+" : "-"}
-            </button>
-          ) : (
-            <span className="tree-toggle-spacer" aria-hidden="true" />
-          )}
-          <code className="dep-node-name">{node.name}</code>
-          {node.constraint && node.constraint !== "*" ? <span className="muted dep-constraint">{node.constraint}</span> : null}
-          {ecosystem === "rpm" && node.resolved_name ? <ProviderLink node={node} arch={arch} /> : null}
-          {node.resolved_version ? <span className="tag dep-version-tag">{node.resolved_version}</span> : <span className="tag muted-tag dep-version-tag">unresolved</span>}
-          {node.cycle ? <span className="tag warn">cycle</span> : null}
-          {node.dependencies_unknown ? <span className="tag warn">dependencies unknown</span> : null}
-        </div>
-        {conditions.labels.length ? (
-          <div className="dep-node-meta">
-            {conditions.labels.map((label) => (
-              <span key={label} className="tag cond">
-                {label}
-              </span>
-            ))}
-          </div>
-        ) : null}
-        {installHints.length ? (
-          <p className="muted dep-node-hint">
-            Enable with <code>{installHints.join(" ")}</code>
-          </p>
-        ) : null}
-      </div>
-      {!isCollapsed ? (
-        <DependencyTree
-          nodes={node.children}
-          packageName={packageName}
-          ecosystem={ecosystem}
-          arch={arch}
-          parentId={nodeId}
-          collapsedNodes={collapsedNodes}
-          onToggleCollapse={onToggleCollapse}
-        />
-      ) : null}
-    </li>
-  );
-}
-
-function DependencyTree({ nodes, packageName, ecosystem, arch, parentId = "root", collapsedNodes, onToggleCollapse }) {
-  if (!nodes?.length) {
-    return null;
-  }
-
-  return (
-    <ul className="dep-tree">
-      {nodes.map((node, idx) => (
-        <DependencyTreeNode
-          key={`${node.name}-${idx}`}
-          node={node}
-          nodeId={`${parentId}/${node.name}-${idx}`}
-          packageName={packageName}
-          ecosystem={ecosystem}
-          arch={arch}
-          collapsedNodes={collapsedNodes}
-          onToggleCollapse={onToggleCollapse}
-        />
-      ))}
-    </ul>
-  );
-}
+import { CompareTab } from "./package/CompareTab";
+import { DependenciesTab } from "./package/DependenciesTab";
+import { ActionLink } from "./package/Links";
+import { OverviewTab } from "./package/OverviewTab";
+import { PackageFacts } from "./package/PackageFacts";
+import { PackageHeader } from "./package/PackageHeader";
+import { PackageTabs } from "./package/PackageTabs";
+import { SourcesTab } from "./package/SourcesTab";
+import { UsedByTab } from "./package/UsedByTab";
+import { useDependents } from "./package/useDependents";
+import { useVersionList } from "./package/useVersionList";
+import { VersionsTab, resolveVersionsView, versionChips } from "./package/VersionsTab";
+import {
+  CRATES_TARGETS,
+  DEFAULTS,
+  MAVEN_SCOPES,
+  NPM_OS_OPTIONS,
+  NUGET_FRAMEWORKS,
+  RPM_ARCHES,
+  VERSIONS_SHOWN,
+  archesOf,
+  normalizeFeatures,
+  normalizeScopes,
+  pickOption,
+  treeParams,
+} from "./package/packageEnv";
+import {
+  TABS,
+  collectNodeIds,
+  deprecationMessage,
+  initialVersion,
+  isNotFound,
+  readDepsView,
+  readRelation,
+  readTab,
+  readVersionsView,
+} from "./package/packageHelpers";
 
 export default function PackagePage() {
   // `/package/:ecosystem/*` carries native coordinates (`@angular/core`); `/package/:name` is the old PyPI route.
@@ -534,7 +64,9 @@ export default function PackagePage() {
 
   const [pkg, setPkg] = useState(null);
   const [versions, setVersions] = useState([]);
-  const [selectedVersion, setSelectedVersion] = useState(() => searchParams.get("version") || "");
+  // The page behind `versions` (for "all" on the Versions tab) and the package it belongs to.
+  const [versionsPage, setVersionsPage] = useState({ key: "", cursor: null, hasMore: false });
+  const [selectedVersion, setSelectedVersion] = useState(() => initialVersion(searchParams.get("version")));
   const [pythonVersion, setPythonVersion] = useState(() => searchParams.get("python") || DEFAULTS.pypi.python);
   const [nodeVersion, setNodeVersion] = useState(() => searchParams.get("node") || DEFAULTS.npm.node);
   const [cpu, setCpu] = useState(() => searchParams.get("cpu") || DEFAULTS.npm.cpu);
@@ -550,6 +82,8 @@ export default function PackagePage() {
   const [featuresInput, setFeaturesInput] = useState(() => normalizeFeatures(searchParams.get("features")));
   const [defaultFeatures, setDefaultFeatures] = useState(() => searchParams.get("default_features") !== "0");
   const [vulns, setVulns] = useState([]);
+  // Whether any source feeds advisories for this ecosystem: an empty list means nothing without it (#68).
+  const [vulnCoverage, setVulnCoverage] = useState("not_collected");
   const [deps, setDeps] = useState([]);
   const [depsUnknown, setDepsUnknown] = useState(false);
   const [versionDetail, setVersionDetail] = useState(null);
@@ -558,13 +92,38 @@ export default function PackagePage() {
   const [depsLoading, setDepsLoading] = useState(false);
   const [error, setError] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState(() => new Set());
+  const [activeTab, setActiveTab] = useState(() => readTab(searchParams.get("tab")));
+  // `?relation=` of the Used by tab and `?dep_relation=` of the Dependencies tab: "" for both. `?deps=` of the
+  // Dependencies tab: "" is the table. Each tab keeps its own filter.
+  const [relation, setRelation] = useState(() => readRelation(searchParams.get("relation")));
+  const [depRelation, setDepRelation] = useState(() => readRelation(searchParams.get("dep_relation")));
+  const [depsView, setDepsView] = useState(() => readDepsView(searchParams.get("deps")));
+  // `?view=` and `?line=` of the Versions tab: the requested view ("lines" by default) and the expanded line.
+  const [versionsView, setVersionsView] = useState(() => readVersionsView(searchParams.get("view")));
+  const [expandedLine, setExpandedLine] = useState(() => searchParams.get("line") || "");
+  // `?from=` of the Compare tab: the version compared with the header's one; "" is the API's default.
+  const [compareFrom, setCompareFrom] = useState(() => searchParams.get("from") || "");
+  // The Overview numbers of the selected version; `overviewState` tells "not there yet" from "failed".
+  const [overview, setOverview] = useState(null);
+  const [overviewState, setOverviewState] = useState("loading");
+  // The version the tree request last settled for: the overview waits for it, so the two do not load the same
+  // version's dependencies at once.
+  const [depsSettledFor, setDepsSettledFor] = useState("");
+  // The version `fetchVersion` last answered for (found or not): its `dependencies_state` tells whether the tree request
+  // is about to hydrate it.
+  const [detailSettledFor, setDetailSettledFor] = useState("");
+  // Each tree and package request takes a number; an answer whose number is no longer the latest is dropped, so a slow
+  // answer for another version or package never writes over the current one.
+  const depsRequest = useRef(0);
+  const packageRequest = useRef(0);
+  // A version in the URL that the catalog does not have (`fetchVersion` answered 404).
+  const [missingVersion, setMissingVersion] = useState("");
 
   // `os` is one URL parameter for both ecosystems, but PyPI calls Windows "windows" and npm "win32".
   const treeOs = isNpm ? pickOption(os, NPM_OS_OPTIONS.map((item) => item.value), DEFAULTS.npm.os) : os;
   const treeTarget = pickOption(target, CRATES_TARGETS, DEFAULTS.crates.target);
   const treeFramework = pickOption(framework, NUGET_FRAMEWORKS, DEFAULTS.nuget.framework);
   const selectedScopes = scopes.split(",");
-  const latestVersion = useMemo(() => selectedVersion || pkg?.latest_version || versions?.[0]?.version, [selectedVersion, pkg, versions]);
   // `deprecation.message` of the package (Go: the `// Deprecated:` paragraph of go.mod; NuGet: the message or the reasons), `true` when it has no text.
   const deprecated = useMemo(() => {
     if (!pkg?.deprecation) {
@@ -580,11 +139,17 @@ export default function PackagePage() {
     [allNodeIds, collapsedNodes]
   );
 
+  // A version outside the loaded ones may not exist: its detail is asked first, and a 404 there spares the tree, the
+  // overview and the files requests that would 404 too. A loaded version is known to exist and does not wait.
+  const versionKnown = versions.some((row) => row.version === selectedVersion);
+  const versionMissing = Boolean(missingVersion) && missingVersion === selectedVersion;
+  const treeAllowed = !versionMissing && (versionKnown || detailSettledFor === selectedVersion);
+
   useEffect(() => {
     if (!name) {
       return;
     }
-    setSelectedVersion(searchParams.get("version") || "");
+    setSelectedVersion(initialVersion(searchParams.get("version")));
     setPythonVersion(searchParams.get("python") || DEFAULTS.pypi.python);
     setNodeVersion(searchParams.get("node") || DEFAULTS.npm.node);
     setCpu(searchParams.get("cpu") || DEFAULTS.npm.cpu);
@@ -597,11 +162,25 @@ export default function PackagePage() {
     setFeaturesInput(normalizeFeatures(searchParams.get("features")));
     setDefaultFeatures(searchParams.get("default_features") !== "0");
     setIncludeOptional(searchParams.get("include_optional") === "1");
+    setActiveTab(readTab(searchParams.get("tab")));
+    setRelation(readRelation(searchParams.get("relation")));
+    setDepRelation(readRelation(searchParams.get("dep_relation")));
+    setDepsView(readDepsView(searchParams.get("deps")));
+    setVersionsView(readVersionsView(searchParams.get("view")));
+    setExpandedLine(searchParams.get("line") || "");
+    setCompareFrom(searchParams.get("from") || "");
+    setOverview(null);
+    setOverviewState("loading");
+    setDepsSettledFor("");
+    setDetailSettledFor("");
+    setMissingVersion("");
+    depsRequest.current += 1;   // a tree still loading for the previous package is dropped
+    setDepsLoading(false);
     setDeps([]);
     setDepsUnknown(false);
     setVersionDetail(null);
     setCollapsedNodes(new Set());
-    loadPackage();
+    loadPackage(initialVersion(searchParams.get("version")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ecosystem, name]);
 
@@ -648,16 +227,41 @@ export default function PackagePage() {
     if (includeOptional && !isGo && !isNuget && !isMaven) {
       next.set("include_optional", "1");
     }
+    if (activeTab !== "overview") {
+      next.set("tab", activeTab);
+    }
+    if (activeTab === "used-by" && relation) {
+      next.set("relation", relation);
+    }
+    if (activeTab === "dependencies") {
+      if (depRelation) {
+        next.set("dep_relation", depRelation);
+      }
+      if (depsView) {
+        next.set("deps", depsView);
+      }
+    }
+    if (activeTab === "versions") {
+      if (versionsView !== "lines") {
+        next.set("view", versionsView);
+      }
+      if (expandedLine) {
+        next.set("line", expandedLine);
+      }
+    }
+    if (activeTab === "compare" && compareFrom) {
+      next.set("from", compareFrom);
+    }
     setSearchParams(next, { replace: true });
-  }, [isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
+  }, [activeTab, relation, depRelation, depsView, versionsView, expandedLine, compareFrom, isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
 
   useEffect(() => {
-    if (!name || !selectedVersion) {
+    if (!name || !selectedVersion || !treeAllowed) {
       return;
     }
     loadDependencies(name, selectedVersion);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ecosystem, name, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional]);
+  }, [ecosystem, name, selectedVersion, treeAllowed, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional]);
 
   // RPM: the listed versions and the selected one are asked for their files, whose arches the page shows. A failed
   // request leaves that version without arches; the page does not depend on them.
@@ -666,22 +270,24 @@ export default function PackagePage() {
       return undefined;
     }
     const wanted = new Set(versions.slice(0, VERSIONS_SHOWN).map((row) => row.version));
-    if (selectedVersion) {
+    if (selectedVersion && !versionMissing) {
       wanted.add(selectedVersion);
     }
-    wanted.forEach((version) => {
-      const key = `${name}/${version}`;
-      if (archesByVersion[key]) {
-        return;
-      }
-      // Keyed by package, so an answer that arrives after the page moved on is still the right one for its key.
-      fetchArtifacts(ecosystem, name, version)
-        .then((payload) => setArchesByVersion((current) => ({ ...current, [key]: archesOf(payload?.data) })))
-        .catch(() => {});
-    });
+    wanted.forEach(loadArches);
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRpm, ecosystem, name, versions, selectedVersion]);
+  }, [isRpm, ecosystem, name, versions, selectedVersion, versionMissing]);
+
+  function loadArches(version) {
+    const key = `${name}/${version}`;
+    if (archesByVersion[key]) {
+      return;
+    }
+    // Keyed by package, so an answer that arrives after the page moved on is still the right one for its key.
+    fetchArtifacts(ecosystem, name, version)
+      .then((payload) => setArchesByVersion((current) => ({ ...current, [key]: archesOf(payload?.data) })))
+      .catch(() => {});
+  }
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -689,16 +295,22 @@ export default function PackagePage() {
       return undefined;
     }
     let cancelled = false;
+    setMissingVersion("");
     fetchVersion(ecosystem, name, selectedVersion)
       .then((payload) => {
         if (!cancelled) {
           setVersionDetail(payload);
+          setDetailSettledFor(selectedVersion);
         }
       })
-      .catch(() => {
-        // The sources block is auxiliary: the page stays usable without it.
+      .catch((err) => {
+        // The sources block is auxiliary: the page stays usable without it. Only an unknown version is reported.
         if (!cancelled) {
           setVersionDetail(null);
+          if (isNotFound(err)) {
+            setMissingVersion(selectedVersion);
+          }
+          setDetailSettledFor(selectedVersion);
         }
       });
     return () => {
@@ -706,24 +318,76 @@ export default function PackagePage() {
     };
   }, [ecosystem, name, selectedVersion]);
 
-  async function loadPackage() {
+  // The overview and the Compare tab load a version's dependencies on the server as the tree does; a version still in
+  // `pending` is hydrated by one request at a time, so they wait for the tree. A hydrated one needs no waiting.
+  const detailNow = versionDetail && versionDetail.version === selectedVersion ? versionDetail : null;
+  const hydrationClear =
+    !versionMissing &&
+    detailSettledFor === selectedVersion &&
+    !(detailNow?.dependencies_state === "pending" && depsSettledFor !== selectedVersion);
+
+  useEffect(() => {
+    if (!name || !selectedVersion || !hydrationClear) {
+      return undefined;
+    }
+    let cancelled = false;
+    setOverviewState("loading");
+    fetchOverview(ecosystem, name, selectedVersion)
+      .then((payload) => {
+        if (!cancelled) {
+          setOverview(payload);
+          setOverviewState("ready");
+        }
+      })
+      .catch(() => {
+        // The numbers are a summary: the page stays usable without them.
+        if (!cancelled) {
+          setOverview(null);
+          setOverviewState("error");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ecosystem, name, selectedVersion, hydrationClear]);
+
+  async function loadPackage(requestedVersion) {
+    const token = (packageRequest.current += 1);
+    const current = () => token === packageRequest.current;
     setLoading(true);
     setError("");
     try {
       const packagePayload = await fetchPackage(ecosystem, name);
+      if (!current()) {
+        return;
+      }
       setPkg(packagePayload);
 
       const versionsPayload = await fetchVersions(ecosystem, name, { limit: 30 });
+      if (!current()) {
+        return;
+      }
       const loadedVersions = versionsPayload.data || [];
       setVersions(loadedVersions);
+      setVersionsPage({ key: `${ecosystem}/${name}`, cursor: versionsPayload.cursor || null, hasMore: Boolean(versionsPayload.has_more) });
 
       const vulnerabilitiesPayload = await fetchVulnerabilities(ecosystem, name);
+      if (!current()) {
+        return;
+      }
       setVulns(vulnerabilitiesPayload.data || []);
+      setVulnCoverage(vulnerabilitiesPayload.coverage || "not_collected");
 
-      const versionExists = loadedVersions.some((row) => row.version === selectedVersion);
-      const targetVersion = versionExists ? selectedVersion : (packagePayload.latest_version || loadedVersions[0]?.version || "");
-      setSelectedVersion(targetVersion);
+      // A version outside the 30 loaded ones is still asked for; the catalog's 404 for it is shown as such.
+      const target = requestedVersion || packagePayload.latest_version || loadedVersions[0]?.version || "";
+      setSelectedVersion(target);
+      if (!target) {
+        setOverviewState("error");   // nothing to count
+      }
     } catch (err) {
+      if (!current()) {
+        return;
+      }
       setError(err?.message || "Package request failed");
       setPkg(null);
       setVersions([]);
@@ -732,11 +396,14 @@ export default function PackagePage() {
       setDepsUnknown(false);
       setSelectedVersion("");
     } finally {
-      setLoading(false);
+      if (current()) {
+        setLoading(false);
+      }
     }
   }
 
   async function loadDependencies(packageName, version) {
+    const token = (depsRequest.current += 1);
     setDepsLoading(true);
     setError("");
     try {
@@ -750,15 +417,25 @@ export default function PackagePage() {
           includeOptional
         )
       );
+      if (token !== depsRequest.current) {
+        return;
+      }
       setDeps(depPayload.dependencies || []);
       setDepsUnknown(Boolean(depPayload.dependencies_unknown));
       setCollapsedNodes(new Set());
     } catch (err) {
-      setError(err?.message || "Dependency tree request failed");
+      if (token !== depsRequest.current) {
+        return;
+      }
+      // An unknown version is reported by the page itself, not as a failed tree.
+      setError(isNotFound(err) ? "" : err?.message || "Dependency tree request failed");
       setDeps([]);
       setDepsUnknown(false);
     } finally {
-      setDepsLoading(false);
+      if (token === depsRequest.current) {
+        setDepsLoading(false);
+        setDepsSettledFor(version);
+      }
     }
   }
 
@@ -813,407 +490,243 @@ export default function PackagePage() {
     });
   }
 
+  const versionRow = useMemo(
+    () => (versionDetail && versionDetail.version === selectedVersion ? versionDetail : versions.find((row) => row.version === selectedVersion) || null),
+    [versionDetail, versions, selectedVersion]
+  );
+  // The numbers belong to the version they were counted for; a stale answer is not shown under another version.
+  const overviewNow = overview && overview.version === selectedVersion ? overview : null;
+  const isLatest = Boolean(pkg && selectedVersion && selectedVersion === pkg.latest_version);
+  // RPM counts no indirect dependents (capabilities are not resolved), so its list is the direct one.
+  const dependents = useDependents(ecosystem, name, Boolean(pkg) && activeTab === "used-by", isRpm ? "direct" : relation);
+
+  // The Versions tab counts packages by lines and filters from the overview. Those are package-wide, so the last
+  // overview of this package stays in use while another version's one loads; the tab does not blank on a version click.
+  const lastOverview = useRef({ key: "", overview: null });
+  if (overviewNow) {
+    lastOverview.current = { key: `${ecosystem}/${name}`, overview: overviewNow };
+  }
+  const versionsOverview = lastOverview.current.key === `${ecosystem}/${name}` ? lastOverview.current.overview : null;
+  const versionsInfoReady = Boolean(versionsOverview) || overviewState === "error";
+  const versionChipList = versionChips(versionsOverview, isRpm);
+  const shownView = resolveVersionsView(versionsView, versionChipList);
+  const versionsOpen = Boolean(pkg) && activeTab === "versions" && versionsInfoReady;
+  const versionsSeed = useMemo(
+    () => (versionsPage.key === `${ecosystem}/${name}` ? { rows: versions, cursor: versionsPage.cursor, hasMore: versionsPage.hasMore } : null),
+    [ecosystem, name, versions, versionsPage]
+  );
+  const flatList = useVersionList(ecosystem, name, versionsOpen && shownView !== "lines" ? shownView : null, versionsSeed);
+  const lineKey = versionsOpen && shownView === "lines" && expandedLine ? `line:${expandedLine}` : null;
+  const lineList = useVersionList(ecosystem, name, lineKey);
+  useEffect(() => {
+    if (isRpm && versionsOpen && shownView !== "lines") {
+      flatList.rows.forEach((row) => loadArches(row.version));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRpm, versionsOpen, shownView, flatList.rows]);
+  const tabs = TABS.map((tab) => {
+    if (tab.id === "used-by" && overviewNow) {
+      return { ...tab, count: overviewNow.used_by.direct };   // what the tab opens on is the list's own filter, "All" has its chip
+    }
+    if (tab.id === "dependencies" && overviewNow && overviewNow.dependencies.direct !== null) {
+      return { ...tab, count: overviewNow.dependencies.direct };
+    }
+    return tab.id === "versions" && overviewNow ? { ...tab, count: overviewNow.versions.total } : tab;
+  });
+
+  // The address of a tab (and, for the "latest" link, of another version) with every other parameter kept.
+  function tabHref(tab, patch = {}) {
+    const next = new URLSearchParams(searchParams);
+    const target = tab === undefined ? activeTab : tab;
+    if (target === "overview") {
+      next.delete("tab");
+    } else {
+      next.set("tab", target);
+    }
+    Object.entries(patch).forEach(([key, value]) => (value === null ? next.delete(key) : next.set(key, value)));
+    return `?${next.toString()}`;
+  }
+
+  const notice =
+    pkg && versionMissing ? (
+      <div className="banner warn" role="alert">
+        <b>Version {missingVersion} is not in the catalog</b>
+        {pkg.latest_version ? (
+          <>
+            {" "}
+            <ActionLink href={tabHref(undefined, { version: pkg.latest_version })} onSelect={() => setSelectedVersion(pkg.latest_version)}>
+              Open {pkg.latest_version}, the latest
+            </ActionLink>
+          </>
+        ) : null}
+      </div>
+    ) : null;
+
   return (
-    <section>
-      <h2>
-        Package: {(isNuget || isMaven || isRpm) && pkg?.name ? pkg.name : name}
-        <span className="tag eco-badge">{ECOSYSTEM_LABELS[ecosystem] || ecosystem}</span>
-      </h2>
+    <section className="package-page">
       {error ? <p className="error">{error}</p> : null}
       {loading ? <p>Loading...</p> : null}
 
-      {pkg ? (
-        <>
-          {deprecated ? (
-            <div className="banner warn" role="alert">
-              <b>Deprecated</b>
-              {deprecated !== true ? `: ${deprecated}` : ""}
-              {relocatedTo ? (
-                <>
-                  {" "}
-                  (moved to <RelocationLink alternative={relocatedTo} isMaven={isMaven} />)
-                </>
-              ) : null}
-            </div>
-          ) : null}
-          {/* Go modules have no description, license or authors in the catalog: no empty blocks for them. */}
-          {descriptionParagraphs.length || !isGo ? (
-            <div className="package-description">
-              {descriptionParagraphs.length ? (
-                descriptionParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)
-              ) : (
-                <p>No description</p>
-              )}
-            </div>
-          ) : null}
-          <div className="meta-grid">
-            {pkg.purl ? (
-              <span>
-                <b>purl</b>: <code>{pkg.purl}</code>
-              </span>
-            ) : null}
-            {isMaven ? (
-              <>
-                <span>
-                  <b>groupId</b>: <code>{pkg.namespace}</code>
-                </span>
-                <span>
-                  <b>artifactId</b>: <code>{pkg.normalized_name}</code>
-                </span>
-              </>
-            ) : null}
-            {isRpm ? (
-              <>
-                <span>
-                  <b>Distro</b>: <code>{pkg.namespace}</code>
-                </span>
-                <span>
-                  <b>Name</b>: <code>{pkg.normalized_name}</code>
-                </span>
-              </>
-            ) : null}
-            <span>
-              <b>Latest</b>: {latestVersion}
-            </span>
-            {!isGo || pkg.license_spdx || pkg.license_raw ? (
-              <span>
-                <b>License</b>: {pkg.license_spdx || pkg.license_raw || "unknown"}
-              </span>
-            ) : null}
-            {!isGo || pkg.homepage_url ? (
-              <span>
-                <b>Homepage</b>: <UrlValue url={pkg.homepage_url} />
-              </span>
-            ) : null}
-            {!isGo || pkg.repository_url ? (
-              <span>
-                <b>Repo</b>: <UrlValue url={pkg.repository_url} />
-              </span>
-            ) : null}
-            {pkg.documentation_url ? (
-              <span>
-                <b>Documentation</b>: <UrlValue url={pkg.documentation_url} />
-              </span>
-            ) : null}
-          </div>
+      <PackageHeader
+        title={(isNuget || isMaven || isRpm) && pkg?.name ? pkg.name : name}
+        ecosystem={ecosystem}
+        pkg={pkg}
+        selectedVersion={selectedVersion}
+        versions={versions}
+        loading={loading}
+        isLatest={isLatest}
+        versionRow={versionRow}
+        deprecated={deprecated}
+        relocatedTo={relocatedTo}
+        descriptionParagraphs={descriptionParagraphs}
+        onSelectVersion={setSelectedVersion}
+        tabHref={tabHref}
+        notice={notice}
+        missingVersion={versionMissing}
+      />
 
-          {pkg.sources?.length ? (
-            <>
-              <h3>Sources</h3>
-              <ul className="result-list package-sources">
-                {pkg.sources.map((source) => (
-                  <li key={source.registry}>
-                    <code>{source.registry}</code>
-                    {source.primary ? <span className="tag">primary</span> : null}
-                    {!source.enabled ? <span className="tag muted-tag">disabled</span> : null}
-                    {source.missing_since ? (
-                      <span className="tag warn">missing since {formatDateTime(source.missing_since)}</span>
-                    ) : null}
-                    {source.checked_at ? (
-                      <span className="muted"> checked {formatDateTime(source.checked_at)}</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-
-          <h3>Versions</h3>
-          <ul className="inline-list">
-            {versions.slice(0, VERSIONS_SHOWN).map((v) => (
-              <li key={v.version}>
-                {v.version}
-                <VersionStatus version={v} isGo={isGo} />
-                {isMaven && packagingOf(v) ? <span className="tag cond">{packagingOf(v)}</span> : null}
-                {isRpm
-                  ? (archesByVersion[`${name}/${v.version}`] || []).map((item) => (
-                      <span key={item} className="tag cond">
-                        {item}
-                      </span>
-                    ))
-                  : null}
-                {formatDate(v.release_date) ? <span className="muted version-date">{formatDate(v.release_date)}</span> : null}
-              </li>
-            ))}
-          </ul>
-
-          <h3>Dependency tree ({latestVersion || "n/a"})</h3>
-          <div className="toolbar">
-            <label>
-              Version
-              <select
-                aria-label="Version"
-                value={selectedVersion}
-                onChange={(e) => setSelectedVersion(e.target.value)}
-                disabled={loading || versions.length === 0}
-              >
-                {versions.map((v) => (
-                  <option key={v.version} value={v.version}>
-                    {v.version}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {isNpm ? (
-              <>
-                <label>
-                  Node.js version
-                  <select
-                    aria-label="Node.js version"
-                    value={nodeVersion}
-                    onChange={(e) => setNodeVersion(e.target.value)}
-                    disabled={loading || depsLoading}
-                  >
-                    {NPM_NODE_VERSIONS.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  OS
-                  <select
-                    aria-label="OS"
-                    value={treeOs}
-                    onChange={(e) => setOs(e.target.value)}
-                    disabled={loading || depsLoading}
-                  >
-                    {NPM_OS_OPTIONS.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  CPU
-                  <select
-                    aria-label="CPU"
-                    value={cpu}
-                    onChange={(e) => setCpu(e.target.value)}
-                    disabled={loading || depsLoading}
-                  >
-                    {NPM_CPU_OPTIONS.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </>
-            ) : isGo ? null : isRpm ? (
-              <label>
-                Arch
-                <select aria-label="Arch" value={arch} onChange={(e) => setArch(e.target.value)} disabled={loading || depsLoading}>
-                  {RPM_ARCHES.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : isMaven ? (
-              <div className="scope-select" role="group" aria-label="Scopes">
-                <b>Scopes</b>
-                {MAVEN_SCOPES.map((scope) => (
-                  <label key={scope}>
-                    <input
-                      type="checkbox"
-                      checked={selectedScopes.includes(scope)}
-                      onChange={(e) => toggleScope(scope, e.target.checked)}
-                      disabled={loading || depsLoading}
-                    />
-                    {scope}
-                  </label>
-                ))}
-              </div>
-            ) : isNuget ? (
-              <label>
-                Target framework
-                <select
-                  aria-label="Target framework"
-                  value={treeFramework}
-                  onChange={(e) => setFramework(e.target.value)}
-                  disabled={loading || depsLoading}
-                >
-                  {NUGET_FRAMEWORKS.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : isCrates ? (
-              <>
-                <label>
-                  Target
-                  <select
-                    aria-label="Target"
-                    value={treeTarget}
-                    onChange={(e) => setTarget(e.target.value)}
-                    disabled={loading || depsLoading}
-                  >
-                    {CRATES_TARGETS.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Features
-                  <input
-                    aria-label="Features"
-                    placeholder="derive, std"
-                    value={featuresInput}
-                    onChange={(e) => setFeaturesInput(e.target.value)}
-                    onBlur={applyFeatures}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        applyFeatures();
-                      }
-                    }}
-                  />
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    aria-label="Default features"
-                    checked={defaultFeatures}
-                    onChange={(e) => setDefaultFeatures(e.target.checked)}
-                  />
-                  default features
-                </label>
-              </>
-            ) : (
-              <>
-                <label>
-                  Python version
-                  <select
-                    aria-label="Python version"
-                    value={pythonVersion}
-                    onChange={(e) => setPythonVersion(e.target.value)}
-                    disabled={loading || depsLoading}
-                  >
-                    {PYTHON_VERSIONS.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  OS
-                  <select
-                    aria-label="OS"
-                    value={os}
-                    onChange={(e) => setOs(e.target.value)}
-                    disabled={loading || depsLoading}
-                  >
-                    {OS_OPTIONS.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </>
-            )}
-            {isGo || isNuget || isMaven ? null : (
-              <label>
-                <input
-                  type="checkbox"
-                  checked={includeOptional}
-                  onChange={(e) => setIncludeOptional(e.target.checked)}
-                />
-                include optional
-              </label>
-            )}
-            <button type="button" onClick={toggleTreeCollapse} disabled={depsLoading || deps.length === 0}>
-              {isTreeCollapsed ? "Expand tree" : "Collapse tree"}
-            </button>
-            <button
-              type="button"
-              onClick={refreshTree}
-              disabled={loading || depsLoading || !selectedVersion}
-            >
-              Refresh tree
-            </button>
-          </div>
-          {versionDetail && versionDetail.version === selectedVersion ? (
-            <div className="version-detail">
-              <b>Sources of {versionDetail.version}</b>:
-              {versionDetail.sources?.length ? (
-                <ul className="inline-list">
-                  {versionDetail.sources.map((source) => (
-                    <li key={source.registry}>
-                      {source.registry}: {source.status}
-                      {!source.enabled ? <span className="tag muted-tag">disabled</span> : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {versionDetail.dependencies_state === "unavailable" ? (
-                <span className="tag warn">dependencies unknown</span>
-              ) : null}
-              {isGo && versionDetail.status === "yanked" ? (
-                <p className="muted">
-                  Retracted{versionDetail.status_reason ? `: ${versionDetail.status_reason}` : ""}
-                </p>
-              ) : null}
-              {isRpm && archesByVersion[`${name}/${versionDetail.version}`]?.length ? (
-                <p className="muted">Arches: {archesByVersion[`${name}/${versionDetail.version}`].join(", ")}</p>
-              ) : null}
-              {isRpm && versionDetail.status === "superseded" ? (
-                <p className="muted">Superseded: a newer build of the same arch is in the source, this one is still in the catalog.</p>
-              ) : null}
-              {isMaven && packagingOf(versionDetail) ? (
-                <p className="muted">
-                  Packaging: <code>{packagingOf(versionDetail)}</code>
-                </p>
-              ) : null}
-              {isNuget && versionDetail.status === "unlisted" ? (
-                <p className="muted">Unlisted: the author hid this version from search, it can still be restored.</p>
-              ) : null}
-              {versionDetail.deprecation ? (
-                <p className="muted">
-                  Deprecated
-                  {deprecationMessage(versionDetail.deprecation) ? `: ${deprecationMessage(versionDetail.deprecation)}` : ""}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-          {isCrates && versionDetail && versionDetail.version === selectedVersion ? (
-            <FeaturesBlock version={versionDetail.version} features={versionDetail.features} />
-          ) : null}
-          {depsLoading ? <p>Loading dependency tree...</p> : null}
-          {!depsLoading && depsUnknown ? (
-            <p>Dependencies unknown: the source has no metadata for this version</p>
-          ) : null}
-          {!depsLoading && !depsUnknown && deps.length === 0 ? <p>No runtime dependencies for this environment.</p> : null}
-          <DependencyTree
-            nodes={deps}
-            packageName={pkg.normalized_name}
+      {pkg && !versionMissing ? (
+        <div className="package-layout">
+          <PackageFacts
             ecosystem={ecosystem}
-            arch={arch}
-            collapsedNodes={collapsedNodes}
-            onToggleCollapse={toggleNodeCollapse}
+            pkg={pkg}
+            selectedVersion={selectedVersion}
+            versionRow={versionRow}
+            versionDetail={versionDetail && versionDetail.version === selectedVersion ? versionDetail : null}
           />
-
-          <h3>Vulnerabilities</h3>
-          {vulns.length === 0 ? <p>None</p> : null}
-          <ul className="result-list">
-            {vulns.map((vuln) => (
-              <li key={vuln.source_id}>
-                <b>{vuln.source_id}</b>
-                {vuln.severity ? <span className="tag warn">{vuln.severity}</span> : null}
-                <p>{vuln.summary}</p>
-              </li>
-            ))}
-          </ul>
-        </>
+          <div className="package-main">
+            <PackageTabs tabs={tabs} active={activeTab} onSelect={setActiveTab}>
+              {activeTab === "overview" ? (
+                <OverviewTab
+                  overview={overviewNow}
+                  overviewState={overviewState}
+                  pkg={pkg}
+                  ecosystem={ecosystem}
+                  vulns={vulns}
+                  vulnCoverage={vulnCoverage}
+                  isLatest={isLatest}
+                  tabHref={tabHref}
+                  onSelectTab={setActiveTab}
+                />
+              ) : null}
+              {activeTab === "dependencies" ? (
+                <DependenciesTab
+                  view={depsView}
+                  relation={depRelation}
+                  tabHref={tabHref}
+                  onSelectView={setDepsView}
+                  onSelectRelation={setDepRelation}
+                  isNpm={isNpm}
+                  isGo={isGo}
+                  isRpm={isRpm}
+                  isMaven={isMaven}
+                  isNuget={isNuget}
+                  isCrates={isCrates}
+                  nodeVersion={nodeVersion}
+                  setNodeVersion={setNodeVersion}
+                  treeOs={treeOs}
+                  setOs={setOs}
+                  os={os}
+                  cpu={cpu}
+                  setCpu={setCpu}
+                  arch={arch}
+                  setArch={setArch}
+                  selectedScopes={selectedScopes}
+                  toggleScope={toggleScope}
+                  treeFramework={treeFramework}
+                  setFramework={setFramework}
+                  treeTarget={treeTarget}
+                  setTarget={setTarget}
+                  featuresInput={featuresInput}
+                  setFeaturesInput={setFeaturesInput}
+                  applyFeatures={applyFeatures}
+                  defaultFeatures={defaultFeatures}
+                  setDefaultFeatures={setDefaultFeatures}
+                  pythonVersion={pythonVersion}
+                  setPythonVersion={setPythonVersion}
+                  includeOptional={includeOptional}
+                  setIncludeOptional={setIncludeOptional}
+                  loading={loading}
+                  depsLoading={depsLoading}
+                  depsUnknown={depsUnknown}
+                  isTreeCollapsed={isTreeCollapsed}
+                  toggleTreeCollapse={toggleTreeCollapse}
+                  refreshTree={refreshTree}
+                  selectedVersion={selectedVersion}
+                  deps={deps}
+                      pkg={pkg}
+                  ecosystem={ecosystem}
+                  collapsedNodes={collapsedNodes}
+                  toggleNodeCollapse={toggleNodeCollapse}
+                />
+              ) : null}
+              {activeTab === "used-by" ? (
+                <UsedByTab
+                  list={dependents}
+                  totals={overviewNow ? overviewNow.used_by : null}
+                  relation={relation}
+                  tabHref={tabHref}
+                  onSelectRelation={setRelation}
+                  isRpm={isRpm}
+                />
+              ) : null}
+              {activeTab === "versions" ? (
+                versionsInfoReady ? (
+                  <VersionsTab
+                    overview={versionsOverview}
+                    chips={versionChipList}
+                    view={shownView}
+                    expandedLine={expandedLine}
+                    viewingLine={versionRow?.line || ""}
+                    list={flatList}
+                    lineList={lineList}
+                    tabHref={tabHref}
+                    onSelectView={(value) => {
+                      setVersionsView(value);
+                      setExpandedLine("");
+                    }}
+                    onSelectLine={setExpandedLine}
+                    name={name}
+                    selectedVersion={selectedVersion}
+                    onSelectVersion={setSelectedVersion}
+                    isGo={isGo}
+                    isMaven={isMaven}
+                    isRpm={isRpm}
+                    archesByVersion={archesByVersion}
+                  />
+                ) : (
+                  <p className="muted">Loading...</p>
+                )
+              ) : null}
+              {activeTab === "compare" ? (
+                <CompareTab
+                  ecosystem={ecosystem}
+                  name={name}
+                  to={selectedVersion}
+                  from={compareFrom}
+                  hold={!hydrationClear}
+                  versions={versions}
+                  onSelectFrom={setCompareFrom}
+                  isGo={isGo}
+                />
+              ) : null}
+              {activeTab === "sources" ? (
+                <SourcesTab
+                  pkg={pkg}
+                  name={name}
+                  versionDetail={versionDetail}
+                  selectedVersion={selectedVersion}
+                  isGo={isGo}
+                  isCrates={isCrates}
+                  isNuget={isNuget}
+                  isMaven={isMaven}
+                  isRpm={isRpm}
+                  archesByVersion={archesByVersion}
+                />
+              ) : null}
+            </PackageTabs>
+          </div>
+        </div>
       ) : null}
     </section>
   );

@@ -3,8 +3,8 @@
 > Source of truth для контрактов HTTP API MVP.
 
 **Source of truth:** [SPEC-MVP.md](./SPEC-MVP.md); адресация по purl, источники и формат resolve — [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md) §9.1, §11  
-**Версия:** 1.10-api  
-**Дата:** 2026-10-31
+**Версия:** 1.18-api  
+**Дата:** 2026-11-07
 
 ## 1. Область и правила владения
 
@@ -103,7 +103,10 @@ Cursor-based ответ для списков:
   - `license: string?`
   - `has_vulnerabilities: boolean?`
   - `updated_after: datetime?`
-  - `sort: enum(name|updated_at|downloads_total)=name`
+  - `min_used_by: int?` — только пакеты, от которых зависят не меньше стольких пакетов каталога (`used_by`, см. ниже); `0` — без фильтра;
+  - `deprecated: boolean?` — `true` оставляет пакеты с `deprecation`, `false` — остальные. JSON `null` в `deprecation` не считается: «объявлен устаревшим» — это непустой объект;
+  - `released_before: datetime?` — только пакеты, у которых последняя версия (`latest_version`) выпущена раньше этого момента; без даты выпуска пакет не подходит;
+  - `sort: enum(name|updated_at|downloads_total|relevance|used_by)=name`: `relevance` — точное имя, затем имена с префиксом запроса, затем остальные (без учёта регистра), потом `normalized_name` и id; нужен `q`, без него это `name`. `used_by` — по убыванию `used_by`, затем `normalized_name` и id; курсор держит число, имя и id, так что страницы не пересекаются
   - `limit: int=50 (max 200)`
   - `cursor: string?`
 - Response `200`:
@@ -122,7 +125,8 @@ Cursor-based ответ для списков:
       "license_spdx": "BSD-3-Clause",
       "latest_version": "3.0.0",
       "updated_at": "2026-03-01T10:00:00Z",
-      "has_vulnerabilities": false
+      "has_vulnerabilities": false,
+      "used_by": 12
     }
   ],
   "cursor": "...",
@@ -130,6 +134,7 @@ Cursor-based ответ для списков:
 }
 ```
 
+- `used_by` — сколько других пакетов каталога имеют этот в зависимостях `runtime`, `peer` или `provided` своей последней версии (пакет, зависящий от себя, и `dev`, `build`, `optional` не в счёт). Считается в каталоге: `0` значит, что зависимых в каталоге нет, а не что пакет никому не нужен. Один и тот же подсчёт у поля, сортировки и фильтра `min_used_by`.
 - `namespace` — пустая строка, если у экосистемы нет пространства имён (PyPI, crates, Go, NuGet, npm-пакет без scope). У npm это scope без `@`, а `name` — имя без scope: `@angular/core` приходит как `namespace: "angular"`, `name: "core"`. У Maven `namespace` — `groupId`, `normalized_name` — `artifactId`, а `name` — пара целиком: `namespace: "org.springframework"`, `normalized_name: "spring-core"`, `name: "org.springframework:spring-core"`. У RPM `namespace` — дистрибутив и релиз, `normalized_name` — имя пакета, а `name` — они вместе: `namespace: "rocky-9"`, `normalized_name: "openssl"`, `name: "rocky-9/openssl"`. `latest_version` может быть `null` (проект без релизов).
 - Errors: `422/500`
 
@@ -137,8 +142,36 @@ Cursor-based ответ для списков:
 
 - Auth: none
 - Query: `q: string` (обязателен, подстрока в имени или описании) и те же фильтры, сортировка и пагинация, что у `GET /packages`.
-- Response `200`: как у `GET /packages` (`data` — те же элементы с `purl`, `namespace`, `origin`).
+- Сортировка по умолчанию — `relevance` (у `GET /packages` — `name`).
+- `%` и `_` в `q` — обычные символы, не шаблон LIKE: `q=%` не возвращает весь каталог. Запрос сравнивается в том виде, как набран, и с `_` и `.`, заменёнными на `-`: PyPI-имя `typing-extensions` находится по `typing_extensions`. Ранг `relevance` (точное имя, начало имени, остальное) считается по тем же двум формам.
+- Курсор с чужим или испорченным содержимым (`id` не uuid, `used_by` не число, `key` не строка, дата без часового пояса) — `422`, как у остальных списков.
+- `q`, начинающийся с `pkg:`, — purl: ответ — пакет с этими координатами (версия и квалификаторы, кроме `distro` у rpm, не учитываются); purl, который не разбирается или ничего не находит, даёт пустой список, не ошибку.
+- Response `200`: как у `GET /packages` (`data` — те же элементы с `purl`, `namespace`, `origin`, `used_by`).
 - Errors: `422/500`
+
+## 3.2.1 `GET /api/v1/catalog/summary`
+
+- Auth: none
+- Query: `ecosystem` (необязательно, одна из семи; неверное значение — `422`). Сужает `licenses`, `most_used`, `deprecated_in_use`, `deprecated_in_use_total` и `stale_in_use`; `ecosystems` остаётся полным: чипы главной показывают все экосистемы, какая бы ни была выбрана.
+- Response `200` (данные для главной страницы; без `ecosystem` считается по всему каталогу):
+
+```json
+{
+  "ecosystems": [{"ecosystem": "rpm", "packages": 218}],
+  "licenses": [{"license": "MIT", "count": 133}],
+  "most_used": [{"...": "элемент списка, как в GET /packages"}],
+  "deprecated_in_use": [{"...": "элемент списка"}],
+  "deprecated_in_use_total": 12,
+  "stale_in_use": {"packages": 39, "years": 3, "min_used_by": 5, "released_before": "2023-11-07T00:00:00Z"}
+}
+```
+
+- `ecosystems` — пакеты по экосистемам: по убыванию числа, затем по имени.
+- `licenses` — двенадцать самых частых SPDX-идентификаторов (`license_spdx`) по убыванию числа, затем по идентификатору; пустые не входят.
+- `most_used` — пять пакетов с наибольшим `used_by`, не меньше 1.
+- `deprecated_in_use` — до пяти устаревших пакетов (`deprecation`) с `used_by >= 1`, самые используемые первыми. `deprecated_in_use_total` — сколько их всего: когда оно больше списка, главная ведёт ссылкой `GET /search?deprecated=true&min_used_by=1&sort=used_by` (без `q` — `GET /packages` с теми же параметрами) на остальные.
+- `stale_in_use` — сколько пакетов с `used_by >= min_used_by` не выпускали новой версии `years` лет и больше. Пороги (3 года, 5 пакетов) заданы одним местом на сервере (`services/usage.py`); `released_before` — начало суток (UTC) `years` лет назад. Ссылка на список: `GET /search?released_before=<released_before>&min_used_by=<min_used_by>&sort=used_by` (с `ecosystem`, если он выбран) (без `q` — `GET /packages` с теми же параметрами).
+- Errors: `500`
 
 ## 3.3 Адресация пакета: `/packages/{ecosystem}/{coordinates}/-/…`
 
@@ -148,10 +181,13 @@ Cursor-based ответ для списков:
 GET /api/v1/purl/{purl}
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions
+GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/compare?from=&to=
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/{version}
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/{version}/dependencies
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/{version}/artifacts
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/vulnerabilities
+GET /api/v1/packages/{ecosystem}/{coordinates}/-/overview
+GET /api/v1/packages/{ecosystem}/{coordinates}/-/dependents
 ```
 
 Примеры для npm (scope пишется с `@`, `/` между scope и именем остаётся как есть):
@@ -279,7 +315,12 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
   - `profile: string?`
   - `limit: int=50 (max 200)`
   - `cursor: string?`
-- Semantics: версии, которые публикуют источники профиля, от новых к старым по дате релиза. `status` (`active|yanked|deprecated|unlisted|removed|superseded`) — лучший статус среди видимых источников.
+  - `prerelease: bool?` — `true` только пререлизы, `false` только стабильные
+  - `not_active: bool?` — `true` версии, чей статус в ответе не `active`; `false` активные. Это тот же эффективный статус, что в строках, а не сохранённый `status` версии; число совпадает с `versions.not_active` из `/overview`
+  - `deprecated: bool?` — `true` версии с `deprecation` (npm и NuGet хранят её при статусе `active`, поэтому `not_active` их не находит), `false` остальные; JSON `null` в `deprecation` значит «нет», как у `deprecated` списка пакетов; число совпадает с `versions.deprecated` из `/overview`
+  - `line: string?` — линейка выпуска (`2.14`, `v1`)
+- Semantics: версии, которые публикуют источники профиля, от новых к старым по дате релиза. `status` (`active|yanked|deprecated|unlisted|removed|superseded`) — лучший статус среди видимых источников. `line` — `major.minor` (Go: `v<major>`; у RPM `null`) по строке версии, `is_prerelease` — признак пререлиза.
+- С `line` фильтр применяется в Python над видимыми версиями (линейка выводится из строки версии, в SQL её не выразить для всех экосистем): возвращаются все версии линейки, стабильные и пререлизы, если `prerelease` не сужает выбор; `limit` и `cursor` игнорируются, `cursor: null`, `has_more: false`. `prerelease`, `not_active` и `deprecated` без `line` работают с курсором. В строке версии `deprecation` — объект источника или `null`.
 - Response `200`:
 
 ```json
@@ -289,7 +330,9 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
       "version": "3.0.0",
       "release_date": "2026-01-11T00:00:00Z",
       "status": "active",
-      "requires_python": ">=3.8"
+      "requires_python": ">=3.8",
+      "line": "3.0",
+      "is_prerelease": false
     }
   ],
   "cursor": null,
@@ -330,6 +373,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 - NuGet: версия — NuGetVersion: SemVer 2 с необязательной четвёртой частью (`13.0.3`, `12.0.3.1`, `1.0.0-beta.2`); метки prerelease сравниваются без учёта регистра (`1.0.0-BETA` = `1.0.0-beta`), `+метаданные` не влияют на порядок. Версия приходит в нормализованной записи NuGet (`1.0` как `1.0.0`). Скрытая автором (unlisted) версия не удаляется: она остаётся в `versions` со `status: "unlisted"`, потому что lock-файл может её закреплять (resolve выбирает такую версию, только когда подходящих листед-версий нет), у неё может не быть `release_date` (`null`). Deprecation версии (причины `Legacy`, `CriticalBugs`, `Other`, сообщение, пакет-замена) каталог сохраняет, события `release_deprecated` попадают в ленту (§6.3); в ответах карточки версии и списка версий оно пока не отдаётся (клиент читает `deprecation` версии). Если deprecated новейшая из листед-версий, `deprecation` пакета (`{"message": ...}`) несёт сообщение или перечень причин. Лицензия пакета — `license_spdx` (выражение `licenseExpression`) и `license_raw` (то же выражение; когда у пакета только `licenseUrl` — ссылка, а `license_spdx` — `null`); описание, `homepage_url` (`projectUrl`), авторы и теги берутся из записи новейшей листед-версии.
 - Maven: версия — как её пишет репозиторий (`6.1.14`, `33.3.1-jre`, `6.2.0-RC1`, `2.0.0.Final`), сравнение — Maven ComparableVersion (SPEC-MULTI-ECOSYSTEM §5.5). Prerelease — квалификаторы `alpha`, `beta`, `milestone`, `rc` и `snapshot` в любом написании (`-M1`, `-RC1`, `-alpha`, `-b2`); `-jre`, `-android` и `.Final` prerelease не делают. SNAPSHOT-версии каталог не хранит: snapshot-репозитории не подключаются. Релизы Maven не удаляют и не отзывают, поэтому у каждой версии `status: "active"`, а событий `release_removed` и `release_yanked` у Maven не бывает. `release_date` — `Last-Modified` POM версии. Новейшая версия датируется сразу при загрузке пакета, остальные — фоновой задачей (раз в минуту, новые версии первыми; как поля API crates.io, Q22): до неё у них `null`. `null` остаётся и тогда, когда источник даты не отдал; версию, на которой источник ошибся, задача пробует снова через сутки. Повторная синхронизация уже записанную дату не стирает. Порядок ComparableVersion не транзитивен, и `sort` по версии — его линейное приближение: у версий с квалификатором между точками (`1.0.sp.2`) против вложенных (`1-1`) бывают расхождения; выбор версии в resolve повторяет Maven точно. Релокация (`<distributionManagement><relocation>`) новейшей версии приходит в `deprecation` пакета: `{"message": "...", "alternative": "<groupId>:<artifactId>[:<версия>]"}`, `message` — текст из POM, без него `relocated`; `alternative` — пакет (и версия), куда переехал артефакт. Лицензия пакета — `license_raw` (названия лицензий из `<licenses>` POM, а без названия адрес; несколько — через ` OR `) и `license_spdx` (то же, приведённое к SPDX; `null`, если хоть одну лицензию не узнали); описание, `homepage_url` и авторы — из POM новейшей версии. Новейшая версия и `latest_version` пакета — наибольший релиз по ComparableVersion, не `<release>` метаданных (тот — последний выложенный, бывает RC или релиз старой ветки); тег `latest` пакет получает, только когда `<release>` с ним совпадает. Упаковка версии (`jar`, `pom`, `aar`, `war`…) хранится у каталога (`raw_metadata.packaging` новейшей версии), но карточка и список версий её пока не отдают: основной файл версии виден в `artifacts` (§3.3.6), у версии с упаковкой `pom` он один — сам POM; клиент читает `packaging` версии, если оно появится. 
 - RPM: версия — EVR `[epoch:]version-release` (`1:3.0.7-27.el9`; нулевая эпоха не пишется), сравнение — `rpmvercmp` (SPEC-MULTI-ECOSYSTEM §5.5): `~` сортирует раньше всего, даже раньше конца строки (`1.0~rc1` меньше `1.0`), `^` позже конца строки, но раньше любого сегмента. Prerelease — `~` в части version (`1.0~rc1-1`); `~` в release (`1-0.1~rc1`) — метка снимка, prerelease не делает. Версия пакета — все сборки с этим EVR во всех архитектурах источника (`config.arch`); сборки по архитектурам — `artifacts` версии (§3.3.6). Сборка, старше другой сборки той же архитектуры в том же источнике, помечается `status: "superseded"` (`status_reason`: `a newer build of the same arch is in the source`): она остаётся в каталоге и в списке версий, события для неё нет. Версия `active`, пока она новейшая хотя бы для одной архитектуры. `release_date` — время сборки (`buildtime` в repodata). `license_raw` — тег `License` пакета как в spec (`ASL 2.0 and MIT`), описание и `homepage_url` — из новейшей сборки. Потоки модулей версии хранятся в `raw_metadata` и в ответ пока не попадают.
+- `status` — эффективный статус, тот же, что в строке списка версий (лучший среди видимых источников профиля по умолчанию), а не сохранённый в версии: заголовок карточки читает его отсюда.
 - `engines` — требования к среде в нативной записи экосистемы (PyPI: `python`); может быть `null`. `requires_python` — алиас `engines.python`, сохраняется до конца E7.
 - `dependencies_state` — состояние зависимостей версии (`pending` — ещё не загружены, `hydrated`, `unavailable` — зависимости неизвестны).
 - `sources` — все источники версии (без фильтра по профилю) и статус версии в каждом.
@@ -376,6 +420,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
       "extra_name": null,
       "environment_markers": null,
       "resolved_version": "3.0.1",
+      "license": "BSD-3-Clause",
       "cycle": false,
       "children": []
     }
@@ -384,6 +429,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 ```
 
 - `package` — нормализованное имя, `profile` — slug применённого профиля, `depth` — фактическая глубина возвращённого дерева.
+- `license` узла — лицензия пакета, на который указывает `resolved_version`: SPDX-идентификатор, иначе строка как опубликована, иначе `null` (то же правило, что у `licenses` в `/overview`). У узла без разрешённой версии `null`. Лицензии всего дерева читаются одним запросом. Ссылки на пакет каталога отдельного поля нет: у узла с `resolved_version` это `resolved_name`, а когда он `null` — `name` (у Maven это `groupId:artifactId`, у RPM `resolved_name` — `<namespace>/<имя>`).
 - Errors: `404/422/500`
 
 ### 3.3.6 `GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/{version}/artifacts`
@@ -417,6 +463,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 ```json
 {
   "package": "flask",
+  "coverage": "collected",
   "data": [
     {
       "source": "pypi_native",
@@ -430,7 +477,84 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 }
 ```
 
+- `coverage` — `collected` или `not_collected`. Советы хранит только PyPI-коннектор (NuGet получает и отбрасывает по D6, у остальных экосистем источника нет), поэтому `collected` только у `pypi`. При `not_collected` пустой `data` не значит «проверено, чисто». Список относится к пакету, не к версии: клиент не выдаёт пустой список за вывод про версию, отличную от последней.
 - Errors: `404/500`
+
+### 3.3.8 `GET /api/v1/packages/{ecosystem}/{coordinates}/-/overview`
+
+Сводка для вкладки Overview и счётчиков шапки карточки (SPEC-CATALOG-PAGES.md §5). Query: `version`, по умолчанию последняя; неизвестная версия — `404`, как у остальных маршрутов версии.
+
+- Response `200`:
+
+```json
+{
+  "version": "2.14.3",
+  "dependencies": {"direct": 4, "optional": 2, "dev": 0, "indirect": 0, "not_in_catalog": 1},
+  "used_by": {"direct": 1, "indirect": 0},
+  "licenses": [{"license": "MIT", "count": 3}, {"license": "PSF-2.0", "count": 1}],
+  "versions": {"total": 211, "prereleases": 36, "not_active": 2, "deprecated": 0},
+  "activity": [{"month": "2025-12", "releases": 2}],
+  "lines": [{"line": "2.14", "latest": "2.14.3", "released_at": "2026-11-05T09:00:00Z", "stable_releases": 4, "started_at": "2026-04-02T09:00:00Z"}]
+}
+```
+
+- `dependencies` считается по различным именам версии; зависимость пакета от самого себя не считается (как и в рёбрах графа). `direct` — типы `runtime`, `peer`, `provided`; `optional` — `optional`; `dev` — `dev` и `build`. Имя в нескольких вариантах или типах считается один раз, в первой из групп. Зависимости версии, которые ещё не загружены, загружаются при запросе, как для дерева; если у версии они недоступны (`dependencies_state: "unavailable"`), все пять чисел — `null`, `licenses` пуст.
+- `indirect` — пакеты каталога, достижимые от прямых по графу: рёбра берутся из последней версии каждого пакета, типы `runtime`/`peer`/`provided`, без рёбер пакета в самого себя (тот же граф, что у `used_by` в `/updates/summary`); без прямых и без самого пакета. Цикл обход не зацикливает. Это нижняя граница: граф строится по последним версиям пакетов каталога, а не по версии, которую смотрят. `not_in_catalog` — различные имена без `resolved_package_id` среди прямых и optional зависимостей версии и среди рёбер достигнутых пакетов.
+- `used_by.direct` — то же число, что `used_by` в `/updates/summary`; `used_by.indirect` — обратный обход, без прямых и без самого пакета. Считается в каталоге, не в реестре.
+- `licenses` — по прямым и достигнутым пакетам: `license_spdx`, иначе `license_raw`, иначе `unknown`; пакеты, которых нет в каталоге, не входят. Порядок: число по убыванию, затем имя.
+- `versions` — версии, видимые профилем по умолчанию, как в списке версий: `prereleases` по `is_prerelease`, `not_active` — эффективный статус (лучший среди видимых источников) не `active`, как у фильтра `not_active` списка версий, `deprecated` — версии с `deprecation`, как у фильтра `deprecated` (версия может быть и `not_active`, и `deprecated`, числа независимы).
+- `activity` — ровно последние 12 календарных месяцев по UTC, текущий включительно, от старого к новому, месяцы без выпусков с нулём; считаются все выпуски с `release_date`, пререлизы тоже.
+- `lines` — линейки выпуска стабильных версий, статус не учитывается, версия без `release_date` входит: `major.minor` для PyPI, npm, crates.io, NuGet и Maven, `v<major>` для Go (эпоха PEP 440 отбрасывается: линейка `1!2.0` — `2.0`); у RPM пусто. Первой идёт линейка с высшей версией (по `sort_key`). `latest` и `released_at` — высшая версия линейки, `started_at` — самый ранний датированный выпуск; `released_at` и `started_at` — `null`, если дат нет.
+- RPM. Зависимость RPM называет возможность (capability), а её пакет дерево находит через rpm-worker; граф каталога знает только `resolved_package_id`, и всё посчитанное по нему утверждало бы, что у возможностей нет пакетов. Поэтому у RPM `dependencies.indirect`, `dependencies.not_in_catalog` и `used_by.indirect` — `null`, `licenses` пуст; `direct`, `optional`, `dev` и `used_by.direct` остаются. Карточка скрывает эти строки и пишет «Dependencies on capabilities are not counted». Разрешение поставщиков здесь — решение владельца.
+- `version` — `null` у пакета без версий; тогда `dependencies` состоит из `null`.
+- Errors: `404/500`
+
+### 3.3.9 `GET /api/v1/packages/{ecosystem}/{coordinates}/-/dependents`
+
+Пакеты каталога, которые затронет изменение этого: вкладка Used by (SPEC-CATALOG-PAGES.md §5). Query: `relation` (`direct`, `indirect`; без него оба вида; другое значение — `422`), `limit` (по умолчанию 50, максимум 200), `cursor`.
+
+- Response `200`:
+
+```json
+{
+  "totals": {"direct": 5, "indirect": 10},
+  "data": [{"ecosystem": "go", "namespace": "", "name": "github.com/a/b", "normalized_name": "github.com/a/b",
+            "purl": "pkg:golang/github.com/a/b", "latest_version": "v1.2.3", "relation": "direct",
+            "dependency_types": ["runtime"], "requires": ["v1.5.4"]}],
+  "cursor": null,
+  "has_more": false
+}
+```
+
+- Граф тот же, что у `used_by` и Overview: рёбра из последней версии каждого пакета, типы `runtime`, `peer`, `provided`, без рёбер пакета в самого себя. `totals` равны `used_by` из `/overview` и не зависят от `relation`. Пакет, от которого никто не зависит, получает нули и пустой `data`.
+- Порядок: прямые, затем косвенные; внутри группы `normalized_name`, затем `id`. Курсор keyset, сравнение выполняется в SQL, поэтому порядок следует collation базы. Курсор от другого маршрута или испорченный — `422`.
+- `requires` — различные `version_constraint` прямых рёбер из последней версии зависимого пакета в этот, по возрастанию; значений несколько, когда у зависимого несколько строк. `dependency_types` — типы этих рёбер, по возрастанию значения. У косвенного зависимого оба поля пусты. `normalized_name` вместе с `namespace` даёт написание, по которому карточка строит ссылку.
+- Errors: `404/422/500`
+
+### 3.3.10 `GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/compare`
+
+Чем отличаются зависимости двух версий (вкладка Compare). Маршрут объявлен раньше `/versions/{version}`, иначе `compare` читалось бы как версия.
+
+Параметры:
+- `to: string?` — по умолчанию последняя версия пакета.
+- `from: string?` — по умолчанию ближайшая меньшая по `sort_key` стабильная версия среди видимых, эффективный статус которой `active` (отозванная версия — плохое умолчание). Если такой нет, `from` в ответе `null`, списки пусты. Явно заданная `from` может быть пререлизом и может быть больше `to`.
+- Неизвестная версия или пакет: 404.
+
+```json
+{"from": {"version": "2.13.5", "release_date": "2026-09-01T09:00:00Z", "status": "active"},
+ "to": {"version": "2.14.3", "release_date": "2026-11-05T09:00:00Z", "status": "active"},
+ "dependencies": {
+   "added": [{"name": "x", "constraint": ">=1", "dependency_type": "runtime"}],
+   "removed": [],
+   "changed": [{"name": "pydantic-core", "dependency_type": "runtime", "from": "==2.46.5", "to": "==2.50.4"}],
+   "unchanged": 1},
+ "dependencies_unknown": false}
+```
+
+- Ключ зависимости: экосистема, пространство имён, имя и тип. `name` в ответе — имя, как его пишет экосистема (`@babel/core`, `org.slf4j:slf4j-api`), поэтому два пакета с одним коротким именем в разных пространствах — две строки. Несколько строк одного ключа (маркеры, варианты) сводятся к отсортированным различным ограничениям через `, `. Переход между типами даёт одну запись в `removed` и одну в `added`. Списки отсортированы по типу, затем по имени; порядок не зависит от порядка строк в источнике.
+- `status` версий эффективный, как в списке версий, а не сохранённый.
+- Зависимости загружаются так же, как для `/overview`: версия в состоянии `pending` подгружается при чтении. Если зависимости одной из сторон неизвестны, `dependencies_unknown` равно `true`, списки пусты, `unchanged` равно 0.
+- Лицензии, описания и артефакты не сравниваются.
 
 ## 3.4 Алиасы PyPI (deprecated до конца E7)
 
@@ -1430,6 +1554,14 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 
 ## 8. Изменения
 
+- **1.18-api (2026-11-07), этап UX7.** `GET {coords}/versions` принимает `deprecated` (§3.3.3), `/overview` отдаёт `versions.deprecated`; `GET {coords}/versions/{version}` возвращает эффективный статус, как список (§3.3.4). Overview: для RPM `dependencies.indirect`, `dependencies.not_in_catalog`, `used_by.indirect` — `null`, `licenses` пуст; зависимость от самого себя не считается; в `lines` входят стабильные версии без даты, их `released_at` и `started_at` — `null`; эпоха PEP 440 не входит в линейку (§3.3.8). Compare: `from` по умолчанию — стабильная и `active`, `name` — написание экосистемы (§3.3.10). `GET /catalog/summary`: до пяти `deprecated_in_use` и `deprecated_in_use_total` (§3.2.1). Поиск: `%` и `_` в `q` — текст, `_` и `.` ищутся и как `-`; испорченный курсор `/packages` и `/search` — `422` вместо `500` (§3.2).
+- **1.17-api (2026-11-07), этап UX6.** Новый `GET {coords}/versions/compare?from=&to=`: различия зависимостей двух версий, `dependencies_unknown`, эффективный статус сторон (§3.3.10).
+- **1.16-api (2026-11-07), этап UX4.** `GET {coords}/versions`: поля `line`, `is_prerelease`, фильтры `prerelease`, `not_active`, `line` (§3.3.3); `/overview` отдаёт счётчики версий, активность за 12 месяцев и линейки (§3.3.8).
+- **1.15-api (2026-11-07), этап UX1.** Новый `GET {coords}/overview?version=`: счётчики прямых и косвенных зависимостей и зависимых, не разрешённые в каталоге, лицензии, активность, линейки (§3.3.8).
+- **1.14-api (2026-11-07), этап UX0.** `GET {coords}/vulnerabilities` отдаёт `coverage` (`collected`, `not_collected`): пустой список без сбора не значит «проверено» (§3.3.7).
+- **1.13-api (2026-11-07), этап UX5.** Узел дерева зависимостей получает `license`: SPDX-идентификатор пакета, иначе строка как опубликована, иначе `null` (§3.3.5).
+- **1.12-api (2026-11-07), этап UX3.** Новый `GET {coords}/dependents`: зависимые пакеты каталога, прямые и косвенные, с требуемой версией, фильтр `relation`, курсор (§3.3.9).
+- **1.11-api (2026-11-07), этап UX2.** Главная страница и `/search`. В элементах списка и поиска поле `used_by` (§3.1); сортировка `used_by`; фильтры `min_used_by`, `deprecated`, `released_before` у `GET /packages` и `GET /search` (§3.1, §3.2); новый `GET /catalog/summary` (§3.2.1).
 - **1.10-api (2026-10-31), этап E6.** Каталог содержит RPM. Слаг экосистемы `rpm`, тип purl `rpm`: `pkg:rpm/<vendor>/<имя>?distro=<namespace>`, namespace — дистрибутив и релиз (`rocky-9`), часть идентичности; в путях, в `name` и в поиске координаты пишутся `<namespace>/<имя>` (§2.1, §3.1, §3.3). Версии RPM — EVR (`1:3.0.7-27.el9`), сравнение `rpmvercmp`, prerelease — `~` в version, вытесненная сборка той же архитектуры — `status: "superseded"`, `release_date` — время сборки, `license_raw` — тег License (§3.3.4). Артефакты версии — её `.rpm` по архитектурам, с полем `arch` (§3.3.6). Дерево зависимостей принимает `arch` (`x86_64`, `aarch64`, `ppc64le`, `s390x`), узлы — возможности (capability) с `scope` (`requires`, `recommends`, `suggests`, `supplements`, `enhances`), пакет, который возможность предоставляет, — `resolved_name` (§3.3.5). Resolve для RPM: `ecosystem: "rpm"`, окружение `distro` / `arch` / `repos` / `weak_deps` / `module_streams` / `disabled_modules` / `module_install`, стратегия `libsolv` (`dnf 4`, ответ равен `dnf install --assumeno --installroot`), ошибки `unsolvable`, `module_conflict`, `not_found` с `error.problems[]` (§4.1.6). `/admin/packages` принимает purl `rpm` с `distro` (§5.3), `/admin/presence-probe` — `ecosystem: "rpm"` (§5.6); стартового источника нет, набор источников — `backend/registries.rpm.yaml`, авторизация `tls_client_cert` и `basic` по `credentials_ref`, ежедневное обновление через rpm-worker (§5.8).
 - **1.9-api (2026-10-31), этап E5.** Каталог содержит Maven. Слаг экосистемы `maven`, тип purl `maven`, идентичность — `groupId:artifactId` (регистр значим), namespace purl — `groupId`; в путях, в `name` и в поиске координаты пишутся `groupId:artifactId` (§2.1, §3.1, §3.3). Версии Maven: ComparableVersion, prerelease по квалификаторам, все версии `active`, дата — `Last-Modified` POM (кроме новейшей — фоновой задачей), релокация артефакта в `deprecation.alternative` пакета, лицензия из POM (§3.3.4). Дерево зависимостей Maven принимает `scopes` (по умолчанию `compile,runtime`), показывает рёбра effective model, у ребра `details.exclusions`, `type`, `classifier`, у узла дерева — поле `scope` (для всех экосистем) (§3.3.5). Resolve для Maven: `ecosystem: "maven"`, `managed` (`dependencyManagement`, BOM — purl с `?type=pom`), окружение `scopes` / `strategy` / `plugins` / `java_version`, стратегии `maven-nearest-wins` (`Maven 3.9`, результат равен `mvn dependency:list`) и `gradle-highest-wins` (Gradle 8 по POM, повторные проходы до устойчивого выбора, предупреждение `gradle_module_metadata`, Q15), `details.scope` узлов и рёбер (§4.1.5). Раздел 4.1.4 (NuGet) перенесён из §5.3 в §4.1 без изменений. `/admin/packages` принимает purl `maven` (§5.3), `/admin/presence-probe` — `ecosystem: "maven"` (§5.6); стартовый источник `maven-central`, ежедневное обновление по ETag `maven-metadata.xml`, routing `group_patterns` (§5.8).
 - **1.8-api (2026-10-30), этап E4.** Каталог содержит NuGet. Слаг экосистемы `nuget`, тип purl `nuget`, id без учёта регистра: каталог хранит и адресует его строчными (`normalized_name`), написание реестра приходит как `name` (§2.1, §3.3). Версии NuGet: три или четыре части, prerelease без учёта регистра, скрытые автором версии со статусом `unlisted`, `deprecation` пакета (§3.3.4); дерево зависимостей NuGet в окружении `target_framework` (по умолчанию `net8.0`), группа платформы ребра в `environment_markers.dotnet_target_framework` (§3.3.5). Resolve для NuGet: `ecosystem: "nuget"`, диапазоны версий NuGet, окружение `target_framework`, стратегия `nuget-nearest-wins` (`.NET SDK 8 (NuGet 6.x)`), результат равен `dotnet restore`, предупреждение `NU1605`, ошибка `NU1107` (§4.1.4). `/admin/packages` принимает purl `nuget` (§5.3), `/admin/presence-probe` — `ecosystem: "nuget"` (§5.6); стартовый источник `nuget-org` с лентой Catalog (§5.8).

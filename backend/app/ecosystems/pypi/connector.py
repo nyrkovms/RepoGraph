@@ -70,9 +70,9 @@ class PyPIConnector(BaseConnector):
             name=package_name,
             normalized_name=normalized_name,
             description=info.get("summary") or info.get("description"),
-            homepage_url=info.get("home_page"),
+            homepage_url=_link(info.get("home_page"), info.get("project_urls"), "homepage"),
             repository_url=info.get("project_urls", {}).get("Source") if info.get("project_urls") else None,
-            documentation_url=info.get("docs_url"),
+            documentation_url=_link(info.get("docs_url"), info.get("project_urls"), "documentation", "docs"),
             license_raw=info.get("license"),
             license_spdx=license_spdx,
             keywords=keyword_list,
@@ -256,6 +256,18 @@ def _parse_last_serial(value: object) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int):
         return None
     return value
+
+
+def _link(legacy: object, project_urls: object, *keys: str) -> str | None:
+    """The legacy `info` field, else the first of `keys` found in `project_urls` (keys compared without case). Modern
+    packages leave the legacy fields empty and publish only `project_urls` (#69); empty strings count as missing."""
+    if isinstance(legacy, str) and legacy.strip():
+        return legacy.strip()
+    if not isinstance(project_urls, dict):
+        return None
+    by_key = {key.lower(): value.strip() for key, value in project_urls.items()
+              if isinstance(key, str) and isinstance(value, str) and value.strip()}
+    return next((by_key[key] for key in keys if key in by_key), None)
 
 
 def _pick_latest_version(releases: dict[str, Any]) -> str:

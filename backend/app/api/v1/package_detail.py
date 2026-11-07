@@ -5,17 +5,19 @@ from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from typing import Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from packaging.markers import Marker
-from sqlalchemy import and_, or_, select
+from sqlalchemy import ColumnElement, and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.packages import _decode_cursor_or_422
+from app.api.v1.packages import _decode_cursor_or_422, deprecated_clause
 from app.db import get_db_session
 from app.ecosystems import purl as purls
 from app.ecosystems.base import EcosystemPlugin, Environment, PackageRef, RegistryConfig, SourceProfile
@@ -44,10 +46,25 @@ from app.models.vulnerability import PackageVulnerability, Vulnerability
 from app.schemas.packages import (
     ArtifactItem,
     ArtifactListResponse,
+    CompareChange,
+    CompareDependencies,
+    CompareDependency,
+    CompareVersion,
     DependencyNode,
     DependencyTreeResponse,
+    DependentItem,
+    DependentListResponse,
+    DependentTotals,
+    OverviewDependencies,
+    OverviewLicense,
+    OverviewLine,
+    OverviewMonth,
+    OverviewUsedBy,
+    OverviewVersions,
     PackageDetailResponse,
+    PackageOverviewResponse,
     PackageSourceItem,
+    VersionCompareResponse,
     VersionDetailResponse,
     VersionItem,
     VersionListResponse,
@@ -55,14 +72,18 @@ from app.schemas.packages import (
     VulnerabilityItem,
     VulnerabilityListResponse,
 )
-from app.services import visibility
+from app.services import release_lines, usage, version_compare, visibility
 from app.services.cursor import CursorError, encode_cursor, parse_iso_datetime, parse_uuid
+from app.services.purls import package_purl
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 FULL_TREE_MAX_DEPTH = 200
 API_PREFIX = "/api/v1"
 _COORDS = "/packages/{ecosystem}/{coordinates:path}/-"
+# Only the PyPI connector stores advisories; NuGet receives them and drops them (D6), the other ecosystems have no
+# source. For the rest an empty list must not read as "checked and clean" (#68).
+_ADVISORY_ECOSYSTEMS = frozenset({"pypi"})
 
 
 @dataclass(slots=True)
@@ -169,6 +190,19 @@ def _versions_cursor_or_422(cursor: str | None) -> tuple[datetime | None, uuid.U
         raise HTTPException(status_code=422, detail="invalid cursor payload") from exc
 
 
+def _not_active_clause(registries: Sequence[RegistryConfig]) -> ColumnElement[bool]:
+    """Effective status is not `active`: the status a reader sees is the best one among the visible sources
+    (`visibility.effective_status`), and `active` is the best, so a version is not active exactly when none of its
+    visible sources says `active`. The stored `PackageVersion.status` is the merged view and may differ."""
+    return ~exists(
+        select(VersionSource.version_id).where(
+            VersionSource.version_id == PackageVersion.id,
+            VersionSource.registry_id.in_([uuid.UUID(r.id) for r in registries]),
+            VersionSource.status == PackageVersionStatus.active,
+        )
+    )
+
+
 @router.get(_COORDS + "/versions", response_model=VersionListResponse)
 async def list_versions(
     ecosystem: str,
@@ -177,15 +211,42 @@ async def list_versions(
     profile: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None),
+    prerelease: bool | None = Query(default=None),
+    not_active: bool | None = Query(default=None),
+    deprecated: bool | None = Query(default=None),
+    line: str | None = Query(default=None),
 ) -> VersionListResponse:
-    """Versions the profile's sources publish (the default profile without `profile`), newest release first."""
+    """Versions the profile's sources publish (the default profile without `profile`), newest release first.
+
+    `prerelease=true|false` keeps only prereleases or only stable versions; `not_active=true` keeps versions whose
+    effective status (the one the rows show) is not `active`, `false` the active ones. `deprecated=true|false` keeps
+    versions that carry a deprecation (npm and NuGet keep it with status `active`; JSON `null` is none), or those that
+    do not. All three are SQL filters and work with the cursor.
+
+    `line` (`2.14`, `v1`) cannot be expressed in SQL for every ecosystem (the line is derived from the version string,
+    see `release_lines.line_of`), so it is applied in Python over the visible rows in the usual order: stable and
+    prerelease versions both, unless `prerelease` narrows it. A line is small, so all its versions come back at once:
+    `limit` and `cursor` are ignored, `cursor` is null and `has_more` false."""
     position = _versions_cursor_or_422(cursor)
     target = await _target(db, ecosystem, coordinates)
     registries = await visibility.visible_registries(db, target.plugin, target.ref, target.package.id,
                                                      await _profile(db, ecosystem, profile))
 
     stmt = select(PackageVersion).where(PackageVersion.package_id == target.package.id, visibility.visible_clause(registries))
+    if prerelease is not None:
+        stmt = stmt.where(PackageVersion.is_prerelease.is_(prerelease))
+    if not_active is not None:
+        clause = _not_active_clause(registries)
+        stmt = stmt.where(clause if not_active else ~clause)
+    if deprecated is not None:
+        clause = deprecated_clause(PackageVersion.deprecation)
+        stmt = stmt.where(clause if deprecated else ~clause)
     stmt = stmt.order_by(PackageVersion.release_date.desc().nullslast(), PackageVersion.id.asc())
+
+    if line is not None:
+        in_line = release_lines.filter_line(target.plugin.ecosystem, (await db.scalars(stmt)).all(), line)
+        return VersionListResponse(data=await _version_items(db, registries, target.plugin.ecosystem, in_line),
+                                   cursor=None, has_more=False)
 
     if position:
         rel, id_value = position
@@ -214,8 +275,14 @@ async def list_versions(
             }
         )
 
-    statuses = await visibility.source_statuses(db, registries, [row.id for row in data_rows])
-    data = [
+    data = await _version_items(db, registries, target.plugin.ecosystem, data_rows)
+    return VersionListResponse(data=data, cursor=next_cursor, has_more=has_more)
+
+
+async def _version_items(db: AsyncSession, registries: Sequence[RegistryConfig], ecosystem: str,
+                         rows: Sequence[PackageVersion]) -> list[VersionItem]:
+    statuses = await visibility.source_statuses(db, registries, [row.id for row in rows])
+    return [
         VersionItem(
             version=row.version,
             release_date=row.release_date,
@@ -223,10 +290,84 @@ async def list_versions(
             status_reason=row.status_reason,
             deprecation=row.deprecation,
             requires_python=_requires_python(row),
+            line=release_lines.line_of(ecosystem, row.version),
+            is_prerelease=row.is_prerelease,
         )
-        for row in data_rows
+        for row in rows
     ]
-    return VersionListResponse(data=data, cursor=next_cursor, has_more=has_more)
+
+
+@router.get(_COORDS + "/versions/compare", response_model=VersionCompareResponse)
+async def compare_versions(
+    ecosystem: str,
+    coordinates: str,
+    db: AsyncSession = Depends(get_db_session),
+    from_: str | None = Query(default=None, alias="from"),
+    to: str | None = Query(default=None),
+) -> VersionCompareResponse:
+    """Dependencies that differ between two versions: `to` is the latest by default, `from` the nearest lower stable
+    visible version whose effective status is `active` (a yanked one is a poor default; an explicit `from` is free). Declared before `/versions/{version}`, which would take `compare` for a version. A version whose
+    dependencies are unknown makes the lists empty and `dependencies_unknown` true."""
+    target = await _target(db, ecosystem, coordinates)
+    package = target.package
+    profile = await _profile(db, ecosystem, None)
+    registries = await visibility.visible_registries(db, target.plugin, target.ref, package.id, profile)
+
+    if to is None:
+        to = package.latest_version
+        if to is None:
+            raise HTTPException(status_code=404, detail="Package has no versions")
+    new_row = await _version(db, target, to)
+    old_row: PackageVersion | None
+    if from_ is not None:
+        old_row = await _version(db, target, from_)
+    else:
+        old_row = (await db.scalars(
+            select(PackageVersion)
+            .where(PackageVersion.package_id == package.id, visibility.visible_clause(registries),
+                   PackageVersion.is_prerelease.is_(False), ~_not_active_clause(registries),
+                   PackageVersion.sort_key < new_row.sort_key)
+            .order_by(PackageVersion.sort_key.desc()).limit(1)
+        )).first()
+
+    shown = [row for row in (old_row, new_row) if row is not None]
+    statuses = await visibility.source_statuses(db, registries, [row.id for row in shown])
+
+    def describe(row: PackageVersion) -> CompareVersion:
+        status = visibility.effective_status(statuses.get(row.id, [])) or row.status
+        return CompareVersion(version=row.version, release_date=row.release_date, status=status.value)
+
+    def rows_of(deps: list[Dependency]) -> list[version_compare.DepRow]:
+        return [version_compare.DepRow(dep.dependency_ecosystem.value, dep.dependency_namespace or "",
+                                       dep.dependency_name, dep.dependency_type.value, dep.version_constraint,
+                                       display=_dependency_display(dep))
+                for dep in deps]
+
+    comparison = version_compare.Comparison(added=[], removed=[], changed=[], unchanged=0)
+    unknown = False
+    if old_row is not None:
+        view = _ProfileView(db, profile)
+        old_deps = await view.dependencies(package, old_row)
+        new_deps = await view.dependencies(package, new_row)
+        unknown = old_row.id in view.unknown or new_row.id in view.unknown
+        await db.commit()
+        if not unknown:
+            comparison = version_compare.compare_dependencies(rows_of(old_deps), rows_of(new_deps))
+
+    return VersionCompareResponse(
+        from_=describe(old_row) if old_row is not None else None,
+        to=describe(new_row),
+        dependencies=CompareDependencies(
+            added=[CompareDependency(name=d.name, constraint=d.constraint, dependency_type=d.dependency_type)
+                   for d in comparison.added],
+            removed=[CompareDependency(name=d.name, constraint=d.constraint, dependency_type=d.dependency_type)
+                     for d in comparison.removed],
+            changed=[CompareChange(name=c.name, dependency_type=c.dependency_type, from_=c.old, to=c.new)
+                     for c in comparison.changed],
+            unchanged=comparison.unchanged,
+        ),
+        dependencies_unknown=unknown,
+    )
 
 
 @router.get(_COORDS + "/versions/{version}", response_model=VersionDetailResponse)
@@ -235,6 +376,11 @@ async def get_version(
 ) -> VersionDetailResponse:
     target = await _target(db, ecosystem, coordinates)
     row = await _version(db, target, version)
+    # The status a reader sees is the effective one, as in the versions list; the stored one is the merged view.
+    registries = await visibility.visible_registries(db, target.plugin, target.ref, target.package.id,
+                                                     await _profile(db, ecosystem, None))
+    statuses = await visibility.source_statuses(db, registries, [row.id])
+    status = visibility.effective_status(statuses.get(row.id, [])) or row.status
     source_rows = (
         await db.execute(
             select(Registry, VersionSource)
@@ -248,10 +394,11 @@ async def get_version(
         purl=target.plugin.coordinates.to_purl(target.ref, row.version),
         version=row.version,
         release_date=row.release_date,
-        status=row.status.value,
+        status=status.value,
         status_reason=row.status_reason,
         deprecation=row.deprecation,
         requires_python=_requires_python(row),
+        line=release_lines.line_of(target.plugin.ecosystem, row.version),
         engines=row.engines,
         features=row.features,
         dependencies_state=row.dependencies_state.value,
@@ -339,6 +486,7 @@ async def get_dependencies_tree(
         visited={str(version_row.id)},
         fetcher=fetcher,
     )
+    await _fill_licenses(db, nodes)
     await db.commit()
 
     return DependencyTreeResponse(
@@ -348,6 +496,153 @@ async def get_dependencies_tree(
         depth=_measure_tree_depth(nodes),
         dependencies_unknown=version_row.id in view.unknown,
         dependencies=nodes,
+    )
+
+
+@router.get(_COORDS + "/overview", response_model=PackageOverviewResponse)
+async def get_overview(
+    ecosystem: str,
+    coordinates: str,
+    version: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db_session),
+) -> PackageOverviewResponse:
+    """What the package card's Overview shows, for `version` (the latest by default): dependency, dependent and
+    license counts over the catalog's graph (latest versions, `used_by` types), release activity and release lines.
+    Counts are for this catalog, not the registry: indirect ones are a lower bound."""
+    target = await _target(db, ecosystem, coordinates)
+    package = target.package
+    profile = await _profile(db, ecosystem, None)
+    registries = await visibility.visible_registries(db, target.plugin, target.ref, package.id, profile)
+    visible = visibility.visible_clause(registries)
+
+    version_row = await _version(db, target, version) if version else None
+    if version_row is None and version is None and package.latest_version:
+        version_row = await _version(db, target, package.latest_version)
+
+    # An RPM dependency names a capability and the tree finds its package through rpm-worker (`_rpm_provider`); the
+    # catalog graph only has `resolved_package_id`, so for RPM everything counted over it would claim that capabilities
+    # no package provides. Until the owner decides how providers are resolved here, those counts are null, not zero.
+    is_rpm = target.plugin.ecosystem == "rpm"
+
+    dependencies = OverviewDependencies(direct=None, optional=None, dev=None, indirect=None, not_in_catalog=None)
+    licenses: list[tuple[str, int]] = []
+    if version_row is not None:
+        # The tree route's way: the version's dependencies are loaded on first read; unknown ones stay null.
+        view = _ProfileView(db, profile)
+        rows = await view.dependencies(package, version_row)
+        edges = [((dep.dependency_ecosystem.value, dep.dependency_namespace or "", dep.dependency_name),
+                  dep.dependency_type, dep.resolved_package_id) for dep in rows]
+        unknown = version_row.id in view.unknown
+        await db.commit()
+        if not unknown:
+            summary = usage.summarize_dependencies(edges, self_id=package.id)
+            if is_rpm:
+                dependencies = OverviewDependencies(direct=summary.direct, optional=summary.optional, dev=summary.dev,
+                                                    indirect=None, not_in_catalog=None)
+            else:
+                reached = await usage.reachable(db, summary.direct_ids, forward=True)
+                indirect = reached - summary.direct_ids - {package.id}
+                missing = summary.not_in_catalog | await usage.unresolved_edges(db, reached - {package.id})
+                dependencies = OverviewDependencies(direct=summary.direct, optional=summary.optional, dev=summary.dev,
+                                                    indirect=len(indirect), not_in_catalog=len(missing))
+                licenses = await usage.license_counts(db, reached - {package.id})
+
+    used_by_direct = (await usage.fetch_used_by(db, [package.id])).get(package.id, 0)
+    if is_rpm:
+        used_by = OverviewUsedBy(direct=used_by_direct, indirect=None)
+    else:
+        dependents = await usage.reachable(db, [package.id], forward=False)
+        used_by = OverviewUsedBy(direct=used_by_direct, indirect=max(len(dependents - {package.id}) - used_by_direct, 0))
+
+    now = datetime.now(UTC)
+    months = release_lines.last_months(now)
+    month_of = func.to_char(func.timezone("UTC", PackageVersion.release_date), "YYYY-MM")
+    in_package = (PackageVersion.package_id == package.id, visible)
+    total, prereleases, not_active, deprecated = (await db.execute(
+        select(
+            func.count(),
+            func.count().filter(PackageVersion.is_prerelease.is_(True)),
+            func.count().filter(_not_active_clause(registries)),
+            func.count().filter(deprecated_clause(PackageVersion.deprecation)),
+        ).where(*in_package)
+    )).one()
+    month_counts: dict[str, int] = dict((await db.execute(
+        select(month_of, func.count()).where(*in_package, month_of.in_(months)).group_by(month_of)
+    )).all())
+    stable = (await db.execute(
+        select(PackageVersion.version, PackageVersion.release_date, PackageVersion.sort_key).where(
+            *in_package, PackageVersion.is_prerelease.is_(False))
+    )).all()
+    lines = release_lines.build_lines(
+        target.plugin.ecosystem,
+        (release_lines.ReleasedVersion(name, released_at, sort_key) for name, released_at, sort_key in stable),
+    )
+
+    return PackageOverviewResponse(
+        version=version_row.version if version_row is not None else None,
+        dependencies=dependencies,
+        used_by=used_by,
+        licenses=[OverviewLicense(license=name, count=count) for name, count in licenses],
+        versions=OverviewVersions(total=total, prereleases=prereleases, not_active=not_active, deprecated=deprecated),
+        activity=[OverviewMonth(**month) for month in release_lines.fill_months(month_counts, now)],
+        lines=[OverviewLine(**asdict(line)) for line in lines],
+    )
+
+
+def _dependents_cursor_or_422(cursor: str | None) -> tuple[bool, str, uuid.UUID] | None:
+    """The (indirect, normalized_name, id) a dependents cursor points after; 422 for a cursor that is not one."""
+    payload = _decode_cursor_or_422(cursor)
+    if not payload:
+        return None
+    try:
+        indirect, name = payload["indirect"], payload["name"]
+        if not isinstance(indirect, bool) or not isinstance(name, str):
+            raise TypeError("cursor")
+        return indirect, name, parse_uuid(payload["id"])
+    except CursorError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (KeyError, TypeError, AttributeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="invalid cursor payload") from exc
+
+
+@router.get(_COORDS + "/dependents", response_model=DependentListResponse)
+async def list_dependents(
+    ecosystem: str,
+    coordinates: str,
+    relation: Literal["direct", "indirect"] | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    cursor: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db_session),
+) -> DependentListResponse:
+    """The catalog packages that break if this one changes, direct first: the same graph as `used_by` (latest
+    versions, runtime/peer/provided, no self-edges). `totals` are those of the overview, whatever `relation` is."""
+    after = _dependents_cursor_or_422(cursor)
+    target = await _target(db, ecosystem, coordinates)
+    page = await usage.fetch_dependents(db, target.package.id, relation=relation, limit=limit, after=after)
+
+    next_cursor = None
+    if page.has_more and page.rows:
+        last = page.rows[-1]
+        next_cursor = encode_cursor({"indirect": not last.direct, "name": last.package.normalized_name,
+                                     "id": str(last.package.id)})
+    return DependentListResponse(
+        totals=DependentTotals(direct=page.direct_total, indirect=page.indirect_total),
+        data=[
+            DependentItem(
+                ecosystem=row.package.ecosystem.value,
+                namespace=row.package.namespace or "",
+                name=row.package.name,
+                normalized_name=row.package.normalized_name,
+                purl=package_purl(row.package.ecosystem.value, row.package.namespace, row.package.normalized_name),
+                latest_version=row.package.latest_version,
+                relation="direct" if row.direct else "indirect",
+                dependency_types=[t.value for t in row.dependency_types],
+                requires=list(row.requires),
+            )
+            for row in page.rows
+        ],
+        cursor=next_cursor,
+        has_more=page.has_more,
     )
 
 
@@ -399,6 +694,7 @@ async def list_vulnerabilities(
 
     return VulnerabilityListResponse(
         package=target.display,
+        coverage="collected" if target.ref.ecosystem in _ADVISORY_ECOSYSTEMS else "not_collected",
         data=[
             VulnerabilityItem(
                 source=row.source.value,
@@ -428,7 +724,8 @@ async def list_versions_alias(
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None),
 ) -> VersionListResponse:
-    return await list_versions("pypi", name, db, profile=None, limit=limit, cursor=cursor)
+    return await list_versions("pypi", name, db, profile=None, limit=limit, cursor=cursor, prerelease=None,
+                               not_active=None, deprecated=None, line=None)
 
 
 @router.get("/packages/pypi/{name}/versions/{ver}", response_model=VersionDetailResponse, deprecated=True)
@@ -783,24 +1080,43 @@ async def _build_tree_for_version(
                 ecosystem=child_package.ecosystem.value, namespace=child_package.namespace or "",
                 name=child_package.normalized_name))
             resolved_name = shown if shown != name else None
-        nodes.append(
-            DependencyNode(
-                name=name,
-                resolved_name=resolved_name,
-                constraint=dep.version_constraint,
-                dependency_type=dep.dependency_type.value,
-                extra_name=dep.extra_name,
-                scope=dep.scope,
-                environment_markers=dep.environment_markers,
-                details=dep.details,
-                resolved_version=resolved_version,
-                cycle=cycle,
-                dependencies_unknown=dependencies_unknown,
-                children=children,
-            )
+        node = DependencyNode(
+            name=name,
+            resolved_name=resolved_name,
+            constraint=dep.version_constraint,
+            dependency_type=dep.dependency_type.value,
+            extra_name=dep.extra_name,
+            scope=dep.scope,
+            environment_markers=dep.environment_markers,
+            details=dep.details,
+            resolved_version=resolved_version,
+            cycle=cycle,
+            dependencies_unknown=dependencies_unknown,
+            children=children,
         )
+        node._package_id = child_package.id if child_package is not None else None
+        nodes.append(node)
 
     return nodes
+
+
+async def _fill_licenses(db: AsyncSession, nodes: list[DependencyNode]) -> None:
+    """`license` of every node, from one query for the whole tree: SPDX id, else the raw string, else None (the rule of
+    `usage.license_counts`)."""
+    found: list[DependencyNode] = []
+    stack = list(nodes)
+    while stack:
+        node = stack.pop()
+        found.append(node)
+        stack.extend(node.children)
+    ids = {node._package_id for node in found if node._package_id is not None}
+    if not ids:
+        return
+    rows = (await db.execute(select(Package.id, Package.license_spdx, Package.license_raw).where(Package.id.in_(ids)))).all()
+    licenses = {row_id: (spdx or "").strip() or (raw or "").strip() or None for row_id, spdx, raw in rows}
+    for node in found:
+        if node._package_id is not None:
+            node.license = licenses.get(node._package_id)
 
 
 def _crate_asks(env: Environment | None, version_row: PackageVersion, deps: list[Dependency]) -> dict[str, frozenset[str]]:

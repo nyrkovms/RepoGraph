@@ -13,7 +13,7 @@ body {
 }
 
 .app {
-  max-width: 1040px;
+  max-width: 1160px;
   margin: 0 auto;
   padding: 24px;
 }
@@ -282,13 +282,6 @@ button:disabled {
   color: #475569;
 }
 
-.meta-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
 .package-sources li {
   margin-bottom: 4px;
 }
@@ -529,4 +522,669 @@ button:disabled {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+/* Package card: title, tabs and the Overview bars */
+/* The name, the ecosystem and the version select share one line, wrapping on a narrow screen. */
+.package-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+}
+
+.package-title h2 {
+  margin: 0;
+}
+
+.package-title select {
+  min-width: 0;
+  padding: 4px 8px;
+}
+
+.package-title .tag {
+  margin-left: 0;
+}
+
+.banner:not(.warn) {
+  background: #e0e7ff;
+  color: #1e3a8a;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.tab {
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: #334155;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  border-bottom-color: #1d4ed8;
+  color: #1e3a8a;
+}
+
+.tab:hover {
+  background: #e2e8f0;
+}
+
+.tab-count {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 12px;
+}
+
+.tab-panel {
+  padding-top: 16px;
+}
+
+.overview-state {
+  margin: 0;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  background: #3b82f6;
+}
+
+.bar-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.activity {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  align-items: end;
+  gap: 4px;
+  height: 72px;
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.activity li {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  border-bottom: 1px solid #94a3b8;
+}
+
+.activity-bar {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  background: #3b82f6;
+}
+
+.activity-axis {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 6px;
+}
+
+.line-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line-list li {
+  margin-bottom: 4px;
+}
+
+/* Home page and search filters */
+.home-search-label {
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+
+.chips,
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+
+.chip,
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.chip:hover {
+  background: #e2e8f0;
+}
+
+.filter-chip {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+  color: #1e3a8a;
+}
+
+.chip-clear {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  line-height: 1.2;
+}
+
+.home-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  align-items: baseline;
+}
+
+.home-status,
+.home-status-row p {
+  margin: 4px 0;
+}
+
+.home-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+}
+
+.home-subtitle {
+  margin: -4px 0 8px;
+  font-size: 13px;
+}
+
+.home-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+
+.home-chips .chips {
+  margin: 0;
+}
+
+button.chip {
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button.chip[aria-pressed="true"] {
+  border-color: #1d4ed8;
+  background: #e0e7ff;
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+.row-description {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.attention-row,
+.updated-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.attention-row p,
+.updated-row p {
+  margin: 0;
+}
+
+.attention-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.attention-row .update-description,
+.attention-row .update-detected {
+  margin-left: 0;
+}
+
+.home-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+}
+
+.home-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.home-list-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.home-list-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+
+.home-list-meta {
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.home-note {
+  font-size: 13px;
+}
+
+.used-by {
+  margin-left: 8px;
+  font-size: 13px;
+}
+
+.empty-state p {
+  margin: 4px 0;
+}
+
+@media (max-width: 760px) {
+  .home-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.chip {
+  padding: 3px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #334155;
+  text-decoration: none;
+}
+
+.chip.active {
+  border-color: #1d4ed8;
+  background: #e0e7ff;
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+.used-by-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.used-by-table th,
+.used-by-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.used-by-table th {
+  color: #475569;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.used-by-note {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.version-rows {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+}
+
+.version-row {
+  padding: 4px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.tag.viewing {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.lines-table .line-versions > td {
+  background: #f8fafc;
+}
+
+.dep-summary {
+  margin: 0 0 4px;
+}
+
+.dep-summary-note {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.dep-via {
+  font-size: 12px;
+}
+
+.compare-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  align-items: center;
+  margin: 0 0 8px;
+}
+
+.compare-from,
+.compare-to {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.compare-dates {
+  margin: 0 0 12px;
+}
+
+.compare-table .diff-old {
+  background: #fee2e2;
+}
+
+.compare-table .diff-new {
+  background: #dcfce7;
+}
+
+.diff-marker {
+  margin-right: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Package card: a full-width top, then the tabs beside a narrow facts panel (SPEC-CATALOG-PAGES.md section 5) */
+.package-page {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.package-page a {
+  color: #1d4ed8;
+  font-weight: 400;
+  text-decoration: none;
+}
+
+.package-page a:hover,
+.package-page a:focus-visible {
+  text-decoration: underline;
+}
+
+.package-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.package-header .banner,
+.package-header .package-description,
+.package-header .package-title,
+.package-header p {
+  margin: 0;
+}
+
+.package-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 32px;
+  margin-top: 20px;
+  align-items: start;
+}
+
+.package-main {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.package-facts {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.package-facts dl {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+}
+
+.fact {
+  min-width: 0;
+}
+
+.fact dt {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.fact dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.copy-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.copy-field code {
+  width: 100%;
+  font-size: 12.5px;
+  line-height: 1.4;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* A small text button: copying is secondary to the identifier above it. */
+.copy-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.copy-button:hover,
+.copy-button:focus-visible {
+  background: transparent;
+  text-decoration: underline;
+}
+
+.copy-field-state {
+  font-size: 12px;
+}
+
+.copy-field-state:empty {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .package-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .package-main,
+  .package-facts {
+    grid-column: 1;
+  }
+
+  .package-facts {
+    grid-row: 1;
+  }
+
+  .package-main {
+    grid-row: 2;
+  }
+}
+
+/* Overview: sections divided by whitespace and a 1px rule, no boxes */
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.overview p {
+  margin: 0;
+}
+
+.overview-summary {
+  font-size: 16px;
+}
+
+.overview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 24px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.overview-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.overview-pair .overview-section {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.overview-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.overview-section-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .overview-pair {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+}
+
+/* The environment controls of Dependencies: one compact row that wraps */
+.env-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+
+.env-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.env-row select,
+.env-row input:not([type="checkbox"]) {
+  min-width: 0;
+  padding: 4px 8px;
+}
+
+.env-row input[type="checkbox"] {
+  min-width: 0;
+  width: auto;
+}
+
+.env-row button {
+  padding: 5px 12px;
+}
+
+.line-list li {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr) auto;
+  gap: 12px;
 }

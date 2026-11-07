@@ -2,6 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { fetchUpdates, fetchUpdatesSummary } from "../lib/api";
+import AttentionRow from "../lib/AttentionRow";
+import {
+  FLAG_LABELS,
+  browserTimezone,
+  bumpOf,
+  compareLink,
+  displayName,
+  ecosystemOf,
+  flagsOf,
+  formatDate,
+  formatDateTime,
+  packageLink,
+  summarizeRuns,
+  usageLine,
+} from "../lib/updates";
 
 const PERIODS = [
   { value: "day", label: "Today" },
@@ -22,37 +37,6 @@ const TYPE_FILTERS = [
   { value: "sources", label: "Sources added", kinds: ["source_added"] },
 ];
 
-// The native name and package page of a digest entry: from its purl (`pkg:npm/%40angular/core` -> `@angular/core`),
-// so an npm package does not link to a PyPI page of the same name.
-function displayName(item) {
-  if (!item.purl) return item.name;
-  // RPM: `pkg:rpm/rocky/openssl?distro=rocky-9` is the package `rocky-9/openssl`; the distro qualifier is the namespace
-  // (the purl vendor, `rocky`, is not), so the same name in two releases stays two packages.
-  if (item.purl.startsWith("pkg:rpm/")) {
-    const distro = new URLSearchParams(item.purl.replace(/^[^?]*\??/, "").replace(/#.*$/, "")).get("distro");
-    const name = decodeURIComponent(item.purl.replace(/[?#].*$/, "").replace(/@[^/]*$/, "").split("/").pop());
-    return distro ? `${distro}/${name}` : item.name;
-  }
-  // The scope's `@` is encoded in a purl, so a literal `@` can only start a version.
-  const native = decodeURIComponent(item.purl.replace(/^pkg:[^/]+\//, "").replace(/[?#].*$/, "").replace(/@[^/]*$/, ""));
-  // Maven: `pkg:maven/org.springframework/spring-core` is the package `org.springframework:spring-core`.
-  return item.purl.startsWith("pkg:maven/") ? native.replace("/", ":") : native;
-}
-
-// The slug of an ecosystem differs from its purl type for crates (`pkg:cargo/...`) and Go (`pkg:golang/...`).
-const PURL_TYPE_ECOSYSTEMS = { cargo: "crates", golang: "go" };
-
-function ecosystemOf(item) {
-  if (item.ecosystem) return item.ecosystem;
-  const type = /^pkg:([^/]+)\//.exec(item.purl || "")?.[1];
-  return PURL_TYPE_ECOSYSTEMS[type] || type || "pypi";
-}
-
-function packageLink(item) {
-  const ecosystem = ecosystemOf(item);
-  return `/package/${ecosystem}/${displayName(item).split("/").map((part) => encodeURIComponent(part).replaceAll("%3A", ":")).join("/")}`;
-}
-
 const TOTAL_LABELS = [
   ["attention", "Attention"],
   ["packages", "Packages"],
@@ -62,15 +46,6 @@ const TOTAL_LABELS = [
   ["vulnerabilities", "Vulnerabilities"],
   ["unavailable", "Unavailable"],
 ];
-
-const FLAG_LABELS = {
-  unavailable: "unavailable",
-  vulnerability_added: "new vulnerability",
-  removed: "removed",
-  yanked: "yanked",
-  deprecated: "deprecated",
-  major: "major",
-};
 
 const KIND_LABELS = {
   tracking_started: "Tracking started",
@@ -92,27 +67,6 @@ const WARN_KINDS = new Set(["release_yanked", "release_removed", "vulnerability_
 const EVENTS_PAGE_SIZE = 50;
 const LIST_PREVIEW_LIMIT = 8;
 
-function browserTimezone() {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
-}
-
-function formatDate(value) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
-}
-
-function formatDateTime(value) {
-  if (!value) {
-    return "";
-  }
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
-}
-
 function parseDateInput(value) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
   if (!match) {
@@ -132,28 +86,6 @@ function buildCustomRange(fromValue, toValue) {
   return { since: start.toISOString(), until: end.toISOString() };
 }
 
-function bumpOf(item) {
-  return item.max_bump && item.max_bump !== "other" ? item.max_bump : null;
-}
-
-function flagsOf(item) {
-  const flags = Array.isArray(item.flags) ? [...item.flags] : [];
-  if (item.max_bump === "major" && !flags.includes("major")) {
-    flags.push("major");
-  }
-  return flags;
-}
-
-// `used by 9 packages · tracked directly`: how much of the catalog depends on the package, and why it is in it.
-function usageLine(item) {
-  const parts = [];
-  const usedBy = Number(item.used_by) || 0;
-  if (usedBy > 0) parts.push(`used by ${usedBy} ${usedBy === 1 ? "package" : "packages"}`);
-  if (item.origin === "manual" || item.origin === "seed") parts.push("tracked directly");
-  else if (item.origin) parts.push("dependency");
-  return parts.join(" · ");
-}
-
 function CompactList({ label, items, warn = false }) {
   if (!Array.isArray(items) || !items.length) {
     return null;
@@ -168,30 +100,12 @@ function CompactList({ label, items, warn = false }) {
   );
 }
 
-// A daily run that finished more than 36 hours ago was missed: 24 hours plus slack for a long or late run.
-const STALE_RUN_HOURS = 36;
-
-// Why a run counts as a problem: a list of short reasons, empty when the run is fine.
-function runProblems(run) {
-  const reasons = [];
-  if (run.status !== "success") reasons.push(run.status);
-  const failed = run.packages_failed || 0;
-  if (failed > 0) reasons.push(`${failed} failed`);
-  const at = Date.parse(run.finished_at || run.started_at);
-  const hours = (Date.now() - at) / 3_600_000;
-  if (hours > STALE_RUN_HOURS) reasons.push(`no run for ${Math.round(hours / 24)} days`);
-  return reasons;
-}
-
 function RunStatus({ lastRun, lastRuns }) {
   const runs = Array.isArray(lastRuns) && lastRuns.length ? lastRuns : lastRun ? [lastRun] : [];
   if (!runs.length) {
     return <p className="muted">Data as of: no runs yet</p>;
   }
-  const asOf = runs.map((run) => run.finished_at || run.started_at).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
-  const problems = runs
-    .map((run) => ({ name: run.ecosystem || "last run", reasons: runProblems(run) }))
-    .filter((p) => p.reasons.length);
+  const { asOf, problems } = summarizeRuns(runs);
   const problem = problems.length > 0;
   return (
     <p className={problem ? "update-run warn-text" : "update-run muted"}>
@@ -247,7 +161,7 @@ export default function UpdatesPage() {
   // The view lives in the URL so a link can be shared; a default adds nothing to it.
   const [searchParams, setSearchParams] = useSearchParams();
   const periodParam = searchParams.get("period");
-  const period = PERIODS.some((item) => item.value === periodParam) ? periodParam : "day";
+  const period = PERIODS.some((item) => item.value === periodParam) ? periodParam : "week";
   const customFrom = searchParams.get("from") || "";
   const customTo = searchParams.get("to") || "";
   const ecosystemParam = searchParams.get("ecosystem");
@@ -270,7 +184,7 @@ export default function UpdatesPage() {
   }
 
   function setPeriod(value) {
-    setParam("period", value === "day" ? "" : value);
+    setParam("period", value === "week" ? "" : value);
   }
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -391,18 +305,45 @@ export default function UpdatesPage() {
     const bump = bumpOf(item);
     const flags = flagsOf(item);
     const usage = usageLine(item);
+    const toggle = (
+      <button
+        type="button"
+        className="tree-toggle"
+        aria-expanded={isOpen}
+        aria-label={`${isOpen ? "Hide" : "Show"} events for ${item.name}`}
+        onClick={() => toggleRow(rowKey)}
+      >
+        {isOpen ? "-" : "+"}
+      </button>
+    );
+    const details = (
+      <>
+        <CompactList label="Releases" items={item.releases} />
+        <CompactList label="Yanked" items={item.yanked} warn />
+        <CompactList label="Removed" items={item.removed} warn />
+        <CompactList label="Vulnerabilities" items={item.vulnerabilities} warn />
+        {isOpen ? (
+          <EventTimeline state={events[rowKey]} onLoadMore={() => loadEvents(rowKey, events[rowKey]?.cursor)} />
+        ) : null}
+      </>
+    );
+    if (flags.length) {
+      return (
+        <AttentionRow key={rowKey} item={item} lead={toggle}>
+          {item.description ? <p className="muted update-description">{item.description}</p> : null}
+          {item.released_at ? (
+            <p className="muted update-detected">released {formatDate(item.released_at)}</p>
+          ) : item.last_detected_at ? (
+            <p className="muted update-detected">detected {formatDateTime(item.last_detected_at)}</p>
+          ) : null}
+          {details}
+        </AttentionRow>
+      );
+    }
     return (
       <li key={rowKey}>
         <div className="update-row-head">
-          <button
-            type="button"
-            className="tree-toggle"
-            aria-expanded={isOpen}
-            aria-label={`${isOpen ? "Hide" : "Show"} events for ${item.name}`}
-            onClick={() => toggleRow(rowKey)}
-          >
-            {isOpen ? "-" : "+"}
-          </button>
+          {toggle}
           <Link to={packageLink(item)}>{displayName(item)}</Link>
           <span className="tag muted-tag">{ecosystemOf(item)}</span>
           {item.to_version ? (
@@ -411,6 +352,9 @@ export default function UpdatesPage() {
               {" → "}
               <code>{item.to_version}</code>
             </span>
+          ) : null}
+          {item.from_version && item.to_version ? (
+            <Link to={compareLink(item)}>Compare</Link>
           ) : null}
           {bump && !flags.includes(bump) ? <span className="tag muted-tag">{bump}</span> : null}
           {flags.map((flag) => (
@@ -426,13 +370,7 @@ export default function UpdatesPage() {
         </div>
         {item.description ? <p className="muted update-description">{item.description}</p> : null}
         {usage ? <p className="muted update-usage">{usage}</p> : null}
-        <CompactList label="Releases" items={item.releases} />
-        <CompactList label="Yanked" items={item.yanked} warn />
-        <CompactList label="Removed" items={item.removed} warn />
-        <CompactList label="Vulnerabilities" items={item.vulnerabilities} warn />
-        {isOpen ? (
-          <EventTimeline state={events[rowKey]} onLoadMore={() => loadEvents(rowKey, events[rowKey]?.cursor)} />
-        ) : null}
+        {details}
       </li>
     );
   }

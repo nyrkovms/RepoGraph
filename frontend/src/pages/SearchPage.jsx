@@ -1,21 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { fetchPackages, searchPackages } from "../lib/api";
+import { fetchCatalogSummary, fetchPackages, searchPackages } from "../lib/api";
+import { isPurl, purlDestination } from "../lib/purl";
 import { getPackageDescriptionPreview } from "../lib/packageDescription";
-
-const AUTOCOMPLETE_LIMIT = 8;
-
-const ECOSYSTEM_OPTIONS = [
-  { value: "", label: "All" },
-  { value: "pypi", label: "PyPI" },
-  { value: "npm", label: "npm" },
-  { value: "crates", label: "crates.io" },
-  { value: "go", label: "Go" },
-  { value: "nuget", label: "NuGet" },
-  { value: "maven", label: "Maven" },
-  { value: "rpm", label: "RPM" },
-];
+import { ECOSYSTEM_OPTIONS, displayName, ecosystemLabel, itemKey, packageHref } from "../lib/packageNames";
+import SearchBox from "../lib/SearchBox";
+import { formatDate } from "../lib/updates";
 
 const DEFAULT_PLACEHOLDER = "flask, requests, numpy...";
 // A Maven package is found and opened by `groupId:artifactId`.
@@ -26,184 +17,145 @@ const PLACEHOLDERS = {
   rpm: "distro/name, e.g. rocky-9/openssl",
 };
 
-function ecosystemLabel(ecosystem) {
-  return ECOSYSTEM_OPTIONS.find((option) => option.value === ecosystem)?.label || ecosystem;
-}
+const PAGE_SIZE = 20;
+const SORT_OPTIONS = [
+  { value: "relevance", label: "Relevance" },
+  { value: "used_by", label: "Most used" },
+  { value: "name", label: "Name" },
+];
 
-// The native spelling of the package name: an npm scope is kept apart from the name in the catalog (`@angular` + `core`),
-// a Maven groupId too (`org.springframework` + `spring-core`), an RPM distro too (`rocky-9` + `openssl`).
-function nativeName(item) {
-  if (item.ecosystem === "maven") {
-    return `${item.namespace}:${item.normalized_name}`;
-  }
-  if (item.ecosystem === "rpm") {
-    return `${item.namespace}/${item.normalized_name}`;
-  }
-  return item.namespace ? `@${item.namespace}/${item.normalized_name}` : item.normalized_name;
-}
-
-function displayName(item) {
-  // The name of a Maven package already is `groupId:artifactId`, that of an RPM package `distro/name`.
-  if (item.ecosystem === "maven" || item.ecosystem === "rpm") {
-    return item.name;
-  }
-  return item.namespace ? `@${item.namespace}/${item.name}` : item.name;
-}
-
-function packageHref(item) {
-  return `/package/${item.ecosystem}/${nativeName(item)}`;
-}
-
-function itemKey(item) {
-  return `${item.ecosystem}-${nativeName(item)}-${item.latest_version}`;
+// One list request from the search spec: the query decides between /search and /packages.
+function requestPage(spec, cursor) {
+  const { q, ...filters } = spec;
+  const set = Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== ""));
+  const params = { limit: PAGE_SIZE, ...set, ...(cursor ? { cursor } : {}) };
+  return q ? searchPackages({ q, ...params }) : fetchPackages(params);
 }
 
 export default function SearchPage() {
+  // The view lives in the URL so a link can be shared; a default adds nothing to it.
+  const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
-  const autocompleteRequestId = useRef(0);
+  const q = (params.get("q") || "").trim();
+  const ecosystemParam = params.get("ecosystem") || "";
+  const ecosystem = ECOSYSTEM_OPTIONS.some((option) => option.value && option.value === ecosystemParam) ? ecosystemParam : "";
+  const license = params.get("license") || "";
+  const minUsedBy = /^[1-9]\d*$/.test(params.get("min_used_by") || "") ? params.get("min_used_by") : "";
+  const releasedBeforeParam = params.get("released_before") || "";
+  const releasedBefore = Number.isNaN(Date.parse(releasedBeforeParam)) ? "" : releasedBeforeParam;
+  const deprecated = ["true", "1"].includes(params.get("deprecated") || "");
+  // Relevance ranks the matches of a query: without one the list is by name.
+  const sortParam = params.get("sort");
+  const defaultSort = q ? "relevance" : "name";
+  const sort = sortParam === "used_by" || sortParam === "name" || (sortParam === "relevance" && q) ? sortParam : defaultSort;
 
-  const [query, setQuery] = useState("");
-  const [ecosystem, setEcosystem] = useState("");
-  const [rows, setRows] = useState([]);
-  const [cursor, setCursor] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [suggestions, setSuggestions] = useState([]);
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const spec = {
+    q,
+    sort,
+    ecosystem,
+    license,
+    min_used_by: minUsedBy,
+    released_before: releasedBefore,
+    deprecated: deprecated ? true : "",
+  };
+  const key = JSON.stringify(spec);
 
-  // The list is reloaded on mount and whenever the ecosystem switcher changes.
-  useEffect(() => {
-    loadFirstPage();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ecosystem]);
-
-  useEffect(() => {
-    const trimmedQuery = query.trim();
-    if (!trimmedQuery) {
-      setSuggestions([]);
-      setSuggestionsOpen(false);
-      setHighlightedIndex(-1);
-      return;
-    }
-
-    const requestId = autocompleteRequestId.current + 1;
-    autocompleteRequestId.current = requestId;
-
-    const timeoutId = window.setTimeout(async () => {
-      try {
-        const payload = await searchPackages({ q: trimmedQuery, limit: AUTOCOMPLETE_LIMIT, sort: "name", ...ecosystemFilter() });
-        if (autocompleteRequestId.current !== requestId) {
-          return;
-        }
-        setSuggestions(payload.data || []);
-        setSuggestionsOpen(Boolean(payload.data?.length));
-        setHighlightedIndex((payload.data || []).length ? 0 : -1);
-      } catch {
-        if (autocompleteRequestId.current !== requestId) {
-          return;
-        }
-        setSuggestions([]);
-        setSuggestionsOpen(false);
-        setHighlightedIndex(-1);
-      }
-    }, 250);
-
-    return () => window.clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, ecosystem]);
-
-  function ecosystemFilter() {
-    return ecosystem ? { ecosystem } : {};
+  const [draft, setDraft] = useState(q);
+  const [seenQuery, setSeenQuery] = useState(q);
+  if (seenQuery !== q) {
+    // The address changed (back, a link): the field follows it.
+    setSeenQuery(q);
+    setDraft(q);
   }
 
-  async function loadFirstPage() {
-    setLoading(true);
-    setError("");
-    try {
-      const payload = query.trim()
-        ? await searchPackages({ q: query.trim(), limit: 20, sort: "name", ...ecosystemFilter() })
-        : await fetchPackages({ limit: 20, sort: "name", ...ecosystemFilter() });
-      setRows(payload.data || []);
-      setCursor(payload.cursor || null);
-    } catch (err) {
-      setError(err?.message || "Search request failed");
-    } finally {
-      setLoading(false);
-    }
+  // `key` says which request the stored list answers: a different key means the list is still loading.
+  const [result, setResult] = useState({ key: null, rows: [], cursor: null, error: "" });
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [licenses, setLicenses] = useState([]);
+  const loading = result.key !== key;
+
+  useEffect(() => {
+    let cancelled = false;
+    requestPage(JSON.parse(key))
+      .then((payload) => {
+        if (!cancelled) setResult({ key, rows: payload.data || [], cursor: payload.cursor || null, error: "" });
+      })
+      .catch((err) => {
+        if (!cancelled) setResult({ key, rows: [], cursor: null, error: err?.message || "Search request failed" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCatalogSummary()
+      .then((payload) => {
+        if (!cancelled) setLicenses((payload.licenses || []).map((item) => item.license));
+      })
+      .catch(() => {
+        // The select then offers only what the address names: the list itself still works.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function setParam(name, value, { replace = true } = {}) {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set(name, value);
+        else next.delete(name);
+        return next;
+      },
+      { replace }
+    );
   }
 
   async function loadMore() {
-    if (!cursor) {
+    if (!result.cursor || loadingMore) {
       return;
     }
-    setLoading(true);
-    setError("");
+    setLoadingMore(true);
     try {
-      const payload = query.trim()
-        ? await searchPackages({ q: query.trim(), limit: 20, sort: "name", ...ecosystemFilter(), cursor })
-        : await fetchPackages({ limit: 20, sort: "name", ...ecosystemFilter(), cursor });
-      setRows((prev) => [...prev, ...(payload.data || [])]);
-      setCursor(payload.cursor || null);
+      const payload = await requestPage(spec, result.cursor);
+      setResult((prev) =>
+        prev.key === key ? { ...prev, rows: [...prev.rows, ...(payload.data || [])], cursor: payload.cursor || null } : prev
+      );
     } catch (err) {
-      setError(err?.message || "Pagination request failed");
+      setResult((prev) => (prev.key === key ? { ...prev, error: err?.message || "Pagination request failed" } : prev));
     } finally {
-      setLoading(false);
+      setLoadingMore(false);
     }
   }
 
-  function closeSuggestions() {
-    setSuggestionsOpen(false);
-    setHighlightedIndex(-1);
-  }
-
-  function selectSuggestion(item) {
-    setQuery(item.ecosystem === "maven" || item.ecosystem === "rpm" ? nativeName(item) : item.normalized_name);
-    closeSuggestions();
-    navigate(packageHref(item));
-  }
-
-  function handleSubmit() {
-    closeSuggestions();
-    loadFirstPage();
-  }
-
-  function handleInputKeyDown(event) {
-    if (!suggestionsOpen || !suggestions.length) {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        handleSubmit();
-      }
-      return;
-    }
-
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setHighlightedIndex((current) => (current + 1) % suggestions.length);
-      return;
-    }
-
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setHighlightedIndex((current) => (current <= 0 ? suggestions.length - 1 : current - 1));
-      return;
-    }
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeSuggestions();
-      return;
-    }
-
-    if (event.key === "Enter") {
-      event.preventDefault();
-      if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
-        selectSuggestion(suggestions[highlightedIndex]);
-      } else {
-        handleSubmit();
+  async function handleSubmit() {
+    const typed = draft.trim();
+    if (isPurl(typed)) {
+      // A purl names one package: open its card (at the purl's version) as the home page does; with none or several the
+      // results page says so.
+      try {
+        const href = await purlDestination(typed);
+        if (href) {
+          navigate(href);
+          return;
+        }
+      } catch {
+        // The list below reports a failing search itself.
       }
     }
+    setParam("q", typed, { replace: false });
   }
+
+  const licenseOptions = license && !licenses.includes(license) ? [license, ...licenses] : licenses;
+  // Filters the page has no control for are shown as chips, so a list that arrives short says why.
+  const chips = [
+    minUsedBy ? { name: "min_used_by", label: `used by ${minUsedBy}+` } : null,
+    releasedBefore ? { name: "released_before", label: `latest release before ${formatDate(releasedBefore)}` } : null,
+    deprecated ? { name: "deprecated", label: "deprecated" } : null,
+  ].filter(Boolean);
 
   return (
     <section>
@@ -211,7 +163,7 @@ export default function SearchPage() {
       <div className="toolbar">
         <label>
           Ecosystem
-          <select aria-label="Ecosystem" value={ecosystem} onChange={(e) => setEcosystem(e.target.value)}>
+          <select aria-label="Ecosystem" value={ecosystem} onChange={(e) => setParam("ecosystem", e.target.value)}>
             {ECOSYSTEM_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -219,70 +171,102 @@ export default function SearchPage() {
             ))}
           </select>
         </label>
-        <div className="autocomplete">
-          <input
-            placeholder={PLACEHOLDERS[ecosystem] || DEFAULT_PLACEHOLDER}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleInputKeyDown}
-            onFocus={() => {
-              if (suggestions.length) {
-                setSuggestionsOpen(true);
-              }
-            }}
-            onBlur={() => {
-              window.setTimeout(() => closeSuggestions(), 120);
-            }}
-            aria-label="Search query"
-            autoComplete="off"
-          />
-          {suggestionsOpen && suggestions.length ? (
-            <ul className="autocomplete-list" role="listbox" aria-label="Search suggestions">
-              {suggestions.map((item, index) => (
-                <li key={itemKey(item)}>
-                  <button
-                    type="button"
-                    className={index === highlightedIndex ? "autocomplete-item active" : "autocomplete-item"}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => selectSuggestion(item)}
-                  >
-                    <span>
-                      <b>{displayName(item)}</b>
-                      <span className="tag eco-badge">{ecosystemLabel(item.ecosystem)}</span>
-                      <span className="muted autocomplete-version">{item.latest_version}</span>
-                    </span>
-                    {item.description ? (
-                      <span className="muted autocomplete-description">{getPackageDescriptionPreview(item.description, 120)}</span>
-                    ) : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
+        <SearchBox
+          value={draft}
+          onChange={setDraft}
+          onSubmit={handleSubmit}
+          placeholder={PLACEHOLDERS[ecosystem] || DEFAULT_PLACEHOLDER}
+          ecosystem={ecosystem}
+          applied={q}
+        />
         <button type="button" onClick={handleSubmit} disabled={loading}>
           {loading ? "Loading..." : "Search"}
         </button>
       </div>
+      <div className="toolbar">
+        <label>
+          Sort
+          <select
+            aria-label="Sort"
+            value={sort}
+            onChange={(e) => setParam("sort", e.target.value === defaultSort ? "" : e.target.value)}
+          >
+            {SORT_OPTIONS.filter((option) => option.value !== "relevance" || q).map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          License
+          <select aria-label="License" value={license} onChange={(e) => setParam("license", e.target.value)}>
+            <option value="">All licenses</option>
+            {licenseOptions.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
-      {error ? <p className="error">{error}</p> : null}
+      {chips.length ? (
+        <ul className="filter-chips" aria-label="Active filters">
+          {chips.map((chip) => (
+            <li key={chip.name} className="filter-chip">
+              <span>{chip.label}</span>
+              <button
+                type="button"
+                className="chip-clear"
+                aria-label={`Clear filter: ${chip.label}`}
+                onClick={() => setParam(chip.name, "")}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {result.error ? <p className="error">{result.error}</p> : null}
 
       <ul className="result-list">
-        {rows.map((item) => (
-          <li key={itemKey(item)}>
-            <Link to={packageHref(item)}>{displayName(item)}</Link>
-            <span className="tag eco-badge">{ecosystemLabel(item.ecosystem)}</span>
-            <span className="tag">{item.latest_version}</span>
-            {item.license_spdx ? <span className="tag">{item.license_spdx}</span> : null}
-            {item.has_vulnerabilities ? <span className="tag warn">vuln</span> : null}
-            <p>{getPackageDescriptionPreview(item.description, 220) || "No description"}</p>
-          </li>
-        ))}
+        {(loading ? [] : result.rows).map((item) => {
+          const description = getPackageDescriptionPreview(item.description, 220);
+          return (
+            <li key={itemKey(item)}>
+              <Link to={packageHref(item)}>{displayName(item)}</Link>
+              <span className="tag eco-badge">{ecosystemLabel(item.ecosystem)}</span>
+              <span className="tag">{item.latest_version}</span>
+              {item.license_spdx ? <span className="tag">{item.license_spdx}</span> : null}
+              {item.has_vulnerabilities ? <span className="tag warn">vuln</span> : null}
+              {item.used_by > 0 ? (
+                <span className="muted used-by" title="Packages in this catalog that depend on it">
+                  used by {item.used_by}
+                </span>
+              ) : null}
+              {description ? <p>{description}</p> : null}
+            </li>
+          );
+        })}
       </ul>
+      {!loading && result.rows.some((item) => item.used_by > 0) ? (
+        <p className="muted home-note">used by counts packages in this catalog</p>
+      ) : null}
 
-      {cursor ? (
-        <button type="button" onClick={loadMore} disabled={loading}>
-          {loading ? "Loading..." : "Load more"}
+      {!loading && !result.error && !result.rows.length ? (
+        <div className="empty-state">
+          <p>
+            No packages match{q ? ` "${q}"` : ""}
+          </p>
+          {isPurl(q) ? <p className="muted">No package matches this purl</p> : null}
+        </div>
+      ) : null}
+
+      {result.cursor && !loading ? (
+        <button type="button" onClick={loadMore} disabled={loadingMore}>
+          {loadingMore ? "Loading..." : "Load more"}
         </button>
       ) : null}
     </section>

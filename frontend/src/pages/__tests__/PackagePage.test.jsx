@@ -6,9 +6,13 @@ import App from "../../App";
 import PackagePage from "../PackagePage";
 import * as api from "../../lib/api";
 
+// The UI writes dates in the reader's locale, like Updates: expectations take the same fixture timestamp.
+const day = (iso) => new Date(iso).toLocaleDateString();
+
 vi.mock("../../lib/api", () => ({
   fetchArtifacts: vi.fn(),
   fetchDependencies: vi.fn(),
+  fetchOverview: vi.fn(),
   fetchPackage: vi.fn(),
   fetchVersion: vi.fn(),
   fetchVersions: vi.fn(),
@@ -30,9 +34,32 @@ Installation
    pip install binary
 `;
 
+// What the overview route answers for a package with one direct dependency; the version follows the request.
+function overviewOf(version, patch = {}) {
+  return {
+    version,
+    dependencies: { direct: 1, optional: 0, dev: 0, indirect: 0, not_in_catalog: 0 },
+    used_by: { direct: 0, indirect: 0 },
+    licenses: [],
+    versions: { total: 2, prereleases: 0, not_active: 0 },
+    activity: Array.from({ length: 12 }, (_, index) => ({ month: `2026-${String(index + 1).padStart(2, "0")}`, releases: 0 })),
+    lines: [],
+    ...patch,
+  };
+}
+
+const startsWithText = (prefix) => (content) => content.startsWith(prefix);
+
+// The Versions tab waits for the overview before it shows a list: the rows come a moment after the header.
+async function versionRows() {
+  await waitFor(() => expect(document.querySelector(".version-row")).not.toBeNull(), { timeout: 4000 });
+  return [...document.querySelectorAll(".version-row")];
+}
+
 describe("PackagePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    api.fetchOverview.mockImplementation((ecosystem, name, version) => Promise.resolve(overviewOf(version)));
     api.fetchPackage.mockResolvedValue({
       ecosystem: "pypi",
       name: "Flask",
@@ -55,6 +82,7 @@ describe("PackagePage", () => {
     });
     api.fetchVulnerabilities.mockResolvedValue({
       package: "flask",
+      coverage: "collected",
       data: [],
     });
     api.fetchVersion.mockResolvedValue({
@@ -83,10 +111,10 @@ describe("PackagePage", () => {
     });
   });
 
-  it("renders package details, versions and dependency tree", async () => {
+  async function renderFlask(search = "") {
     render(
       <MemoryRouter
-        initialEntries={["/package/flask"]}
+        initialEntries={[`/package/flask${search}`]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
@@ -94,13 +122,77 @@ describe("PackagePage", () => {
         </Routes>
       </MemoryRouter>
     );
+    await screen.findByText("A lightweight WSGI framework");
+  }
 
-    expect(await screen.findByText("A lightweight WSGI framework")).toBeInTheDocument();
-    expect(screen.getByText((content) => content.includes("BSD-3-Clause"))).toBeInTheDocument();
+  it("names an empty license and hides empty homepage and docs rows (§3 rule 4)", async () => {
+    api.fetchPackage.mockResolvedValue({
+      ecosystem: "pypi",
+      name: "Flask",
+      normalized_name: "flask",
+      description: "A lightweight WSGI framework",
+      homepage_url: null,
+      documentation_url: "",
+      repository_url: null,
+      license_raw: null,
+      license_spdx: null,
+      latest_version: "3.1.3",
+      synced_at: "2026-03-09T00:00:00Z",
+    });
+    await renderFlask();
+    expect(screen.getByText((content) => content.includes("Not published by the source"))).toBeInTheDocument();
+    expect(screen.queryByText("Homepage")).not.toBeInTheDocument();
+    expect(screen.queryByText("Documentation")).not.toBeInTheDocument();
+    expect(screen.queryByText("unknown")).not.toBeInTheDocument();
+  });
+
+  it("shows the latest version for ?version=latest", async () => {
+    await renderFlask("?version=latest");
+    await waitFor(() => {
+      expect(api.fetchDependencies).toHaveBeenCalledWith("pypi", "flask", "3.1.3", expect.anything());
+    });
+    expect(api.fetchVersion).not.toHaveBeenCalledWith("pypi", "flask", "latest");
+    expect(api.fetchDependencies).not.toHaveBeenCalledWith("pypi", "flask", "latest", expect.anything());
+  });
+
+  it("says advisories are not collected instead of None (#68)", async () => {
+    api.fetchVulnerabilities.mockResolvedValue({ package: "flask", coverage: "not_collected", data: [] });
+    await renderFlask();
+    expect(await screen.findByText("Not collected for this ecosystem")).toBeInTheDocument();
+    expect(screen.queryByText("None")).not.toBeInTheDocument();
+  });
+
+  it("does not call an old version clean when advisories are collected (#68)", async () => {
+    await renderFlask("?version=3.1.2");
+    expect(await screen.findByText("Not checked for this version")).toBeInTheDocument();
+  });
+
+  it("notes that listed advisories belong to the package for an old version (#68)", async () => {
+    api.fetchVulnerabilities.mockResolvedValue({
+      package: "flask",
+      coverage: "collected",
+      data: [{ source: "pypi_native", source_id: "PYSEC-1", summary: "Bad", severity: "high", fixed_in: null, link: "" }],
+    });
+    await renderFlask("?version=3.1.2");
+    expect(await screen.findByText("PYSEC-1")).toBeInTheDocument();
+    expect(screen.getByText("Listed for the package, not for this version")).toBeInTheDocument();
+  });
+
+  it("renders the header and the Overview, then the dependency tree and the versions on their tabs", async () => {
+    const user = userEvent.setup();
+    await renderFlask();
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("flask");
+    expect(screen.getAllByText((content) => content.includes("BSD-3-Clause")).length).toBeGreaterThan(0);
+    expect(screen.getByText("No advisories found")).toBeInTheDocument();
+    expect(screen.queryByText("werkzeug")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: /Dependencies/ }));
     expect(await screen.findByText("werkzeug")).toBeInTheDocument();
     expect(screen.getByText(">=3.1.0")).toBeInTheDocument();
     expect(screen.getByText("3.1.0")).toBeInTheDocument();
-    expect(screen.getByText("None")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: /Versions/ }));
+    expect(screen.getByRole("link", { name: "3.1.2" })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(api.fetchDependencies).toHaveBeenCalledWith("pypi", "flask", "3.1.3", {
@@ -151,7 +243,8 @@ describe("PackagePage", () => {
     expect(screen.getByText("Installation")).toBeInTheDocument();
     expect(screen.queryByText(/\.\. image::/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/\.\. code-block::/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/pip install binary/i)).not.toBeInTheDocument();
+    // The install command of the header is not the description's `pip install binary` block.
+    expect(screen.queryByText(/^pip install binary$/i)).not.toBeInTheDocument();
   });
 
   it("reloads dependency tree for selected version", async () => {
@@ -172,7 +265,7 @@ describe("PackagePage", () => {
 
     render(
       <MemoryRouter
-        initialEntries={["/package/flask"]}
+        initialEntries={["/package/flask?tab=dependencies&deps=tree"]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
@@ -200,7 +293,7 @@ describe("PackagePage", () => {
 
     render(
       <MemoryRouter
-        initialEntries={["/package/flask"]}
+        initialEntries={["/package/flask?tab=dependencies&deps=tree"]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
@@ -257,7 +350,7 @@ describe("PackagePage", () => {
 
     render(
       <MemoryRouter
-        initialEntries={["/package/flask"]}
+        initialEntries={["/package/flask?tab=dependencies&deps=tree"]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
@@ -334,7 +427,7 @@ describe("PackagePage", () => {
 
     render(
       <MemoryRouter
-        initialEntries={["/package/flask"]}
+        initialEntries={["/package/flask?tab=dependencies&deps=tree"]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
@@ -356,10 +449,10 @@ describe("PackagePage", () => {
     expect(await screen.findByText("markupsafe")).toBeInTheDocument();
   });
 
-  function renderPackagePage() {
+  function renderPackagePage(search = "?tab=dependencies&deps=tree") {
     render(
       <MemoryRouter
-        initialEntries={["/package/flask"]}
+        initialEntries={[`/package/flask${search}`]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
@@ -392,7 +485,7 @@ describe("PackagePage", () => {
         },
       ],
     });
-    renderPackagePage();
+    renderPackagePage("?tab=sources");
 
     expect(await screen.findByRole("heading", { name: "Sources" })).toBeInTheDocument();
     const rows = screen.getAllByRole("listitem").filter((li) => li.classList.length === 0 && li.querySelector("code"));
@@ -410,7 +503,7 @@ describe("PackagePage", () => {
   it.each([["absent", undefined], ["empty", []]])("renders no sources block when sources are %s", async (_label, sources) => {
     const base = await api.fetchPackage();
     api.fetchPackage.mockResolvedValueOnce({ ...base, sources });
-    renderPackagePage();
+    renderPackagePage("?tab=sources");
     await screen.findByText("A lightweight WSGI framework");
     expect(screen.queryByRole("heading", { name: "Sources" })).not.toBeInTheDocument();
   });
@@ -471,7 +564,7 @@ describe("PackagePage", () => {
         { registry: "pytorch-cpu", enabled: true, status: "yanked", first_seen_at: "2026-01-02T00:00:00Z" },
       ],
     });
-    renderPackagePage();
+    renderPackagePage("?tab=sources");
 
     expect(await screen.findByText("pypi: active")).toBeInTheDocument();
     expect(screen.getByText("pytorch-cpu: yanked")).toBeInTheDocument();
@@ -520,7 +613,7 @@ describe("PackagePage", () => {
       renderApp("/package/npm/@angular/core");
 
       expect(await screen.findByText("Angular - the core framework")).toBeInTheDocument();
-      expect(screen.getByText("pkg:npm/%40angular/core")).toBeInTheDocument();
+      expect(screen.getByText(startsWithText("pkg:npm/%40angular/core"))).toBeInTheDocument();
       expect(api.fetchPackage).toHaveBeenCalledWith("npm", "@angular/core");
       expect(api.fetchVersions).toHaveBeenCalledWith("npm", "@angular/core", { limit: 30 });
       expect(api.fetchVulnerabilities).toHaveBeenCalledWith("npm", "@angular/core");
@@ -532,7 +625,7 @@ describe("PackagePage", () => {
     it("shows the npm environment fields and sends them to the tree", async () => {
       const user = userEvent.setup();
       mockAngularCore();
-      renderApp("/package/npm/@angular/core");
+      renderApp("/package/npm/@angular/core?tab=dependencies&deps=tree");
 
       await screen.findByText("Angular - the core framework");
       expect(screen.getByLabelText("Node.js version")).toBeInTheDocument();
@@ -560,7 +653,7 @@ describe("PackagePage", () => {
     });
 
     it("keeps the Python fields and the old route for PyPI", async () => {
-      renderApp("/package/flask");
+      renderApp("/package/flask?tab=dependencies&deps=tree");
 
       expect(await screen.findByText("A lightweight WSGI framework")).toBeInTheDocument();
       expect(api.fetchPackage).toHaveBeenCalledWith("pypi", "flask");
@@ -571,7 +664,7 @@ describe("PackagePage", () => {
     });
 
     it("opens PyPI by the ecosystem route too", async () => {
-      renderApp("/package/pypi/flask");
+      renderApp("/package/pypi/flask?tab=dependencies&deps=tree");
 
       expect(await screen.findByText("A lightweight WSGI framework")).toBeInTheDocument();
       expect(api.fetchPackage).toHaveBeenCalledWith("pypi", "flask");
@@ -631,34 +724,36 @@ describe("PackagePage", () => {
 
     it("opens a crate by its route and shows purl, links, versions with dates and yanked ones", async () => {
       mockSerdeJson();
-      renderApp("/package/crates/serde_json");
+      renderApp("/package/crates/serde_json?tab=versions");
 
       expect(await screen.findByText("A JSON serialization file format")).toBeInTheDocument();
-      expect(screen.getByText("pkg:cargo/serde_json")).toBeInTheDocument();
+      expect(screen.getByText(startsWithText("pkg:cargo/serde_json"))).toBeInTheDocument();
       expect(screen.getByText("crates.io", { selector: ".eco-badge" })).toBeInTheDocument();
       expect(api.fetchPackage).toHaveBeenCalledWith("crates", "serde_json");
       expect(api.fetchVersions).toHaveBeenCalledWith("crates", "serde_json", { limit: 30 });
       expect(api.fetchVulnerabilities).toHaveBeenCalledWith("crates", "serde_json");
       await waitFor(() => expect(api.fetchVersion).toHaveBeenCalledWith("crates", "serde_json", "1.0.140"));
 
-      expect(screen.getByRole("link", { name: "https://serde.rs" })).toHaveAttribute("href", "https://serde.rs");
-      expect(screen.getByRole("link", { name: "https://github.com/serde-rs/json" })).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "https://docs.rs/serde_json" })).toHaveAttribute(
+      expect(screen.getByRole("link", { name: "serde.rs" })).toHaveAttribute("href", "https://serde.rs");
+      expect(screen.getByRole("link", { name: "github.com/serde-rs/json" })).toHaveAttribute("href", "https://github.com/serde-rs/json");
+      expect(screen.getByRole("link", { name: "docs.rs/serde_json" })).toHaveAttribute(
         "href",
         "https://docs.rs/serde_json"
       );
+      expect(["Homepage", "Repository", "Documentation"].every((label) => screen.getByText(label).tagName === "DT")).toBe(true);
       expect(screen.getByText((content) => content.includes("MIT OR Apache-2.0"))).toBeInTheDocument();
 
-      expect(screen.getByText("2026-03-01")).toBeInTheDocument();
-      expect(screen.getByText("2026-02-01")).toBeInTheDocument();
+      expect(screen.getByText(day("2026-03-01T10:00:00Z"))).toBeInTheDocument();
+      expect(screen.getByText(day("2026-02-01T10:00:00Z"))).toBeInTheDocument();
       expect(screen.getByText("yanked", { selector: ".tag" })).toHaveClass("warn");
-      expect(screen.getByText("active", { selector: ".tag" })).not.toHaveClass("warn");
+      // A version that is not yanked or otherwise flagged shows no status.
+      expect(screen.queryByText("active", { selector: ".tag" })).not.toBeInTheDocument();
     });
 
     it("shows the crates environment fields, not the Python or npm ones, and sends them to the tree", async () => {
       const user = userEvent.setup();
       mockSerdeJson();
-      renderApp("/package/crates/serde_json");
+      renderApp("/package/crates/serde_json?tab=dependencies&deps=tree");
 
       await screen.findByText("A JSON serialization file format");
       const target = screen.getByLabelText("Target");
@@ -715,7 +810,7 @@ describe("PackagePage", () => {
 
     it("reads target, features and default features from the query", async () => {
       mockSerdeJson();
-      renderApp("/package/crates/serde_json?version=1.0.139&target=aarch64-apple-darwin&features=std&default_features=0");
+      renderApp("/package/crates/serde_json?version=1.0.139&target=aarch64-apple-darwin&features=std&default_features=0&tab=dependencies&deps=tree");
 
       await screen.findByText("A JSON serialization file format");
       expect(screen.getByLabelText("Target")).toHaveValue("aarch64-apple-darwin");
@@ -785,7 +880,7 @@ describe("PackagePage", () => {
           },
         ],
       });
-      renderApp("/package/crates/serde_json");
+      renderApp("/package/crates/serde_json?tab=dependencies&deps=tree");
 
       expect(await screen.findByText("winapi")).toBeInTheDocument();
       expect(screen.getByText("cfg(windows)")).toBeInTheDocument();
@@ -800,7 +895,7 @@ describe("PackagePage", () => {
     it("lists the features of the selected version without the internal key", async () => {
       const user = userEvent.setup();
       mockSerdeJson();
-      renderApp("/package/crates/serde_json");
+      renderApp("/package/crates/serde_json?tab=sources");
 
       expect(await screen.findByRole("heading", { name: "Features of 1.0.140" })).toBeInTheDocument();
       const items = document.querySelectorAll(".feature-item");
@@ -831,7 +926,7 @@ describe("PackagePage", () => {
     });
 
     it("sends no crates parameters for PyPI or npm and shows no features block", async () => {
-      renderApp("/package/flask");
+      renderApp("/package/flask?tab=dependencies&deps=tree");
       await screen.findByText("werkzeug");
       await waitFor(() => expect(api.fetchVersion).toHaveBeenCalled());
       expect(screen.queryByRole("heading", { name: /^Features of/ })).not.toBeInTheDocument();
@@ -927,7 +1022,7 @@ describe("PackagePage", () => {
       mockModule();
       renderApp(`/package/go/${MODULE}`);
 
-      expect(await screen.findByText("pkg:golang/github.com/BurntSushi/toml")).toBeInTheDocument();
+      expect(await screen.findByText(startsWithText("pkg:golang/github.com/BurntSushi/toml"))).toBeInTheDocument();
       expect(screen.getByText("Go", { selector: ".eco-badge" })).toBeInTheDocument();
       expect(api.fetchPackage).toHaveBeenCalledWith("go", MODULE);
       expect(api.fetchVersions).toHaveBeenCalledWith("go", MODULE, { limit: 30 });
@@ -939,39 +1034,41 @@ describe("PackagePage", () => {
       mockModule({ name: "github.com/redis/go-redis/v9", normalized_name: "github.com/redis/go-redis/v9" });
       renderApp("/package/go/github.com/redis/go-redis/v9");
 
-      await screen.findByText("pkg:golang/github.com/BurntSushi/toml");
+      await screen.findByText(startsWithText("pkg:golang/github.com/BurntSushi/toml"));
       expect(api.fetchPackage).toHaveBeenCalledWith("go", "github.com/redis/go-redis/v9");
     });
 
-    it("shows no empty description, license or link blocks", async () => {
+    it("shows no empty description or link blocks and names the missing license", async () => {
       mockModule();
       renderApp(`/package/go/${MODULE}`);
 
-      await screen.findByText("pkg:golang/github.com/BurntSushi/toml");
+      await screen.findByText(startsWithText("pkg:golang/github.com/BurntSushi/toml"));
       expect(screen.queryByText("No description")).not.toBeInTheDocument();
-      expect(screen.queryByText(/License/)).not.toBeInTheDocument();
+      expect(document.querySelector(".package-description")).toBeNull();
       expect(screen.queryByText(/Homepage/)).not.toBeInTheDocument();
-      expect(screen.queryByText(/Repo/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Repository/)).not.toBeInTheDocument();
       expect(screen.queryByText("n/a")).not.toBeInTheDocument();
-      expect(screen.getByText(/Latest/)).toBeInTheDocument();
+      // §3 rule 4: the empty license is named, in the header and in the Overview block.
+      expect(screen.getAllByText((content) => content.includes("Not published by the source")).length).toBeGreaterThan(0);
+      expect(screen.getByText("latest", { selector: ".tag" })).toBeInTheDocument();
     });
 
     it("shows the license and links of a module when the catalog has them", async () => {
       mockModule({ license_spdx: "MIT", repository_url: "https://github.com/BurntSushi/toml" });
-      renderApp(`/package/go/${MODULE}`);
+      renderApp(`/package/go/${MODULE}?tab=versions`);
 
-      await screen.findByText("pkg:golang/github.com/BurntSushi/toml");
+      await screen.findByText(startsWithText("pkg:golang/github.com/BurntSushi/toml"));
       expect(screen.getByText((content) => content.includes("MIT"))).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "https://github.com/BurntSushi/toml" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "github.com/BurntSushi/toml" })).toHaveAttribute("href", "https://github.com/BurntSushi/toml");
       expect(screen.queryByText(/Homepage/)).not.toBeInTheDocument();
     });
 
     it("marks pseudo-versions and retracted versions with their reason, and keeps +incompatible as is", async () => {
       mockModule();
-      renderApp(`/package/go/${MODULE}`);
+      renderApp(`/package/go/${MODULE}?tab=versions`);
 
-      await screen.findByText("pkg:golang/github.com/BurntSushi/toml");
-      const items = [...document.querySelectorAll(".inline-list > li")];
+      await screen.findByText(startsWithText("pkg:golang/github.com/BurntSushi/toml"));
+      const items = await versionRows();
       const row = (version) => items.find((item) => item.textContent.startsWith(version));
 
       expect(within(row("v1.4.1-0.20261014143641-f0251eb4aa3e")).getByText("pseudo-version")).toBeInTheDocument();
@@ -984,7 +1081,7 @@ describe("PackagePage", () => {
 
       expect(within(row("v2.0.0+incompatible")).queryByText("pseudo-version")).not.toBeInTheDocument();
       expect(screen.getAllByText("v2.0.0+incompatible").length).toBeGreaterThan(0);
-      expect(screen.getByText("2026-10-14", { exact: false })).toBeInTheDocument();
+      expect(screen.getByText(day("2026-10-14T14:36:41Z"), { exact: false })).toBeInTheDocument();
     });
 
     it("shows a deprecation banner only when the module is deprecated", async () => {
@@ -999,13 +1096,13 @@ describe("PackagePage", () => {
       mockModule({ deprecation: null });
       renderApp(`/package/go/${MODULE}`);
 
-      await screen.findByText("pkg:golang/github.com/BurntSushi/toml");
+      await screen.findByText(startsWithText("pkg:golang/github.com/BurntSushi/toml"));
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 
     it("has no environment form and sends no tree parameters", async () => {
       mockModule();
-      renderApp(`/package/go/${MODULE}`);
+      renderApp(`/package/go/${MODULE}?tab=dependencies&deps=tree`);
 
       await screen.findByText("golang.org/x/sys");
       expect(screen.queryByLabelText("Python version")).not.toBeInTheDocument();
@@ -1020,7 +1117,7 @@ describe("PackagePage", () => {
 
     it("tags indirect requirements", async () => {
       mockModule();
-      renderApp(`/package/go/${MODULE}`);
+      renderApp(`/package/go/${MODULE}?tab=dependencies&deps=tree`);
 
       await screen.findByText("golang.org/x/sys");
       const direct = screen.getByText("github.com/BurntSushi/toml-test").closest(".dep-tree-item");
@@ -1056,7 +1153,7 @@ describe("PackagePage", () => {
         dependencies_state: "hydrated",
         sources: [],
       });
-      renderApp(`/package/go/${MODULE}?version=v1.3.0`);
+      renderApp(`/package/go/${MODULE}?version=v1.3.0&tab=sources`);
 
       expect(await screen.findByText("Retracted: wrong tag, use v1.3.1")).toBeInTheDocument();
     });
@@ -1067,9 +1164,10 @@ describe("PackagePage", () => {
         cursor: null,
         has_more: false,
       });
-      renderApp("/package/flask");
+      renderApp("/package/flask?tab=versions");
 
-      expect(await screen.findByText("yanked", { selector: ".tag" })).toBeInTheDocument();
+      // The tab waits for the overview, which waits for the tree: give it more than the default second under load.
+      await waitFor(() => screen.getByText("yanked", { selector: ".tag" }), { timeout: 4000 });
       expect(screen.queryByText("retracted")).not.toBeInTheDocument();
       expect(screen.queryByText("broken")).not.toBeInTheDocument();
     });
@@ -1155,11 +1253,11 @@ describe("PackagePage", () => {
 
     it("opens a package by its lowercase id and shows the purl, the license and the registry's spelling", async () => {
       mockPackage();
-      renderApp(`/package/nuget/${ID}`);
+      renderApp(`/package/nuget/${ID}?tab=versions`);
 
-      expect(await screen.findByText("pkg:nuget/newtonsoft.json")).toBeInTheDocument();
+      expect(await screen.findByText(startsWithText("pkg:nuget/newtonsoft.json"))).toBeInTheDocument();
       expect(screen.getByText("NuGet", { selector: ".eco-badge" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Package: Newtonsoft.Json");
+      expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Newtonsoft.Json");
       expect(screen.getByText((content) => content.includes("MIT"))).toBeInTheDocument();
       expect(api.fetchPackage).toHaveBeenCalledWith("nuget", ID);
       expect(api.fetchVersions).toHaveBeenCalledWith("nuget", ID, { limit: 30 });
@@ -1169,42 +1267,43 @@ describe("PackagePage", () => {
 
     it("shows a license URL as a link when the package has no expression", async () => {
       mockPackage({ license_spdx: null, license_raw: "https://licenses.nuget.org/MIT" });
-      renderApp(`/package/nuget/${ID}`);
+      renderApp(`/package/nuget/${ID}?tab=versions`);
 
-      await screen.findByText("pkg:nuget/newtonsoft.json");
+      await screen.findByText(startsWithText("pkg:nuget/newtonsoft.json"));
       expect(screen.getByText((content) => content.includes("https://licenses.nuget.org/MIT"))).toBeInTheDocument();
     });
 
     it("marks unlisted versions, shows four-part versions and dates as is", async () => {
       mockPackage();
-      renderApp(`/package/nuget/${ID}`);
+      renderApp(`/package/nuget/${ID}?tab=versions`);
 
-      await screen.findByText("pkg:nuget/newtonsoft.json");
-      const items = [...document.querySelectorAll(".inline-list > li")];
+      await screen.findByText(startsWithText("pkg:nuget/newtonsoft.json"));
+      const items = await versionRows();
       const row = (version) => items.find((item) => item.textContent.startsWith(version));
 
       expect(within(row("13.0.2")).getByText("unlisted")).toBeInTheDocument();
-      expect(within(row("13.0.2")).getByText("2023-02-01")).toBeInTheDocument();
+      expect(within(row("13.0.2")).getByText(day("2023-02-01T10:00:00Z"))).toBeInTheDocument();
       // An unlisted version may have no date.
       expect(within(row("13.0.3-beta1")).getByText("unlisted")).toBeInTheDocument();
       expect(row("13.0.3-beta1").querySelector(".version-date")).toBeNull();
       expect(within(row("13.0.3")).queryByText("unlisted")).not.toBeInTheDocument();
-      expect(within(row("13.0.3")).getByText("2023-03-08")).toBeInTheDocument();
-      expect(within(row("12.0.3.1")).getByText("active")).toBeInTheDocument();
+      expect(within(row("13.0.3")).getByText(day("2023-03-08T10:00:00Z"))).toBeInTheDocument();
+      expect(within(row("12.0.3.1")).queryByText("active")).not.toBeInTheDocument();
       expect(row("1.0.0-BETA")).toBeTruthy();
       expect(screen.getByRole("option", { name: "12.0.3.1" })).toBeInTheDocument();
     });
 
     it("marks a deprecated version with its message when the version data carries it", async () => {
       mockPackage();
-      renderApp(`/package/nuget/${ID}`);
+      renderApp(`/package/nuget/${ID}?tab=versions`);
 
-      await screen.findByText("pkg:nuget/newtonsoft.json");
-      const deprecated = [...document.querySelectorAll(".inline-list > li")].find((item) => item.textContent.startsWith("12.0.3.1"));
+      await screen.findByText(startsWithText("pkg:nuget/newtonsoft.json"));
+      const deprecated = (await versionRows()).find((item) => item.textContent.startsWith("12.0.3.1"));
       expect(within(deprecated).getByText("deprecated")).toBeInTheDocument();
       expect(within(deprecated).getByText("use 12.0.4")).toBeInTheDocument();
-      const plain = document.querySelector(".inline-list > li");
-      expect(plain.textContent.startsWith("13.0.3active")).toBe(true);
+      const plain = document.querySelector(".version-row");
+      expect(plain.textContent.startsWith("13.0.3")).toBe(true);
+      expect(within(plain).queryByText("active")).not.toBeInTheDocument();
       expect(within(plain).queryByText("deprecated")).not.toBeInTheDocument();
     });
 
@@ -1219,7 +1318,7 @@ describe("PackagePage", () => {
       mockPackage({ deprecation: null });
       renderApp(`/package/nuget/${ID}`);
 
-      await screen.findByText("pkg:nuget/newtonsoft.json");
+      await screen.findByText(startsWithText("pkg:nuget/newtonsoft.json"));
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 
@@ -1234,7 +1333,7 @@ describe("PackagePage", () => {
         dependencies_state: "hydrated",
         sources: [],
       });
-      renderApp(`/package/nuget/${ID}?version=12.0.3.1`);
+      renderApp(`/package/nuget/${ID}?version=12.0.3.1&tab=sources`);
 
       expect(await screen.findByText(/^Unlisted:/)).toBeInTheDocument();
       expect(screen.getByText("Deprecated: use 12.0.4", { selector: "p" })).toBeInTheDocument();
@@ -1242,7 +1341,7 @@ describe("PackagePage", () => {
 
     it("shows a target framework selector with net8.0 selected and sends only target_framework", async () => {
       mockPackage();
-      renderApp(`/package/nuget/${ID}`);
+      renderApp(`/package/nuget/${ID}?tab=dependencies&deps=tree`);
 
       await screen.findByText("system.memory");
       const select = screen.getByLabelText("Target framework");
@@ -1264,7 +1363,7 @@ describe("PackagePage", () => {
     it("reloads the tree for another target framework", async () => {
       mockPackage();
       const user = userEvent.setup();
-      renderApp(`/package/nuget/${ID}`);
+      renderApp(`/package/nuget/${ID}?tab=dependencies&deps=tree`);
 
       await screen.findByText("system.memory");
       await user.selectOptions(screen.getByLabelText("Target framework"), "netstandard2.0");
@@ -1275,7 +1374,7 @@ describe("PackagePage", () => {
 
     it("reads the target framework from the query", async () => {
       mockPackage();
-      renderApp(`/package/nuget/${ID}?target_framework=net6.0`);
+      renderApp(`/package/nuget/${ID}?target_framework=net6.0&tab=dependencies&deps=tree`);
       await waitFor(() =>
         expect(api.fetchDependencies).toHaveBeenCalledWith("nuget", ID, "13.0.3", { target_framework: "net6.0" })
       );
@@ -1292,7 +1391,7 @@ describe("PackagePage", () => {
 
     it("shows the framework group of an edge", async () => {
       mockPackage();
-      renderApp(`/package/nuget/${ID}`);
+      renderApp(`/package/nuget/${ID}?tab=dependencies&deps=tree`);
 
       await screen.findByText("system.memory");
       const grouped = screen.getByText("microsoft.csharp").closest(".dep-tree-item");
@@ -1302,7 +1401,7 @@ describe("PackagePage", () => {
     });
 
     it("sends no target_framework for the other ecosystems", async () => {
-      renderApp("/package/flask");
+      renderApp("/package/flask?tab=dependencies&deps=tree");
       await screen.findByText("werkzeug");
       expect(screen.queryByLabelText("Target framework")).not.toBeInTheDocument();
       expect(api.fetchDependencies.mock.calls[0][3]).not.toHaveProperty("target_framework");
@@ -1406,11 +1505,11 @@ describe("PackagePage", () => {
 
     it("opens a package by groupId:artifactId and shows the purl, groupId, artifactId and the license", async () => {
       mockPackage();
-      renderApp(`/package/maven/${GA}`);
+      renderApp(`/package/maven/${GA}?tab=versions`);
 
-      expect(await screen.findByText("pkg:maven/org.springframework/spring-core")).toBeInTheDocument();
+      expect(await screen.findByText(startsWithText("pkg:maven/org.springframework/spring-core"))).toBeInTheDocument();
       expect(screen.getByText("Maven", { selector: ".eco-badge" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(`Package: ${GA}`);
+      expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(GA);
       expect(screen.getByText("org.springframework", { selector: "code" })).toBeInTheDocument();
       expect(screen.getByText("spring-core", { selector: "code" })).toBeInTheDocument();
       expect(screen.getByText((content) => content.includes("Apache-2.0"))).toBeInTheDocument();
@@ -1422,23 +1521,23 @@ describe("PackagePage", () => {
 
     it("falls back to the license name of the POM when there is no SPDX id", async () => {
       mockPackage({ license_spdx: null, license_raw: "Eclipse Public License 1.0" });
-      renderApp(`/package/maven/${GA}`);
+      renderApp(`/package/maven/${GA}?tab=versions`);
 
-      await screen.findByText("pkg:maven/org.springframework/spring-core");
+      await screen.findByText(startsWithText("pkg:maven/org.springframework/spring-core"));
       expect(screen.getByText((content) => content.includes("Eclipse Public License 1.0"))).toBeInTheDocument();
     });
 
     it("shows versions with their dates, qualifiers as they are and the packaging where known", async () => {
       mockPackage();
-      renderApp(`/package/maven/${GA}`);
+      renderApp(`/package/maven/${GA}?tab=versions`);
 
-      await screen.findByText("pkg:maven/org.springframework/spring-core");
-      const items = [...document.querySelectorAll(".inline-list > li")];
+      await screen.findByText(startsWithText("pkg:maven/org.springframework/spring-core"));
+      const items = await versionRows();
       const row = (version) => items.find((item) => item.textContent.startsWith(version));
 
-      expect(within(row("6.1.14")).getByText("2024-10-16")).toBeInTheDocument();
+      expect(within(row("6.1.14")).getByText(day("2024-10-16T10:00:00Z"))).toBeInTheDocument();
       expect(within(row("6.1.14")).getByText("jar")).toBeInTheDocument();
-      expect(within(row("6.2.0-RC1")).getByText("2024-10-10")).toBeInTheDocument();
+      expect(within(row("6.2.0-RC1")).getByText(day("2024-10-10T10:00:00Z"))).toBeInTheDocument();
       expect(within(row("6.2.0-RC1")).queryByText("jar")).not.toBeInTheDocument();
       expect(row("6.1.13").querySelector(".version-date")).toBeNull();
       expect(screen.getByRole("option", { name: "6.2.0-RC1" })).toBeInTheDocument();
@@ -1454,7 +1553,7 @@ describe("PackagePage", () => {
         dependencies_state: "hydrated",
         sources: [],
       });
-      renderApp(`/package/maven/${GA}`);
+      renderApp(`/package/maven/${GA}?tab=sources`);
 
       expect(await screen.findByText(/^Packaging:/)).toHaveTextContent("Packaging: pom");
     });
@@ -1488,13 +1587,13 @@ describe("PackagePage", () => {
       mockPackage({ deprecation: null });
       renderApp(`/package/maven/${GA}`);
 
-      await screen.findByText("pkg:maven/org.springframework/spring-core");
+      await screen.findByText(startsWithText("pkg:maven/org.springframework/spring-core"));
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 
     it("shows scope checkboxes with compile and runtime selected and sends only scopes", async () => {
       mockPackage();
-      renderApp(`/package/maven/${GA}`);
+      renderApp(`/package/maven/${GA}?tab=dependencies&deps=tree`);
 
       await screen.findByText("org.springframework:spring-jcl");
       const group = screen.getByRole("group", { name: "Scopes" });
@@ -1515,7 +1614,7 @@ describe("PackagePage", () => {
     it("reloads the tree with the scopes that were ticked, in a fixed order", async () => {
       mockPackage();
       const user = userEvent.setup();
-      renderApp(`/package/maven/${GA}`);
+      renderApp(`/package/maven/${GA}?tab=dependencies&deps=tree`);
 
       await screen.findByText("org.springframework:spring-jcl");
       await user.click(screen.getByLabelText("test"));
@@ -1535,7 +1634,7 @@ describe("PackagePage", () => {
     it("keeps the last selected scope: the API refuses an empty list", async () => {
       mockPackage();
       const user = userEvent.setup();
-      renderApp(`/package/maven/${GA}?scopes=test`);
+      renderApp(`/package/maven/${GA}?scopes=test&tab=dependencies&deps=tree`);
 
       await waitFor(() =>
         expect(api.fetchDependencies).toHaveBeenCalledWith("maven", GA, "6.1.14", { scopes: "test" })
@@ -1548,7 +1647,7 @@ describe("PackagePage", () => {
 
     it("reads the scopes from the query, drops unknown ones and falls back to the default", async () => {
       mockPackage();
-      renderApp(`/package/maven/${GA}?scopes=system,bogus,compile`);
+      renderApp(`/package/maven/${GA}?scopes=system,bogus,compile&tab=dependencies&deps=tree`);
       await waitFor(() =>
         expect(api.fetchDependencies).toHaveBeenCalledWith("maven", GA, "6.1.14", { scopes: "compile,system" })
       );
@@ -1566,7 +1665,7 @@ describe("PackagePage", () => {
 
     it("shows the scope, exclusions, classifier and type of an edge", async () => {
       mockPackage();
-      renderApp(`/package/maven/${GA}`);
+      renderApp(`/package/maven/${GA}?tab=dependencies&deps=tree`);
 
       await screen.findByText("org.springframework:spring-jcl");
       const item = (name) => screen.getByText(name).closest(".dep-tree-item");
@@ -1606,14 +1705,14 @@ describe("PackagePage", () => {
           },
         ],
       });
-      renderApp(`/package/maven/${GA}`);
+      renderApp(`/package/maven/${GA}?tab=dependencies&deps=tree`);
 
       await screen.findByText("org.springframework:spring-jcl");
       expect(screen.getByText("scope runtime")).toHaveClass("cond");
     });
 
     it("sends no scopes for the other ecosystems", async () => {
-      renderApp("/package/flask");
+      renderApp("/package/flask?tab=dependencies&deps=tree");
       await screen.findByText("werkzeug");
       expect(screen.queryByRole("group", { name: "Scopes" })).not.toBeInTheDocument();
       expect(api.fetchDependencies.mock.calls[0][3]).not.toHaveProperty("scopes");
@@ -1740,11 +1839,11 @@ describe("PackagePage", () => {
 
     it("opens a package by distro/name and shows the purl, distro, name and the license", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}`);
+      renderApp(`/package/rpm/${NAME}?tab=versions`);
 
-      expect(await screen.findByText("pkg:rpm/rocky/openssl?distro=rocky-9")).toBeInTheDocument();
+      expect(await screen.findByText(startsWithText("pkg:rpm/rocky/openssl"))).toBeInTheDocument();
       expect(screen.getByText("RPM", { selector: ".eco-badge" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(`Package: ${NAME}`);
+      expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(NAME);
       expect(screen.getByText("rocky-9", { selector: "code" })).toBeInTheDocument();
       expect(screen.getByText("openssl", { selector: "code" })).toBeInTheDocument();
       // The RPM License tag is shown as it is when it has no SPDX form.
@@ -1757,28 +1856,28 @@ describe("PackagePage", () => {
 
     it("shows the epoch, dates, a marked superseded build and prereleases as they are", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}`);
+      renderApp(`/package/rpm/${NAME}?tab=versions`);
 
-      await screen.findByText("pkg:rpm/rocky/openssl?distro=rocky-9");
-      const items = [...document.querySelectorAll(".inline-list > li")];
+      await screen.findByText(startsWithText("pkg:rpm/rocky/openssl"));
+      const items = await versionRows();
       const row = (version) => items.find((item) => item.textContent.startsWith(version));
 
-      expect(within(row("1:3.0.7-27.el9")).getByText("2024-10-16")).toBeInTheDocument();
-      expect(within(row("1:3.0.7-27.el9")).getByText("active")).not.toHaveClass("muted-tag");
+      expect(within(row("1:3.0.7-27.el9")).getByText(day("2024-10-16T10:00:00Z"))).toBeInTheDocument();
+      expect(within(row("1:3.0.7-27.el9")).queryByText("active")).not.toBeInTheDocument();
       const superseded = within(row("1:3.0.7-24.el9")).getByText("superseded");
       expect(superseded).toHaveClass("muted-tag");
       expect(superseded).toHaveAttribute("title", expect.stringContaining("newer build"));
-      expect(within(row("1:3.0.7-24.el9")).getByText("2024-05-02")).toBeInTheDocument();
+      expect(within(row("1:3.0.7-24.el9")).getByText(day("2024-05-02T10:00:00Z"))).toBeInTheDocument();
       expect(row("1:3.0.7~rc1-1.el9").querySelector(".version-date")).toBeNull();
       expect(screen.getByRole("option", { name: "1:3.0.7~rc1-1.el9" })).toBeInTheDocument();
     });
 
     it("shows the arches of each version from its artifacts, once each, from the file name when there is no arch", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}`);
+      renderApp(`/package/rpm/${NAME}?tab=versions`);
 
-      await screen.findByText("pkg:rpm/rocky/openssl?distro=rocky-9");
-      const items = [...document.querySelectorAll(".inline-list > li")];
+      await screen.findByText(startsWithText("pkg:rpm/rocky/openssl"));
+      const items = await versionRows();
       const row = (version) => items.find((item) => item.textContent.startsWith(version));
       const arches = (version) => [...row(version).querySelectorAll(".tag.cond")].map((tag) => tag.textContent);
 
@@ -1791,7 +1890,7 @@ describe("PackagePage", () => {
 
     it("lists the arches and the superseded state of the selected version", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}?version=${encodeURIComponent("1:3.0.7-24.el9")}`);
+      renderApp(`/package/rpm/${NAME}?version=${encodeURIComponent("1:3.0.7-24.el9")}&tab=sources`);
 
       expect(await screen.findByText("Arches: x86_64, s390x")).toBeInTheDocument();
       expect(screen.getByText(/Superseded: a newer build of the same arch/)).toBeInTheDocument();
@@ -1800,16 +1899,16 @@ describe("PackagePage", () => {
     it("stays usable when the artifacts cannot be read", async () => {
       mockPackage();
       api.fetchArtifacts.mockRejectedValue({ message: "HTTP 500" });
-      renderApp(`/package/rpm/${NAME}`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       expect(await screen.findByText("libssl.so.3()(64bit)")).toBeInTheDocument();
       expect(screen.queryByText("HTTP 500")).not.toBeInTheDocument();
-      expect(document.querySelectorAll(".inline-list > li .tag.cond")).toHaveLength(0);
+      expect(document.querySelectorAll(".version-row .tag.cond")).toHaveLength(0);
     });
 
     it("shows an arch selector with the four arches, x86_64 selected, and sends only arch and include_optional", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       await screen.findByText("libssl.so.3()(64bit)");
       const select = screen.getByLabelText("Arch");
@@ -1823,7 +1922,7 @@ describe("PackagePage", () => {
 
     it("reloads the tree for another arch", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       await screen.findByText("libssl.so.3()(64bit)");
       await userEvent.selectOptions(screen.getByLabelText("Arch"), "aarch64");
@@ -1834,7 +1933,7 @@ describe("PackagePage", () => {
 
     it("reads the arch from the query", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}?arch=s390x`);
+      renderApp(`/package/rpm/${NAME}?arch=s390x&tab=dependencies&deps=tree`);
       await screen.findByText("libssl.so.3()(64bit)");
       expect(screen.getByLabelText("Arch")).toHaveValue("s390x");
       expect(api.fetchDependencies.mock.calls[0][3]).toEqual({ include_optional: false, arch: "s390x" });
@@ -1842,7 +1941,7 @@ describe("PackagePage", () => {
 
     it("falls back to x86_64 for an arch the API does not know", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}?arch=riscv64`);
+      renderApp(`/package/rpm/${NAME}?arch=riscv64&tab=dependencies&deps=tree`);
       await screen.findByText("libssl.so.3()(64bit)");
       expect(screen.getByLabelText("Arch")).toHaveValue("x86_64");
       expect(api.fetchDependencies.mock.calls[0][3]).toEqual({ include_optional: false, arch: "x86_64" });
@@ -1850,7 +1949,7 @@ describe("PackagePage", () => {
 
     it("asks for weak dependencies when include optional is ticked", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       await screen.findByText("libssl.so.3()(64bit)");
       await userEvent.click(screen.getByLabelText("include optional"));
@@ -1861,7 +1960,7 @@ describe("PackagePage", () => {
 
     it("shows the capability with its constraint and a link to the package that provides it", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       await screen.findByText("libssl.so.3()(64bit)");
       const item = (name) => screen.getByText(name).closest(".dep-tree-item");
@@ -1880,7 +1979,7 @@ describe("PackagePage", () => {
 
     it("shows the kind of a weak dependency and the arches a dependency is limited to", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       await screen.findByText("libssl.so.3()(64bit)");
       const item = (name) => screen.getByText(name).closest(".dep-tree-item");
@@ -1891,7 +1990,7 @@ describe("PackagePage", () => {
 
     it("shows a capability nothing provides as unresolved, without a link", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       await screen.findByText("/bin/sh");
       const shell = screen.getByText("/bin/sh").closest(".dep-tree-item");
@@ -1901,7 +2000,7 @@ describe("PackagePage", () => {
 
     it("carries a non-default arch to the page of the providing package", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}?arch=aarch64`);
+      renderApp(`/package/rpm/${NAME}?arch=aarch64&tab=dependencies&deps=tree`);
 
       await screen.findByText("libssl.so.3()(64bit)");
       const link = within(screen.getByText("libssl.so.3()(64bit)").closest(".dep-tree-item")).getByRole("link", {
@@ -1911,7 +2010,7 @@ describe("PackagePage", () => {
     });
 
     it("sends no arch for the other ecosystems", async () => {
-      renderApp("/package/flask");
+      renderApp("/package/flask?tab=dependencies&deps=tree");
       await screen.findByText("werkzeug");
       expect(screen.queryByLabelText("Arch")).not.toBeInTheDocument();
       expect(api.fetchDependencies.mock.calls[0][3]).not.toHaveProperty("arch");

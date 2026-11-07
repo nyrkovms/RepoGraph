@@ -197,3 +197,53 @@ def test_connector_quotes_the_name_into_one_path_segment(monkeypatch) -> None:
     with pytest.raises(RuntimeError):
         asyncio.run(connector.fetch_package_metadata("flask/3"))
     connector._fetch_with_retry.assert_awaited_once_with("https://pypi.org/pypi/flask%2F3/json", "flask/3")
+
+
+DJANGO_INFO = {
+    "name": "Django",
+    "version": "5.1",
+    "classifiers": [],
+    "home_page": None,
+    "docs_url": None,
+    "project_urls": {
+        "Homepage": "https://www.djangoproject.com/",
+        "Documentation": "https://docs.djangoproject.com/",
+        "Source": "https://github.com/django/django",
+    },
+}
+
+
+def test_link_prefers_the_legacy_field() -> None:
+    from app.ecosystems.pypi.connector import _link
+
+    assert _link("https://legacy", {"Homepage": "https://other"}, "homepage") == "https://legacy"
+
+
+def test_link_falls_back_to_project_urls_without_regard_to_case() -> None:
+    from app.ecosystems.pypi.connector import _link
+
+    assert _link(None, {"HOMEPAGE": "https://a"}, "homepage") == "https://a"
+    assert _link(None, {"docs": "https://d"}, "documentation", "docs") == "https://d"
+
+
+def test_link_treats_empty_strings_as_missing() -> None:
+    from app.ecosystems.pypi.connector import _link
+
+    assert _link("", {"Homepage": "  "}, "homepage") is None
+    assert _link("", {"Homepage": "", "homepage": "https://b"}, "homepage") == "https://b"
+    assert _link(None, None, "homepage") is None
+
+
+def test_fetch_package_metadata_reads_homepage_and_docs_from_project_urls(monkeypatch) -> None:
+    connector = PyPIConnector()
+
+    class _Response:
+        def json(self) -> dict:
+            return {"info": DJANGO_INFO, "releases": {}, "vulnerabilities": []}
+
+    monkeypatch.setattr(connector, "_fetch_with_retry", AsyncMock(return_value=_Response()))
+    package = asyncio.run(connector.fetch_package_metadata("django"))
+
+    assert package.homepage_url == "https://www.djangoproject.com/"
+    assert package.documentation_url == "https://docs.djangoproject.com/"
+    assert package.repository_url == "https://github.com/django/django"

@@ -14,14 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db_session
 from app.ecosystems.pypi.versions import PyPIVersionScheme
 from app.ecosystems.registry import UnknownEcosystem, get_plugin
-from app.models.dependency import Dependency
-from app.models.enums import DependencyType, Ecosystem, PackageEventKind
+from app.models.enums import Ecosystem, PackageEventKind
 from app.models.package import Package
 from app.models.package_event import PackageEvent
 from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
 from app.models.run import Run
-from app.models.version import PackageVersion
 from app.schemas.updates import (
     EcosystemRunInfo,
     UpdateEventItem,
@@ -33,6 +31,7 @@ from app.schemas.updates import (
 )
 from app.services.cursor import CursorError, decode_cursor, encode_cursor, parse_iso_datetime
 from app.services.purls import package_purl
+from app.services.usage import fetch_used_by
 from app.tasks.fetch_packages import ref_from_target
 
 router = APIRouter()
@@ -368,33 +367,6 @@ async def fetch_last_update_runs(db: AsyncSession) -> list[EcosystemRunInfo]:
         EcosystemRunInfo(**_run_fields(run), ecosystem=run.ecosystem.value if run.ecosystem else "")
         for run in sorted(runs, key=lambda run: run.ecosystem.value if run.ecosystem else "")
     ]
-
-
-# Dependency types that make a package depend on another; dev, build and optional ones only inflate the number.
-_USED_BY_TYPES = (DependencyType.runtime, DependencyType.peer, DependencyType.provided)
-
-
-async def fetch_used_by(db: AsyncSession, package_ids: Iterable[Any]) -> dict[Any, int]:
-    """Per package id: how many other packages have it as a runtime/peer/provided dependency in their latest version."""
-    ids = set(package_ids)
-    if not ids:
-        return {}
-    latest = (
-        select(PackageVersion.id, PackageVersion.package_id)
-        .join(Package, and_(Package.id == PackageVersion.package_id, Package.latest_version == PackageVersion.version))
-        .subquery()
-    )
-    stmt = (
-        select(Dependency.resolved_package_id, func.count(func.distinct(latest.c.package_id)))
-        .join(latest, latest.c.id == Dependency.version_id)
-        .where(
-            Dependency.resolved_package_id.in_(ids),
-            Dependency.resolved_package_id != latest.c.package_id,
-            Dependency.dependency_type.in_(_USED_BY_TYPES),
-        )
-        .group_by(Dependency.resolved_package_id)
-    )
-    return dict((await db.execute(stmt)).all())
 
 
 def _scope(stmt, ecosystems: list[Ecosystem] | None, registry: str | None):
