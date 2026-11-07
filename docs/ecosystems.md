@@ -1,8 +1,11 @@
 # Экосистемы: адресация и resolve
 
+Как адресовать пакеты и запускать resolve в каждой экосистеме (PyPI, npm, crates.io, Go, NuGet, Maven, RPM), с примерами `curl`.
+Полный контракт API: [`SPEC-MVP-API.md`](../SPEC-MVP-API.md).
+
 ## API: адресация по purl и resolve
 
-Полный контракт: [`SPEC-MVP-API.md`](./SPEC-MVP-API.md).
+Полный контракт: [`SPEC-MVP-API.md`](../SPEC-MVP-API.md).
 
 Пакет адресуется экосистемой и координатами (`/packages/{ecosystem}/{coordinates}/-/…`) или purl; маршруты `/packages/pypi/{name}/…` остаются deprecated-алиасами до конца E7. Фильтры `ecosystem`, `registry`, `origin` есть у `/packages`, `/search` и (кроме `origin`) у `/updates`.
 

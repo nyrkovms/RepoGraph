@@ -2,6 +2,20 @@
 
 Внутренний каталог метаданных пакетов семи экосистем: PyPI, npm, crates.io, Go, NuGet, Maven и RPM. Страницы каталога и карточка пакета, поиск, дайджест обновлений (Updates), demand-driven sync и dependency resolve.
 
+## Документы
+
+- [`CLAUDE.md`](CLAUDE.md): правила работы агентов и карта репозитория
+- [`SPEC-MULTI-ECOSYSTEM.md`](SPEC-MULTI-ECOSYSTEM.md): дизайн мультиэкосистемного каталога
+- [`IMPL-MULTI-ECOSYSTEM.md`](IMPL-MULTI-ECOSYSTEM.md): план реализации по стадиям
+- [`SPEC-MVP-API.md`](SPEC-MVP-API.md): контракты API
+- [`SPEC-DAILY-UPDATE.md`](SPEC-DAILY-UPDATE.md): ежедневное обновление и дайджест
+- [`SPEC-CATALOG-PAGES.md`](SPEC-CATALOG-PAGES.md): главная, поиск и карточка пакета
+- [`SPEC-UPDATES-DIGEST.md`](SPEC-UPDATES-DIGEST.md): редизайн страницы Updates (черновик)
+- [`RESOLVER.md`](RESOLVER.md): dependency resolve
+- [`docs/ecosystems.md`](docs/ecosystems.md): адресация пакетов и resolve по экосистемам
+- [`PRODUCTION-CHECKLIST.md`](PRODUCTION-CHECKLIST.md): чек-лист выката
+- `docs/archive/`: история MVP
+
 ## Prerequisites
 
 - Docker + Docker Compose
@@ -58,7 +72,23 @@ curl -X POST http://localhost:8000/api/v1/admin/seed \
 
 ## API: адресация по purl и resolve
 
-См. [`docs/ecosystems.md`](docs/ecosystems.md).
+Пакет адресуется экосистемой и координатами или purl; resolve принимает корни и ограничения:
+
+```bash
+curl http://localhost:8000/api/v1/packages/pypi/flask/-/
+curl -H 'Content-Type: application/json' http://localhost:8000/api/v1/resolve \
+  -d '{"roots": [{"purl": "pkg:pypi/flask", "constraint": ">=3.0"}]}'
+```
+
+Группы эндпоинтов (полный контракт: [`SPEC-MVP-API.md`](SPEC-MVP-API.md); примеры по каждой экосистеме: [`docs/ecosystems.md`](docs/ecosystems.md)):
+
+- пакеты и версии: `/packages`, `/packages/{ecosystem}/{координаты}/-/…`, `/search`, `/purl/{purl}`;
+- resolve: `POST /resolve`;
+- страницы каталога: `/catalog/summary`, `/packages/{ecosystem}/{координаты}/-/overview`, `/-/dependents`, `/-/versions/compare`;
+- обновления: `/updates`, `/updates/summary`;
+- источники и профили: `/registries`, `/profiles`;
+- admin: `/admin/*` (токен администратора);
+- `/metrics`: метрики Prometheus.
 
 ## Test stand
 
@@ -142,7 +172,7 @@ docker compose run --rm api python -m app.cli retry-failed --limit 100
 ./scripts/acceptance_smoke.sh
 ```
 
-Отчёт последнего прогона: [`ACCEPTANCE-MVP.md`](ACCEPTANCE-MVP.md).
+Отчёт последнего прогона: [`docs/archive/ACCEPTANCE-MVP.md`](docs/archive/ACCEPTANCE-MVP.md).
 
 ## Frontend integration tests
 
