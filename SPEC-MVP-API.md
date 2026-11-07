@@ -154,6 +154,7 @@ GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/{version}
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/{version}/dependencies
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/{version}/artifacts
 GET /api/v1/packages/{ecosystem}/{coordinates}/-/vulnerabilities
+GET /api/v1/packages/{ecosystem}/{coordinates}/-/overview
 ```
 
 Примеры для npm (scope пишется с `@`, `/` между scope и именем остаётся как есть):
@@ -434,6 +435,34 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 ```
 
 - `coverage` — `collected` или `not_collected`. Советы хранит только PyPI-коннектор (NuGet получает и отбрасывает по D6, у остальных экосистем источника нет), поэтому `collected` только у `pypi`. При `not_collected` пустой `data` не значит «проверено, чисто». Список относится к пакету, не к версии: клиент не выдаёт пустой список за вывод про версию, отличную от последней.
+- Errors: `404/500`
+
+### 3.3.8 `GET /api/v1/packages/{ecosystem}/{coordinates}/-/overview`
+
+Сводка для вкладки Overview и счётчиков шапки карточки (SPEC-CATALOG-PAGES.md §5). Query: `version`, по умолчанию последняя; неизвестная версия — `404`, как у остальных маршрутов версии.
+
+- Response `200`:
+
+```json
+{
+  "version": "2.14.3",
+  "dependencies": {"direct": 4, "optional": 2, "dev": 0, "indirect": 0, "not_in_catalog": 1},
+  "used_by": {"direct": 1, "indirect": 0},
+  "licenses": [{"license": "MIT", "count": 3}, {"license": "PSF-2.0", "count": 1}],
+  "versions": {"total": 211, "prereleases": 36, "not_active": 2},
+  "activity": [{"month": "2025-12", "releases": 2}],
+  "lines": [{"line": "2.14", "latest": "2.14.3", "released_at": "2026-11-05T09:00:00Z", "stable_releases": 4, "started_at": "2026-04-02T09:00:00Z"}]
+}
+```
+
+- `dependencies` считается по различным именам версии. `direct` — типы `runtime`, `peer`, `provided`; `optional` — `optional`; `dev` — `dev` и `build`. Имя в нескольких вариантах или типах считается один раз, в первой из групп. Зависимости версии, которые ещё не загружены, загружаются при запросе, как для дерева; если у версии они недоступны (`dependencies_state: "unavailable"`), все пять чисел — `null`, `licenses` пуст.
+- `indirect` — пакеты каталога, достижимые от прямых по графу: рёбра берутся из последней версии каждого пакета, типы `runtime`/`peer`/`provided`, без рёбер пакета в самого себя (тот же граф, что у `used_by` в `/updates/summary`); без прямых и без самого пакета. Цикл обход не зацикливает. Это нижняя граница: граф строится по последним версиям пакетов каталога, а не по версии, которую смотрят. `not_in_catalog` — различные имена без `resolved_package_id` среди прямых и optional зависимостей версии и среди рёбер достигнутых пакетов.
+- `used_by.direct` — то же число, что `used_by` в `/updates/summary`; `used_by.indirect` — обратный обход, без прямых и без самого пакета. Считается в каталоге, не в реестре.
+- `licenses` — по прямым и достигнутым пакетам: `license_spdx`, иначе `license_raw`, иначе `unknown`; пакеты, которых нет в каталоге, не входят. Порядок: число по убыванию, затем имя.
+- `versions` — версии, видимые профилем по умолчанию, как в списке версий: `prereleases` по `is_prerelease`, `not_active` — со статусом не `active`.
+- `activity` — ровно последние 12 календарных месяцев по UTC, текущий включительно, от старого к новому, месяцы без выпусков с нулём; считаются все выпуски с `release_date`, пререлизы тоже.
+- `lines` — линейки выпуска стабильных версий с `release_date`, статус не учитывается: `major.minor` для PyPI, npm, crates.io, NuGet и Maven, `v<major>` для Go; у RPM пусто. Первой идёт линейка с высшей версией (по `sort_key`). `latest` и `released_at` — высшая версия линейки, `started_at` — самый ранний выпуск линейки.
+- `version` — `null` у пакета без версий; тогда `dependencies` состоит из `null`.
 - Errors: `404/500`
 
 ## 3.4 Алиасы PyPI (deprecated до конца E7)

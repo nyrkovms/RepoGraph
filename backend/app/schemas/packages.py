@@ -148,3 +148,52 @@ class VulnerabilityListResponse(BaseModel):
     # `not_collected`: no source feeds advisories for the ecosystem, so an empty `data` says nothing about safety.
     coverage: Literal["collected", "not_collected"]
     data: list[VulnerabilityItem]
+
+
+class OverviewDependencies(BaseModel):
+    """Distinct names of the viewed version; every count is null while its dependencies are unavailable."""
+
+    direct: int | None
+    optional: int | None
+    dev: int | None
+    indirect: int | None                   # a lower bound: counted over the catalog's latest versions
+    not_in_catalog: int | None
+
+
+class OverviewUsedBy(BaseModel):
+    direct: int
+    indirect: int
+
+
+class OverviewLicense(BaseModel):
+    license: str
+    count: int
+
+
+class OverviewVersions(BaseModel):
+    total: int
+    prereleases: int
+    not_active: int
+
+
+class OverviewMonth(BaseModel):
+    month: str                             # YYYY-MM, UTC
+    releases: int
+
+
+class OverviewLine(BaseModel):
+    line: str                              # 2.14 (Go: v1)
+    latest: str
+    released_at: datetime
+    stable_releases: int
+    started_at: datetime
+
+
+class PackageOverviewResponse(BaseModel):
+    version: str | None                    # null for a package with no versions
+    dependencies: OverviewDependencies
+    used_by: OverviewUsedBy
+    licenses: list[OverviewLicense]
+    versions: OverviewVersions
+    activity: list[OverviewMonth]
+    lines: list[OverviewLine]

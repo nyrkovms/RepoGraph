@@ -5,14 +5,14 @@ from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from packaging.markers import Marker
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.packages import _decode_cursor_or_422
@@ -46,7 +46,14 @@ from app.schemas.packages import (
     ArtifactListResponse,
     DependencyNode,
     DependencyTreeResponse,
+    OverviewDependencies,
+    OverviewLicense,
+    OverviewLine,
+    OverviewMonth,
+    OverviewUsedBy,
+    OverviewVersions,
     PackageDetailResponse,
+    PackageOverviewResponse,
     PackageSourceItem,
     VersionDetailResponse,
     VersionItem,
@@ -55,7 +62,7 @@ from app.schemas.packages import (
     VulnerabilityItem,
     VulnerabilityListResponse,
 )
-from app.services import visibility
+from app.services import release_lines, usage, visibility
 from app.services.cursor import CursorError, encode_cursor, parse_iso_datetime, parse_uuid
 
 router = APIRouter()
@@ -351,6 +358,84 @@ async def get_dependencies_tree(
         depth=_measure_tree_depth(nodes),
         dependencies_unknown=version_row.id in view.unknown,
         dependencies=nodes,
+    )
+
+
+@router.get(_COORDS + "/overview", response_model=PackageOverviewResponse)
+async def get_overview(
+    ecosystem: str,
+    coordinates: str,
+    version: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db_session),
+) -> PackageOverviewResponse:
+    """What the package card's Overview shows, for `version` (the latest by default): dependency, dependent and
+    license counts over the catalog's graph (latest versions, `used_by` types), release activity and release lines.
+    Counts are for this catalog, not the registry: indirect ones are a lower bound."""
+    target = await _target(db, ecosystem, coordinates)
+    package = target.package
+    profile = await _profile(db, ecosystem, None)
+    registries = await visibility.visible_registries(db, target.plugin, target.ref, package.id, profile)
+    visible = visibility.visible_clause(registries)
+
+    version_row = await _version(db, target, version) if version else None
+    if version_row is None and version is None and package.latest_version:
+        version_row = await _version(db, target, package.latest_version)
+
+    dependencies = OverviewDependencies(direct=None, optional=None, dev=None, indirect=None, not_in_catalog=None)
+    licenses: list[tuple[str, int]] = []
+    if version_row is not None:
+        # The tree route's way: the version's dependencies are loaded on first read; unknown ones stay null.
+        view = _ProfileView(db, profile)
+        rows = await view.dependencies(package, version_row)
+        edges = [((dep.dependency_ecosystem.value, dep.dependency_namespace or "", dep.dependency_name),
+                  dep.dependency_type, dep.resolved_package_id) for dep in rows]
+        unknown = version_row.id in view.unknown
+        await db.commit()
+        if not unknown:
+            summary = usage.summarize_dependencies(edges)
+            reached = await usage.reachable(db, summary.direct_ids, forward=True)
+            indirect = reached - summary.direct_ids - {package.id}
+            missing = summary.not_in_catalog | await usage.unresolved_edges(db, reached - {package.id})
+            dependencies = OverviewDependencies(direct=summary.direct, optional=summary.optional, dev=summary.dev,
+                                                indirect=len(indirect), not_in_catalog=len(missing))
+            licenses = await usage.license_counts(db, reached - {package.id})
+
+    used_by_direct = (await usage.fetch_used_by(db, [package.id])).get(package.id, 0)
+    dependents = await usage.reachable(db, [package.id], forward=False)
+    used_by = OverviewUsedBy(direct=used_by_direct, indirect=max(len(dependents - {package.id}) - used_by_direct, 0))
+
+    now = datetime.now(UTC)
+    months = release_lines.last_months(now)
+    month_of = func.to_char(func.timezone("UTC", PackageVersion.release_date), "YYYY-MM")
+    in_package = (PackageVersion.package_id == package.id, visible)
+    total, prereleases, not_active = (await db.execute(
+        select(
+            func.count(),
+            func.count().filter(PackageVersion.is_prerelease.is_(True)),
+            func.count().filter(PackageVersion.status != PackageVersionStatus.active),
+        ).where(*in_package)
+    )).one()
+    month_counts: dict[str, int] = dict((await db.execute(
+        select(month_of, func.count()).where(*in_package, month_of.in_(months)).group_by(month_of)
+    )).all())
+    stable = (await db.execute(
+        select(PackageVersion.version, PackageVersion.release_date, PackageVersion.sort_key).where(
+            *in_package, PackageVersion.is_prerelease.is_(False), PackageVersion.release_date.is_not(None))
+    )).all()
+    lines = release_lines.build_lines(
+        target.plugin.ecosystem,
+        (release_lines.ReleasedVersion(name, released_at, sort_key)
+         for name, released_at, sort_key in stable if released_at is not None),
+    )
+
+    return PackageOverviewResponse(
+        version=version_row.version if version_row is not None else None,
+        dependencies=dependencies,
+        used_by=used_by,
+        licenses=[OverviewLicense(license=name, count=count) for name, count in licenses],
+        versions=OverviewVersions(total=total, prereleases=prereleases, not_active=not_active),
+        activity=[OverviewMonth(**month) for month in release_lines.fill_months(month_counts, now)],
+        lines=[OverviewLine(**asdict(line)) for line in lines],
     )
 
 

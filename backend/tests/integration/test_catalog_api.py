@@ -19,12 +19,15 @@ from sqlalchemy.pool import NullPool
 
 from app.api.v1 import admin as admin_api
 from app.config import get_settings
+from app.fetcher import sources
 from app.models.dependency import Dependency
 from app.models.enums import (
+    DependenciesState,
     DependencyType,
     Ecosystem,
     PackageEventKind,
     PackageOrigin,
+    PackageVersionStatus,
     RegistryProtocol,
     SyncStatus,
 )
@@ -574,3 +577,118 @@ def test_sync_status_registries_and_pypi_keys(client: TestClient, world, auth: d
                      "last_error": None, "consecutive_failures": 0, "degraded_until": None, "cursor_data": {}}
     ecosystems = [r["ecosystem"] for r in payload["registries"]]
     assert ecosystems == sorted(ecosystems)
+
+
+# --------------------------------------------------------------------------- the package overview
+
+OVW = "ovw-"   # outside the `c1b-` prefix: the search tests count everything with that prefix
+
+
+@pytest.fixture
+def overview(world):
+    """A small graph (npm, latest versions):
+
+        root -> a, b (runtime, peer), a again as optional, opt (optional), dev (dev, not in catalog), ghost (runtime,
+                not in catalog)
+        a -> c, ghost2 (not in catalog);  b -> c;  c -> a  (a cycle)
+        user -> root, user2;  user2 -> user  (a cycle on the dependents' side)
+
+    root has four versions: 1.0.0 (latest) and 0.9.0 stable, 1.1.0-beta.1 a prerelease, 0.1.0 yanked and undated."""
+    now = world.now
+    ids: list[uuid.UUID] = []
+
+    async def add(db: AsyncSession) -> None:
+        # Versions are visible through the sources of the default profile, which does not list the test registry.
+        profile = await sources.default_profile(db, "npm")
+        registry = await db.scalar(select(Registry).where(Registry.id == uuid.UUID(profile.registries[0].id)))
+        assert registry
+        packages = {name: _package(registry, Ecosystem.npm, f"{OVW}{name}", origin=PackageOrigin.manual, latest="1.0.0",
+                                   now=now) for name in ("root", "a", "b", "c", "opt", "user", "user2")}
+        for name, (spdx, raw) in {"a": ("MIT", None), "b": ("MIT", "MIT License"), "c": (None, "Custom"),
+                                  "opt": ("Apache-2.0", None)}.items():
+            packages[name].license_spdx, packages[name].license_raw = spdx, raw
+        db.add_all(packages.values())
+        await db.flush()
+        ids.extend(p.id for p in packages.values())
+
+        def version(name: str, number: str, key: int, *, prerelease: bool = False, released: datetime | None = now,
+                    status: PackageVersionStatus = PackageVersionStatus.active) -> PackageVersion:
+            return PackageVersion(id=uuid.uuid4(), package_id=packages[name].id, version=number, raw_metadata={},
+                                  sort_key=bytes([key]), is_prerelease=prerelease, release_date=released, status=status,
+                                  metadata_registry_id=registry.id, dependencies_state=DependenciesState.hydrated)
+
+        latest = {name: version(name, "1.0.0", 3) for name in packages}
+        extra = [version("root", "0.9.0", 2, released=now - timedelta(days=70)),
+                 version("root", "1.1.0-beta.1", 4, prerelease=True),
+                 version("root", "0.1.0", 1, released=None, status=PackageVersionStatus.yanked)]
+        db.add_all([*latest.values(), *extra])
+        await db.flush()
+        for row in [*latest.values(), *extra]:
+            db.add(VersionSource(version_id=row.id, registry_id=registry.id, first_seen_at=now, status=row.status))
+
+        def edge(src: str, dst: str, kind: DependencyType, resolved: bool = True) -> Dependency:
+            return Dependency(version_id=latest[src].id, dependency_name=f"{OVW}{dst}", dependency_ecosystem=Ecosystem.npm,
+                              version_constraint="*", dependency_type=kind, raw_spec=dst,
+                              resolved_package_id=packages[dst].id if resolved else None)
+
+        db.add_all([
+            edge("root", "a", DependencyType.runtime), edge("root", "b", DependencyType.peer),
+            edge("root", "a", DependencyType.optional), edge("root", "opt", DependencyType.optional),
+            edge("root", "dev", DependencyType.dev, resolved=False),
+            edge("root", "ghost", DependencyType.runtime, resolved=False),
+            edge("a", "c", DependencyType.runtime), edge("a", "ghost2", DependencyType.runtime, resolved=False),
+            edge("b", "c", DependencyType.runtime), edge("c", "a", DependencyType.runtime),
+            edge("user", "root", DependencyType.runtime), edge("user", "user2", DependencyType.runtime),
+            edge("user2", "user", DependencyType.runtime),
+        ])
+
+    async def remove(db: AsyncSession) -> None:
+        version_ids = (await db.scalars(select(PackageVersion.id).where(PackageVersion.package_id.in_(ids)))).all()
+        await db.execute(delete(Dependency).where(Dependency.version_id.in_(version_ids)))
+        await db.execute(delete(VersionSource).where(VersionSource.version_id.in_(version_ids)))
+        await db.execute(delete(PackageVersion).where(PackageVersion.id.in_(version_ids)))
+        await db.execute(delete(Package).where(Package.id.in_(ids)))
+
+    run_db(add)
+    yield
+    run_db(remove)
+
+
+def test_overview_counts_the_graph(client: TestClient, overview) -> None:
+    payload = client.get(f"{API}/packages/npm/{OVW}root/-/overview").json()
+    assert payload["version"] == "1.0.0"
+    # a and a-as-optional count once, as direct; dev has no catalog package, ghost and ghost2 (reached through a) neither.
+    assert payload["dependencies"] == {"direct": 3, "optional": 1, "dev": 1, "indirect": 1, "not_in_catalog": 2}
+    # Reached: a, b, c; the cycle c -> a does not loop and root is not counted in its own dependencies.
+    assert payload["used_by"] == {"direct": 1, "indirect": 1}
+    assert payload["licenses"] == [{"license": "MIT", "count": 2}, {"license": "Custom", "count": 1}]
+
+
+def test_overview_of_a_leaf_and_of_a_cycle(client: TestClient, overview) -> None:
+    opt = client.get(f"{API}/packages/npm/{OVW}opt/-/overview").json()
+    assert opt["dependencies"] == {"direct": 0, "optional": 0, "dev": 0, "indirect": 0, "not_in_catalog": 0}
+    assert opt["used_by"] == {"direct": 0, "indirect": 0}   # optional edges do not make a dependent
+    assert opt["licenses"] == []
+
+    a = client.get(f"{API}/packages/npm/{OVW}a/-/overview").json()
+    # a -> c -> a: c is the only dependency reached, a itself is not counted. a is used directly by root and c; b (->c),
+    # user and user2 (the user <-> user2 cycle) reach it through them.
+    assert a["dependencies"] == {"direct": 2, "optional": 0, "dev": 0, "indirect": 0, "not_in_catalog": 1}
+    assert a["used_by"] == {"direct": 2, "indirect": 3}
+
+
+def test_overview_versions_activity_and_lines(client: TestClient, world, overview) -> None:
+    payload = client.get(f"{API}/packages/npm/{OVW}root/-/overview").json()
+    assert payload["versions"] == {"total": 4, "prereleases": 1, "not_active": 1}
+    assert len(payload["activity"]) == 12
+    by_month = {item["month"]: item["releases"] for item in payload["activity"]}
+    assert by_month[world.now.strftime("%Y-%m")] >= 2   # 1.0.0 and the prerelease; 0.9.0 may share the month
+    assert sum(by_month.values()) == 3                  # the yanked 0.1.0 has no date
+    assert [(line["line"], line["latest"], line["stable_releases"]) for line in payload["lines"]] == [
+        ("1.0", "1.0.0", 1), ("0.9", "0.9.0", 1)]
+
+
+def test_overview_for_a_given_version_and_an_unknown_one(client: TestClient, overview) -> None:
+    old = client.get(f"{API}/packages/npm/{OVW}root/-/overview", params={"version": "0.9.0"})
+    assert old.status_code == 200 and old.json()["version"] == "0.9.0"
+    assert client.get(f"{API}/packages/npm/{OVW}root/-/overview", params={"version": "9.9.9"}).status_code == 404
