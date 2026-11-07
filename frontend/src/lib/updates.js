@@ -44,6 +44,19 @@ export const FLAG_LABELS = {
   major: "major",
 };
 
+// What to do about a flag, worst first: the sentence an attention row shows under the package.
+const ATTENTION_REASONS = [
+  ["unavailable", "The package is no longer available at its source."],
+  ["vulnerability_added", "A new security advisory was published."],
+  ["removed", "A release disappeared from the source."],
+  ["yanked", "A release was withdrawn by its publisher."],
+  ["deprecated", "A release is marked deprecated."],
+  ["major", "New major version: expect breaking changes."],
+];
+
+export function attentionReason(flags) {
+  return ATTENTION_REASONS.find(([flag]) => flags.includes(flag))?.[1] || "";
+}
 
 // The one date format of the UI: the reader's locale, no ISO dates. Empty for no value.
 export function formatDate(value) {

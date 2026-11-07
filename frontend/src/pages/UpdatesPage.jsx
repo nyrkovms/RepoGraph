@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { fetchUpdates, fetchUpdatesSummary } from "../lib/api";
+import AttentionRow from "../lib/AttentionRow";
 import {
   FLAG_LABELS,
   browserTimezone,
@@ -160,7 +161,7 @@ export default function UpdatesPage() {
   // The view lives in the URL so a link can be shared; a default adds nothing to it.
   const [searchParams, setSearchParams] = useSearchParams();
   const periodParam = searchParams.get("period");
-  const period = PERIODS.some((item) => item.value === periodParam) ? periodParam : "day";
+  const period = PERIODS.some((item) => item.value === periodParam) ? periodParam : "week";
   const customFrom = searchParams.get("from") || "";
   const customTo = searchParams.get("to") || "";
   const ecosystemParam = searchParams.get("ecosystem");
@@ -183,7 +184,7 @@ export default function UpdatesPage() {
   }
 
   function setPeriod(value) {
-    setParam("period", value === "day" ? "" : value);
+    setParam("period", value === "week" ? "" : value);
   }
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -304,18 +305,45 @@ export default function UpdatesPage() {
     const bump = bumpOf(item);
     const flags = flagsOf(item);
     const usage = usageLine(item);
+    const toggle = (
+      <button
+        type="button"
+        className="tree-toggle"
+        aria-expanded={isOpen}
+        aria-label={`${isOpen ? "Hide" : "Show"} events for ${item.name}`}
+        onClick={() => toggleRow(rowKey)}
+      >
+        {isOpen ? "-" : "+"}
+      </button>
+    );
+    const details = (
+      <>
+        <CompactList label="Releases" items={item.releases} />
+        <CompactList label="Yanked" items={item.yanked} warn />
+        <CompactList label="Removed" items={item.removed} warn />
+        <CompactList label="Vulnerabilities" items={item.vulnerabilities} warn />
+        {isOpen ? (
+          <EventTimeline state={events[rowKey]} onLoadMore={() => loadEvents(rowKey, events[rowKey]?.cursor)} />
+        ) : null}
+      </>
+    );
+    if (flags.length) {
+      return (
+        <AttentionRow key={rowKey} item={item} lead={toggle}>
+          {item.description ? <p className="muted update-description">{item.description}</p> : null}
+          {item.released_at ? (
+            <p className="muted update-detected">released {formatDate(item.released_at)}</p>
+          ) : item.last_detected_at ? (
+            <p className="muted update-detected">detected {formatDateTime(item.last_detected_at)}</p>
+          ) : null}
+          {details}
+        </AttentionRow>
+      );
+    }
     return (
       <li key={rowKey}>
         <div className="update-row-head">
-          <button
-            type="button"
-            className="tree-toggle"
-            aria-expanded={isOpen}
-            aria-label={`${isOpen ? "Hide" : "Show"} events for ${item.name}`}
-            onClick={() => toggleRow(rowKey)}
-          >
-            {isOpen ? "-" : "+"}
-          </button>
+          {toggle}
           <Link to={packageLink(item)}>{displayName(item)}</Link>
           <span className="tag muted-tag">{ecosystemOf(item)}</span>
           {item.to_version ? (
@@ -342,13 +370,7 @@ export default function UpdatesPage() {
         </div>
         {item.description ? <p className="muted update-description">{item.description}</p> : null}
         {usage ? <p className="muted update-usage">{usage}</p> : null}
-        <CompactList label="Releases" items={item.releases} />
-        <CompactList label="Yanked" items={item.yanked} warn />
-        <CompactList label="Removed" items={item.removed} warn />
-        <CompactList label="Vulnerabilities" items={item.vulnerabilities} warn />
-        {isOpen ? (
-          <EventTimeline state={events[rowKey]} onLoadMore={() => loadEvents(rowKey, events[rowKey]?.cursor)} />
-        ) : null}
+        {details}
       </li>
     );
   }

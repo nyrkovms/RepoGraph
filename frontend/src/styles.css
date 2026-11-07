@@ -841,8 +841,69 @@ button:disabled {
 
 .home-columns {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+}
+
+.home-subtitle {
+  margin: -4px 0 8px;
+  font-size: 13px;
+}
+
+.home-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+
+.home-chips .chips {
+  margin: 0;
+}
+
+button.chip {
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button.chip[aria-pressed="true"] {
+  border-color: #1d4ed8;
+  background: #e0e7ff;
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+.row-description {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.attention-row,
+.updated-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.attention-row p,
+.updated-row p {
+  margin: 0;
+}
+
+.attention-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.attention-row .update-description,
+.attention-row .update-detected {
+  margin-left: 0;
 }
 
 .home-list {
@@ -854,14 +915,30 @@ button:disabled {
 .home-list li {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
-  padding: 4px 0;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 0;
   border-bottom: 1px solid #e2e8f0;
-  word-break: break-word;
+}
+
+.home-list-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.home-list-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
 }
 
 .home-list-meta {
   white-space: nowrap;
+  margin-left: auto;
 }
 
 .home-note {

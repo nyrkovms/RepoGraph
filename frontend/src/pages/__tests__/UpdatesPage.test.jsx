@@ -102,7 +102,7 @@ describe("UpdatesPage", () => {
 
     expect(await screen.findByRole("link", { name: "flask" })).toBeInTheDocument();
     expect(api.fetchUpdatesSummary).toHaveBeenCalledWith({
-      period: "day",
+      period: "week",
       tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
   });
@@ -233,18 +233,23 @@ describe("UpdatesPage", () => {
     expect(await screen.findByText("HTTP 500")).toBeInTheDocument();
   });
 
-  it("switches to week period", async () => {
+  it("opens on the week and Today writes period=day to the address", async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole("link", { name: "flask" });
+    expect(screen.getByRole("button", { name: "Week" })).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(screen.getByRole("button", { name: "Today" }));
+    await waitFor(() => {
+      expect(api.fetchUpdatesSummary).toHaveBeenLastCalledWith(expect.objectContaining({ period: "day" }));
+    });
+    expect(screen.getByTestId("search")).toHaveTextContent("period=day");
 
     await user.click(screen.getByRole("button", { name: "Week" }));
-
     await waitFor(() => {
-      expect(api.fetchUpdatesSummary).toHaveBeenLastCalledWith(
-        expect.objectContaining({ period: "week" })
-      );
+      expect(api.fetchUpdatesSummary).toHaveBeenLastCalledWith(expect.objectContaining({ period: "week" }));
     });
+    expect(screen.getByTestId("search")).toBeEmptyDOMElement();
   });
 
   it("requests summary with since/until for a custom range", async () => {
@@ -708,9 +713,28 @@ describe("UpdatesPage sections and usage", () => {
     });
     renderPage();
     await screen.findByRole("link", { name: "fresh" });
-    const links = screen.getAllByRole("link", { name: "Compare" });
-    expect(links).toHaveLength(2);
+    // The attention row (flask, a major bump) spells out the versions; the plain row says Compare.
+    const links = screen.getAllByRole("link", { name: /^Compare/ });
+    expect(links.map((link) => link.textContent)).toEqual(["Compare 3.1.1 → 3.2.0", "Compare"]);
     expect(links[0]).toHaveAttribute("href", "/package/pypi/flask?version=3.2.0&tab=compare&from=3.1.1");
     expect(links[1]).toHaveAttribute("href", "/package/npm/%40scope/pkg?version=1.1.0&tab=compare&from=1.0.0");
+  });
+
+  it("explains an attention row and links to who uses it, like the home page", async () => {
+    withPackages([
+      row("risky", { flags: ["removed"], used_by: 4, to_version: "1.0.1" }),
+      row("lonely", { flags: ["deprecated"], used_by: 0 }),
+    ], { attention: 2 });
+    renderPage();
+
+    const risky = (await screen.findByRole("link", { name: "risky" })).closest("li");
+    expect(within(risky).getByText("A release disappeared from the source.")).toBeInTheDocument();
+    expect(within(risky).getByRole("link", { name: "Who uses it (4)" })).toHaveAttribute("href", "/package/pypi/risky?tab=used-by");
+    expect(within(risky).getByText("PyPI")).toHaveClass("tag");
+    const lonely = screen.getByRole("link", { name: "lonely" }).closest("li");
+    expect(within(lonely).getByText("A release is marked deprecated.")).toBeInTheDocument();
+    expect(within(lonely).getByText("Nothing in this catalog depends on it")).toBeInTheDocument();
+    // The events toggle stays on the attention row.
+    expect(within(risky).getByRole("button", { name: "Show events for risky" })).toBeInTheDocument();
   });
 });

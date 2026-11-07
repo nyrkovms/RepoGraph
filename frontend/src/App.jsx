@@ -6,10 +6,12 @@ import ResolvePage from "./pages/ResolvePage";
 import SearchPage from "./pages/SearchPage";
 import UpdatesPage from "./pages/UpdatesPage";
 
-// `/` used to be the search page: a bookmark like `/?q=flask` goes on to `/search` with its query kept.
+// `/` used to be the search page: a bookmark like `/?q=flask` goes on to `/search` with its query kept. `ecosystem`
+// alone is the home page's own filter.
 function HomeRoute() {
   const { search } = useLocation();
-  return search ? <Navigate to={{ pathname: "/search", search }} replace /> : <HomePage />;
+  const keys = [...new URLSearchParams(search).keys()];
+  return keys.some((key) => key !== "ecosystem") ? <Navigate to={{ pathname: "/search", search }} replace /> : <HomePage />;
 }
 
 export default function App() {

@@ -35,8 +35,10 @@ const CATALOG = {
     { ecosystem: "crates", packages: 127 },
   ],
   licenses: [{ license: "MIT", count: 133 }],
-  most_used: [item("golang.org/x/sys", { used_by: 50 }), item("github.com/stretchr/testify", { used_by: 45 })],
-  latest_releases: [item("github.com/gin-gonic/gin", { latest_version: "v1.10.0", released_at: "2026-11-06T10:00:00Z" })],
+  most_used: [
+    item("golang.org/x/sys", { used_by: 50, description: "Go packages for low-level system calls" }),
+    item("github.com/stretchr/testify", { used_by: 45 }),
+  ],
   deprecated_in_use: [item("github.com/golang/protobuf", { used_by: 5 })],
   stale_in_use: { packages: 39, years: 3, min_used_by: 5, released_before: "2023-11-07T00:00:00Z" },
 };
@@ -76,6 +78,7 @@ const WEEK = {
       flags: [],
       used_by: 3,
       origin: "seed",
+      description: "A web framework",
     },
   ],
 };
@@ -105,47 +108,68 @@ describe("HomePage", () => {
     api.searchPackages.mockResolvedValue({ data: [], cursor: null, has_more: false });
   });
 
-  it("shows the search box, ecosystems, status, this week and the three lists", async () => {
+  it("shows the search box, ecosystems, status, this week and the two lists", async () => {
     renderHome();
 
     const input = screen.getByLabelText("Name or purl");
     expect(input).toHaveAttribute("placeholder", "requests, pkg:npm/express");
 
     const chips = await screen.findByRole("list", { name: "Ecosystems" });
-    const links = within(chips).getAllByRole("link");
-    expect(links.map((link) => link.textContent)).toEqual(["All 559", "RPM 218", "Go 214", "crates.io 127"]);
-    expect(links[0]).toHaveAttribute("href", "/search");
-    expect(links[1]).toHaveAttribute("href", "/search?ecosystem=rpm");
+    const buttons = within(chips).getAllByRole("button");
+    expect(buttons.map((button) => button.textContent)).toEqual(["All 559", "RPM 218", "Go 214", "crates.io 127"]);
+    expect(buttons[0]).toHaveAttribute("aria-pressed", "true");
+    expect(buttons[1]).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("link", { name: /Browse all/ })).not.toBeInTheDocument();
 
     expect(await screen.findByText(/7 of 7 sources updated · last run/)).toBeInTheDocument();
     expect(screen.getByText("Security advisories: PyPI only")).toBeInTheDocument();
     expect(api.fetchUpdatesSummary).toHaveBeenCalledWith(expect.objectContaining({ period: "week" }));
+    expect(api.fetchCatalogSummary).toHaveBeenCalledWith({ ecosystem: "" });
 
     expect(screen.getByText(/2 need attention/)).toBeInTheDocument();
     expect(screen.getByText(/41 packages updated/)).toBeInTheDocument();
     expect(screen.getByText(/77\s+releases/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "All updates this week" })).toHaveAttribute("href", "/updates?period=week");
-    // Only the package with a flag is a row; its usage line is the Updates page's.
+
+    // Needs attention: only the flagged package, with the reason and both actions.
+    expect(screen.getByRole("heading", { name: "Needs attention" })).toBeInTheDocument();
     const attention = screen.getByRole("link", { name: "left-pad" });
     expect(attention).toHaveAttribute("href", "/package/npm/left-pad");
-    expect(screen.queryByRole("link", { name: "flask" })).not.toBeInTheDocument();
-    expect(screen.getByText("yanked")).toBeInTheDocument();
-    expect(screen.getByText("major")).toBeInTheDocument();
-    expect(screen.getByText("used by 9 packages · tracked directly")).toBeInTheDocument();
+    const row = attention.closest("li");
+    expect(within(row).getByText("yanked")).toBeInTheDocument();
+    expect(within(row).getByText("major")).toBeInTheDocument();
+    expect(within(row).getByText("A release was withdrawn by its publisher.")).toBeInTheDocument();
+    expect(within(row).getByRole("link", { name: "Compare 1.2.0 → 2.0.0" })).toHaveAttribute(
+      "href",
+      "/package/npm/left-pad?version=2.0.0&tab=compare&from=1.2.0"
+    );
+    expect(within(row).getByRole("link", { name: "Who uses it (9)" })).toHaveAttribute("href", "/package/npm/left-pad?tab=used-by");
 
+    // Updated, most used first: the unflagged one, with its bump, description and usage.
+    expect(screen.getByRole("heading", { name: "Updated, most used first" })).toBeInTheDocument();
+    const updated = screen.getByRole("link", { name: "flask" }).closest("li");
+    expect(within(updated).getByText("minor")).toBeInTheDocument();
+    expect(within(updated).getByText("A web framework")).toBeInTheDocument();
+    expect(within(updated).getByText("used by 3 packages")).toBeInTheDocument();
+
+    expect(screen.queryByRole("heading", { name: "Latest releases" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Most used in catalog" })).toBeInTheDocument();
+    expect(screen.getByText("Packages the rest of the catalog depends on")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "golang.org/x/sys" })).toHaveAttribute("href", "/package/go/golang.org/x/sys");
-    expect(screen.getByText("50")).toBeInTheDocument();
+    expect(screen.getByText("50 dependents")).toBeInTheDocument();
+    expect(screen.getByText("Go packages for low-level system calls")).toBeInTheDocument();
+    // No description: the latest version stands in.
+    expect(screen.getAllByText("latest v1.0.0", { selector: ".row-description" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Go counts test dependencies too: go.mod does not separate them.")).toBeInTheDocument();
+    expect(screen.queryByText("used by counts packages in this catalog")).not.toBeInTheDocument();
 
-    expect(screen.getByRole("heading", { name: "Latest releases" })).toBeInTheDocument();
-    expect(screen.getByText(/v1\.10\.0 ·/)).toBeInTheDocument();
-
-    expect(screen.getByRole("heading", { name: "Deprecated, still used" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Worth a look" })).toBeInTheDocument();
+    expect(screen.getByText("Deprecated, but other packages still use them")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "github.com/golang/protobuf" })).toBeInTheDocument();
     expect(screen.getByText("used by 5")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "No release in 3+ years, used by 5+" })).toBeInTheDocument();
-    const stale = screen.getByRole("link", { name: "39 packages" });
+    const stale = screen.getByRole("link", {
+      name: "39 packages had no release in 3+ years and are used by 5 or more",
+    });
     const target = new URL(stale.getAttribute("href"), "http://x");
     expect(target.pathname).toBe("/search");
     expect(Object.fromEntries(target.searchParams)).toEqual({
@@ -155,31 +179,63 @@ describe("HomePage", () => {
     });
   });
 
+  it("shows at most five updated packages without flags and skips prerelease-only ones", async () => {
+    const flat = (name, extra = {}) => ({ ...WEEK.packages[1], name, purl: `pkg:pypi/${name}`, ...extra });
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...WEEK,
+      packages: [
+        flat("beta", { prerelease_only: true }),
+        ...["a", "b", "c", "d", "e", "f", "g"].map((name) => flat(name)),
+      ],
+    });
+    renderHome();
+    const heading = await screen.findByRole("heading", { name: "Updated, most used first" });
+    const list = heading.nextElementSibling;
+    expect(within(list).getAllByRole("listitem").map((li) => within(li).getAllByRole("link")[0].textContent)).toEqual([
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+    ]);
+  });
+
+  it("hides used by at zero and the Nothing depends text appears on an attention row without dependents", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...WEEK,
+      packages: [
+        { ...WEEK.packages[0], used_by: 0 },
+        { ...WEEK.packages[1], used_by: 0 },
+      ],
+    });
+    renderHome();
+    await screen.findByRole("link", { name: "flask" });
+    expect(screen.queryByText(/^used by \d+ package/)).not.toBeInTheDocument();
+    expect(screen.getByText("Nothing in this catalog depends on it")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Who uses it/ })).not.toBeInTheDocument();
+  });
+
   it("lists up to five deprecated packages and links to the rest only when there are more", async () => {
     const many = Array.from({ length: 5 }, (_, index) => item(`github.com/dep/p${index}`, { used_by: 9 - index }));
     api.fetchCatalogSummary.mockResolvedValue({ ...CATALOG, deprecated_in_use: many, deprecated_in_use_total: 12 });
     renderHome();
-    const heading = await screen.findByRole("heading", { name: "Deprecated, still used" });
-    const list = heading.nextElementSibling;
-    expect(within(list).getAllByRole("listitem")).toHaveLength(5);
-    const more = screen.getByRole("link", { name: "All 12 deprecated packages in use" });
+    const more = await screen.findByRole("link", { name: "All 12 deprecated packages in use" });
     expect(more).toHaveAttribute("href", "/search?deprecated=true&min_used_by=1&sort=used_by");
+    expect(screen.getAllByText(/^used by \d$/)).toHaveLength(5);
   });
 
   it("has no link to the rest when every deprecated package is listed", async () => {
     api.fetchCatalogSummary.mockResolvedValue({ ...CATALOG, deprecated_in_use_total: 1 });
     renderHome();
-    await screen.findByRole("heading", { name: "Deprecated, still used" });
+    await screen.findByRole("heading", { name: "Worth a look" });
     expect(screen.queryByRole("link", { name: /deprecated packages in use/ })).not.toBeInTheDocument();
   });
 
-  it("explains the used by numbers once under each list that shows them", async () => {
+  it("puts the subtitles in two columns and no used by caption", async () => {
     renderHome();
-    await screen.findByRole("heading", { name: "Deprecated, still used" });
-    const captions = screen.getAllByText("used by counts packages in this catalog");
-    expect(captions).toHaveLength(2);   // Most used, and the deprecated ones in Worth a look
+    await screen.findByRole("heading", { name: "Worth a look" });
     const columns = [...document.querySelectorAll(".home-columns > div")];
-    expect(columns.map((column) => column.querySelectorAll(".home-note").length)).toEqual([2, 0, 1]);
+    expect(columns).toHaveLength(2);
   });
 
   it("writes a singular and the shared ecosystem label in This week", async () => {
@@ -195,16 +251,15 @@ describe("HomePage", () => {
     expect(within(row).queryByText("pypi")).not.toBeInTheDocument();
   });
 
-  it("omits a Worth a look subheading with nothing to show", async () => {
+  it("says nothing stands out when Worth a look has nothing to show", async () => {
     api.fetchCatalogSummary.mockResolvedValue({
       ...CATALOG,
       deprecated_in_use: [],
       stale_in_use: { ...CATALOG.stale_in_use, packages: 0 },
     });
     renderHome();
-    await screen.findByRole("list", { name: "Ecosystems" });
-    expect(screen.queryByRole("heading", { name: "Deprecated, still used" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /No release in/ })).not.toBeInTheDocument();
+    expect(await screen.findByText("Nothing stands out")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /had no release/ })).not.toBeInTheDocument();
   });
 
   it("says when nothing needs attention", async () => {
@@ -233,7 +288,7 @@ describe("HomePage", () => {
   it("keeps the other blocks when the catalog summary fails", async () => {
     api.fetchCatalogSummary.mockRejectedValue({ message: "HTTP 500" });
     renderHome();
-    expect((await screen.findAllByText(/Could not load .*: HTTP 500/)).length).toBeGreaterThanOrEqual(4);
+    expect((await screen.findAllByText(/Could not load .*: HTTP 500/)).length).toBeGreaterThanOrEqual(3);
     expect(await screen.findByText(/7 of 7 sources updated/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "left-pad" })).toBeInTheDocument();
     expect(screen.getByLabelText("Name or purl")).toBeInTheDocument();
@@ -246,6 +301,61 @@ describe("HomePage", () => {
     expect(screen.getByText("Could not load this week's updates: HTTP 503")).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "golang.org/x/sys" })).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Ecosystems" })).toBeInTheDocument();
+  });
+
+  describe("ecosystem chips", () => {
+    function renderAt(entry) {
+      return render(
+        <MemoryRouter initialEntries={[entry]} future={FUTURE}>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <>
+                  <HomePage />
+                  <LocationProbe />
+                </>
+              }
+            />
+            <Route path="*" element={<LocationProbe />} />
+          </Routes>
+        </MemoryRouter>
+      );
+    }
+
+    it("filter in place: the address, the requests and the browse link follow the chip", async () => {
+      const user = userEvent.setup();
+      renderAt("/");
+      await screen.findByRole("list", { name: "Ecosystems" });
+      await user.click(screen.getByRole("button", { name: "Go 214" }));
+
+      expect(screen.getByTestId("where")).toHaveTextContent("/?ecosystem=go");
+      expect(screen.getByRole("button", { name: "Go 214" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "false");
+      await waitFor(() => expect(api.fetchCatalogSummary).toHaveBeenLastCalledWith({ ecosystem: "go" }));
+      expect(api.fetchUpdatesSummary).toHaveBeenLastCalledWith(expect.objectContaining({ period: "week", ecosystem: "go" }));
+      expect(screen.getByRole("link", { name: "Browse all 214 Go packages" })).toHaveAttribute("href", "/search?ecosystem=go");
+      expect(screen.getByRole("link", { name: "All updates this week" })).toHaveAttribute(
+        "href",
+        "/updates?period=week&ecosystem=go"
+      );
+      const stale = screen.getByRole("link", { name: /had no release in 3\+ years/ });
+      expect(new URL(stale.getAttribute("href"), "http://x").searchParams.get("ecosystem")).toBe("go");
+
+      await user.click(screen.getByRole("button", { name: /^All/ }));
+      expect(screen.getByTestId("where")).toHaveTextContent(/^\/$/);
+      expect(screen.queryByRole("link", { name: /Browse all/ })).not.toBeInTheDocument();
+    });
+
+    it("passes the ecosystem to the search box and to the search page", async () => {
+      const user = userEvent.setup();
+      renderAt("/?ecosystem=go");
+      await screen.findByRole("list", { name: "Ecosystems" });
+      await user.type(screen.getByLabelText("Name or purl"), "spew");
+      await waitFor(() => expect(api.searchPackages).toHaveBeenCalledWith(expect.objectContaining({ q: "spew", ecosystem: "go" })));
+      await user.type(screen.getByLabelText("Name or purl"), "{Enter}");
+      await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/search?q=spew&ecosystem=go"));
+    });
   });
 
   it("goes to the search page with the query on Enter", async () => {
@@ -328,6 +438,18 @@ describe("App routes", () => {
       expect(api.searchPackages).toHaveBeenCalledWith(expect.objectContaining({ q: "flask", ecosystem: "pypi", limit: 20 }));
     });
     expect(screen.getByRole("heading", { name: "Search packages" })).toBeInTheDocument();
+  });
+
+  it("redirects ecosystem plus a query but keeps ecosystem alone on the home page", async () => {
+    renderApp("/?ecosystem=go&q=spew");
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/search?ecosystem=go&q=spew"));
+  });
+
+  it("does not redirect ecosystem alone", async () => {
+    renderApp("/?ecosystem=go");
+    expect(await screen.findByLabelText("Name or purl")).toBeInTheDocument();
+    expect(screen.getByTestId("where")).toHaveTextContent("/?ecosystem=go");
+    expect(await screen.findByRole("button", { name: "Go 214" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("shows the home page on / and the header navigation in order", async () => {
