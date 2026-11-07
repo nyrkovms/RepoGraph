@@ -55,7 +55,7 @@ function SecurityBlock({ vulns, coverage, isLatest }) {
   );
 }
 
-function LicensesBlock({ license, overview, isRpm }) {
+function LicensesBlock({ license, overview, isRpm, tabHref, onSelectTab }) {
   const dependencies = overview.dependencies;
   const licenses = overview.licenses || [];
   let text;
@@ -73,7 +73,7 @@ function LicensesBlock({ license, overview, isRpm }) {
     text = `Dependencies: ${shown.join(" · ")}${rest > 0 ? ` · ${rest} more` : ""}`;
   }
   return (
-    <Block title="Licenses">
+    <Block title="Licenses" tab="dependencies" tabLabel="Open dependency licenses" tabHref={tabHref} onSelectTab={onSelectTab}>
       <p>
         <b>This package</b>: {license}
       </p>
@@ -162,7 +162,7 @@ export function OverviewTab({ overview, overviewState, pkg, ecosystem, vulns, vu
       <SecurityBlock vulns={vulns} coverage={vulnCoverage} isLatest={isLatest} />
       {overview ? (
         <>
-          <LicensesBlock license={license} overview={overview} isRpm={ecosystem === "rpm"} />
+          <LicensesBlock license={license} overview={overview} isRpm={ecosystem === "rpm"} tabHref={tabHref} onSelectTab={onSelectTab} />
           <DependenciesBlock dependencies={overview.dependencies} tabHref={tabHref} onSelectTab={onSelectTab} />
           <UsedByBlock usedBy={overview.used_by} tabHref={tabHref} onSelectTab={onSelectTab} />
           <ActivityBlock activity={overview.activity} tabHref={tabHref} onSelectTab={onSelectTab} />

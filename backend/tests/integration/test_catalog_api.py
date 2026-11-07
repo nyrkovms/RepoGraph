@@ -390,6 +390,45 @@ def test_relevance_cursor_walks_across_ranks(client: TestClient, relevance) -> N
     assert seen == [RELEVANCE, f"{RELEVANCE}-extra", f"{RELEVANCE}-zip", f"aa-{RELEVANCE}", f"zz-{RELEVANCE}"]
 
 
+def test_search_takes_percent_and_underscore_as_text(client: TestClient, world, relevance) -> None:
+    # `%` is no wildcard: nothing in the catalog has one in its name or description.
+    assert client.get(f"{API}/search", params={"q": "%"}).json()["data"] == []
+    assert client.get(f"{API}/search", params={"q": f"{RELEVANCE[:4]}%"}).json()["data"] == []
+    assert client.get(f"{API}/search", params={"q": "%", "sort": "name"}).json()["data"] == []
+    assert [row["normalized_name"] for row in client.get(f"{API}/search", params={"q": RELEVANCE}).json()["data"]]
+
+
+def test_search_finds_a_hyphenated_name_by_its_underscore_or_dot_spelling(client: TestClient, world) -> None:
+    names_ = ["dash-typing-extensions", "dash-typing-extensions-extra", "aa-dash-typing-extensions"]
+
+    async def add(db: AsyncSession) -> list[uuid.UUID]:
+        registry = await db.scalar(select(Registry).where(Registry.slug == f"{PREFIX}npm-hi"))
+        assert registry
+        packages = [_package(registry, Ecosystem.npm, name, origin=PackageOrigin.manual, latest="1.0.0", now=world.now)
+                    for name in names_]
+        db.add_all(packages)
+        return [package.id for package in packages]
+
+    ids = run_db(add)
+    try:
+        for q in ("dash_typing_extensions", "dash.typing.extensions", "dash-typing-extensions", "DASH_Typing_Extensions"):
+            data = client.get(f"{API}/search", params={"q": q}).json()["data"]
+            # The rank uses the same forms: exact first, then the one that starts with it, then the rest.
+            assert [row["normalized_name"] for row in data] == names_, q
+        seen: list[str] = []
+        cursor = None
+        for _ in range(5):
+            params = {"q": "dash_typing_extensions", "limit": 1} | ({"cursor": cursor} if cursor else {})
+            page = client.get(f"{API}/search", params=params).json()
+            seen += [row["normalized_name"] for row in page["data"]]
+            cursor = page["cursor"]
+            if not page["has_more"]:
+                break
+        assert seen == names_
+    finally:
+        run_db(lambda db: db.execute(delete(Package).where(Package.id.in_(ids))))
+
+
 def test_relevance_without_a_query_behaves_as_name(client: TestClient, world) -> None:
     by_relevance = client.get(f"{API}/packages", params={"sort": "relevance", "registry": world.npm_hi}).json()
     by_name = client.get(f"{API}/packages", params={"registry": world.npm_hi}).json()
@@ -964,7 +1003,10 @@ def test_catalog_summary(client: TestClient, usage_graph, world) -> None:
 
     # nul holds a JSON null: it is not deprecated, however much it is used.
     deprecated = ux_names({"data": payload["deprecated_in_use"]})
-    assert deprecated == ["dep"] and len(payload["deprecated_in_use"]) <= 3
+    assert deprecated == ["dep"] and len(payload["deprecated_in_use"]) <= 5
+    # The total is what the home page's link to the rest finds: the same filters, whatever the list's length.
+    linked = client.get(f"{API}/packages", params={"deprecated": "true", "min_used_by": 1, "sort": "used_by", "limit": 200})
+    assert payload["deprecated_in_use_total"] == len(linked.json()["data"]) >= len(payload["deprecated_in_use"]) >= 1
 
     stale = payload["stale_in_use"]
     assert stale["packages"] >= 1 and (stale["years"], stale["min_used_by"]) == (3, 5)
@@ -973,6 +1015,15 @@ def test_catalog_summary(client: TestClient, usage_graph, world) -> None:
     linked = client.get(f"{API}/search", params={"q": UX, "released_before": stale["released_before"],
                                                  "min_used_by": stale["min_used_by"], "limit": 50}).json()
     assert ux_names(linked) == ["old"]
+
+
+def test_catalog_summary_total_does_not_depend_on_the_list_length(client: TestClient, usage_graph, monkeypatch) -> None:
+    from app.api.v1 import catalog
+
+    full = client.get(f"{API}/catalog/summary").json()
+    monkeypatch.setattr(catalog, "DEPRECATED_IN_USE_LIMIT", 0)
+    cut = client.get(f"{API}/catalog/summary").json()
+    assert cut["deprecated_in_use"] == [] and cut["deprecated_in_use_total"] == full["deprecated_in_use_total"] >= 1
 
 
 # --------------------------------------------------------------------------- dependents

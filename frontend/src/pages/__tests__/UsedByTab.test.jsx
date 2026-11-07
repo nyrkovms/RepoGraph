@@ -199,7 +199,7 @@ describe("used by tab", () => {
     api.fetchDependents.mockResolvedValue({
       totals: { direct: 3, indirect: 0 },
       data: [
-        direct("core", { namespace: "angular", purl: "pkg:npm/%40angular/core" }),
+        direct("@angular/core", { namespace: "angular", normalized_name: "core", purl: "pkg:npm/%40angular/core" }),
         direct("org.x:lib", { ecosystem: "maven", namespace: "org.x", normalized_name: "lib", purl: "pkg:maven/org.x/lib" }),
         direct("openssl", { ecosystem: "rpm", namespace: "rocky-9", purl: "pkg:rpm/rocky/openssl" }),
       ],

@@ -26,8 +26,9 @@ export function nativeName(item) {
 }
 
 export function displayName(item) {
-  // The name of a Maven package already is `groupId:artifactId`, that of an RPM package `distro/name`.
-  if (item.ecosystem === "maven" || item.ecosystem === "rpm") {
+  // The name of a Maven package already is `groupId:artifactId`, that of an RPM package `distro/name`, and the API
+  // sends a scoped npm package as `namespace: "angular", name: "@angular/core"`: the scope is in the name already.
+  if (item.ecosystem === "maven" || item.ecosystem === "rpm" || String(item.name).startsWith("@")) {
     return item.name;
   }
   return item.namespace ? `@${item.namespace}/${item.name}` : item.name;

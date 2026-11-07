@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from datetime import datetime
 from enum import Enum
@@ -148,12 +149,14 @@ async def _query_packages(
         stmt = stmt.where(Package.origin.in_(origins))
 
     if q:
-        needle = f"%{q.lower()}%"
+        # `%` and `_` in the query are text, not wildcards. The hyphen form finds `typing-extensions` for
+        # `typing_extensions`: PyPI treats `-`, `_` and `.` alike and the catalog stores the hyphenated name.
+        forms = _query_forms(q)
         stmt = stmt.where(
             or_(
-                func.lower(Package.normalized_name).like(needle),
-                func.lower(Package.name).like(needle),
-                func.lower(func.coalesce(Package.description, "")).like(needle),
+                *[func.lower(Package.normalized_name).contains(form, autoescape=True) for form in forms],
+                *[func.lower(Package.name).contains(form, autoescape=True) for form in forms],
+                func.lower(func.coalesce(Package.description, "")).contains(q.lower(), autoescape=True),
             )
         )
 
@@ -196,14 +199,35 @@ async def _query_packages(
 
 
 def _after_cursor(ordered_stmt, sort: PackageSort, cursor_payload: dict, q: str | None, used_by_expr):
-    """The rows after the cursor in the order `_apply_package_sort` gives."""
+    """The rows after the cursor in the order `_apply_package_sort` gives; 422 for a cursor that is not one of ours."""
     if cursor_payload.get("sort") != sort.value:
         raise HTTPException(status_code=422, detail="cursor sort mismatch")
+    try:
+        return _after_cursor_unchecked(ordered_stmt, sort, cursor_payload, q, used_by_expr)
+    except (KeyError, TypeError, AttributeError, ValueError) as exc:   # CursorError is a ValueError
+        raise HTTPException(status_code=422, detail="invalid cursor payload") from exc
 
-    last_id = parse_uuid(cursor_payload["id"])
+
+def _cursor_text(payload: dict, field: str) -> str:
+    value = payload[field]
+    if not isinstance(value, str):
+        raise TypeError(field)
+    return value
+
+
+def _cursor_int(payload: dict, field: str) -> int:
+    value = payload[field]
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(field)
+    return value
+
+
+def _after_cursor_unchecked(ordered_stmt, sort: PackageSort, cursor_payload: dict, q: str | None, used_by_expr):
+    """`_after_cursor` with the payload taken on trust: any malformed field raises KeyError, TypeError or ValueError."""
+    last_id = parse_uuid(_cursor_text(cursor_payload, "id"))
     if sort == PackageSort.relevance:
-        last_key = cursor_payload["key"]
-        last_rank = int(cursor_payload["rank"])
+        last_key = _cursor_text(cursor_payload, "key")
+        last_rank = _cursor_int(cursor_payload, "rank")
         rank = _relevance_rank(q or "")
         ordered_stmt = ordered_stmt.where(
             or_(
@@ -219,8 +243,8 @@ def _after_cursor(ordered_stmt, sort: PackageSort, cursor_payload: dict, q: str 
         )
     elif sort == PackageSort.used_by:
         assert used_by_expr is not None
-        last_key = cursor_payload["key"]
-        last_used = int(cursor_payload["used_by"])
+        last_key = _cursor_text(cursor_payload, "key")
+        last_used = _cursor_int(cursor_payload, "used_by")
         ordered_stmt = ordered_stmt.where(
             or_(
                 used_by_expr < last_used,
@@ -234,7 +258,7 @@ def _after_cursor(ordered_stmt, sort: PackageSort, cursor_payload: dict, q: str 
             )
         )
     elif sort == PackageSort.name:
-        last_key = cursor_payload["key"]
+        last_key = _cursor_text(cursor_payload, "key")
         ordered_stmt = ordered_stmt.where(
             or_(
                 Package.normalized_name > last_key,
@@ -242,17 +266,19 @@ def _after_cursor(ordered_stmt, sort: PackageSort, cursor_payload: dict, q: str 
             )
         )
     elif sort == PackageSort.updated_at:
-        last_key = parse_iso_datetime(cursor_payload["key"])
+        last_moment = parse_iso_datetime(_cursor_text(cursor_payload, "key"))
+        if last_moment.tzinfo is None:
+            raise ValueError("cursor datetime has no timezone")
         ordered_stmt = ordered_stmt.where(
             or_(
-                Package.updated_at < last_key,
-                and_(Package.updated_at == last_key, Package.id > last_id),
+                Package.updated_at < last_moment,
+                and_(Package.updated_at == last_moment, Package.id > last_id),
             )
         )
     elif sort == PackageSort.downloads_total:
-        last_key = int(cursor_payload["key"])
+        last_count = int(_cursor_text(cursor_payload, "key"))
         current = func.coalesce(Package.downloads_total, -1)
-        ordered_stmt = ordered_stmt.where(or_(current < last_key, and_(current == last_key, Package.id > last_id)))
+        ordered_stmt = ordered_stmt.where(or_(current < last_count, and_(current == last_count, Package.id > last_id)))
     return ordered_stmt
 
 
@@ -288,17 +314,28 @@ async def build_list_items(db: AsyncSession, rows: Sequence[Package]) -> list[Pa
     ]
 
 
+def _query_forms(q: str) -> list[str]:
+    """The spellings a query is matched by, lowercase: as typed, and with `_` and `.` as `-`, the form the catalog keeps
+    PyPI names in."""
+    typed = q.lower()
+    return list(dict.fromkeys([typed, re.sub(r"[_.]", "-", typed)]))
+
+
 def _relevance_rank(q: str):
     """SQL rank of a package for the query: 0 exact `normalized_name`, 1 starts with it, 2 the rest."""
-    needle = q.lower()
+    forms = _query_forms(q)
     name = func.lower(Package.normalized_name)
-    return case((name == needle, 0), (name.startswith(needle, autoescape=True), 1), else_=2)
+    return case(
+        (name.in_(forms), 0),
+        (or_(*[name.startswith(form, autoescape=True) for form in forms]), 1),
+        else_=2,
+    )
 
 
 def _relevance_rank_of(normalized_name: str, q: str) -> int:
     """The same rank for a loaded row, for the cursor."""
-    name, needle = normalized_name.lower(), q.lower()
-    return 0 if name == needle else 1 if name.startswith(needle) else 2
+    name, forms = normalized_name.lower(), _query_forms(q)
+    return 0 if name in forms else 1 if any(name.startswith(form) for form in forms) else 2
 
 
 def _ref_from_purl(raw: str) -> PackageRef | None:

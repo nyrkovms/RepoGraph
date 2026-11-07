@@ -294,5 +294,6 @@ class CatalogSummaryResponse(BaseModel):
     licenses: list[LicenseCount]
     most_used: list[PackageListItem]
     latest_releases: list[LatestReleaseItem]
-    deprecated_in_use: list[PackageListItem]
+    deprecated_in_use: list[PackageListItem]      # the first few, most used first
+    deprecated_in_use_total: int                  # all of them: more than the list means a link to the rest
     stale_in_use: StaleInUse

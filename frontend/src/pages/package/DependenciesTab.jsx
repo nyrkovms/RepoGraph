@@ -176,7 +176,10 @@ export function DependenciesTab({
 }) {
   return (
     <>
-      <h3>{view === "tree" ? "Dependency tree" : "Dependencies"} ({latestVersion || "n/a"})</h3>
+      <h3>
+        {view === "tree" ? "Dependency tree" : "Dependencies"}
+        {latestVersion ? ` (${latestVersion})` : ""}
+      </h3>
       <div className="toolbar">
         {isNpm ? (
           <>

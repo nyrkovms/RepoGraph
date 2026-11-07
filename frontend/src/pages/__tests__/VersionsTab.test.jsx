@@ -319,6 +319,8 @@ describe("versions tab", () => {
   it("links a version to the same tab with that version, and moves the viewing marker on a click", async () => {
     const user = userEvent.setup();
     renderCard("/package/pydantic?tab=versions&view=all");
+    // The address is rewritten (version first) in a router transition that may land after the rows: the link is built from it.
+    await waitFor(() => expect(query().version).toBe("2.14.3"));
     const link = await screen.findByRole("link", { name: "2.13.5" });
     expect(link).toHaveAttribute("href", "?version=2.13.5&tab=versions&view=all");
     await waitFor(() => {

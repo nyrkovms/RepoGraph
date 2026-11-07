@@ -114,6 +114,16 @@ describe("package card", () => {
     await screen.findByRole("tab", { name: /Versions\s*211/ });
   }
 
+  it("names the Dependencies tab without a version in the title when the package has none", async () => {
+    api.fetchPackage.mockResolvedValue({ ...PYDANTIC, latest_version: null });
+    api.fetchVersions.mockResolvedValue({ data: [], cursor: null, has_more: false });
+    renderCard("/package/pydantic?tab=dependencies");
+    await screen.findByText("Data validation using Python type hints");
+    const heading = await screen.findByRole("heading", { level: 3, name: /Dependencies/ });
+    expect(heading).toHaveTextContent(/^Dependencies$/);
+    expect(screen.queryByText(/n\/a/)).not.toBeInTheDocument();
+  });
+
   describe("header", () => {
     it("shows the name, ecosystem, version, latest tag, description, facts and links", async () => {
       renderCard();
@@ -472,6 +482,16 @@ describe("package card", () => {
       expect(api.fetchOverview).not.toHaveBeenCalled();
       release({ package: "pydantic", version: "2.14.3", depth: 0, dependencies: [] });
       await waitFor(() => expect(api.fetchOverview).toHaveBeenCalledWith("pypi", "pydantic", "2.14.3"));
+    });
+
+    it("links the Licenses block to the Dependencies tab", async () => {
+      const user = userEvent.setup();
+      renderCard();
+      await ready();
+      const block = [...document.querySelectorAll(".overview-block")].find((item) => item.querySelector("h3").textContent === "Licenses");
+      await user.click(within(block).getByRole("link", { name: "Open dependency licenses" }));
+      expect(screen.getByRole("tab", { name: /Dependencies/ })).toHaveAttribute("aria-selected", "true");
+      expect(query().tab).toBe("dependencies");
     });
 
     it("opens the Dependencies and Versions tabs from the blocks", async () => {

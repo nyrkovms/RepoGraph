@@ -155,6 +155,46 @@ describe("HomePage", () => {
     });
   });
 
+  it("lists up to five deprecated packages and links to the rest only when there are more", async () => {
+    const many = Array.from({ length: 5 }, (_, index) => item(`github.com/dep/p${index}`, { used_by: 9 - index }));
+    api.fetchCatalogSummary.mockResolvedValue({ ...CATALOG, deprecated_in_use: many, deprecated_in_use_total: 12 });
+    renderHome();
+    const heading = await screen.findByRole("heading", { name: "Deprecated, still used" });
+    const list = heading.nextElementSibling;
+    expect(within(list).getAllByRole("listitem")).toHaveLength(5);
+    const more = screen.getByRole("link", { name: "All 12 deprecated packages in use" });
+    expect(more).toHaveAttribute("href", "/search?deprecated=true&min_used_by=1&sort=used_by");
+  });
+
+  it("has no link to the rest when every deprecated package is listed", async () => {
+    api.fetchCatalogSummary.mockResolvedValue({ ...CATALOG, deprecated_in_use_total: 1 });
+    renderHome();
+    await screen.findByRole("heading", { name: "Deprecated, still used" });
+    expect(screen.queryByRole("link", { name: /deprecated packages in use/ })).not.toBeInTheDocument();
+  });
+
+  it("explains the used by numbers once under each list that shows them", async () => {
+    renderHome();
+    await screen.findByRole("heading", { name: "Deprecated, still used" });
+    const captions = screen.getAllByText("used by counts packages in this catalog");
+    expect(captions).toHaveLength(2);   // Most used, and the deprecated ones in Worth a look
+    const columns = [...document.querySelectorAll(".home-columns > div")];
+    expect(columns.map((column) => column.querySelectorAll(".home-note").length)).toEqual([2, 0, 1]);
+  });
+
+  it("writes a singular and the shared ecosystem label in This week", async () => {
+    api.fetchUpdatesSummary.mockResolvedValue({
+      ...WEEK,
+      totals: { ...WEEK.totals, attention: 1 },
+      packages: [{ ...WEEK.packages[0], ecosystem: "pypi", name: "flask", purl: "pkg:pypi/flask" }],
+    });
+    renderHome();
+    expect(await screen.findByText("1 needs attention")).toBeInTheDocument();
+    const row = screen.getByRole("link", { name: "flask" }).closest("li");
+    expect(within(row).getByText("PyPI")).toHaveClass("tag");
+    expect(within(row).queryByText("pypi")).not.toBeInTheDocument();
+  });
+
   it("omits a Worth a look subheading with nothing to show", async () => {
     api.fetchCatalogSummary.mockResolvedValue({
       ...CATALOG,
@@ -227,6 +267,18 @@ describe("HomePage", () => {
     await user.type(screen.getByLabelText("Name or purl"), "pkg:npm/express{Enter}");
     expect(await screen.findByTestId("where")).toHaveTextContent("/package/npm/express");
     expect(api.searchPackages).toHaveBeenCalledWith({ q: "pkg:npm/express", limit: 2 });
+  });
+
+  it("carries the version of a purl to the card", async () => {
+    const user = userEvent.setup();
+    api.searchPackages.mockResolvedValue({
+      data: [{ ...item("express"), ecosystem: "npm", purl: "pkg:npm/express" }],
+      cursor: null,
+      has_more: false,
+    });
+    renderHome();
+    await user.type(screen.getByLabelText("Name or purl"), "pkg:npm/express@4.18.2{Enter}");
+    expect(await screen.findByTestId("where")).toHaveTextContent("/package/npm/express?version=4.18.2");
   });
 
   it("sends a purl that matches nothing to the search page", async () => {

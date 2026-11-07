@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.api.v1.packages import PackageSort, _ref_from_purl, _relevance_rank_of
+from app.api.v1.packages import PackageSort, _query_forms, _ref_from_purl, _relevance_rank_of
 from app.ecosystems.base import PackageRef
 
 
@@ -13,6 +13,20 @@ from app.ecosystems.base import PackageRef
 )
 def test_rank(name: str, q: str, rank: int) -> None:
     assert _relevance_rank_of(name, q) == rank
+
+
+@pytest.mark.parametrize(
+    ("name", "q", "rank"),
+    [("typing-extensions", "typing_extensions", 0), ("typing-extensions", "Typing.Extensions", 0),
+     ("typing-extensions-extra", "typing_extensions", 1), ("x-typing-extensions", "typing_extensions", 2)],
+)
+def test_rank_reads_underscore_and_dot_as_a_hyphen(name: str, q: str, rank: int) -> None:
+    assert _relevance_rank_of(name, q) == rank
+
+
+def test_query_forms_are_the_typed_one_and_the_hyphenated_one() -> None:
+    assert _query_forms("Typing_Extensions") == ["typing_extensions", "typing-extensions"]
+    assert _query_forms("typing-extensions") == ["typing-extensions"]
 
 
 def test_relevance_is_a_sort() -> None:

@@ -22,7 +22,7 @@ router = APIRouter()
 
 MOST_USED_LIMIT = 5
 LATEST_RELEASES_LIMIT = 5
-DEPRECATED_IN_USE_LIMIT = 3
+DEPRECATED_IN_USE_LIMIT = 5
 LICENSES_LIMIT = 12
 
 
@@ -51,6 +51,10 @@ async def catalog_summary(db: AsyncSession = Depends(get_db_session)) -> Catalog
     deprecated = (
         await db.scalars(in_use.where(deprecated_clause()).order_by(*by_use).limit(DEPRECATED_IN_USE_LIMIT))
     ).all()
+
+    deprecated_total = await db.scalar(
+        select(func.count()).select_from(Package).join(counts, counts.c.package_id == Package.id).where(deprecated_clause())
+    )
 
     latest_rows = (
         await db.execute(
@@ -87,6 +91,7 @@ async def catalog_summary(db: AsyncSession = Depends(get_db_session)) -> Catalog
             for item, (_package, released) in zip(latest_items, latest_rows, strict=True)
         ],
         deprecated_in_use=await build_list_items(db, deprecated),
+        deprecated_in_use_total=deprecated_total or 0,
         stale_in_use=StaleInUse(
             packages=stale or 0, years=STALE_YEARS, min_used_by=STALE_MIN_USED_BY, released_before=cutoff
         ),

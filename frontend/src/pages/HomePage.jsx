@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { fetchCatalogSummary, fetchUpdatesSummary, searchPackages } from "../lib/api";
+import { fetchCatalogSummary, fetchUpdatesSummary } from "../lib/api";
 import { ecosystemLabel, packageHref } from "../lib/packageNames";
+import { isPurl, purlDestination } from "../lib/purl";
 import SearchBox from "../lib/SearchBox";
 import {
   FLAG_LABELS,
@@ -18,6 +19,8 @@ import {
 } from "../lib/updates";
 
 const ATTENTION_ROWS = 3;
+const DEPRECATED_ROWS = 5;
+const USED_BY_CAPTION = "used by counts packages in this catalog";
 
 // A block's data: loading until the request answers, then the payload or the error message.
 function useBlockData(load) {
@@ -58,14 +61,15 @@ function SearchBlock() {
       return;
     }
     const toSearch = () => navigate(`/search?q=${encodeURIComponent(q)}`);
-    if (q.slice(0, 4).toLowerCase() !== "pkg:") {
+    if (!isPurl(q)) {
       toSearch();
       return;
     }
-    // A purl names one package: go straight to its card, else let the search page say that nothing matches.
+    // A purl names one package: go straight to its card (at the purl's version), else let the search page say that
+    // nothing matches.
     try {
-      const payload = await searchPackages({ q, limit: 2 });
-      if (payload.data?.length === 1) navigate(packageHref(payload.data[0]));
+      const href = await purlDestination(q);
+      if (href) navigate(href);
       else toSearch();
     } catch {
       toSearch();
@@ -136,7 +140,7 @@ function AttentionRow({ item }) {
     <li>
       <div className="update-row-head">
         <Link to={packageLink(item)}>{displayName(item)}</Link>
-        <span className="tag muted-tag">{ecosystemOf(item)}</span>
+        <span className="tag muted-tag">{ecosystemLabel(ecosystemOf(item))}</span>
         {item.to_version ? (
           <span className="update-versions">
             {item.from_version ? <code>{item.from_version}</code> : <span className="muted">new</span>}
@@ -164,7 +168,9 @@ function ThisWeek({ state }) {
   return (
     <>
       <p>
-        <b>{totals.attention ?? 0} need attention</b> · {totals.packages ?? 0} packages updated · {totals.releases ?? 0}{" "}
+        <b>
+          {totals.attention ?? 0} {totals.attention === 1 ? "needs" : "need"} attention
+        </b> · {totals.packages ?? 0} packages updated · {totals.releases ?? 0}{" "}
         releases · <Link to="/updates?period=week">All updates this week</Link>
       </p>
       {attention.length ? (
@@ -205,6 +211,7 @@ function MostUsed({ state }) {
       ) : (
         <p className="muted">No package in the catalog is used by another one</p>
       )}
+      {items.length ? <p className="muted home-note">{USED_BY_CAPTION}</p> : null}
       <p className="muted home-note">Go counts test dependencies too: go.mod does not separate them.</p>
     </>
   );
@@ -227,7 +234,8 @@ function LatestReleases({ state }) {
 
 function WorthALook({ state }) {
   if (!state.data) return <BlockMessage state={state} what="the packages worth a look" />;
-  const deprecated = state.data.deprecated_in_use || [];
+  const deprecated = (state.data.deprecated_in_use || []).slice(0, DEPRECATED_ROWS);
+  const deprecatedTotal = state.data.deprecated_in_use_total || 0;
   const stale = state.data.stale_in_use;
   const staleLink = stale
     ? `/search?${new URLSearchParams({
@@ -248,6 +256,14 @@ function WorthALook({ state }) {
               </ListLink>
             ))}
           </ul>
+          <p className="muted home-note">{USED_BY_CAPTION}</p>
+          {deprecatedTotal > deprecated.length ? (
+            <p>
+              <Link to={`/search?${new URLSearchParams({ deprecated: "true", min_used_by: "1", sort: "used_by" })}`}>
+                All {deprecatedTotal} deprecated packages in use
+              </Link>
+            </p>
+          ) : null}
         </>
       ) : null}
       {stale?.packages > 0 ? (

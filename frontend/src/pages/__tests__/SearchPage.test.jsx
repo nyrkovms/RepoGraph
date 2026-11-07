@@ -203,7 +203,7 @@ describe("SearchPage", () => {
         {
           ecosystem: "npm",
           namespace: "angular",
-          name: "core",
+          name: "@angular/core",   // the real shape: the scope is in the name, the namespace has it without the `@`
           normalized_name: "core",
           purl: "pkg:npm/%40angular/core",
           description: "Angular core",
@@ -736,8 +736,44 @@ describe("SearchPage", () => {
     });
     renderAt("/search");
     await screen.findByRole("link", { name: "left-pad" });
-    expect(screen.getAllByText(/used by/)).toHaveLength(1);
+    expect(screen.getAllByText(/^used by \d+$/)).toHaveLength(1);
     expect(screen.getByText("used by 12")).toBeInTheDocument();
+  });
+
+  it("explains the used by number once under the list, and not when no row has one", async () => {
+    api.fetchPackages.mockResolvedValue({
+      data: [
+        { ecosystem: "npm", namespace: "", name: "left-pad", normalized_name: "left-pad", latest_version: "1.3.0", used_by: 12 },
+        { ecosystem: "npm", namespace: "", name: "right-pad", normalized_name: "right-pad", latest_version: "1.0.0", used_by: 3 },
+      ],
+      cursor: null,
+      has_more: false,
+    });
+    renderAt("/search");
+    await screen.findByRole("link", { name: "left-pad" });
+    expect(screen.getAllByText("used by counts packages in this catalog")).toHaveLength(1);
+  });
+
+  it("has no caption when no row shows a used by number", async () => {
+    renderAt("/search");
+    await screen.findByRole("link", { name: "Flask" });
+    expect(screen.queryByText("used by counts packages in this catalog")).not.toBeInTheDocument();
+  });
+
+  it("shows no description line for a package without a description", async () => {
+    api.fetchPackages.mockResolvedValue({
+      data: [
+        { ecosystem: "go", namespace: "", name: "github.com/a/b", normalized_name: "github.com/a/b", description: null, latest_version: "v1.0.0" },
+        { ecosystem: "go", namespace: "", name: "github.com/c/d", normalized_name: "github.com/c/d", description: "", latest_version: "v1.0.0" },
+      ],
+      cursor: null,
+      has_more: false,
+    });
+    renderAt("/search");
+    const row = (await screen.findByRole("link", { name: "github.com/a/b" })).closest("li");
+    expect(row.querySelector("p")).toBeNull();
+    expect(screen.queryByText("No description")).not.toBeInTheDocument();
+    expect(screen.queryByText("n/a")).not.toBeInTheDocument();
   });
 
   it("loads the next page with the cursor", async () => {
@@ -770,6 +806,55 @@ describe("SearchPage", () => {
     renderAt("/search?q=pkg:npm/missing");
     expect(await screen.findByText('No packages match "pkg:npm/missing"')).toBeInTheDocument();
     expect(screen.getByText("No package matches this purl")).toBeInTheDocument();
+  });
+
+  describe("a purl typed in the search box", () => {
+    function renderWithCard() {
+      return render(
+        <MemoryRouter initialEntries={["/search"]} future={FUTURE}>
+          <LocationProbe />
+          <Routes>
+            <Route path="/search" element={<SearchPage />} />
+            <Route path="*" element={<p>The card</p>} />
+          </Routes>
+        </MemoryRouter>
+      );
+    }
+    const where = () => screen.getByTestId("search").textContent;
+    const express = { ecosystem: "npm", namespace: "", name: "express", normalized_name: "express", purl: "pkg:npm/express", latest_version: "4.19.2" };
+
+    it("opens the card when exactly one package matches", async () => {
+      const user = userEvent.setup();
+      api.searchPackages.mockResolvedValue({ data: [express], cursor: null, has_more: false });
+      renderWithCard();
+      await user.type(screen.getByLabelText("Search query"), "pkg:npm/express{Enter}");
+      expect(await screen.findByText("The card")).toBeInTheDocument();
+      expect(where()).toBe("");
+      expect(api.searchPackages).toHaveBeenCalledWith({ q: "pkg:npm/express", limit: 2 });
+    });
+
+    it("carries the version of the purl to ?version=", async () => {
+      const user = userEvent.setup();
+      api.searchPackages.mockResolvedValue({ data: [{ ...express, namespace: "angular", name: "@angular/core", normalized_name: "core" }], cursor: null, has_more: false });
+      renderWithCard();
+      await user.type(screen.getByLabelText("Search query"), "pkg:npm/%40angular/core@19.0.1{Enter}");
+      expect(await screen.findByText("The card")).toBeInTheDocument();
+      expect(where()).toBe("?version=19.0.1");
+    });
+
+    it("stays on the results when the purl matches none or several", async () => {
+      const user = userEvent.setup();
+      renderWithCard();
+      await user.type(screen.getByLabelText("Search query"), "pkg:npm/nope{Enter}");
+      await waitFor(() => expect(where()).toBe("?q=pkg%3Anpm%2Fnope"));
+      expect(screen.getByRole("heading", { name: "Search packages" })).toBeInTheDocument();
+
+      api.searchPackages.mockResolvedValue({ data: [express, { ...express, ecosystem: "pypi", purl: "pkg:pypi/express" }], cursor: null, has_more: false });
+      await user.clear(screen.getByLabelText("Search query"));
+      await user.type(screen.getByLabelText("Search query"), "pkg:npm/express{Enter}");
+      await waitFor(() => expect(where()).toBe("?q=pkg%3Anpm%2Fexpress"));
+      expect(screen.getByRole("heading", { name: "Search packages" })).toBeInTheDocument();
+    });
   });
 
   it("still lists packages when the license list cannot be loaded", async () => {

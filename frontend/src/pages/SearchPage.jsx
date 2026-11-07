@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { fetchCatalogSummary, fetchPackages, searchPackages } from "../lib/api";
+import { isPurl, purlDestination } from "../lib/purl";
 import { getPackageDescriptionPreview } from "../lib/packageDescription";
 import { ECOSYSTEM_OPTIONS, displayName, ecosystemLabel, itemKey, packageHref } from "../lib/packageNames";
 import SearchBox from "../lib/SearchBox";
@@ -31,13 +32,10 @@ function requestPage(spec, cursor) {
   return q ? searchPackages({ q, ...params }) : fetchPackages(params);
 }
 
-function isPurl(q) {
-  return q.slice(0, 4).toLowerCase() === "pkg:";
-}
-
 export default function SearchPage() {
   // The view lives in the URL so a link can be shared; a default adds nothing to it.
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const q = (params.get("q") || "").trim();
   const ecosystemParam = params.get("ecosystem") || "";
   const ecosystem = ECOSYSTEM_OPTIONS.some((option) => option.value && option.value === ecosystemParam) ? ecosystemParam : "";
@@ -133,8 +131,22 @@ export default function SearchPage() {
     }
   }
 
-  function handleSubmit() {
-    setParam("q", draft.trim(), { replace: false });
+  async function handleSubmit() {
+    const typed = draft.trim();
+    if (isPurl(typed)) {
+      // A purl names one package: open its card (at the purl's version) as the home page does; with none or several the
+      // results page says so.
+      try {
+        const href = await purlDestination(typed);
+        if (href) {
+          navigate(href);
+          return;
+        }
+      } catch {
+        // The list below reports a failing search itself.
+      }
+    }
+    setParam("q", typed, { replace: false });
   }
 
   const licenseOptions = license && !licenses.includes(license) ? [license, ...licenses] : licenses;
@@ -220,22 +232,28 @@ export default function SearchPage() {
       {result.error ? <p className="error">{result.error}</p> : null}
 
       <ul className="result-list">
-        {(loading ? [] : result.rows).map((item) => (
-          <li key={itemKey(item)}>
-            <Link to={packageHref(item)}>{displayName(item)}</Link>
-            <span className="tag eco-badge">{ecosystemLabel(item.ecosystem)}</span>
-            <span className="tag">{item.latest_version}</span>
-            {item.license_spdx ? <span className="tag">{item.license_spdx}</span> : null}
-            {item.has_vulnerabilities ? <span className="tag warn">vuln</span> : null}
-            {item.used_by > 0 ? (
-              <span className="muted used-by" title="Packages in this catalog that depend on it">
-                used by {item.used_by}
-              </span>
-            ) : null}
-            <p>{getPackageDescriptionPreview(item.description, 220) || "No description"}</p>
-          </li>
-        ))}
+        {(loading ? [] : result.rows).map((item) => {
+          const description = getPackageDescriptionPreview(item.description, 220);
+          return (
+            <li key={itemKey(item)}>
+              <Link to={packageHref(item)}>{displayName(item)}</Link>
+              <span className="tag eco-badge">{ecosystemLabel(item.ecosystem)}</span>
+              <span className="tag">{item.latest_version}</span>
+              {item.license_spdx ? <span className="tag">{item.license_spdx}</span> : null}
+              {item.has_vulnerabilities ? <span className="tag warn">vuln</span> : null}
+              {item.used_by > 0 ? (
+                <span className="muted used-by" title="Packages in this catalog that depend on it">
+                  used by {item.used_by}
+                </span>
+              ) : null}
+              {description ? <p>{description}</p> : null}
+            </li>
+          );
+        })}
       </ul>
+      {!loading && result.rows.some((item) => item.used_by > 0) ? (
+        <p className="muted home-note">used by counts packages in this catalog</p>
+      ) : null}
 
       {!loading && !result.error && !result.rows.length ? (
         <div className="empty-state">
