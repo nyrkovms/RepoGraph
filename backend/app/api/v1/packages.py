@@ -4,10 +4,13 @@ from datetime import datetime
 from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, exists, func, or_, select
+from sqlalchemy import and_, case, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db_session
+from app.ecosystems import purl as purls
+from app.ecosystems.base import PackageRef
+from app.ecosystems.registry import UnknownEcosystem, get_plugin
 from app.models.enums import Ecosystem, PackageOrigin
 from app.models.package import Package
 from app.models.package_registry import PackageRegistry
@@ -24,6 +27,8 @@ class PackageSort(str, Enum):
     name = "name"
     updated_at = "updated_at"
     downloads_total = "downloads_total"
+    # Exact name, then names starting with the query, then the rest. The default of /search; without `q` it is `name`.
+    relevance = "relevance"
 
 
 @router.get("/packages", response_model=PackageListResponse)
@@ -73,6 +78,21 @@ async def _query_packages(
 
     stmt = select(Package)
 
+    purl_ref: PackageRef | None = None
+    if q and q[:4].lower() == "pkg:":
+        # A purl names one package: its version and qualifiers (except the rpm distro) do not narrow the search.
+        purl_ref = _ref_from_purl(q.strip())
+        if purl_ref is None:
+            return [], None, False
+        stmt = stmt.where(
+            Package.ecosystem == Ecosystem(purl_ref.ecosystem),
+            func.coalesce(Package.namespace, "") == purl_ref.namespace,
+            Package.normalized_name == purl_ref.name,
+        )
+        q = None
+    if sort == PackageSort.relevance and not q:
+        sort = PackageSort.name
+
     if ecosystems:
         stmt = stmt.where(Package.ecosystem.in_(ecosystems))
 
@@ -113,14 +133,30 @@ async def _query_packages(
     elif has_vulnerabilities is False:
         stmt = stmt.where(~vuln_exists)
 
-    sort_key, ordered_stmt = _apply_package_sort(stmt, sort)
+    sort_key, ordered_stmt = _apply_package_sort(stmt, sort, q)
 
     if cursor_payload:
         if cursor_payload.get("sort") != sort.value:
             raise HTTPException(status_code=422, detail="cursor sort mismatch")
 
         last_id = parse_uuid(cursor_payload["id"])
-        if sort == PackageSort.name:
+        if sort == PackageSort.relevance:
+            last_key = cursor_payload["key"]
+            last_rank = int(cursor_payload["rank"])
+            rank = _relevance_rank(q or "")
+            ordered_stmt = ordered_stmt.where(
+                or_(
+                    rank > last_rank,
+                    and_(
+                        rank == last_rank,
+                        or_(
+                            Package.normalized_name > last_key,
+                            and_(Package.normalized_name == last_key, Package.id > last_id),
+                        ),
+                    ),
+                )
+            )
+        elif sort == PackageSort.name:
             last_key = cursor_payload["key"]
             ordered_stmt = ordered_stmt.where(
                 or_(
@@ -175,18 +211,41 @@ async def _query_packages(
     next_cursor = None
     if has_more and data_rows:
         last = data_rows[-1]
-        next_cursor = encode_cursor(
-            {
-                "sort": sort.value,
-                "id": str(last.id),
-                "key": _cursor_key_for_sort(last, sort, sort_key),
-            }
-        )
+        payload: dict[str, object] = {"sort": sort.value, "id": str(last.id), "key": _cursor_key_for_sort(last, sort, sort_key)}
+        if sort == PackageSort.relevance:
+            payload["rank"] = _relevance_rank_of(last.normalized_name, q or "")
+        next_cursor = encode_cursor(payload)
 
     return response_items, next_cursor, has_more
 
 
-def _apply_package_sort(stmt, sort: PackageSort):
+def _relevance_rank(q: str):
+    """SQL rank of a package for the query: 0 exact `normalized_name`, 1 starts with it, 2 the rest."""
+    needle = q.lower()
+    name = func.lower(Package.normalized_name)
+    return case((name == needle, 0), (name.startswith(needle, autoescape=True), 1), else_=2)
+
+
+def _relevance_rank_of(normalized_name: str, q: str) -> int:
+    """The same rank for a loaded row, for the cursor."""
+    name, needle = normalized_name.lower(), q.lower()
+    return 0 if name == needle else 1 if name.startswith(needle) else 2
+
+
+def _ref_from_purl(raw: str) -> PackageRef | None:
+    """The package a purl names, resolved as `/purl/{purl}` does (the plugin knows the repo prefix of rpm names);
+    None for a purl that does not parse or names no known ecosystem."""
+    try:
+        plugin = get_plugin(purls.ecosystem_for(purls.parse(raw).type))
+        ref, _version = plugin.coordinates.from_purl(raw)
+    except (UnknownEcosystem, ValueError):
+        return None
+    return ref
+
+
+def _apply_package_sort(stmt, sort: PackageSort, q: str | None = None):
+    if sort == PackageSort.relevance:
+        return "name", stmt.order_by(_relevance_rank(q or ""), Package.normalized_name.asc(), Package.id.asc())
     if sort == PackageSort.name:
         return "name", stmt.order_by(Package.normalized_name.asc(), Package.id.asc())
     if sort == PackageSort.updated_at:
@@ -197,7 +256,7 @@ def _apply_package_sort(stmt, sort: PackageSort):
 
 
 def _cursor_key_for_sort(row: Package, sort: PackageSort, sort_key: str) -> str:
-    if sort == PackageSort.name:
+    if sort in (PackageSort.name, PackageSort.relevance):
         return row.normalized_name
     if sort == PackageSort.updated_at:
         return row.updated_at.isoformat()

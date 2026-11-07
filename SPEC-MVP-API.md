@@ -103,7 +103,7 @@ Cursor-based ответ для списков:
   - `license: string?`
   - `has_vulnerabilities: boolean?`
   - `updated_after: datetime?`
-  - `sort: enum(name|updated_at|downloads_total)=name`
+  - `sort: enum(name|updated_at|downloads_total|relevance)=name`: `relevance` — точное имя, затем имена с префиксом запроса, затем остальные (без учёта регистра), потом `normalized_name` и id; нужен `q`, без него это `name`
   - `limit: int=50 (max 200)`
   - `cursor: string?`
 - Response `200`:
@@ -137,6 +137,8 @@ Cursor-based ответ для списков:
 
 - Auth: none
 - Query: `q: string` (обязателен, подстрока в имени или описании) и те же фильтры, сортировка и пагинация, что у `GET /packages`.
+- Сортировка по умолчанию — `relevance` (у `GET /packages` — `name`).
+- `q`, начинающийся с `pkg:`, — purl: ответ — пакет с этими координатами (версия и квалификаторы, кроме `distro` у rpm, не учитываются); purl, который не разбирается или ничего не находит, даёт пустой список, не ошибку.
 - Response `200`: как у `GET /packages` (`data` — те же элементы с `purl`, `namespace`, `origin`).
 - Errors: `422/500`
 

@@ -91,7 +91,7 @@ describe("SearchPage", () => {
 
     expect(await screen.findByRole("link", { name: "Requests" })).toBeInTheDocument();
     await waitFor(() => {
-      expect(api.searchPackages).toHaveBeenCalledWith({ q: "requests", limit: 20, sort: "name" });
+      expect(api.searchPackages).toHaveBeenCalledWith({ q: "requests", limit: 20, sort: "relevance" });
     });
   });
 
@@ -144,7 +144,7 @@ describe("SearchPage", () => {
 
     expect(await screen.findByText("Package page")).toBeInTheDocument();
     await waitFor(() => {
-      expect(api.searchPackages).toHaveBeenCalledWith({ q: "requests", limit: 8, sort: "name" });
+      expect(api.searchPackages).toHaveBeenCalledWith({ q: "requests", limit: 8, sort: "relevance" });
     });
   });
 
@@ -165,12 +165,12 @@ describe("SearchPage", () => {
     await user.type(screen.getByLabelText("Search query"), "left");
     await user.click(screen.getByRole("button", { name: "Search" }));
     await waitFor(() => {
-      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "left", limit: 20, sort: "name", ecosystem: "npm" });
+      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "left", limit: 20, sort: "relevance", ecosystem: "npm" });
     });
 
     await user.selectOptions(screen.getByLabelText("Ecosystem"), "");
     await waitFor(() => {
-      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "left", limit: 20, sort: "name" });
+      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "left", limit: 20, sort: "relevance" });
     });
   });
 
@@ -276,7 +276,7 @@ describe("SearchPage", () => {
     await user.type(screen.getByLabelText("Search query"), "serde");
     await user.click(screen.getByRole("button", { name: "Search" }));
     await waitFor(() => {
-      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "serde", limit: 20, sort: "name", ecosystem: "crates" });
+      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "serde", limit: 20, sort: "relevance", ecosystem: "crates" });
     });
 
     expect(screen.getByRole("link", { name: "serde_json" })).toHaveAttribute("href", "/package/crates/serde_json");
@@ -343,7 +343,7 @@ describe("SearchPage", () => {
     await user.type(screen.getByLabelText("Search query"), "gin");
     await user.click(screen.getByRole("button", { name: "Search" }));
     await waitFor(() => {
-      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "gin", limit: 20, sort: "name", ecosystem: "go" });
+      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "gin", limit: 20, sort: "relevance", ecosystem: "go" });
     });
 
     expect(screen.getByRole("link", { name: "github.com/gin-gonic/gin" })).toHaveAttribute(
@@ -409,7 +409,7 @@ describe("SearchPage", () => {
     await user.type(screen.getByLabelText("Search query"), "json");
     await user.click(screen.getByRole("button", { name: "Search" }));
     await waitFor(() => {
-      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "json", limit: 20, sort: "name", ecosystem: "nuget" });
+      expect(api.searchPackages).toHaveBeenLastCalledWith({ q: "json", limit: 20, sort: "relevance", ecosystem: "nuget" });
     });
 
     expect(screen.getByRole("link", { name: "Newtonsoft.Json" })).toHaveAttribute("href", "/package/nuget/newtonsoft.json");
@@ -473,7 +473,7 @@ describe("SearchPage", () => {
       expect(api.searchPackages).toHaveBeenLastCalledWith({
         q: "org.springframework:spring",
         limit: 20,
-        sort: "name",
+        sort: "relevance",
         ecosystem: "maven",
       });
     });
@@ -542,7 +542,7 @@ describe("SearchPage", () => {
       expect(api.searchPackages).toHaveBeenLastCalledWith({
         q: "rocky-9/openssl",
         limit: 20,
-        sort: "name",
+        sort: "relevance",
         ecosystem: "rpm",
       });
     });

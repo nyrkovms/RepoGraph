@@ -195,6 +195,29 @@ def dependents(world):
     run_db(lambda db: _remove_dependents(db, package_ids, version_ids))
 
 
+RELEVANCE = "rlv-core"
+RELEVANCE_NAMES = [RELEVANCE, f"{RELEVANCE}-extra", f"{RELEVANCE}2", f"aa-{RELEVANCE}", f"zz-{RELEVANCE}"]
+
+
+@pytest.fixture
+def relevance(world):
+    """Names around one query, outside the `c1b-` prefix the search tests count; removed after each test."""
+    async def add(db: AsyncSession) -> list[uuid.UUID]:
+        registry = await db.scalar(select(Registry).where(Registry.slug == f"{PREFIX}npm-hi"))
+        assert registry
+        packages = [_package(registry, Ecosystem.npm, name, origin=PackageOrigin.manual, latest="1.0.0", now=world.now)
+                    for name in RELEVANCE_NAMES]
+        db.add_all(packages)
+        return [package.id for package in packages]
+
+    async def remove(db: AsyncSession, ids: list[uuid.UUID]) -> None:
+        await db.execute(delete(Package).where(Package.id.in_(ids)))
+
+    ids = run_db(add)
+    yield
+    run_db(lambda db: remove(db, ids))
+
+
 @pytest.fixture
 def auth(admin_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {admin_token}"}
@@ -265,6 +288,46 @@ def test_cursor_walks_all_ecosystems(client: TestClient, world, sort: str) -> No
         if not page["has_more"]:
             break
     assert len(seen) == 3 and len(set(seen)) == 3
+
+
+def test_search_ranks_exact_then_prefix_then_the_rest(client: TestClient, relevance) -> None:
+    order = [row["normalized_name"] for row in client.get(f"{API}/search", params={"q": RELEVANCE}).json()["data"]]
+    assert order == [RELEVANCE, f"{RELEVANCE}-extra", f"{RELEVANCE}2", f"aa-{RELEVANCE}", f"zz-{RELEVANCE}"]
+
+    upper = client.get(f"{API}/search", params={"q": RELEVANCE.upper()}).json()["data"]
+    assert upper[0]["normalized_name"] == RELEVANCE
+
+
+def test_relevance_cursor_walks_across_ranks(client: TestClient, relevance) -> None:
+    seen: list[str] = []
+    cursor = None
+    for _ in range(10):
+        params = {"q": RELEVANCE, "limit": 2} | ({"cursor": cursor} if cursor else {})
+        page = client.get(f"{API}/search", params=params).json()
+        seen += [row["normalized_name"] for row in page["data"]]
+        cursor = page["cursor"]
+        if not page["has_more"]:
+            break
+    assert seen == [RELEVANCE, f"{RELEVANCE}-extra", f"{RELEVANCE}2", f"aa-{RELEVANCE}", f"zz-{RELEVANCE}"]
+
+
+def test_relevance_without_a_query_behaves_as_name(client: TestClient, world) -> None:
+    by_relevance = client.get(f"{API}/packages", params={"sort": "relevance", "registry": world.npm_hi}).json()
+    by_name = client.get(f"{API}/packages", params={"registry": world.npm_hi}).json()
+    assert by_relevance == by_name
+
+
+def test_search_by_purl_finds_the_package_and_ignores_the_version(client: TestClient, relevance) -> None:
+    for q in (f"pkg:npm/{RELEVANCE}", f"pkg:npm/{RELEVANCE}@1.2.3", f"PKG:NPM/{RELEVANCE}"):
+        data = client.get(f"{API}/search", params={"q": q}).json()["data"]
+        assert [row["normalized_name"] for row in data] == [RELEVANCE], q
+
+
+def test_search_by_purl_that_matches_nothing_is_an_empty_list(client: TestClient, relevance) -> None:
+    for q in (f"pkg:npm/{RELEVANCE}-missing", f"pkg:pypi/{RELEVANCE}", "pkg:npm", "pkg:cobol/x", "pkg:rpm/rocky/bash"):
+        response = client.get(f"{API}/search", params={"q": q})
+        assert response.status_code == 200, q
+        assert response.json() == {"data": [], "cursor": None, "has_more": False}, q
 
 
 # --------------------------------------------------------------------------- /stats

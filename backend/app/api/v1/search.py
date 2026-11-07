@@ -21,7 +21,7 @@ async def search_packages(
     license: str | None = Query(default=None),
     has_vulnerabilities: bool | None = Query(default=None),
     updated_after: datetime | None = Query(default=None),
-    sort: PackageSort = Query(default=PackageSort.name),
+    sort: PackageSort = Query(default=PackageSort.relevance),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None),
 ) -> SearchResponse:

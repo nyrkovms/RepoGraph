@@ -92,7 +92,7 @@ export default function SearchPage() {
 
     const timeoutId = window.setTimeout(async () => {
       try {
-        const payload = await searchPackages({ q: trimmedQuery, limit: AUTOCOMPLETE_LIMIT, sort: "name", ...ecosystemFilter() });
+        const payload = await searchPackages({ q: trimmedQuery, limit: AUTOCOMPLETE_LIMIT, sort: "relevance", ...ecosystemFilter() });
         if (autocompleteRequestId.current !== requestId) {
           return;
         }
@@ -122,7 +122,7 @@ export default function SearchPage() {
     setError("");
     try {
       const payload = query.trim()
-        ? await searchPackages({ q: query.trim(), limit: 20, sort: "name", ...ecosystemFilter() })
+        ? await searchPackages({ q: query.trim(), limit: 20, sort: "relevance", ...ecosystemFilter() })
         : await fetchPackages({ limit: 20, sort: "name", ...ecosystemFilter() });
       setRows(payload.data || []);
       setCursor(payload.cursor || null);
@@ -141,7 +141,7 @@ export default function SearchPage() {
     setError("");
     try {
       const payload = query.trim()
-        ? await searchPackages({ q: query.trim(), limit: 20, sort: "name", ...ecosystemFilter(), cursor })
+        ? await searchPackages({ q: query.trim(), limit: 20, sort: "relevance", ...ecosystemFilter(), cursor })
         : await fetchPackages({ limit: 20, sort: "name", ...ecosystemFilter(), cursor });
       setRows((prev) => [...prev, ...(payload.data || [])]);
       setCursor(payload.cursor || null);
