@@ -152,15 +152,14 @@ Cursor-based ответ для списков:
 ## 3.2.1 `GET /api/v1/catalog/summary`
 
 - Auth: none
-- Query: нет.
-- Response `200` (данные для главной страницы; считается по всему каталогу):
+- Query: `ecosystem` (необязательно, одна из семи; неверное значение — `422`). Сужает `licenses`, `most_used`, `deprecated_in_use`, `deprecated_in_use_total` и `stale_in_use`; `ecosystems` остаётся полным: чипы главной показывают все экосистемы, какая бы ни была выбрана.
+- Response `200` (данные для главной страницы; без `ecosystem` считается по всему каталогу):
 
 ```json
 {
   "ecosystems": [{"ecosystem": "rpm", "packages": 218}],
   "licenses": [{"license": "MIT", "count": 133}],
   "most_used": [{"...": "элемент списка, как в GET /packages"}],
-  "latest_releases": [{"...": "элемент списка", "released_at": "2026-11-06T10:03:00Z"}],
   "deprecated_in_use": [{"...": "элемент списка"}],
   "deprecated_in_use_total": 12,
   "stale_in_use": {"packages": 39, "years": 3, "min_used_by": 5, "released_before": "2023-11-07T00:00:00Z"}
@@ -170,9 +169,8 @@ Cursor-based ответ для списков:
 - `ecosystems` — пакеты по экосистемам: по убыванию числа, затем по имени.
 - `licenses` — двенадцать самых частых SPDX-идентификаторов (`license_spdx`) по убыванию числа, затем по идентификатору; пустые не входят.
 - `most_used` — пять пакетов с наибольшим `used_by`, не меньше 1.
-- `latest_releases` — пять пакетов, у которых новее всех дата выпуска `latest_version`; эта версия `active`, не prerelease и с датой. `released_at` — эта дата.
 - `deprecated_in_use` — до пяти устаревших пакетов (`deprecation`) с `used_by >= 1`, самые используемые первыми. `deprecated_in_use_total` — сколько их всего: когда оно больше списка, главная ведёт ссылкой `GET /search?deprecated=true&min_used_by=1&sort=used_by` (без `q` — `GET /packages` с теми же параметрами) на остальные.
-- `stale_in_use` — сколько пакетов с `used_by >= min_used_by` не выпускали новой версии `years` лет и больше. Пороги (3 года, 5 пакетов) заданы одним местом на сервере (`services/usage.py`); `released_before` — начало суток (UTC) `years` лет назад. Ссылка на список: `GET /search?released_before=<released_before>&min_used_by=<min_used_by>&sort=used_by` (без `q` — `GET /packages` с теми же параметрами).
+- `stale_in_use` — сколько пакетов с `used_by >= min_used_by` не выпускали новой версии `years` лет и больше. Пороги (3 года, 5 пакетов) заданы одним местом на сервере (`services/usage.py`); `released_before` — начало суток (UTC) `years` лет назад. Ссылка на список: `GET /search?released_before=<released_before>&min_used_by=<min_used_by>&sort=used_by` (с `ecosystem`, если он выбран) (без `q` — `GET /packages` с теми же параметрами).
 - Errors: `500`
 
 ## 3.3 Адресация пакета: `/packages/{ecosystem}/{coordinates}/-/…`

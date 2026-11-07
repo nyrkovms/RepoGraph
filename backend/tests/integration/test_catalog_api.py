@@ -994,12 +994,7 @@ def test_catalog_summary(client: TestClient, usage_graph, world) -> None:
     assert len(payload["most_used"]) <= 5 and all(row["used_by"] >= 1 for row in payload["most_used"])
     assert next(row for row in payload["most_used"] if row["name"] == f"{UX}old")["used_by"] == 5
 
-    # The prerelease and the yanked latest versions are newer but do not count.
-    latest = ux_names({"data": payload["latest_releases"]})
-    assert latest[:3] == ["u3", "u2", "u1"]   # then the hubs, released ten days ago
-    assert "u4" not in latest and "u5" not in latest and len(payload["latest_releases"]) <= 5
-    released = [row["released_at"] for row in payload["latest_releases"]]
-    assert released == sorted(released, reverse=True)
+    assert "latest_releases" not in payload
 
     # nul holds a JSON null: it is not deprecated, however much it is used.
     deprecated = ux_names({"data": payload["deprecated_in_use"]})
@@ -1015,6 +1010,24 @@ def test_catalog_summary(client: TestClient, usage_graph, world) -> None:
     linked = client.get(f"{API}/search", params={"q": UX, "released_before": stale["released_before"],
                                                  "min_used_by": stale["min_used_by"], "limit": 50}).json()
     assert ux_names(linked) == ["old"]
+
+
+def test_catalog_summary_narrows_to_an_ecosystem(client: TestClient, usage_graph) -> None:
+    whole = client.get(f"{API}/catalog/summary").json()
+    npm = client.get(f"{API}/catalog/summary", params={"ecosystem": "npm"}).json()
+    assert npm["ecosystems"] == whole["ecosystems"]   # the chips keep every ecosystem
+    assert ux_names({"data": npm["most_used"]}) == ux_names({"data": whole["most_used"]})   # the graph is all npm
+    assert npm["deprecated_in_use_total"] == whole["deprecated_in_use_total"] >= 1
+    assert npm["stale_in_use"] == whole["stale_in_use"]
+
+    go = client.get(f"{API}/catalog/summary", params={"ecosystem": "go"}).json()
+    assert go["ecosystems"] == whole["ecosystems"]
+    assert go["most_used"] == [] and go["deprecated_in_use"] == [] and go["deprecated_in_use_total"] == 0
+    assert go["stale_in_use"]["packages"] == 0
+    assert all(row["count"] <= next((r["count"] for r in whole["licenses"] if r["license"] == row["license"]), 0)
+               for row in go["licenses"])
+
+    assert client.get(f"{API}/catalog/summary", params={"ecosystem": "nope"}).status_code == 422
 
 
 def test_catalog_summary_total_does_not_depend_on_the_list_length(client: TestClient, usage_graph, monkeypatch) -> None:

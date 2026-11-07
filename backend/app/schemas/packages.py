@@ -278,10 +278,6 @@ class LicenseCount(BaseModel):
     count: int
 
 
-class LatestReleaseItem(PackageListItem):
-    released_at: datetime
-
-
 class StaleInUse(BaseModel):
     packages: int
     years: int
@@ -293,7 +289,6 @@ class CatalogSummaryResponse(BaseModel):
     ecosystems: list[EcosystemCount]
     licenses: list[LicenseCount]
     most_used: list[PackageListItem]
-    latest_releases: list[LatestReleaseItem]
     deprecated_in_use: list[PackageListItem]      # the first few, most used first
     deprecated_in_use_total: int                  # all of them: more than the list means a link to the rest
     stale_in_use: StaleInUse
