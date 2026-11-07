@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Read-only review of a stage or work-package diff against the spec it implements (e.g. SPEC-MULTI-ECOSYSTEM.md, SPEC-CATALOG-PAGES.md, SPEC-UPDATES-DIGEST.md) and the CLAUDE.md rules. Use before a stage PR is marked ready and after WPs flagged "ревью" (migrations, algorithms).
+description: Read-only review of a PR or work-package diff against the spec it implements (e.g. SPEC-MULTI-ECOSYSTEM.md, SPEC-CATALOG-PAGES.md, SPEC-UPDATES-DIGEST.md) and the CLAUDE.md rules. Use before a PR is marked ready when CLAUDE.md *Pull requests* step 3 calls for it (stages, migrations, algorithms, contracts, specs, process rules, large diffs) and after WPs flagged "ревью".
 model: opus
 ---
 
