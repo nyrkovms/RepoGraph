@@ -10,7 +10,7 @@
 - [`SPEC-MVP-API.md`](SPEC-MVP-API.md): контракты API
 - [`SPEC-DAILY-UPDATE.md`](SPEC-DAILY-UPDATE.md): ежедневное обновление и дайджест
 - [`SPEC-CATALOG-PAGES.md`](SPEC-CATALOG-PAGES.md): главная, поиск и карточка пакета
-- [`SPEC-UPDATES-DIGEST.md`](SPEC-UPDATES-DIGEST.md): редизайн страницы Updates (черновик)
+- [`SPEC-UPDATES-DIGEST.md`](SPEC-UPDATES-DIGEST.md): страница Updates: U0–U2 сделаны, U3–U5 впереди
 - [`RESOLVER.md`](RESOLVER.md): dependency resolve
 - [`docs/ecosystems.md`](docs/ecosystems.md): адресация пакетов и resolve по экосистемам
 - [`PRODUCTION-CHECKLIST.md`](PRODUCTION-CHECKLIST.md): чек-лист выката

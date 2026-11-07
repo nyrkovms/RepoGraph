@@ -8,14 +8,16 @@ FastAPI + SQLAlchemy async + Alembic + Celery + Postgres 16 + Redis; React/Vite 
 
 | File | What |
 |---|---|
-| `SPEC-MULTI-ECOSYSTEM.md` | Design of the multi-ecosystem catalog. Source of truth for behaviour |
+| `SPEC-MULTI-ECOSYSTEM.md` | Design of the multi-ecosystem catalog. Source of truth for behaviour; also SLA (§1.1), dependency semantics (§7.5), pipeline write rules (§8.4) |
 | `IMPL-MULTI-ECOSYSTEM.md` | Implementation plan: stages, work packages (WP), process rules, migration table |
 | `design/schema-target.sql`, `design/ecosystem_contract.py` | Target DDL and plugin contract |
-| `SPEC-DAILY-UPDATE.md`, `SPEC-MVP-API.md` | Daily update/digest and current API contracts |
+| `SPEC-MVP-API.md` | HTTP API contract (all endpoints; feature specs link here for fields) |
+| `SPEC-DAILY-UPDATE.md` | Daily update: runs, per-ecosystem change detectors, event kinds, metrics |
 | `SPEC-UPDATES-DIGEST.md` | Updates page redesign: U0–U2 done, U3–U5 open |
 | `SPEC-CATALOG-PAGES.md` | Home page, search and package card: behaviour; stages UX0–UX6 implemented |
-| `README.md` | Setup, API how-to per ecosystem, ops |
-| `RESOLVER.md` | Reference: per-ecosystem dependency resolution algorithms |
+| `README.md`, `docs/ecosystems.md` | Setup, commands, ops; per-ecosystem addressing and resolve examples |
+| `RESOLVER.md` | Reference: per-ecosystem dependency resolution algorithms (RPM: SPEC-MULTI §9.8) |
+| `docs/archive/` | MVP-era specs (PyPI-only), history only: do not use as a source of behaviour |
 
 ## Layout
 
