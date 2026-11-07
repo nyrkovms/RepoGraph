@@ -63,6 +63,20 @@
 5. **Resolve.** `POST /resolve` строит граф по правилам экосистемы с учётом профиля. На эталонных проектах результат совпадает с нативным инструментом (§14.2).
 6. **Тесты:** контрактный сьют плагина на фикстурах, эталоны резолвера, интеграционный прогон на стенде.
 
+### 1.1 SLA
+
+Ориентиры для штатного режима, автоматически не проверяются. Метрики отдаёт `GET /metrics` (`backend/app/services/metrics.py`). Другие документы ссылаются на эту таблицу и не повторяют числа.
+
+| Область | Цель | Метрика |
+|---|---|---|
+| Seed | 100 seed-пакетов PyPI вместе с транзитивными зависимостями (~2–3 тыс. пакетов) за `< 10 мин` | `packagehub_sync_duration_seconds{operation="seed"}` |
+| Ленивая загрузка пакета через API | типичный ответ `< 500 мс` | `packagehub_api_latency_seconds` |
+| Поиск `GET /packages`, `GET /search` | `p95 < 200 мс` | `packagehub_api_latency_seconds` |
+| Дерево зависимостей (уровень 1, `depth <= 5`) | `< 500 мс` | `packagehub_api_latency_seconds` |
+| Повторный resolve из Redis-кэша | `< 10 мс` | `packagehub_resolve_latency_seconds`, `packagehub_resolve_cache_hits_total` / `_misses_total` |
+
+Для холодного resolve цели нет: время зависит от экосистемы и числа лениво загружаемых пакетов. Критерии приёмки MVP выполнены при приёмке MVP и остались в [docs/archive/SPEC-MVP.md](./docs/archive/SPEC-MVP.md) §8. Живую проверку API, дерева, resolve и метрик делает `scripts/acceptance_smoke.sh`; времена он не проверяет.
+
 ---
 
 ## 2. Модель покрытия (курируемый каталог)
@@ -436,6 +450,26 @@ rpm_worker/                   — Dockerfile; rpm_worker/: worker.py, modules.py
 
 Результат — `dependencies` с конкретными constraints и scope. `dependencyManagement` версии сохраняется в `raw_metadata.managed` для резолвера (§9.7).
 
+### 7.5 Семантика зависимостей по экосистемам
+
+Таблица `dependencies` (модель `backend/app/models/dependency.py`): цель задаётся `(dependency_ecosystem, dependency_namespace, dependency_name)`, как в §4. Тип — `dependency_type` (§7.2), исходный вид — в `scope`, исходная строка — в `raw_spec`. `version_constraint` не бывает NULL: пустая строка означает «любая версия» или «не разобрано» (`details.unresolvable`, `details.unresolved_property`). Синтаксис constraint и порядок версий — по схеме экосистемы (§5.5).
+
+| Экосистема | Цель: namespace / name | `scope` | `extra_name` | `alias` | `environment_markers` | `details` |
+|---|---|---|---|---|---|---|
+| pypi | — / проект по PEP 503 | NULL | `extra` из маркера (`extra == "x"`) | — | `{type: "python_environment", expression, conditions[{marker, op, value}]}`, только если у требования есть маркер | — |
+| npm | scope без `@` / имя | поле manifest: `dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies` | — | имя, под которым пакет ставится (`npm:` алиас) | — | `optional` (peer по `peerDependenciesMeta`), `unresolvable` (git, file, URL, workspace, `user/repo`) |
+| maven | groupId / artifactId | scope POM (`compile` по умолчанию) | — | — | `{jdk}` или `{unless_jdk[]}` — зависимость профиля, активируемого по JDK (§7.3) | `exclusions`, `type` (если не `jar`), `classifier`, `unresolved_property`, `relocation` (замена по relocation) |
+| nuget | — / id в нижнем регистре | `dependency` | — | — | `{dotnet_target_framework}` — группа TFM; пустая группа тоже учитывается | `groups` (все TFM версии), `exclude`, `include` |
+| go | — / путь модуля | `require` | — | — | — | `indirect` |
+| crates | — / крейт (`package =` переопределяет имя) | `kind`: `normal`, `dev`, `build` | feature, включающая optional-зависимость (неявная — с именем зависимости, иначе первая включающая) | локальное имя, если задан `package =` | `{rust_cfg}` из `target`, если есть | `features`, `default_features` (только `false`), `registry`, `enabled_by` (для optional) |
+| rpm | дистрибутив источника (`rocky-9`) / capability | `requires`, `recommends`, `suggests`, `supplements`, `enhances` | — | — | `{rpm_arch[]}`, если зависимость есть не у всех arch версии | `kind` (для слабых) |
+
+- **Optional.** `dependency_type = optional` у pypi (extras), crates (`optional = true`), maven (`<optional>true`), npm (`optionalDependencies`; peer с `optional` остаётся `peer`), rpm (слабые зависимости). У npm optional-запись не дублируется в `dependencies`.
+- **Dev, build, provided.** Maven: `test` → dev, `provided`/`system` → provided. crates: `dev`, `build`. npm: `devDependencies` → dev. У PyPI, Go, NuGet, RPM таких типов нет.
+- **Применимость** вычисляет `environment.py` плагина по окружению запроса (§7.3). Без окружения маркеры PyPI не вычисляются. Непонятный маркер считается выполненным.
+- **Разные arch (RPM).** Набор зависимостей версии — объединение по arch.
+- **Связка с каталогом.** `resolved_package_id` и `resolved_version_id` — подсказка для UI и дерева уровня 1, правила в §8.4.
+
 ---
 
 ## 8. Ежедневное обновление
@@ -481,6 +515,40 @@ rpm_worker/                   — Dockerfile; rpm_worker/: worker.py, modules.py
 - **`release_removed` не бывает у Maven** (релизы не удаляются) **и у RPM**: там вытесненная сборка получает статус `superseded` без события.
 - **RPM, модульные пакеты.** В `details` события пишется поток модуля: `nodejs 18.20.4 (nodejs:18)`.
 - **`project_unavailable`** — пакет исчез из **всех** своих источников. Исчезновение из одного источника отмечается `package_registries.missing_since`.
+
+### 8.4 Запись пакета: идемпотентность и производные поля
+
+Запись одного пакета (`write_package`, `backend/app/fetcher/pipeline.py`) — одна транзакция. Ошибка откатывает только этот пакет, прогон и seed идут дальше. Повторная запись тех же данных не меняет состояние.
+
+**Ключи записи**
+
+| Сущность | Правило |
+|---|---|
+| `packages` | Поиск по `(ecosystem, namespace, normalized_name)`, обновление или вставка. Поле без значения (`None`) не затирает сохранённое для описания, ссылок, лицензии, ключевых слов и загрузок: индекс без этих данных (PEP 503, crates) не стирает их |
+| `package_registries` | Upsert по `(package_id, registry_id)`: `upstream_revision`, `checked_at`, `missing_since = NULL`. Источник, который ответил «нет пакета», получает `missing_since` (первое значение сохраняется) |
+| `package_versions` | Поиск по `(package_id, version)`. Версия, пропавшая у ответивших источников, получает статус `removed` (плагин может задать другой статус: `superseded` у RPM и у псевдоверсий Go). Неразбираемая версия хранится с `raw_metadata.invalid_version`, ниже всех валидных |
+| `version_sources` | Upsert по `(version_id, registry_id)`: статус и `metadata_digest`. Источник, ответивший без версии, переводит свою строку в `removed` |
+| `dependencies` | Замена набора: удалить строки версии и вставить новые. Канонический набор (`variant_registry_id IS NULL`) берётся у источника метаданных, набор другого источника с иными зависимостями — вариант (§6.5). Источник, чьи зависимости не прочитаны (ленивые), оставляет сохранённое |
+| `artifacts` | Замена по источнику: удаляются артефакты версий, которые этот источник перечислил, затем вставка. Артефакты других источников не трогаются |
+| `dist_tags` | Удаляются теги, которых нет в ответе, остальные — upsert по `(package_id, tag)` |
+| `authors`, `package_authors` | Связи пакета удаляются и создаются заново. Автор — по `(name, email)`, email может быть NULL |
+| `vulnerabilities`, `package_vulnerabilities` | Связи пакета заменяются, запись уязвимости — по `source_id`. Сегодня заполняется только PyPI (D6) |
+| `sync_states` | Строка на источник (`registry_id` уникален). Успешная запись: `status=idle`, `last_success_at`, `last_error=NULL`, `consecutive_failures=0`, `degraded_until=NULL` |
+
+**Производные поля**
+
+- **`packages.latest_version`.** Тег `latest` из `dist_tags`, если источник его даёт (npm). Иначе наибольшая по `sort_key` версия со статусом `active` и валидным номером; предрелизы берутся, только если стабильных нет. Если прежняя `latest_version` принадлежит замороженному источнику (его в этом прогоне не опрашивали), она остаётся. Пересчитывается при каждой записи пакета.
+- **`packages.synced_at`.** Ставится при каждой успешной записи пакета, и когда содержимое не изменилось. По нему кэш resolve понимает, что каталог изменился.
+- **`dependencies_state`** версии: `pending` — зависимости не прочитаны, `hydrated` — прочитаны, `unavailable` — источник их не публикует (PyPI без PEP 658, Q14). Новая версия получает `hydrated`, если источник отдал зависимости вместе с версией: у PyPI, npm, Maven и Go это только `latest_version`, остальные версии — `pending`. NuGet, crates и RPM отдают зависимости всех версий сразу. `ensure_version_dependencies` читает `pending` версию лениво (карточка, дерево, resolve) и ставит `hydrated` или `unavailable`. Смена источника метаданных без своих зависимостей переводит версию в `pending`, если нет сохранённого варианта этого источника. `unavailable` возвращается в `pending`, когда источник начинает публиковать файл метаданных версии.
+- **`dependencies.resolved_package_id`.** Пакет каталога с тем же `(ecosystem, namespace, name)`, иначе NULL. Заполняется при записи зависимостей версии и для уже сохранённых зависимостей, когда пакет впервые попал в каталог (`_link_dependents`).
+- **`dependencies.resolved_version_id`.** Среди версий пакета со статусом `active` — наибольшая валидная, удовлетворяющая `version_constraint`, стабильные раньше предрелизов (предрелиз — только если стабильной нет). Maven: версия без скобок называет предпочтительную версию, если она есть. npm: выбор плагина (`choose_version`: dist-tags, deprecation, engines, как у resolve). Непонятный constraint подходит любой версии. Нет кандидата — NULL. Транзитивные конфликты не учитываются: это подсказка для уровня 1, не resolve (§9).
+- **`sync_states.cursor_data`.** Принадлежит детектору источника (§8.1): ключи `index_serial` (PyPI), `last_seq` (npm), `commit` (NuGet), `since` (Go), `revisions` и `config` (RPM), `reconciled_at` (npm, NuGet, Go — время последней полной сверки по ETag). Ключ `pending` — идентификаторы пакетов, остававшиеся устаревшими в конце прогона, их проверит следующий. Числовые значения попадают в метрику `packagehub_source_cursor`.
+- **`sync_failures`.** Ключ `(operation, ecosystem, registry_id, package_ref)`; код пишет строки с `registry_id = NULL`, `package_ref` — purl без версии. Ошибка пакета создаёт или обновляет строку, `attempts` растёт. Ошибка ретраится (`retryable`), если это сетевая ошибка, ошибка TLS, `429` или `5xx`; `PackageNotFound` и неразбираемый purl не ретраятся. `next_retry_at = now + min(max_backoff, base * 2^(attempts-1) + jitter)`; по умолчанию base 30 с, максимум 1800 с, jitter до 3 с. При `attempts` больше `sync_failed_retry_max_attempts` (8) строка остаётся, `retryable=false`, `next_retry_at=NULL`. Задача `retry_failed` (раз в 15 мин, по 100 строк) берёт строки с `next_retry_at <= now` и повторяет `sync_package`; успех удаляет строки пакета. Ошибки `presence_probe` не ретраятся и не снимаются синхронизацией пакета: повтор — следующий еженедельный probe. Traceback пишется в строку и в лог.
+- **Ошибка источника.** Сетевая ошибка источника увеличивает `sync_states.consecutive_failures` в отдельной транзакции (circuit breaker, §6.6). Остальные ошибки записи пакета в `sync_states` не попадают: только в `sync_failures`.
+
+### 8.5 Лицензия
+
+В `packages` хранятся оба поля: `license_raw` — как у источника, `license_spdx` — SPDX-выражение, если его удалось получить, иначе NULL. Правила по источникам — в §7.1. PyPI: `license_expression`, затем классификаторы (MIT, Apache 2, BSD → `BSD-3-Clause`), затем таблица алиасов `normalizers/license.py` (MIT, Apache-2.0, BSD-3-Clause, GPL-3.0-only). Maven: таблица алиасов в `ecosystems/maven/pom.py`. npm: выражение как есть, кроме `UNLICENSED` и `SEE LICENSE IN …`; список `licenses` даёт SPDX только для одной лицензии. crates: `/` между альтернативами заменяется на `OR`. NuGet: `licenseExpression`. RPM: поле `License` без нормализации (в SPDX его пишут не все дистрибутивы). Go: лицензии нет (Q11).
 
 ---
 
