@@ -310,6 +310,7 @@ async def get_version(
         status_reason=row.status_reason,
         deprecation=row.deprecation,
         requires_python=_requires_python(row),
+        line=release_lines.line_of(target.plugin.ecosystem, row.version),
         engines=row.engines,
         features=row.features,
         dependencies_state=row.dependencies_state.value,

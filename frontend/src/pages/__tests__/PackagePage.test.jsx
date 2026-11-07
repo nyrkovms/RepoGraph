@@ -47,6 +47,12 @@ function overviewOf(version, patch = {}) {
 
 const startsWithText = (prefix) => (content) => content.startsWith(prefix);
 
+// The Versions tab waits for the overview before it shows a list: the rows come a moment after the header.
+async function versionRows() {
+  await waitFor(() => expect(document.querySelector(".version-row")).not.toBeNull(), { timeout: 4000 });
+  return [...document.querySelectorAll(".version-row")];
+}
+
 describe("PackagePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -183,7 +189,7 @@ describe("PackagePage", () => {
     expect(screen.getByText("3.1.0")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: /Versions/ }));
-    expect(screen.getByText("3.1.2", { selector: "li" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "3.1.2" })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(api.fetchDependencies).toHaveBeenCalledWith("pypi", "flask", "3.1.3", {
@@ -736,7 +742,8 @@ describe("PackagePage", () => {
       expect(screen.getByText("2026-03-01")).toBeInTheDocument();
       expect(screen.getByText("2026-02-01")).toBeInTheDocument();
       expect(screen.getByText("yanked", { selector: ".tag" })).toHaveClass("warn");
-      expect(screen.getByText("active", { selector: ".tag" })).not.toHaveClass("warn");
+      // A version that is not yanked or otherwise flagged shows no status.
+      expect(screen.queryByText("active", { selector: ".tag" })).not.toBeInTheDocument();
     });
 
     it("shows the crates environment fields, not the Python or npm ones, and sends them to the tree", async () => {
@@ -1057,7 +1064,7 @@ describe("PackagePage", () => {
       renderApp(`/package/go/${MODULE}?tab=versions`);
 
       await screen.findByText(startsWithText("pkg:golang/github.com/BurntSushi/toml"));
-      const items = [...document.querySelectorAll(".inline-list > li")];
+      const items = await versionRows();
       const row = (version) => items.find((item) => item.textContent.startsWith(version));
 
       expect(within(row("v1.4.1-0.20261014143641-f0251eb4aa3e")).getByText("pseudo-version")).toBeInTheDocument();
@@ -1155,7 +1162,8 @@ describe("PackagePage", () => {
       });
       renderApp("/package/flask?tab=versions");
 
-      expect(await screen.findByText("yanked", { selector: ".tag" })).toBeInTheDocument();
+      // The tab waits for the overview, which waits for the tree: give it more than the default second under load.
+      await waitFor(() => screen.getByText("yanked", { selector: ".tag" }), { timeout: 4000 });
       expect(screen.queryByText("retracted")).not.toBeInTheDocument();
       expect(screen.queryByText("broken")).not.toBeInTheDocument();
     });
@@ -1266,7 +1274,7 @@ describe("PackagePage", () => {
       renderApp(`/package/nuget/${ID}?tab=versions`);
 
       await screen.findByText(startsWithText("pkg:nuget/newtonsoft.json"));
-      const items = [...document.querySelectorAll(".inline-list > li")];
+      const items = await versionRows();
       const row = (version) => items.find((item) => item.textContent.startsWith(version));
 
       expect(within(row("13.0.2")).getByText("unlisted")).toBeInTheDocument();
@@ -1276,7 +1284,7 @@ describe("PackagePage", () => {
       expect(row("13.0.3-beta1").querySelector(".version-date")).toBeNull();
       expect(within(row("13.0.3")).queryByText("unlisted")).not.toBeInTheDocument();
       expect(within(row("13.0.3")).getByText("2023-03-08")).toBeInTheDocument();
-      expect(within(row("12.0.3.1")).getByText("active")).toBeInTheDocument();
+      expect(within(row("12.0.3.1")).queryByText("active")).not.toBeInTheDocument();
       expect(row("1.0.0-BETA")).toBeTruthy();
       expect(screen.getByRole("option", { name: "12.0.3.1" })).toBeInTheDocument();
     });
@@ -1286,11 +1294,12 @@ describe("PackagePage", () => {
       renderApp(`/package/nuget/${ID}?tab=versions`);
 
       await screen.findByText(startsWithText("pkg:nuget/newtonsoft.json"));
-      const deprecated = [...document.querySelectorAll(".inline-list > li")].find((item) => item.textContent.startsWith("12.0.3.1"));
+      const deprecated = (await versionRows()).find((item) => item.textContent.startsWith("12.0.3.1"));
       expect(within(deprecated).getByText("deprecated")).toBeInTheDocument();
       expect(within(deprecated).getByText("use 12.0.4")).toBeInTheDocument();
-      const plain = document.querySelector(".inline-list > li");
-      expect(plain.textContent.startsWith("13.0.3active")).toBe(true);
+      const plain = document.querySelector(".version-row");
+      expect(plain.textContent.startsWith("13.0.3")).toBe(true);
+      expect(within(plain).queryByText("active")).not.toBeInTheDocument();
       expect(within(plain).queryByText("deprecated")).not.toBeInTheDocument();
     });
 
@@ -1519,7 +1528,7 @@ describe("PackagePage", () => {
       renderApp(`/package/maven/${GA}?tab=versions`);
 
       await screen.findByText(startsWithText("pkg:maven/org.springframework/spring-core"));
-      const items = [...document.querySelectorAll(".inline-list > li")];
+      const items = await versionRows();
       const row = (version) => items.find((item) => item.textContent.startsWith(version));
 
       expect(within(row("6.1.14")).getByText("2024-10-16")).toBeInTheDocument();
@@ -1846,11 +1855,11 @@ describe("PackagePage", () => {
       renderApp(`/package/rpm/${NAME}?tab=versions`);
 
       await screen.findByText(startsWithText("pkg:rpm/rocky/openssl"));
-      const items = [...document.querySelectorAll(".inline-list > li")];
+      const items = await versionRows();
       const row = (version) => items.find((item) => item.textContent.startsWith(version));
 
       expect(within(row("1:3.0.7-27.el9")).getByText("2024-10-16")).toBeInTheDocument();
-      expect(within(row("1:3.0.7-27.el9")).getByText("active")).not.toHaveClass("muted-tag");
+      expect(within(row("1:3.0.7-27.el9")).queryByText("active")).not.toBeInTheDocument();
       const superseded = within(row("1:3.0.7-24.el9")).getByText("superseded");
       expect(superseded).toHaveClass("muted-tag");
       expect(superseded).toHaveAttribute("title", expect.stringContaining("newer build"));
@@ -1864,7 +1873,7 @@ describe("PackagePage", () => {
       renderApp(`/package/rpm/${NAME}?tab=versions`);
 
       await screen.findByText(startsWithText("pkg:rpm/rocky/openssl"));
-      const items = [...document.querySelectorAll(".inline-list > li")];
+      const items = await versionRows();
       const row = (version) => items.find((item) => item.textContent.startsWith(version));
       const arches = (version) => [...row(version).querySelectorAll(".tag.cond")].map((tag) => tag.textContent);
 
@@ -1890,7 +1899,7 @@ describe("PackagePage", () => {
 
       expect(await screen.findByText("libssl.so.3()(64bit)")).toBeInTheDocument();
       expect(screen.queryByText("HTTP 500")).not.toBeInTheDocument();
-      expect(document.querySelectorAll(".inline-list > li .tag.cond")).toHaveLength(0);
+      expect(document.querySelectorAll(".version-row .tag.cond")).toHaveLength(0);
     });
 
     it("shows an arch selector with the four arches, x86_64 selected, and sends only arch and include_optional", async () => {

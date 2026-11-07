@@ -89,6 +89,7 @@ class VersionDetailResponse(BaseModel):
     status_reason: str | None = None
     deprecation: dict | None = None
     requires_python: str | None
+    line: str | None = None                # release line, as in the versions list
     engines: dict | None = None
     features: dict | None
     dependencies_state: str

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
 import {
@@ -20,7 +20,8 @@ import { PackageTabs } from "./package/PackageTabs";
 import { SourcesTab } from "./package/SourcesTab";
 import { UsedByTab } from "./package/UsedByTab";
 import { useDependents } from "./package/useDependents";
-import { VersionsTab } from "./package/VersionsTab";
+import { useVersionList } from "./package/useVersionList";
+import { VersionsTab, resolveVersionsView, versionChips } from "./package/VersionsTab";
 import {
   CRATES_TARGETS,
   DEFAULTS,
@@ -45,6 +46,7 @@ import {
   isNotFound,
   readRelation,
   readTab,
+  readVersionsView,
 } from "./package/packageHelpers";
 
 export default function PackagePage() {
@@ -62,6 +64,8 @@ export default function PackagePage() {
 
   const [pkg, setPkg] = useState(null);
   const [versions, setVersions] = useState([]);
+  // The page behind `versions` (for "all" on the Versions tab) and the package it belongs to.
+  const [versionsPage, setVersionsPage] = useState({ key: "", cursor: null, hasMore: false });
   const [selectedVersion, setSelectedVersion] = useState(() => initialVersion(searchParams.get("version")));
   const [pythonVersion, setPythonVersion] = useState(() => searchParams.get("python") || DEFAULTS.pypi.python);
   const [nodeVersion, setNodeVersion] = useState(() => searchParams.get("node") || DEFAULTS.npm.node);
@@ -91,6 +95,9 @@ export default function PackagePage() {
   const [activeTab, setActiveTab] = useState(() => readTab(searchParams.get("tab")));
   // `?relation=` of the Used by tab: "" for both.
   const [relation, setRelation] = useState(() => readRelation(searchParams.get("relation")));
+  // `?view=` and `?line=` of the Versions tab: the requested view ("lines" by default) and the expanded line.
+  const [versionsView, setVersionsView] = useState(() => readVersionsView(searchParams.get("view")));
+  const [expandedLine, setExpandedLine] = useState(() => searchParams.get("line") || "");
   // The Overview numbers of the selected version; `overviewState` tells "not there yet" from "failed".
   const [overview, setOverview] = useState(null);
   const [overviewState, setOverviewState] = useState("loading");
@@ -140,6 +147,8 @@ export default function PackagePage() {
     setIncludeOptional(searchParams.get("include_optional") === "1");
     setActiveTab(readTab(searchParams.get("tab")));
     setRelation(readRelation(searchParams.get("relation")));
+    setVersionsView(readVersionsView(searchParams.get("view")));
+    setExpandedLine(searchParams.get("line") || "");
     setOverview(null);
     setOverviewState("loading");
     setDepsSettledFor("");
@@ -201,8 +210,16 @@ export default function PackagePage() {
     if (activeTab === "used-by" && relation) {
       next.set("relation", relation);
     }
+    if (activeTab === "versions") {
+      if (versionsView !== "lines") {
+        next.set("view", versionsView);
+      }
+      if (expandedLine) {
+        next.set("line", expandedLine);
+      }
+    }
     setSearchParams(next, { replace: true });
-  }, [activeTab, relation, isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
+  }, [activeTab, relation, versionsView, expandedLine, isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -222,19 +239,21 @@ export default function PackagePage() {
     if (selectedVersion) {
       wanted.add(selectedVersion);
     }
-    wanted.forEach((version) => {
-      const key = `${name}/${version}`;
-      if (archesByVersion[key]) {
-        return;
-      }
-      // Keyed by package, so an answer that arrives after the page moved on is still the right one for its key.
-      fetchArtifacts(ecosystem, name, version)
-        .then((payload) => setArchesByVersion((current) => ({ ...current, [key]: archesOf(payload?.data) })))
-        .catch(() => {});
-    });
+    wanted.forEach(loadArches);
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRpm, ecosystem, name, versions, selectedVersion]);
+
+  function loadArches(version) {
+    const key = `${name}/${version}`;
+    if (archesByVersion[key]) {
+      return;
+    }
+    // Keyed by package, so an answer that arrives after the page moved on is still the right one for its key.
+    fetchArtifacts(ecosystem, name, version)
+      .then((payload) => setArchesByVersion((current) => ({ ...current, [key]: archesOf(payload?.data) })))
+      .catch(() => {});
+  }
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -298,6 +317,7 @@ export default function PackagePage() {
       const versionsPayload = await fetchVersions(ecosystem, name, { limit: 30 });
       const loadedVersions = versionsPayload.data || [];
       setVersions(loadedVersions);
+      setVersionsPage({ key: `${ecosystem}/${name}`, cursor: versionsPayload.cursor || null, hasMore: Boolean(versionsPayload.has_more) });
 
       const vulnerabilitiesPayload = await fetchVulnerabilities(ecosystem, name);
       setVulns(vulnerabilitiesPayload.data || []);
@@ -409,6 +429,31 @@ export default function PackagePage() {
   const overviewNow = overview && overview.version === selectedVersion ? overview : null;
   const isLatest = Boolean(pkg && selectedVersion && selectedVersion === pkg.latest_version);
   const dependents = useDependents(ecosystem, name, Boolean(pkg) && activeTab === "used-by", relation);
+
+  // The Versions tab counts packages by lines and filters from the overview. Those are package-wide, so the last
+  // overview of this package stays in use while another version's one loads; the tab does not blank on a version click.
+  const lastOverview = useRef({ key: "", overview: null });
+  if (overviewNow) {
+    lastOverview.current = { key: `${ecosystem}/${name}`, overview: overviewNow };
+  }
+  const versionsOverview = lastOverview.current.key === `${ecosystem}/${name}` ? lastOverview.current.overview : null;
+  const versionsInfoReady = Boolean(versionsOverview) || overviewState === "error";
+  const versionChipList = versionChips(versionsOverview, isRpm);
+  const shownView = resolveVersionsView(versionsView, versionChipList);
+  const versionsOpen = Boolean(pkg) && activeTab === "versions" && versionsInfoReady;
+  const versionsSeed = useMemo(
+    () => (versionsPage.key === `${ecosystem}/${name}` ? { rows: versions, cursor: versionsPage.cursor, hasMore: versionsPage.hasMore } : null),
+    [ecosystem, name, versions, versionsPage]
+  );
+  const flatList = useVersionList(ecosystem, name, versionsOpen && shownView !== "lines" ? shownView : null, versionsSeed);
+  const lineKey = versionsOpen && shownView === "lines" && expandedLine ? `line:${expandedLine}` : null;
+  const lineList = useVersionList(ecosystem, name, lineKey);
+  useEffect(() => {
+    if (isRpm && versionsOpen && shownView !== "lines") {
+      flatList.rows.forEach((row) => loadArches(row.version));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRpm, versionsOpen, shownView, flatList.rows]);
   const tabs = TABS.map((tab) => {
     if (tab.id === "used-by" && overviewNow) {
       return { ...tab, count: overviewNow.used_by.direct + overviewNow.used_by.indirect };
@@ -703,7 +748,32 @@ export default function PackagePage() {
             />
           ) : null}
           {activeTab === "versions" ? (
-            <VersionsTab versions={versions} name={name} isGo={isGo} isMaven={isMaven} isRpm={isRpm} archesByVersion={archesByVersion} />
+            versionsInfoReady ? (
+              <VersionsTab
+                overview={versionsOverview}
+                chips={versionChipList}
+                view={shownView}
+                expandedLine={expandedLine}
+                viewingLine={versionRow?.line || ""}
+                list={flatList}
+                lineList={lineList}
+                tabHref={tabHref}
+                onSelectView={(value) => {
+                  setVersionsView(value);
+                  setExpandedLine("");
+                }}
+                onSelectLine={setExpandedLine}
+                name={name}
+                selectedVersion={selectedVersion}
+                onSelectVersion={setSelectedVersion}
+                isGo={isGo}
+                isMaven={isMaven}
+                isRpm={isRpm}
+                archesByVersion={archesByVersion}
+              />
+            ) : (
+              <p className="muted">Loading...</p>
+            )
           ) : null}
           {activeTab === "sources" ? (
             <SourcesTab

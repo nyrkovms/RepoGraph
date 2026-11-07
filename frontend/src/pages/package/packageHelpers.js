@@ -226,6 +226,11 @@ export function readRelation(value) {
   return value === "direct" || value === "indirect" ? value : "";
 }
 
+// `?view=` of the Versions tab: absent or unknown means the release lines.
+export function readVersionsView(value) {
+  return value === "prereleases" || value === "not-active" || value === "all" ? value : "lines";
+}
+
 // A catalog 404: the API's error object carries `status`; a rejected mock or an older client has only the message.
 export function isNotFound(error) {
   return error?.status === 404 || error?.message === "HTTP 404";

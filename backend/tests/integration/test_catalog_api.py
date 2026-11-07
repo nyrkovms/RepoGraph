@@ -1067,6 +1067,7 @@ def test_versions_rows_carry_line_and_prerelease(client: TestClient, versions_gr
     rows = {row["version"]: row for row in _versions(client)["data"]}
     assert (rows["2.1.1"]["line"], rows["2.1.1"]["is_prerelease"]) == ("2.1", False)
     assert (rows["2.2.0-beta.1"]["line"], rows["2.2.0-beta.1"]["is_prerelease"]) == ("2.2", True)
+    assert client.get(f"{VSN_PATH}/2.1.1").json()["line"] == "2.1"
 
 
 def test_versions_line_returns_the_whole_line_and_ignores_the_page(client: TestClient, versions_graph) -> None:

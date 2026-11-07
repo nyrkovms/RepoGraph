@@ -62,6 +62,8 @@ export const MAVEN_SCOPES = ["compile", "runtime", "provided", "system", "test"]
 // is a 422 of the API.
 export const RPM_ARCHES = ["x86_64", "aarch64", "ppc64le", "s390x"];
 export const VERSIONS_SHOWN = 10;
+// Release lines the Versions tab lists before `Show N older lines`.
+export const LINES_SHOWN = 8;
 export const DEFAULTS = {
   pypi: { python: "3.12", os: "linux" },
   npm: { node: "20.0.0", os: "linux", cpu: "x64" },

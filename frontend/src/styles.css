@@ -905,3 +905,23 @@ button:disabled {
   margin-top: 12px;
   font-size: 13px;
 }
+
+.version-rows {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+}
+
+.version-row {
+  padding: 4px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.tag.viewing {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.lines-table .line-versions > td {
+  background: #f8fafc;
+}
