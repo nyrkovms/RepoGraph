@@ -1,21 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { fetchPackages, searchPackages } from "../lib/api";
 import { getPackageDescriptionPreview } from "../lib/packageDescription";
-
-const AUTOCOMPLETE_LIMIT = 8;
-
-const ECOSYSTEM_OPTIONS = [
-  { value: "", label: "All" },
-  { value: "pypi", label: "PyPI" },
-  { value: "npm", label: "npm" },
-  { value: "crates", label: "crates.io" },
-  { value: "go", label: "Go" },
-  { value: "nuget", label: "NuGet" },
-  { value: "maven", label: "Maven" },
-  { value: "rpm", label: "RPM" },
-];
+import { ECOSYSTEM_OPTIONS, displayName, ecosystemLabel, itemKey, packageHref } from "../lib/packageNames";
+import SearchBox from "../lib/SearchBox";
 
 const DEFAULT_PLACEHOLDER = "flask, requests, numpy...";
 // A Maven package is found and opened by `groupId:artifactId`.
@@ -26,92 +15,19 @@ const PLACEHOLDERS = {
   rpm: "distro/name, e.g. rocky-9/openssl",
 };
 
-function ecosystemLabel(ecosystem) {
-  return ECOSYSTEM_OPTIONS.find((option) => option.value === ecosystem)?.label || ecosystem;
-}
-
-// The native spelling of the package name: an npm scope is kept apart from the name in the catalog (`@angular` + `core`),
-// a Maven groupId too (`org.springframework` + `spring-core`), an RPM distro too (`rocky-9` + `openssl`).
-function nativeName(item) {
-  if (item.ecosystem === "maven") {
-    return `${item.namespace}:${item.normalized_name}`;
-  }
-  if (item.ecosystem === "rpm") {
-    return `${item.namespace}/${item.normalized_name}`;
-  }
-  return item.namespace ? `@${item.namespace}/${item.normalized_name}` : item.normalized_name;
-}
-
-function displayName(item) {
-  // The name of a Maven package already is `groupId:artifactId`, that of an RPM package `distro/name`.
-  if (item.ecosystem === "maven" || item.ecosystem === "rpm") {
-    return item.name;
-  }
-  return item.namespace ? `@${item.namespace}/${item.name}` : item.name;
-}
-
-function packageHref(item) {
-  return `/package/${item.ecosystem}/${nativeName(item)}`;
-}
-
-function itemKey(item) {
-  return `${item.ecosystem}-${nativeName(item)}-${item.latest_version}`;
-}
-
 export default function SearchPage() {
-  const navigate = useNavigate();
-  const autocompleteRequestId = useRef(0);
-
   const [query, setQuery] = useState("");
   const [ecosystem, setEcosystem] = useState("");
   const [rows, setRows] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [suggestions, setSuggestions] = useState([]);
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
   // The list is reloaded on mount and whenever the ecosystem switcher changes.
   useEffect(() => {
     loadFirstPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ecosystem]);
-
-  useEffect(() => {
-    const trimmedQuery = query.trim();
-    if (!trimmedQuery) {
-      setSuggestions([]);
-      setSuggestionsOpen(false);
-      setHighlightedIndex(-1);
-      return;
-    }
-
-    const requestId = autocompleteRequestId.current + 1;
-    autocompleteRequestId.current = requestId;
-
-    const timeoutId = window.setTimeout(async () => {
-      try {
-        const payload = await searchPackages({ q: trimmedQuery, limit: AUTOCOMPLETE_LIMIT, sort: "relevance", ...ecosystemFilter() });
-        if (autocompleteRequestId.current !== requestId) {
-          return;
-        }
-        setSuggestions(payload.data || []);
-        setSuggestionsOpen(Boolean(payload.data?.length));
-        setHighlightedIndex((payload.data || []).length ? 0 : -1);
-      } catch {
-        if (autocompleteRequestId.current !== requestId) {
-          return;
-        }
-        setSuggestions([]);
-        setSuggestionsOpen(false);
-        setHighlightedIndex(-1);
-      }
-    }, 250);
-
-    return () => window.clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, ecosystem]);
 
   function ecosystemFilter() {
     return ecosystem ? { ecosystem } : {};
@@ -152,57 +68,8 @@ export default function SearchPage() {
     }
   }
 
-  function closeSuggestions() {
-    setSuggestionsOpen(false);
-    setHighlightedIndex(-1);
-  }
-
-  function selectSuggestion(item) {
-    setQuery(item.ecosystem === "maven" || item.ecosystem === "rpm" ? nativeName(item) : item.normalized_name);
-    closeSuggestions();
-    navigate(packageHref(item));
-  }
-
   function handleSubmit() {
-    closeSuggestions();
     loadFirstPage();
-  }
-
-  function handleInputKeyDown(event) {
-    if (!suggestionsOpen || !suggestions.length) {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        handleSubmit();
-      }
-      return;
-    }
-
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setHighlightedIndex((current) => (current + 1) % suggestions.length);
-      return;
-    }
-
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setHighlightedIndex((current) => (current <= 0 ? suggestions.length - 1 : current - 1));
-      return;
-    }
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeSuggestions();
-      return;
-    }
-
-    if (event.key === "Enter") {
-      event.preventDefault();
-      if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
-        selectSuggestion(suggestions[highlightedIndex]);
-      } else {
-        handleSubmit();
-      }
-    }
   }
 
   return (
@@ -219,47 +86,13 @@ export default function SearchPage() {
             ))}
           </select>
         </label>
-        <div className="autocomplete">
-          <input
-            placeholder={PLACEHOLDERS[ecosystem] || DEFAULT_PLACEHOLDER}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleInputKeyDown}
-            onFocus={() => {
-              if (suggestions.length) {
-                setSuggestionsOpen(true);
-              }
-            }}
-            onBlur={() => {
-              window.setTimeout(() => closeSuggestions(), 120);
-            }}
-            aria-label="Search query"
-            autoComplete="off"
-          />
-          {suggestionsOpen && suggestions.length ? (
-            <ul className="autocomplete-list" role="listbox" aria-label="Search suggestions">
-              {suggestions.map((item, index) => (
-                <li key={itemKey(item)}>
-                  <button
-                    type="button"
-                    className={index === highlightedIndex ? "autocomplete-item active" : "autocomplete-item"}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => selectSuggestion(item)}
-                  >
-                    <span>
-                      <b>{displayName(item)}</b>
-                      <span className="tag eco-badge">{ecosystemLabel(item.ecosystem)}</span>
-                      <span className="muted autocomplete-version">{item.latest_version}</span>
-                    </span>
-                    {item.description ? (
-                      <span className="muted autocomplete-description">{getPackageDescriptionPreview(item.description, 120)}</span>
-                    ) : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
+        <SearchBox
+          value={query}
+          onChange={setQuery}
+          onSubmit={handleSubmit}
+          placeholder={PLACEHOLDERS[ecosystem] || DEFAULT_PLACEHOLDER}
+          ecosystem={ecosystem}
+        />
         <button type="button" onClick={handleSubmit} disabled={loading}>
           {loading ? "Loading..." : "Search"}
         </button>
