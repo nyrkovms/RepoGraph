@@ -41,6 +41,7 @@ import {
   deprecationMessage,
   initialVersion,
   isNotFound,
+  readDepsView,
   readRelation,
   readTab,
   readVersionsView,
@@ -90,8 +91,9 @@ export default function PackagePage() {
   const [error, setError] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState(() => new Set());
   const [activeTab, setActiveTab] = useState(() => readTab(searchParams.get("tab")));
-  // `?relation=` of the Used by tab: "" for both.
+  // `?relation=` of the Used by and Dependencies tabs: "" for both. `?deps=` of the Dependencies tab: "" is the table.
   const [relation, setRelation] = useState(() => readRelation(searchParams.get("relation")));
+  const [depsView, setDepsView] = useState(() => readDepsView(searchParams.get("deps")));
   // `?view=` and `?line=` of the Versions tab: the requested view ("lines" by default) and the expanded line.
   const [versionsView, setVersionsView] = useState(() => readVersionsView(searchParams.get("view")));
   const [expandedLine, setExpandedLine] = useState(() => searchParams.get("line") || "");
@@ -144,6 +146,7 @@ export default function PackagePage() {
     setIncludeOptional(searchParams.get("include_optional") === "1");
     setActiveTab(readTab(searchParams.get("tab")));
     setRelation(readRelation(searchParams.get("relation")));
+    setDepsView(readDepsView(searchParams.get("deps")));
     setVersionsView(readVersionsView(searchParams.get("view")));
     setExpandedLine(searchParams.get("line") || "");
     setOverview(null);
@@ -204,8 +207,11 @@ export default function PackagePage() {
     if (activeTab !== "overview") {
       next.set("tab", activeTab);
     }
-    if (activeTab === "used-by" && relation) {
+    if ((activeTab === "used-by" || activeTab === "dependencies") && relation) {
       next.set("relation", relation);
+    }
+    if (activeTab === "dependencies" && depsView) {
+      next.set("deps", depsView);
     }
     if (activeTab === "versions") {
       if (versionsView !== "lines") {
@@ -216,7 +222,7 @@ export default function PackagePage() {
       }
     }
     setSearchParams(next, { replace: true });
-  }, [activeTab, relation, versionsView, expandedLine, isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
+  }, [activeTab, relation, depsView, versionsView, expandedLine, isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
 
   useEffect(() => {
     if (!name || !selectedVersion) {
@@ -529,6 +535,11 @@ export default function PackagePage() {
           ) : null}
           {activeTab === "dependencies" ? (
             <DependenciesTab
+              view={depsView}
+              relation={relation}
+              tabHref={tabHref}
+              onSelectView={setDepsView}
+              onSelectRelation={setRelation}
               isNpm={isNpm}
               isGo={isGo}
               isRpm={isRpm}

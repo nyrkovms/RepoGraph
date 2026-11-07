@@ -262,7 +262,7 @@ describe("PackagePage", () => {
 
     render(
       <MemoryRouter
-        initialEntries={["/package/flask?tab=dependencies"]}
+        initialEntries={["/package/flask?tab=dependencies&deps=tree"]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
@@ -290,7 +290,7 @@ describe("PackagePage", () => {
 
     render(
       <MemoryRouter
-        initialEntries={["/package/flask?tab=dependencies"]}
+        initialEntries={["/package/flask?tab=dependencies&deps=tree"]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
@@ -347,7 +347,7 @@ describe("PackagePage", () => {
 
     render(
       <MemoryRouter
-        initialEntries={["/package/flask?tab=dependencies"]}
+        initialEntries={["/package/flask?tab=dependencies&deps=tree"]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
@@ -424,7 +424,7 @@ describe("PackagePage", () => {
 
     render(
       <MemoryRouter
-        initialEntries={["/package/flask?tab=dependencies"]}
+        initialEntries={["/package/flask?tab=dependencies&deps=tree"]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
@@ -446,7 +446,7 @@ describe("PackagePage", () => {
     expect(await screen.findByText("markupsafe")).toBeInTheDocument();
   });
 
-  function renderPackagePage(search = "?tab=dependencies") {
+  function renderPackagePage(search = "?tab=dependencies&deps=tree") {
     render(
       <MemoryRouter
         initialEntries={[`/package/flask${search}`]}
@@ -622,7 +622,7 @@ describe("PackagePage", () => {
     it("shows the npm environment fields and sends them to the tree", async () => {
       const user = userEvent.setup();
       mockAngularCore();
-      renderApp("/package/npm/@angular/core?tab=dependencies");
+      renderApp("/package/npm/@angular/core?tab=dependencies&deps=tree");
 
       await screen.findByText("Angular - the core framework");
       expect(screen.getByLabelText("Node.js version")).toBeInTheDocument();
@@ -650,7 +650,7 @@ describe("PackagePage", () => {
     });
 
     it("keeps the Python fields and the old route for PyPI", async () => {
-      renderApp("/package/flask?tab=dependencies");
+      renderApp("/package/flask?tab=dependencies&deps=tree");
 
       expect(await screen.findByText("A lightweight WSGI framework")).toBeInTheDocument();
       expect(api.fetchPackage).toHaveBeenCalledWith("pypi", "flask");
@@ -661,7 +661,7 @@ describe("PackagePage", () => {
     });
 
     it("opens PyPI by the ecosystem route too", async () => {
-      renderApp("/package/pypi/flask?tab=dependencies");
+      renderApp("/package/pypi/flask?tab=dependencies&deps=tree");
 
       expect(await screen.findByText("A lightweight WSGI framework")).toBeInTheDocument();
       expect(api.fetchPackage).toHaveBeenCalledWith("pypi", "flask");
@@ -749,7 +749,7 @@ describe("PackagePage", () => {
     it("shows the crates environment fields, not the Python or npm ones, and sends them to the tree", async () => {
       const user = userEvent.setup();
       mockSerdeJson();
-      renderApp("/package/crates/serde_json?tab=dependencies");
+      renderApp("/package/crates/serde_json?tab=dependencies&deps=tree");
 
       await screen.findByText("A JSON serialization file format");
       const target = screen.getByLabelText("Target");
@@ -806,7 +806,7 @@ describe("PackagePage", () => {
 
     it("reads target, features and default features from the query", async () => {
       mockSerdeJson();
-      renderApp("/package/crates/serde_json?version=1.0.139&target=aarch64-apple-darwin&features=std&default_features=0&tab=dependencies");
+      renderApp("/package/crates/serde_json?version=1.0.139&target=aarch64-apple-darwin&features=std&default_features=0&tab=dependencies&deps=tree");
 
       await screen.findByText("A JSON serialization file format");
       expect(screen.getByLabelText("Target")).toHaveValue("aarch64-apple-darwin");
@@ -876,7 +876,7 @@ describe("PackagePage", () => {
           },
         ],
       });
-      renderApp("/package/crates/serde_json?tab=dependencies");
+      renderApp("/package/crates/serde_json?tab=dependencies&deps=tree");
 
       expect(await screen.findByText("winapi")).toBeInTheDocument();
       expect(screen.getByText("cfg(windows)")).toBeInTheDocument();
@@ -922,7 +922,7 @@ describe("PackagePage", () => {
     });
 
     it("sends no crates parameters for PyPI or npm and shows no features block", async () => {
-      renderApp("/package/flask?tab=dependencies");
+      renderApp("/package/flask?tab=dependencies&deps=tree");
       await screen.findByText("werkzeug");
       await waitFor(() => expect(api.fetchVersion).toHaveBeenCalled());
       expect(screen.queryByRole("heading", { name: /^Features of/ })).not.toBeInTheDocument();
@@ -1098,7 +1098,7 @@ describe("PackagePage", () => {
 
     it("has no environment form and sends no tree parameters", async () => {
       mockModule();
-      renderApp(`/package/go/${MODULE}?tab=dependencies`);
+      renderApp(`/package/go/${MODULE}?tab=dependencies&deps=tree`);
 
       await screen.findByText("golang.org/x/sys");
       expect(screen.queryByLabelText("Python version")).not.toBeInTheDocument();
@@ -1113,7 +1113,7 @@ describe("PackagePage", () => {
 
     it("tags indirect requirements", async () => {
       mockModule();
-      renderApp(`/package/go/${MODULE}?tab=dependencies`);
+      renderApp(`/package/go/${MODULE}?tab=dependencies&deps=tree`);
 
       await screen.findByText("golang.org/x/sys");
       const direct = screen.getByText("github.com/BurntSushi/toml-test").closest(".dep-tree-item");
@@ -1337,7 +1337,7 @@ describe("PackagePage", () => {
 
     it("shows a target framework selector with net8.0 selected and sends only target_framework", async () => {
       mockPackage();
-      renderApp(`/package/nuget/${ID}?tab=dependencies`);
+      renderApp(`/package/nuget/${ID}?tab=dependencies&deps=tree`);
 
       await screen.findByText("system.memory");
       const select = screen.getByLabelText("Target framework");
@@ -1359,7 +1359,7 @@ describe("PackagePage", () => {
     it("reloads the tree for another target framework", async () => {
       mockPackage();
       const user = userEvent.setup();
-      renderApp(`/package/nuget/${ID}?tab=dependencies`);
+      renderApp(`/package/nuget/${ID}?tab=dependencies&deps=tree`);
 
       await screen.findByText("system.memory");
       await user.selectOptions(screen.getByLabelText("Target framework"), "netstandard2.0");
@@ -1370,7 +1370,7 @@ describe("PackagePage", () => {
 
     it("reads the target framework from the query", async () => {
       mockPackage();
-      renderApp(`/package/nuget/${ID}?target_framework=net6.0&tab=dependencies`);
+      renderApp(`/package/nuget/${ID}?target_framework=net6.0&tab=dependencies&deps=tree`);
       await waitFor(() =>
         expect(api.fetchDependencies).toHaveBeenCalledWith("nuget", ID, "13.0.3", { target_framework: "net6.0" })
       );
@@ -1387,7 +1387,7 @@ describe("PackagePage", () => {
 
     it("shows the framework group of an edge", async () => {
       mockPackage();
-      renderApp(`/package/nuget/${ID}?tab=dependencies`);
+      renderApp(`/package/nuget/${ID}?tab=dependencies&deps=tree`);
 
       await screen.findByText("system.memory");
       const grouped = screen.getByText("microsoft.csharp").closest(".dep-tree-item");
@@ -1397,7 +1397,7 @@ describe("PackagePage", () => {
     });
 
     it("sends no target_framework for the other ecosystems", async () => {
-      renderApp("/package/flask?tab=dependencies");
+      renderApp("/package/flask?tab=dependencies&deps=tree");
       await screen.findByText("werkzeug");
       expect(screen.queryByLabelText("Target framework")).not.toBeInTheDocument();
       expect(api.fetchDependencies.mock.calls[0][3]).not.toHaveProperty("target_framework");
@@ -1589,7 +1589,7 @@ describe("PackagePage", () => {
 
     it("shows scope checkboxes with compile and runtime selected and sends only scopes", async () => {
       mockPackage();
-      renderApp(`/package/maven/${GA}?tab=dependencies`);
+      renderApp(`/package/maven/${GA}?tab=dependencies&deps=tree`);
 
       await screen.findByText("org.springframework:spring-jcl");
       const group = screen.getByRole("group", { name: "Scopes" });
@@ -1610,7 +1610,7 @@ describe("PackagePage", () => {
     it("reloads the tree with the scopes that were ticked, in a fixed order", async () => {
       mockPackage();
       const user = userEvent.setup();
-      renderApp(`/package/maven/${GA}?tab=dependencies`);
+      renderApp(`/package/maven/${GA}?tab=dependencies&deps=tree`);
 
       await screen.findByText("org.springframework:spring-jcl");
       await user.click(screen.getByLabelText("test"));
@@ -1630,7 +1630,7 @@ describe("PackagePage", () => {
     it("keeps the last selected scope: the API refuses an empty list", async () => {
       mockPackage();
       const user = userEvent.setup();
-      renderApp(`/package/maven/${GA}?scopes=test&tab=dependencies`);
+      renderApp(`/package/maven/${GA}?scopes=test&tab=dependencies&deps=tree`);
 
       await waitFor(() =>
         expect(api.fetchDependencies).toHaveBeenCalledWith("maven", GA, "6.1.14", { scopes: "test" })
@@ -1643,7 +1643,7 @@ describe("PackagePage", () => {
 
     it("reads the scopes from the query, drops unknown ones and falls back to the default", async () => {
       mockPackage();
-      renderApp(`/package/maven/${GA}?scopes=system,bogus,compile&tab=dependencies`);
+      renderApp(`/package/maven/${GA}?scopes=system,bogus,compile&tab=dependencies&deps=tree`);
       await waitFor(() =>
         expect(api.fetchDependencies).toHaveBeenCalledWith("maven", GA, "6.1.14", { scopes: "compile,system" })
       );
@@ -1661,7 +1661,7 @@ describe("PackagePage", () => {
 
     it("shows the scope, exclusions, classifier and type of an edge", async () => {
       mockPackage();
-      renderApp(`/package/maven/${GA}?tab=dependencies`);
+      renderApp(`/package/maven/${GA}?tab=dependencies&deps=tree`);
 
       await screen.findByText("org.springframework:spring-jcl");
       const item = (name) => screen.getByText(name).closest(".dep-tree-item");
@@ -1701,14 +1701,14 @@ describe("PackagePage", () => {
           },
         ],
       });
-      renderApp(`/package/maven/${GA}?tab=dependencies`);
+      renderApp(`/package/maven/${GA}?tab=dependencies&deps=tree`);
 
       await screen.findByText("org.springframework:spring-jcl");
       expect(screen.getByText("scope runtime")).toHaveClass("cond");
     });
 
     it("sends no scopes for the other ecosystems", async () => {
-      renderApp("/package/flask?tab=dependencies");
+      renderApp("/package/flask?tab=dependencies&deps=tree");
       await screen.findByText("werkzeug");
       expect(screen.queryByRole("group", { name: "Scopes" })).not.toBeInTheDocument();
       expect(api.fetchDependencies.mock.calls[0][3]).not.toHaveProperty("scopes");
@@ -1895,7 +1895,7 @@ describe("PackagePage", () => {
     it("stays usable when the artifacts cannot be read", async () => {
       mockPackage();
       api.fetchArtifacts.mockRejectedValue({ message: "HTTP 500" });
-      renderApp(`/package/rpm/${NAME}?tab=dependencies`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       expect(await screen.findByText("libssl.so.3()(64bit)")).toBeInTheDocument();
       expect(screen.queryByText("HTTP 500")).not.toBeInTheDocument();
@@ -1904,7 +1904,7 @@ describe("PackagePage", () => {
 
     it("shows an arch selector with the four arches, x86_64 selected, and sends only arch and include_optional", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}?tab=dependencies`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       await screen.findByText("libssl.so.3()(64bit)");
       const select = screen.getByLabelText("Arch");
@@ -1918,7 +1918,7 @@ describe("PackagePage", () => {
 
     it("reloads the tree for another arch", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}?tab=dependencies`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       await screen.findByText("libssl.so.3()(64bit)");
       await userEvent.selectOptions(screen.getByLabelText("Arch"), "aarch64");
@@ -1929,7 +1929,7 @@ describe("PackagePage", () => {
 
     it("reads the arch from the query", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}?arch=s390x&tab=dependencies`);
+      renderApp(`/package/rpm/${NAME}?arch=s390x&tab=dependencies&deps=tree`);
       await screen.findByText("libssl.so.3()(64bit)");
       expect(screen.getByLabelText("Arch")).toHaveValue("s390x");
       expect(api.fetchDependencies.mock.calls[0][3]).toEqual({ include_optional: false, arch: "s390x" });
@@ -1937,7 +1937,7 @@ describe("PackagePage", () => {
 
     it("falls back to x86_64 for an arch the API does not know", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}?arch=riscv64&tab=dependencies`);
+      renderApp(`/package/rpm/${NAME}?arch=riscv64&tab=dependencies&deps=tree`);
       await screen.findByText("libssl.so.3()(64bit)");
       expect(screen.getByLabelText("Arch")).toHaveValue("x86_64");
       expect(api.fetchDependencies.mock.calls[0][3]).toEqual({ include_optional: false, arch: "x86_64" });
@@ -1945,7 +1945,7 @@ describe("PackagePage", () => {
 
     it("asks for weak dependencies when include optional is ticked", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}?tab=dependencies`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       await screen.findByText("libssl.so.3()(64bit)");
       await userEvent.click(screen.getByLabelText("include optional"));
@@ -1956,7 +1956,7 @@ describe("PackagePage", () => {
 
     it("shows the capability with its constraint and a link to the package that provides it", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}?tab=dependencies`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       await screen.findByText("libssl.so.3()(64bit)");
       const item = (name) => screen.getByText(name).closest(".dep-tree-item");
@@ -1975,7 +1975,7 @@ describe("PackagePage", () => {
 
     it("shows the kind of a weak dependency and the arches a dependency is limited to", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}?tab=dependencies`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       await screen.findByText("libssl.so.3()(64bit)");
       const item = (name) => screen.getByText(name).closest(".dep-tree-item");
@@ -1986,7 +1986,7 @@ describe("PackagePage", () => {
 
     it("shows a capability nothing provides as unresolved, without a link", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}?tab=dependencies`);
+      renderApp(`/package/rpm/${NAME}?tab=dependencies&deps=tree`);
 
       await screen.findByText("/bin/sh");
       const shell = screen.getByText("/bin/sh").closest(".dep-tree-item");
@@ -1996,7 +1996,7 @@ describe("PackagePage", () => {
 
     it("carries a non-default arch to the page of the providing package", async () => {
       mockPackage();
-      renderApp(`/package/rpm/${NAME}?arch=aarch64&tab=dependencies`);
+      renderApp(`/package/rpm/${NAME}?arch=aarch64&tab=dependencies&deps=tree`);
 
       await screen.findByText("libssl.so.3()(64bit)");
       const link = within(screen.getByText("libssl.so.3()(64bit)").closest(".dep-tree-item")).getByRole("link", {
@@ -2006,7 +2006,7 @@ describe("PackagePage", () => {
     });
 
     it("sends no arch for the other ecosystems", async () => {
-      renderApp("/package/flask?tab=dependencies");
+      renderApp("/package/flask?tab=dependencies&deps=tree");
       await screen.findByText("werkzeug");
       expect(screen.queryByLabelText("Arch")).not.toBeInTheDocument();
       expect(api.fetchDependencies.mock.calls[0][3]).not.toHaveProperty("arch");

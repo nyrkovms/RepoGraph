@@ -925,3 +925,16 @@ button:disabled {
 .lines-table .line-versions > td {
   background: #f8fafc;
 }
+
+.dep-summary {
+  margin: 0 0 4px;
+}
+
+.dep-summary-note {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.dep-via {
+  font-size: 12px;
+}

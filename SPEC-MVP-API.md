@@ -416,6 +416,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
       "extra_name": null,
       "environment_markers": null,
       "resolved_version": "3.0.1",
+      "license": "BSD-3-Clause",
       "cycle": false,
       "children": []
     }
@@ -424,6 +425,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 ```
 
 - `package` — нормализованное имя, `profile` — slug применённого профиля, `depth` — фактическая глубина возвращённого дерева.
+- `license` узла — лицензия пакета, на который указывает `resolved_version`: SPDX-идентификатор, иначе строка как опубликована, иначе `null` (то же правило, что у `licenses` в `/overview`). У узла без разрешённой версии `null`. Лицензии всего дерева читаются одним запросом. Ссылки на пакет каталога отдельного поля нет: у узла с `resolved_version` это `resolved_name`, а когда он `null` — `name` (у Maven это `groupId:artifactId`, у RPM `resolved_name` — `<namespace>/<имя>`).
 - Errors: `404/422/500`
 
 ### 3.3.6 `GET /api/v1/packages/{ecosystem}/{coordinates}/-/versions/{version}/artifacts`
@@ -1522,6 +1524,7 @@ RPM принимает namespace вида `<дистрибутив>-<релиз>
 
 ## 8. Изменения
 
+- **1.13-api (2026-11-07), этап UX5.** Узел дерева зависимостей получает `license`: SPDX-идентификатор пакета, иначе строка как опубликована, иначе `null` (§3.3.5).
 - **1.12-api (2026-11-07), этап UX3.** Новый `GET {coords}/dependents`: зависимые пакеты каталога, прямые и косвенные, с требуемой версией, фильтр `relation`, курсор (§3.3.9).
 - **1.11-api (2026-11-07), этап UX2.** Главная страница и `/search`. В элементах списка и поиска поле `used_by` (§3.1); сортировка `used_by`; фильтры `min_used_by`, `deprecated`, `released_before` у `GET /packages` и `GET /search` (§3.1, §3.2); новый `GET /catalog/summary` (§3.2.1).
 - **1.10-api (2026-10-31), этап E6.** Каталог содержит RPM. Слаг экосистемы `rpm`, тип purl `rpm`: `pkg:rpm/<vendor>/<имя>?distro=<namespace>`, namespace — дистрибутив и релиз (`rocky-9`), часть идентичности; в путях, в `name` и в поиске координаты пишутся `<namespace>/<имя>` (§2.1, §3.1, §3.3). Версии RPM — EVR (`1:3.0.7-27.el9`), сравнение `rpmvercmp`, prerelease — `~` в version, вытесненная сборка той же архитектуры — `status: "superseded"`, `release_date` — время сборки, `license_raw` — тег License (§3.3.4). Артефакты версии — её `.rpm` по архитектурам, с полем `arch` (§3.3.6). Дерево зависимостей принимает `arch` (`x86_64`, `aarch64`, `ppc64le`, `s390x`), узлы — возможности (capability) с `scope` (`requires`, `recommends`, `suggests`, `supplements`, `enhances`), пакет, который возможность предоставляет, — `resolved_name` (§3.3.5). Resolve для RPM: `ecosystem: "rpm"`, окружение `distro` / `arch` / `repos` / `weak_deps` / `module_streams` / `disabled_modules` / `module_install`, стратегия `libsolv` (`dnf 4`, ответ равен `dnf install --assumeno --installroot`), ошибки `unsolvable`, `module_conflict`, `not_found` с `error.problems[]` (§4.1.6). `/admin/packages` принимает purl `rpm` с `distro` (§5.3), `/admin/presence-probe` — `ecosystem: "rpm"` (§5.6); стартового источника нет, набор источников — `backend/registries.rpm.yaml`, авторизация `tls_client_cert` и `basic` по `credentials_ref`, ежедневное обновление через rpm-worker (§5.8).

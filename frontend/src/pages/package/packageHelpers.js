@@ -221,9 +221,14 @@ export function readTab(value) {
   return TABS.some((tab) => tab.id === value) ? value : "overview";
 }
 
-// `?relation=` of the Used by tab: absent or unknown means both.
+// `?relation=` of the Used by and Dependencies tabs: absent or unknown means both.
 export function readRelation(value) {
   return value === "direct" || value === "indirect" ? value : "";
+}
+
+// `?deps=` of the Dependencies tab: absent or unknown means the table.
+export function readDepsView(value) {
+  return value === "tree" ? "tree" : "";
 }
 
 // `?view=` of the Versions tab: absent or unknown means the release lines.
