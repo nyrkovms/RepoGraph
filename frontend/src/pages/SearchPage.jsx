@@ -165,6 +165,7 @@ export default function SearchPage() {
           onSubmit={handleSubmit}
           placeholder={PLACEHOLDERS[ecosystem] || DEFAULT_PLACEHOLDER}
           ecosystem={ecosystem}
+          applied={q}
         />
         <button type="button" onClick={handleSubmit} disabled={loading}>
           {loading ? "Loading..." : "Search"}

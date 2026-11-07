@@ -8,8 +8,8 @@ import { displayName, ecosystemLabel, itemKey, nativeName, packageHref } from ".
 const AUTOCOMPLETE_LIMIT = 8;
 
 // The query field with autocomplete. Enter without a highlighted suggestion calls `onSubmit`; a suggestion opens its
-// package. `ecosystem` narrows the suggestions.
-export default function SearchBox({ value, onChange, onSubmit, placeholder, ariaLabel = "Search query", ecosystem = "" }) {
+// package. `ecosystem` narrows the suggestions; `applied` is the query already showing as results, which needs none.
+export default function SearchBox({ value, onChange, onSubmit, placeholder, ariaLabel = "Search query", ecosystem = "", applied = "" }) {
   const navigate = useNavigate();
   const autocompleteRequestId = useRef(0);
 
@@ -17,18 +17,18 @@ export default function SearchBox({ value, onChange, onSubmit, placeholder, aria
   const [open, setSuggestionsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   // An emptied field shows nothing, whatever the last answer was.
-  const hasQuery = Boolean(value.trim());
+  const isApplied = value.trim() === applied.trim();
+  const hasQuery = Boolean(value.trim()) && !isApplied;
   const suggestions = hasQuery ? found : [];
   const suggestionsOpen = hasQuery && open;
 
   useEffect(() => {
     const trimmedQuery = value.trim();
-    if (!trimmedQuery) {
-      return;
-    }
-
     const requestId = autocompleteRequestId.current + 1;
     autocompleteRequestId.current = requestId;
+    if (!trimmedQuery || isApplied) {
+      return;
+    }
 
     const timeoutId = window.setTimeout(async () => {
       try {
@@ -55,7 +55,7 @@ export default function SearchBox({ value, onChange, onSubmit, placeholder, aria
     }, 250);
 
     return () => window.clearTimeout(timeoutId);
-  }, [value, ecosystem]);
+  }, [value, ecosystem, isApplied]);
 
   function closeSuggestions() {
     setSuggestionsOpen(false);

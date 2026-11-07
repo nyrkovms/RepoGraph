@@ -294,7 +294,9 @@ describe("versions tab", () => {
     await waitFor(() => expect(query().version).toBe("2.13.5"));
     expect(query().tab).toBe("versions");
     expect(screen.getByRole("tab", { name: /Versions/ })).toHaveAttribute("aria-selected", "true");
-    expect(within(screen.getByRole("link", { name: "2.13.5" }).closest("li")).getByText("viewing")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(screen.getByRole("link", { name: "2.13.5" }).closest("li")).getByText("viewing")).toBeInTheDocument();
+    });
     expect(within(screen.getByRole("link", { name: "2.14.3" }).closest("li")).queryByText("viewing")).not.toBeInTheDocument();
   });
 });

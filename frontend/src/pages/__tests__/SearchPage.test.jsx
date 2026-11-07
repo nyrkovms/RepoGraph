@@ -630,6 +630,25 @@ describe("SearchPage", () => {
     expect(screen.getByLabelText("License")).toHaveValue("MIT");
   });
 
+  it("asks for no suggestions for the query already showing as results", async () => {
+    const user = userEvent.setup();
+    api.searchPackages.mockResolvedValue(await api.fetchPackages());
+    api.fetchPackages.mockClear();
+    renderAt("/search?q=flask");
+    await screen.findByRole("link", { name: "Flask" });
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    expect(api.searchPackages).toHaveBeenCalledTimes(1);
+
+    await user.type(screen.getByLabelText("Search query"), "x");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => {
+      expect(api.searchPackages).toHaveBeenLastCalledWith(expect.objectContaining({ q: "flaskx", limit: 20 }));
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    expect(api.searchPackages).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("listbox", { name: "Search suggestions" })).not.toBeInTheDocument();
+  });
+
   it("writes sort and license to the address and reloads", async () => {
     const user = userEvent.setup();
     renderAt("/search");
