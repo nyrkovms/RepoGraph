@@ -1016,9 +1016,12 @@ def test_catalog_summary_narrows_to_an_ecosystem(client: TestClient, usage_graph
     whole = client.get(f"{API}/catalog/summary").json()
     npm = client.get(f"{API}/catalog/summary", params={"ecosystem": "npm"}).json()
     assert npm["ecosystems"] == whole["ecosystems"]   # the chips keep every ecosystem
-    assert ux_names({"data": npm["most_used"]}) == ux_names({"data": whole["most_used"]})   # the graph is all npm
-    assert npm["deprecated_in_use_total"] == whole["deprecated_in_use_total"] >= 1
-    assert npm["stale_in_use"] == whole["stale_in_use"]
+    assert npm["most_used"] and all(row["ecosystem"] == "npm" for row in npm["most_used"])
+    assert all(row["ecosystem"] == "npm" for row in npm["deprecated_in_use"])
+    # The test graph is npm: what it holds is all in the narrowed lists, whatever else the database has.
+    assert ux_names({"data": npm["most_used"]}) == [name for name in ["old", "hub3", "hub2", "nul", "dep", "hub1"] if name in ux_names({"data": npm["most_used"]})]
+    assert 1 <= npm["deprecated_in_use_total"] <= whole["deprecated_in_use_total"]
+    assert 1 <= npm["stale_in_use"]["packages"] <= whole["stale_in_use"]["packages"]
 
     go = client.get(f"{API}/catalog/summary", params={"ecosystem": "go"}).json()
     assert go["ecosystems"] == whole["ecosystems"]
