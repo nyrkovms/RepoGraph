@@ -46,7 +46,7 @@ export function CopyField({ label, text }) {
     <div className="copy-field">
       <span className="copy-field-label">{label}</span>
       <code ref={textRef}>{text}</code>
-      <button type="button" onClick={copy} aria-label={`Copy ${label}`}>
+      <button type="button" className="copy-button" onClick={copy} aria-label={`Copy ${label}`}>
         Copy
       </button>
       <span className="muted copy-field-state" role="status">

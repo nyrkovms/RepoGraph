@@ -45,7 +45,11 @@ export const FLAG_LABELS = {
 };
 
 
+// The one date format of the UI: the reader's locale, no ISO dates. Empty for no value.
 export function formatDate(value) {
+  if (!value) {
+    return "";
+  }
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
 }

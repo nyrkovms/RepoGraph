@@ -139,6 +139,12 @@ export default function PackagePage() {
     [allNodeIds, collapsedNodes]
   );
 
+  // A version outside the loaded ones may not exist: its detail is asked first, and a 404 there spares the tree, the
+  // overview and the files requests that would 404 too. A loaded version is known to exist and does not wait.
+  const versionKnown = versions.some((row) => row.version === selectedVersion);
+  const versionMissing = Boolean(missingVersion) && missingVersion === selectedVersion;
+  const treeAllowed = !versionMissing && (versionKnown || detailSettledFor === selectedVersion);
+
   useEffect(() => {
     if (!name) {
       return;
@@ -250,12 +256,12 @@ export default function PackagePage() {
   }, [activeTab, relation, depRelation, depsView, versionsView, expandedLine, compareFrom, isNpm, isCrates, isGo, isNuget, isMaven, isRpm, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional, setSearchParams]);
 
   useEffect(() => {
-    if (!name || !selectedVersion) {
+    if (!name || !selectedVersion || !treeAllowed) {
       return;
     }
     loadDependencies(name, selectedVersion);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ecosystem, name, selectedVersion, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional]);
+  }, [ecosystem, name, selectedVersion, treeAllowed, pythonVersion, nodeVersion, cpu, os, target, framework, scopes, arch, features, defaultFeatures, includeOptional]);
 
   // RPM: the listed versions and the selected one are asked for their files, whose arches the page shows. A failed
   // request leaves that version without arches; the page does not depend on them.
@@ -264,13 +270,13 @@ export default function PackagePage() {
       return undefined;
     }
     const wanted = new Set(versions.slice(0, VERSIONS_SHOWN).map((row) => row.version));
-    if (selectedVersion) {
+    if (selectedVersion && !versionMissing) {
       wanted.add(selectedVersion);
     }
     wanted.forEach(loadArches);
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRpm, ecosystem, name, versions, selectedVersion]);
+  }, [isRpm, ecosystem, name, versions, selectedVersion, versionMissing]);
 
   function loadArches(version) {
     const key = `${name}/${version}`;
@@ -316,7 +322,9 @@ export default function PackagePage() {
   // `pending` is hydrated by one request at a time, so they wait for the tree. A hydrated one needs no waiting.
   const detailNow = versionDetail && versionDetail.version === selectedVersion ? versionDetail : null;
   const hydrationClear =
-    detailSettledFor === selectedVersion && !(detailNow?.dependencies_state === "pending" && depsSettledFor !== selectedVersion);
+    !versionMissing &&
+    detailSettledFor === selectedVersion &&
+    !(detailNow?.dependencies_state === "pending" && depsSettledFor !== selectedVersion);
 
   useEffect(() => {
     if (!name || !selectedVersion || !hydrationClear) {
@@ -539,6 +547,21 @@ export default function PackagePage() {
     return `?${next.toString()}`;
   }
 
+  const notice =
+    pkg && versionMissing ? (
+      <div className="banner warn" role="alert">
+        <b>Version {missingVersion} is not in the catalog</b>
+        {pkg.latest_version ? (
+          <>
+            {" "}
+            <ActionLink href={tabHref(undefined, { version: pkg.latest_version })} onSelect={() => setSelectedVersion(pkg.latest_version)}>
+              Open {pkg.latest_version}, the latest
+            </ActionLink>
+          </>
+        ) : null}
+      </div>
+    ) : null;
+
   return (
     <section>
       {error ? <p className="error">{error}</p> : null}
@@ -561,23 +584,11 @@ export default function PackagePage() {
         onSelectVersion={setSelectedVersion}
         tabHref={tabHref}
         onSelectTab={setActiveTab}
+        notice={notice}
+        missingVersion={versionMissing}
       />
 
-      {pkg && missingVersion && missingVersion === selectedVersion ? (
-        <div className="banner warn" role="alert">
-          <b>Version {missingVersion} is not in the catalog</b>
-          {pkg.latest_version ? (
-            <>
-              {" "}
-              <ActionLink href={tabHref(undefined, { version: pkg.latest_version })} onSelect={() => setSelectedVersion(pkg.latest_version)}>
-                Open {pkg.latest_version}, the latest
-              </ActionLink>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-
-      {pkg && !(missingVersion && missingVersion === selectedVersion) ? (
+      {pkg && !versionMissing ? (
         <PackageTabs tabs={tabs} active={activeTab} onSelect={setActiveTab}>
           {activeTab === "overview" ? (
             <OverviewTab

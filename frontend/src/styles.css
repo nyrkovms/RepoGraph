@@ -532,18 +532,25 @@ button:disabled {
 }
 
 /* Package card: header, fact strip, identifiers, tabs and the Overview blocks */
-.package-header h2 {
-  margin-bottom: 4px;
-}
-
-.package-version {
+/* The name, the ecosystem and the version select share one line, wrapping on a narrow screen. */
+.package-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 12px;
   margin-bottom: 8px;
 }
 
-.package-version .tag {
+.package-title h2 {
+  margin: 0;
+}
+
+.package-title select {
+  min-width: 0;
+  padding: 4px 8px;
+}
+
+.package-title .tag {
   margin-left: 0;
 }
 
@@ -576,9 +583,11 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+/* Identifiers sit on one line that wraps: each field is its own unbreakable-by-default group. */
 .identifiers {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
   margin-bottom: 8px;
 }
 
@@ -586,11 +595,11 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 6px;
+  min-width: 0;
 }
 
 .copy-field-label {
-  min-width: 52px;
   color: #475569;
   font-size: 13px;
 }
@@ -600,8 +609,27 @@ button:disabled {
   user-select: all;
 }
 
+/* A small text button: copying is secondary to the identifier it sits next to. */
+.copy-button {
+  padding: 1px 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: transparent;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.copy-button:hover {
+  background: #eff6ff;
+}
+
 .copy-field-state {
-  min-width: 70px;
+  font-size: 12px;
+}
+
+.copy-field-state:empty {
+  display: none;
 }
 
 .package-links {

@@ -7,6 +7,9 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import PackagePage from "../PackagePage";
 import * as api from "../../lib/api";
 
+// The UI writes dates in the reader's locale, like Updates: expectations take the same fixture timestamp.
+const day = (iso) => new Date(iso).toLocaleDateString();
+
 vi.mock("../../lib/api", () => ({
   fetchArtifacts: vi.fn(),
   fetchDependencies: vi.fn(),
@@ -125,6 +128,27 @@ describe("package card", () => {
   });
 
   describe("header", () => {
+    it("puts the version select on the name's line with an accessible label and no stacked one", async () => {
+      renderCard();
+      await ready();
+      const title = document.querySelector(".package-title");
+      expect(within(title).getByRole("heading", { level: 2 })).toHaveTextContent("pydantic");
+      expect(within(title).getByLabelText("Version")).toHaveValue("2.14.3");
+      expect(within(title).getByText("latest", { selector: ".tag" })).toBeInTheDocument();
+      expect(document.querySelector("label.package-version, .package-version")).toBeNull();
+      expect(screen.queryByText("Version", { selector: "label" })).not.toBeInTheDocument();
+    });
+
+    it("shows the copy controls as small text buttons in one wrapping line", async () => {
+      renderCard();
+      await ready();
+      const buttons = screen.getAllByRole("button", { name: /^Copy / });
+      expect(buttons.map((button) => button.textContent)).toEqual(["Copy", "Copy"]);
+      buttons.forEach((button) => expect(button).toHaveClass("copy-button"));
+      const identifiers = document.querySelector(".identifiers");
+      expect(identifiers.querySelectorAll(".copy-field")).toHaveLength(2);
+    });
+
     it("shows the name, ecosystem, version, latest tag, description, facts and links", async () => {
       renderCard();
       await ready();
@@ -136,7 +160,7 @@ describe("package card", () => {
       expect(screen.queryByText(/Not the latest version/)).not.toBeInTheDocument();
 
       const facts = document.querySelector(".fact-strip");
-      expect(within(facts).getByText("Released").nextSibling).toHaveTextContent("2026-11-05");
+      expect(within(facts).getByText("Released").nextSibling).toHaveTextContent(day("2026-11-05T09:00:00Z"));
       expect(within(facts).getByText("License").nextSibling).toHaveTextContent("MIT");
       expect(within(facts).getByText("Used by").nextSibling).toHaveTextContent("1 in catalog");
       expect(within(facts).getByText("Dependencies").nextSibling).toHaveTextContent("4 + 2 optional");
@@ -246,6 +270,41 @@ describe("package card", () => {
       await userEvent.setup().click(screen.getByRole("link", { name: /Open 2\.14\.3, the latest/ }));
       await waitFor(() => expect(screen.queryByText(/is not in the catalog/)).not.toBeInTheDocument());
       expect(await screen.findByRole("tab", { name: /Versions/ })).toBeInTheDocument();
+    });
+
+    it("puts the message first under the title and leaves out what a missing version cannot have", async () => {
+      api.fetchVersion.mockRejectedValue({ code: "http_error", message: "HTTP 404", status: 404 });
+      api.fetchDependencies.mockRejectedValue({ code: "http_error", message: "HTTP 404", status: 404 });
+      api.fetchOverview.mockRejectedValue({ code: "http_error", message: "HTTP 404", status: 404 });
+      renderCard("/package/pydantic?version=9.9.9");
+      const message = await screen.findByText("Version 9.9.9 is not in the catalog");
+
+      const header = document.querySelector(".package-header");
+      const children = [...header.children];
+      expect(children[0]).toHaveClass("package-title");
+      expect(children[1]).toBe(message.closest(".banner"));   // right under the title row
+      expect(document.querySelector(".fact-strip")).toBeNull();
+      expect(document.querySelector(".identifiers")).toBeNull();
+      expect(screen.queryByText("Not the latest version")).not.toBeInTheDocument();
+      expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+      // What belongs to the package stays.
+      expect(screen.getByText("Data validation using Python type hints")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Repository" })).toBeInTheDocument();
+    });
+
+    it("does not ask for the tree or the overview of a version the detail says is missing", async () => {
+      api.fetchVersion.mockRejectedValue({ code: "http_error", message: "HTTP 404", status: 404 });
+      renderCard("/package/pydantic?version=9.9.9");
+      await screen.findByText("Version 9.9.9 is not in the catalog");
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(api.fetchDependencies).not.toHaveBeenCalled();
+      expect(api.fetchOverview).not.toHaveBeenCalled();
+    });
+
+    it("does not make a loaded version wait for its detail before the tree", async () => {
+      api.fetchVersion.mockReturnValue(new Promise(() => {}));
+      renderCard("/package/pydantic?version=2.13.5");
+      await waitFor(() => expect(api.fetchDependencies).toHaveBeenCalledWith("pypi", "pydantic", "2.13.5", expect.anything()));
     });
 
     it("keeps a version outside the first page of versions in the selector", async () => {
@@ -404,7 +463,7 @@ describe("package card", () => {
 
       const lines = screen.getByRole("heading", { name: "Release lines" }).parentElement;
       expect(within(lines).getAllByRole("listitem")).toHaveLength(3);
-      expect(lines).toHaveTextContent("2.14 2.14.3 2026-11-05");
+      expect(lines).toHaveTextContent(`2.14 2.14.3 ${day("2026-11-05T09:00:00Z")}`);
       expect(lines).not.toHaveTextContent("1.10");
     });
 

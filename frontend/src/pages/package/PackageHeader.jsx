@@ -40,7 +40,9 @@ function dependencyFact(dependencies, link) {
 }
 
 // What a reader wants in five seconds, above every tab: which package, which version, what is wrong with it, the
-// facts, how to name and install it, where it lives.
+// facts, how to name and install it, where it lives. `notice` is shown right under the title; for a version the catalog
+// does not have (`missingVersion`) the version's own parts (status, facts, identifiers, "not the latest") are left out,
+// as nothing of them exists.
 export function PackageHeader({
   title,
   ecosystem,
@@ -58,6 +60,8 @@ export function PackageHeader({
   onSelectVersion,
   tabHref,
   onSelectTab,
+  notice = null,
+  missingVersion = false,
 }) {
   const isGo = ecosystem === "go";
   const isMaven = ecosystem === "maven";
@@ -77,31 +81,32 @@ export function PackageHeader({
 
   return (
     <div className="package-header">
-      <h2>
-        {title}
-        <span className="tag eco-badge">{ECOSYSTEM_LABELS[ecosystem] || ecosystem}</span>
-      </h2>
+      <div className="package-title">
+        <h2>
+          {title}
+          <span className="tag eco-badge">{ECOSYSTEM_LABELS[ecosystem] || ecosystem}</span>
+        </h2>
+        {pkg ? (
+          <>
+            <select
+              aria-label="Version"
+              value={selectedVersion}
+              onChange={(event) => onSelectVersion(event.target.value)}
+              disabled={loading || options.length === 0}
+            >
+              {options.map((version) => (
+                <option key={version} value={version}>
+                  {version}
+                </option>
+              ))}
+            </select>
+            {isLatest ? <span className="tag">latest</span> : null}
+          </>
+        ) : null}
+      </div>
+      {notice}
       {pkg ? (
         <>
-          <div className="package-version">
-            <label>
-              Version
-              <select
-                aria-label="Version"
-                value={selectedVersion}
-                onChange={(event) => onSelectVersion(event.target.value)}
-                disabled={loading || options.length === 0}
-              >
-                {options.map((version) => (
-                  <option key={version} value={version}>
-                    {version}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {isLatest ? <span className="tag">latest</span> : null}
-          </div>
-
           {deprecated ? (
             <div className="banner warn" role="alert">
               <b>Deprecated</b>
@@ -114,12 +119,12 @@ export function PackageHeader({
               ) : null}
             </div>
           ) : null}
-          {showStatus ? (
+          {showStatus && !missingVersion ? (
             <div className="banner warn" role="status">
               <b>Version {versionRow.version}</b> <VersionStatus version={versionRow} isGo={isGo} />
             </div>
           ) : null}
-          {selectedVersion && pkg.latest_version && selectedVersion !== pkg.latest_version ? (
+          {!missingVersion && selectedVersion && pkg.latest_version && selectedVersion !== pkg.latest_version ? (
             <div className="banner">
               <b>Not the latest version</b>:{" "}
               <ActionLink
@@ -139,23 +144,25 @@ export function PackageHeader({
             </div>
           ) : null}
 
-          <dl className="fact-strip">
-            {formatDate(versionRow?.release_date) ? <Fact label="Released">{formatDate(versionRow.release_date)}</Fact> : null}
-            <Fact label="License">{tabLink("overview", license)}</Fact>
-            {overview ? (
-              <>
-                <Fact label="Used by">
-                  {overview.used_by.direct > 0
-                    ? tabLink("used-by", `${overview.used_by.direct} in catalog`)
-                    : `${overview.used_by.direct} in catalog`}
-                </Fact>
-                <Fact label="Dependencies">{dependencyFact(overview.dependencies, (text) => tabLink("dependencies", text))}</Fact>
-                <Fact label="Versions">{tabLink("versions", overview.versions.total)}</Fact>
-              </>
-            ) : null}
-          </dl>
+          {!missingVersion ? (
+            <dl className="fact-strip">
+              {formatDate(versionRow?.release_date) ? <Fact label="Released">{formatDate(versionRow.release_date)}</Fact> : null}
+              <Fact label="License">{tabLink("overview", license)}</Fact>
+              {overview ? (
+                <>
+                  <Fact label="Used by">
+                    {overview.used_by.direct > 0
+                      ? tabLink("used-by", `${overview.used_by.direct} in catalog`)
+                      : `${overview.used_by.direct} in catalog`}
+                  </Fact>
+                  <Fact label="Dependencies">{dependencyFact(overview.dependencies, (text) => tabLink("dependencies", text))}</Fact>
+                  <Fact label="Versions">{tabLink("versions", overview.versions.total)}</Fact>
+                </>
+              ) : null}
+            </dl>
+          ) : null}
 
-          {purl || selectedVersion ? (
+          {!missingVersion && (purl || selectedVersion) ? (
             <div className="identifiers">
               {purl ? <CopyField label="purl" text={purl} /> : null}
               {selectedVersion && installCommand(ecosystem, pkg, selectedVersion) ? (

@@ -6,6 +6,9 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import PackagePage from "../PackagePage";
 import * as api from "../../lib/api";
 
+// The UI writes dates in the reader's locale, like Updates: expectations take the same fixture timestamp.
+const day = (iso) => new Date(iso).toLocaleDateString();
+
 vi.mock("../../lib/api", () => ({
   fetchArtifacts: vi.fn(),
   fetchDependencies: vi.fn(),
@@ -132,8 +135,8 @@ describe("versions tab", () => {
     expect(within(lineRows()[0]).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([
       "Line", "Latest", "Released", "Stable releases", "Started",
     ]);
-    expect(cells(lineRows()[1])).toEqual(["2.14viewing", "2.14.3", "2026-11-05", "4", "2026-04-02"]);
-    expect(cells(lineRows()[4])).toEqual(["1.10", "1.10.22", "2025-01-01", "22", "2024-01-01"]);
+    expect(cells(lineRows()[1])).toEqual(["2.14viewing", "2.14.3", day("2026-11-05T09:00:00Z"), "4", day("2026-04-02T09:00:00Z")]);
+    expect(cells(lineRows()[4])).toEqual(["1.10", "1.10.22", day("2025-01-01T09:00:00Z"), "22", day("2024-01-01T09:00:00Z")]);
     // The first page of versions is the one the page loaded; no line was asked for.
     expect(api.fetchVersions.mock.calls.every(([, , params]) => !params.line)).toBe(true);
     expect(query().view).toBeUndefined();
@@ -290,7 +293,7 @@ describe("versions tab", () => {
     expect(link).toBeInTheDocument();
     expect(within(row("2.14.3")).queryByText("active")).not.toBeInTheDocument();
     expect(within(row("2.14.2")).getByText("yanked")).toHaveClass("warn");
-    expect(within(row("2.14.3")).getByText("2026-11-05")).toBeInTheDocument();
+    expect(within(row("2.14.3")).getByText(day("2026-11-05T09:00:00Z"))).toBeInTheDocument();
     expect(api.fetchVersions).toHaveBeenCalledTimes(1);
   });
 

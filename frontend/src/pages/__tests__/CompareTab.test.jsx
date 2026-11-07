@@ -6,6 +6,9 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import PackagePage from "../PackagePage";
 import * as api from "../../lib/api";
 
+// The UI writes dates in the reader's locale, like Updates: expectations take the same fixture timestamp.
+const day = (iso) => new Date(iso).toLocaleDateString();
+
 vi.mock("../../lib/api", () => ({
   fetchArtifacts: vi.fn(),
   fetchDependencies: vi.fn(),
@@ -229,13 +232,13 @@ describe("compare tab", () => {
     expect(addedCells[2]).toHaveTextContent(">=0.7");
     expect(screen.getByText("1 dependency unchanged")).toBeInTheDocument();
     expect(screen.getByText("License per version is not stored")).toBeInTheDocument();
-    expect(screen.getByText(/released 2026-09-01/)).toHaveTextContent("released 2026-09-01 → 2026-11-05");
+    expect(screen.getByText(/^released /)).toHaveTextContent(`released ${day("2026-09-01T09:00:00Z")} → ${day("2026-11-05T09:00:00Z")}`);
   });
 
   it("tags a side that is not active in the dates line", async () => {
     api.fetchCompare.mockResolvedValue({ ...DIFF, from: side("2.13.5", { status: "yanked" }) });
     await open();
-    expect(await screen.findByText(/released 2026-09-01/)).toHaveTextContent("released 2026-09-01 yanked → 2026-11-05");
+    expect(await screen.findByText(/^released /)).toHaveTextContent(`released ${day("2026-09-01T09:00:00Z")} yanked → ${day("2026-11-05T09:00:00Z")}`);
   });
 
   it("says so when nothing changed", async () => {

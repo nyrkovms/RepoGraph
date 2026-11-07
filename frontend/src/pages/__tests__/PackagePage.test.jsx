@@ -6,6 +6,9 @@ import App from "../../App";
 import PackagePage from "../PackagePage";
 import * as api from "../../lib/api";
 
+// The UI writes dates in the reader's locale, like Updates: expectations take the same fixture timestamp.
+const day = (iso) => new Date(iso).toLocaleDateString();
+
 vi.mock("../../lib/api", () => ({
   fetchArtifacts: vi.fn(),
   fetchDependencies: vi.fn(),
@@ -739,8 +742,8 @@ describe("PackagePage", () => {
       );
       expect(screen.getByText((content) => content.includes("MIT OR Apache-2.0"))).toBeInTheDocument();
 
-      expect(screen.getByText("2026-03-01")).toBeInTheDocument();
-      expect(screen.getByText("2026-02-01")).toBeInTheDocument();
+      expect(screen.getByText(day("2026-03-01T10:00:00Z"))).toBeInTheDocument();
+      expect(screen.getByText(day("2026-02-01T10:00:00Z"))).toBeInTheDocument();
       expect(screen.getByText("yanked", { selector: ".tag" })).toHaveClass("warn");
       // A version that is not yanked or otherwise flagged shows no status.
       expect(screen.queryByText("active", { selector: ".tag" })).not.toBeInTheDocument();
@@ -1077,7 +1080,7 @@ describe("PackagePage", () => {
 
       expect(within(row("v2.0.0+incompatible")).queryByText("pseudo-version")).not.toBeInTheDocument();
       expect(screen.getAllByText("v2.0.0+incompatible").length).toBeGreaterThan(0);
-      expect(screen.getByText("2026-10-14", { exact: false })).toBeInTheDocument();
+      expect(screen.getByText(day("2026-10-14T14:36:41Z"), { exact: false })).toBeInTheDocument();
     });
 
     it("shows a deprecation banner only when the module is deprecated", async () => {
@@ -1278,12 +1281,12 @@ describe("PackagePage", () => {
       const row = (version) => items.find((item) => item.textContent.startsWith(version));
 
       expect(within(row("13.0.2")).getByText("unlisted")).toBeInTheDocument();
-      expect(within(row("13.0.2")).getByText("2023-02-01")).toBeInTheDocument();
+      expect(within(row("13.0.2")).getByText(day("2023-02-01T10:00:00Z"))).toBeInTheDocument();
       // An unlisted version may have no date.
       expect(within(row("13.0.3-beta1")).getByText("unlisted")).toBeInTheDocument();
       expect(row("13.0.3-beta1").querySelector(".version-date")).toBeNull();
       expect(within(row("13.0.3")).queryByText("unlisted")).not.toBeInTheDocument();
-      expect(within(row("13.0.3")).getByText("2023-03-08")).toBeInTheDocument();
+      expect(within(row("13.0.3")).getByText(day("2023-03-08T10:00:00Z"))).toBeInTheDocument();
       expect(within(row("12.0.3.1")).queryByText("active")).not.toBeInTheDocument();
       expect(row("1.0.0-BETA")).toBeTruthy();
       expect(screen.getByRole("option", { name: "12.0.3.1" })).toBeInTheDocument();
@@ -1531,9 +1534,9 @@ describe("PackagePage", () => {
       const items = await versionRows();
       const row = (version) => items.find((item) => item.textContent.startsWith(version));
 
-      expect(within(row("6.1.14")).getByText("2024-10-16")).toBeInTheDocument();
+      expect(within(row("6.1.14")).getByText(day("2024-10-16T10:00:00Z"))).toBeInTheDocument();
       expect(within(row("6.1.14")).getByText("jar")).toBeInTheDocument();
-      expect(within(row("6.2.0-RC1")).getByText("2024-10-10")).toBeInTheDocument();
+      expect(within(row("6.2.0-RC1")).getByText(day("2024-10-10T10:00:00Z"))).toBeInTheDocument();
       expect(within(row("6.2.0-RC1")).queryByText("jar")).not.toBeInTheDocument();
       expect(row("6.1.13").querySelector(".version-date")).toBeNull();
       expect(screen.getByRole("option", { name: "6.2.0-RC1" })).toBeInTheDocument();
@@ -1858,12 +1861,12 @@ describe("PackagePage", () => {
       const items = await versionRows();
       const row = (version) => items.find((item) => item.textContent.startsWith(version));
 
-      expect(within(row("1:3.0.7-27.el9")).getByText("2024-10-16")).toBeInTheDocument();
+      expect(within(row("1:3.0.7-27.el9")).getByText(day("2024-10-16T10:00:00Z"))).toBeInTheDocument();
       expect(within(row("1:3.0.7-27.el9")).queryByText("active")).not.toBeInTheDocument();
       const superseded = within(row("1:3.0.7-24.el9")).getByText("superseded");
       expect(superseded).toHaveClass("muted-tag");
       expect(superseded).toHaveAttribute("title", expect.stringContaining("newer build"));
-      expect(within(row("1:3.0.7-24.el9")).getByText("2024-05-02")).toBeInTheDocument();
+      expect(within(row("1:3.0.7-24.el9")).getByText(day("2024-05-02T10:00:00Z"))).toBeInTheDocument();
       expect(row("1:3.0.7~rc1-1.el9").querySelector(".version-date")).toBeNull();
       expect(screen.getByRole("option", { name: "1:3.0.7~rc1-1.el9" })).toBeInTheDocument();
     });

@@ -153,10 +153,8 @@ export function collectDependencyConditions(node, ecosystem) {
   };
 }
 
-export function formatDate(value) {
-  const match = /^\d{4}-\d{2}-\d{2}/.exec(String(value || ""));
-  return match ? match[0] : "";
-}
+// One date format for the whole UI, the one Updates uses.
+export { formatDate } from "../../lib/updates";
 
 export function isWebUrl(value) {
   return typeof value === "string" && /^https?:\/\//i.test(value);
