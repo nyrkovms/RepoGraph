@@ -25,6 +25,15 @@ jobs:
       - name: Run mypy
         run: make mypy
 
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check relative links in Markdown
+        run: make docs-check
+
   backend-lint:
     runs-on: ubuntu-latest
     steps:
