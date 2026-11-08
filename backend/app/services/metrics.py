@@ -1,6 +1,7 @@
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import perf_counter
+from typing import Any
 
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 
@@ -31,15 +32,15 @@ SYNC_DURATION_SECONDS = Histogram(
     ["operation"],
 )
 
+# Per operation and ecosystem, from the runs journal; runs over all ecosystems (seed, retry) get ecosystem="all".
+RUN_LABELS = ["operation", "ecosystem"]
+
 SYNC_LAST_DURATION_SECONDS = Gauge(
-    "packagehub_sync_last_duration_seconds",
-    "Last known sync duration from DB cursor data",
-    ["operation"],
+    "packagehub_sync_last_duration_seconds", "Duration of the last finished run", RUN_LABELS
 )
 
 SYNC_LAST_STATUS = Gauge(
-    "packagehub_sync_last_status",
-    "Last known sync status from DB (idle=0,running=1,failed=2)",
+    "packagehub_sync_last_status", "Status of the last run (finished ok=0, running=1, failed=2)", RUN_LABELS
 )
 
 DAILY_UPDATE_DURATION_SECONDS = Histogram(
@@ -119,24 +120,19 @@ def observe_sync_duration(operation: str, elapsed_seconds: float) -> None:
     SYNC_DURATION_SECONDS.labels(operation=operation).observe(elapsed_seconds)
 
 
-def update_sync_gauges(states: Iterable) -> None:
-    status_map = {"idle": 0, "running": 1, "failed": 2}
-    max_status = 0
+def update_run_gauges(latest: Iterable, last_finished: Iterable, now: datetime, stale_after: timedelta) -> None:
+    """`latest`: the newest runs row per (operation, ecosystem); `last_finished`: the newest one with finished_at.
+    A run still running after `stale_after` died without finishing and counts as failed."""
+    for run in latest:
+        dead = run.status == "running" and run.started_at < now - stale_after
+        value = 2 if run.status == "failed" or dead else 1 if run.status == "running" else 0
+        SYNC_LAST_STATUS.labels(**_run_labels(run)).set(value)
+    for run in last_finished:
+        SYNC_LAST_DURATION_SECONDS.labels(**_run_labels(run)).set((run.finished_at - run.started_at).total_seconds())
 
-    for state in states:
-        status_value = status_map.get(getattr(state.status, "value", str(state.status)), 0)
-        max_status = max(max_status, status_value)
 
-        cursor_data = state.cursor_data or {}
-        operation = cursor_data.get("last_operation")
-        duration_ms = cursor_data.get("last_duration_ms")
-        if operation and duration_ms is not None:
-            try:
-                SYNC_LAST_DURATION_SECONDS.labels(operation=operation).set(float(duration_ms) / 1000.0)
-            except Exception:  # noqa: BLE001, S112 - a gauge that cannot be set is skipped, not the others
-                continue
-
-    SYNC_LAST_STATUS.set(max_status)
+def _run_labels(run: Any) -> dict[str, str]:
+    return {"operation": run.operation, "ecosystem": run.ecosystem.value if run.ecosystem else "all"}
 
 
 def update_source_gauges(sources: Iterable[tuple[str, str, object]], now: datetime) -> None:

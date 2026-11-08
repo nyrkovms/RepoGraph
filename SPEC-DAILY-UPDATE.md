@@ -2,10 +2,10 @@
 
 > Раз в сутки для каждой экосистемы находим пакеты каталога, изменившиеся в источниках, перечитываем только их и записываем, что именно изменилось. На журнале событий строится дайджест «что обновилось за день / неделю».
 
-**Версия:** 1.0
-**Дата:** 2026-11-07
+**Версия:** 1.1
+**Дата:** 2026-11-08
 **Статус:** реализовано для 7 экосистем (pypi, npm, maven, nuget, go, crates, rpm).
-**История:** 0.2-draft → 1.0: переписано под код этапов E0–E6. Исходный черновик (только PyPI) остался в истории git.
+**История:** 0.2-draft → 1.0: переписано под код этапов E0–E6. Исходный черновик (только PyPI) остался в истории git. 1.1: метрики журнала прогонов (§6) читаются из `runs` (issue #71).
 
 Общий дизайн мультиэкосистемного каталога: [SPEC-MULTI-ECOSYSTEM.md](./SPEC-MULTI-ECOSYSTEM.md). Источники — §6, ежедневное обновление — §8. Здесь описано поведение, как оно реализовано.
 
@@ -197,6 +197,13 @@ Enum `PackageVersionStatus`: `active`, `yanked`, `deprecated`, `unlisted`, `remo
 | `packagehub_daily_update_packages` | gauge | `ecosystem`, `result` | пакеты последнего прогона по итогу: `updated`, `failed`, `unavailable` |
 | `packagehub_daily_update_last_success_timestamp` | gauge | `ecosystem` | время последнего прогона со статусом `success` или `partial`; основа алерта на пропущенный прогон |
 | `packagehub_package_events_total` | counter | `ecosystem`, `kind` | записанные события |
+
+Журнал прогонов (из `runs`, при каждом запросе `/metrics`), метки `operation` и `ecosystem`. У прогонов по всем экосистемам сразу (`seed`, `retry`) `ecosystem="all"`:
+
+| Метрика | Тип | Смысл |
+|---|---|---|
+| `packagehub_sync_last_duration_seconds` | gauge | длительность последнего завершённого прогона |
+| `packagehub_sync_last_status` | gauge | итог последнего прогона: 0 — завершён (`success`, `partial`), 1 — идёт, 2 — `failed` или висит в `running` дольше 6 часов (умер, не завершившись) |
 
 Состояние источников (из `sync_states`), метки `ecosystem` и `registry`:
 

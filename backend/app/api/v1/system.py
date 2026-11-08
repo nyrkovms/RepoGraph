@@ -11,10 +11,12 @@ from app.models.enums import Ecosystem
 from app.models.package import Package
 from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
+from app.models.run import Run
 from app.models.sync_state import SyncState
 from app.models.version import PackageVersion, VersionSource
 from app.schemas.system import EcosystemStats, HealthResponse, RegistryStats, StatsResponse
-from app.services.metrics import render_metrics, update_source_gauges, update_sync_gauges
+from app.services.metrics import render_metrics, update_run_gauges, update_source_gauges
+from app.services.runs import OVERLAP_GUARD
 
 router = APIRouter()
 
@@ -108,8 +110,11 @@ async def stats(db: AsyncSession = Depends(get_db_session)) -> StatsResponse:
 
 @router.get("/metrics")
 async def metrics(db: AsyncSession = Depends(get_db_session)) -> Response:
-    states = (await db.scalars(select(SyncState))).all()
-    update_sync_gauges(states)
+    newest = select(Run).distinct(Run.operation, Run.ecosystem).order_by(Run.operation, Run.ecosystem,
+                                                                          Run.started_at.desc())
+    latest = (await db.scalars(newest)).all()
+    last_finished = (await db.scalars(newest.where(Run.finished_at.is_not(None)))).all()
+    update_run_gauges(latest, last_finished, datetime.now(UTC), OVERLAP_GUARD)
     per_source = (await db.execute(select(Registry.ecosystem, Registry.slug, SyncState)
                                    .join(SyncState, SyncState.registry_id == Registry.id))).all()
     update_source_gauges(((eco.value, slug, state) for eco, slug, state in per_source), datetime.now(UTC))

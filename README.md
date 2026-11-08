@@ -285,8 +285,8 @@ runs the same flow against the live sources (02:30 UTC, or manually via `workflo
 - `packagehub_resolve_cache_hits_total`
 - `packagehub_resolve_cache_misses_total`
 - `packagehub_sync_duration_seconds`
-- `packagehub_sync_last_duration_seconds`
-- `packagehub_sync_last_status`
+- `packagehub_sync_last_duration_seconds{operation,ecosystem}`
+- `packagehub_sync_last_status{operation,ecosystem}`
 - `packagehub_daily_update_duration_seconds`
 - `packagehub_daily_update_packages{result}`
 - `packagehub_daily_update_last_success_timestamp`
