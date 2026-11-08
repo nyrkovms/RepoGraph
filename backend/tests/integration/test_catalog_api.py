@@ -617,6 +617,21 @@ async def _cleanup_runs(db: AsyncSession) -> None:
     await db.execute(delete(Run).where(Run.started_at > datetime.now(UTC) + timedelta(hours=100)))
 
 
+def test_metrics_report_the_last_run_from_the_journal(client: TestClient, world) -> None:
+    """#71: the sync gauges come from `runs`, not from the MVP keys of sync_states.cursor_data."""
+    operation = f"{PREFIX}metrics"
+    start = datetime.now(UTC) - timedelta(minutes=30)
+    finished = Run(operation=operation, ecosystem=Ecosystem.npm, status="success", started_at=start,
+                   finished_at=start + timedelta(seconds=90))
+    failed = Run(operation=operation, ecosystem=Ecosystem.pypi, status="failed", started_at=start,
+                 finished_at=start + timedelta(seconds=5))
+    run_db(lambda db: _add_runs(db, finished, failed))
+    body = client.get(f"{API}/metrics").text
+    assert f'packagehub_sync_last_duration_seconds{{ecosystem="npm",operation="{operation}"}} 90.0' in body
+    assert f'packagehub_sync_last_status{{ecosystem="npm",operation="{operation}"}} 0.0' in body
+    assert f'packagehub_sync_last_status{{ecosystem="pypi",operation="{operation}"}} 2.0' in body
+
+
 # --------------------------------------------------------------------------- /admin/sync/status
 
 
