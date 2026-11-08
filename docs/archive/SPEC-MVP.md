@@ -1,3 +1,6 @@
+> **Исторический документ (MVP, PyPI-only).** Актуальное: [SPEC-MULTI-ECOSYSTEM.md](../../SPEC-MULTI-ECOSYSTEM.md), [SPEC-MVP-API.md](../../SPEC-MVP-API.md), [SPEC-DAILY-UPDATE.md](../../SPEC-DAILY-UPDATE.md), [SPEC-CATALOG-PAGES.md](../../SPEC-CATALOG-PAGES.md).
+> Перенесено: SLA (§7) — [§1.1](../../SPEC-MULTI-ECOSYSTEM.md). Критерии приёмки (§8) выполнены при приёмке MVP, живую проверку делает `scripts/acceptance_smoke.sh`.
+
 # PackageHub MVP — Каноническая спецификация
 
 > PyPI-only вертикальный слайс: каталог, синхронизация и dependency resolve.
@@ -94,7 +97,7 @@ PyPI выбран первым из-за минимальной интеграц
 
 Детализация контрактов:
 
-- API: [SPEC-MVP-API.md](./SPEC-MVP-API.md)
+- API: [SPEC-MVP-API.md](../../SPEC-MVP-API.md)
 - БД и миграции: [SPEC-MVP-DB.md](./SPEC-MVP-DB.md)
 - План поставки: [SPEC-MVP-EXECUTION.md](./SPEC-MVP-EXECUTION.md)
 
@@ -141,7 +144,7 @@ MVP использует четырёхконтурную стратегию:
 - При upstream timeout/ошибке lazy fetch — fail-fast ответ с ошибкой.
 - Partial result для `/resolve` не поддерживается.
 
-Детальный контракт — в [SPEC-MVP-API.md](./SPEC-MVP-API.md).
+Детальный контракт — в [SPEC-MVP-API.md](../../SPEC-MVP-API.md).
 
 `Decisions fixed`
 - Для MVP производительность resolver оптимизируется кэшем и warm-up, без смены backend-языка.
@@ -235,7 +238,7 @@ MVP использует четырёхконтурную стратегию:
 ## 10. Документы и владение контрактами
 
 - Product/architecture governance: этот документ.
-- API контракты: [SPEC-MVP-API.md](./SPEC-MVP-API.md).
+- API контракты: [SPEC-MVP-API.md](../../SPEC-MVP-API.md).
 - DB контракты, миграции и upsert semantics: [SPEC-MVP-DB.md](./SPEC-MVP-DB.md).
 - Delivery plan и runbook реализации: [SPEC-MVP-EXECUTION.md](./SPEC-MVP-EXECUTION.md).
 

@@ -1,3 +1,6 @@
+> **Исторический документ (MVP, PyPI-only).** Актуальное: план работ — [IMPL-MULTI-ECOSYSTEM.md](../../IMPL-MULTI-ECOSYSTEM.md), поведение — [SPEC-MULTI-ECOSYSTEM.md](../../SPEC-MULTI-ECOSYSTEM.md).
+> Срезы MVP выполнены; в живые документы ничего не переносилось.
+
 # PackageHub MVP — Execution Appendix
 
 > Source of truth для плана реализации и последовательности поставки MVP.
