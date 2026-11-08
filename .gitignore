@@ -10,8 +10,7 @@ backend/**/*.pyc
 frontend/node_modules/
 frontend/dist/
 
-# uv run artifacts
-backend/uv.lock
+# uv run artifacts (backend/uv.lock is tracked: the image installs from it)
 backend/*.egg-info/
 
 # Copies a file sync (iCloud) makes next to a changed file: "name 2.py", "key 2.json".

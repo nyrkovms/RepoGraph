@@ -10,13 +10,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock ./
 COPY app ./app
 COPY tests ./tests
 COPY alembic.ini ./alembic.ini
 COPY alembic ./alembic
 COPY registries.example.yaml registries.pytorch.yaml registries.rpm.yaml ./
 
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir ".[test,lint]"
+# Dependencies come from uv.lock, so CI, the stand and local `uv run` use the same versions.
+RUN pip install --no-cache-dir --upgrade pip uv==0.11.7 \
+    && uv export --frozen --no-hashes --no-emit-project --extra test --extra lint -o /tmp/requirements.txt \
+    && pip install --no-cache-dir -r /tmp/requirements.txt \
+    && pip install --no-cache-dir --no-deps . \
+    && pip uninstall -y uv && rm /tmp/requirements.txt
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

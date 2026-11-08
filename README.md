@@ -232,6 +232,10 @@ docker compose build api
 docker compose run --rm --no-deps api pytest tests/unit
 ```
 
+## Backend dependencies
+
+Версии зависимостей backend закреплены в `backend/uv.lock`: образ `api` ставит их оттуда (`uv export --frozen`), локальные `make`-цели берут их через `uv run`. После правки зависимостей в `backend/pyproject.toml` выполнить `uv lock` в `backend/` и закоммитить lock вместе с правкой. Тест `tests/unit/test_dependency_lock.py` падает, если установленные версии расходятся с lock.
+
 ## CI
 
 GitHub Actions workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)

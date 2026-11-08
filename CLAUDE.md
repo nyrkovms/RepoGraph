@@ -56,7 +56,8 @@ scripts/record_fixtures.sh       # re-record upstream responses for offline CI (
 
 - `scripts/stand.sh`: up, seed, daily-update, logs, psql, backup, restore, down, migrate, status.
   `python -m app.cli`: seed, fetch, retry-failed, daily-update, presence-probe, stats, registries (import, test, list).
-- Backend tools run through `uv` (the local `.venv` is not complete): see the Makefile targets.
+- Backend tools run through `uv` (the local `.venv` is not complete): see the Makefile targets. Versions are pinned in
+  `backend/uv.lock`, which the `api` image installs from; after changing dependencies run `uv lock` in `backend/`.
 - Integration tests need the stack: `docker compose up -d --build postgres redis api rpm-worker`, then
   `docker compose run --rm api pytest tests/integration`. They run offline against recorded upstream responses
   (`HTTP_REPLAY_DIR`); never add tests that need the live internet to the default suite.
