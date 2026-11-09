@@ -11,7 +11,7 @@ import uuid
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, func, select, tuple_, update
+from sqlalchemy import delete, func, select, text, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -219,6 +219,9 @@ async def write_package(
     ref = merged.package.ref
     by_registry = {s.registry_id: s for s in ordered}
 
+    # Two fetches of one new package would both see it missing and both insert it: the second waits for the first (#78).
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+                     {"key": f"package:{ref.ecosystem}:{ref.namespace}:{ref.name}"})
     existing = await find_package(db, ref)
     snapshot = await _load_snapshot(db, existing) if existing else None
     incoming_versions = {v.version.version for v in merged.versions}
@@ -258,7 +261,8 @@ async def write_package(
     slugs = {registry_id: row.slug for registry_id, row in registry_rows.items()}
     await _record_events(db, package.id, diff_package(snapshot, merged, plugin.versions, latest, slugs, frozen,
                                                          vanished=vanished_status_of(plugin)), run_id, now)
-    for registry_id in [*by_registry, *missing_registry_ids]:
+    # One order for every write: packages from different sources otherwise lock these rows crosswise (deadlock, #78).
+    for registry_id in sorted({*by_registry, *missing_registry_ids}):
         await _upsert_sync_state(db, registry_id, now)
 
     await db.flush()

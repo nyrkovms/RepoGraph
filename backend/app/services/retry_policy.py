@@ -2,6 +2,10 @@ import random
 import ssl
 
 import httpx
+from sqlalchemy.exc import DBAPIError
+
+# deadlock_detected, serialization_failure: Postgres aborted the transaction, the same write can succeed on a repeat.
+_TRANSIENT_SQLSTATES = ("40P01", "40001")
 
 
 def is_retryable_upstream_error(exc: Exception) -> bool:
@@ -24,6 +28,8 @@ def is_retryable_upstream_error(exc: Exception) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         status = exc.response.status_code if exc.response is not None else 0
         return status == 429 or 500 <= status <= 599
+    if isinstance(exc, DBAPIError):
+        return getattr(exc.orig, "sqlstate", None) in _TRANSIENT_SQLSTATES
     return False
 
 

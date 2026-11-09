@@ -29,6 +29,7 @@ from app.models.artifact import Artifact
 from app.models.author import PackageAuthor
 from app.models.dependency import Dependency
 from app.models.enums import DependenciesState, PackageEventKind, PackageOrigin, RegistryProtocol
+from app.models.package import Package
 from app.models.package_event import PackageEvent
 from app.models.package_registry import PackageRegistry
 from app.models.registry import Registry
@@ -442,5 +443,67 @@ def test_package_gone_from_asked_sources_but_listed_by_a_frozen_one_is_not_unava
             .execution_options(populate_existing=True))).all()}
         assert rows[pypi] is not None and rows[mirror] is None
         assert not any(kind == "project_unavailable" for kind, _ in await _events(db, package.id))
+
+    _in_rolled_back_transaction(test)
+
+
+def test_concurrent_fetches_of_a_new_package_store_it_once(monkeypatch) -> None:
+    """Regression (#78): both fetches saw the package missing, the second failed on the unique index."""
+    real_find = pipeline.find_package
+
+    async def find_and_pause(db: AsyncSession, ref: PackageRef):
+        found = await real_find(db, ref)
+        await asyncio.sleep(0.2)  # without the lock both fetches pass this point before either inserts
+        return found
+
+    monkeypatch.setattr(pipeline, "find_package", find_and_pause)
+
+    async def run() -> None:
+        engine = create_async_engine(get_settings().async_db_url, poolclass=NullPool)
+        name = _name()
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            pypi = str((await pipeline.get_or_create_pypi_registry(db)).id)
+            await db.commit()
+
+        async def fetch() -> None:
+            async with AsyncSession(engine, expire_on_commit=False) as db:
+                await _write(db, _snapshot(name, pypi, [_version("1.0", None)]))
+                await db.commit()
+
+        try:
+            await asyncio.gather(fetch(), fetch())
+            async with AsyncSession(engine) as db:
+                stored = (await db.scalars(select(Package).where(Package.normalized_name == name))).all()
+                assert len(stored) == 1
+        finally:
+            async with AsyncSession(engine) as db:
+                ids = (await db.scalars(select(Package.id).where(Package.normalized_name == name))).all()
+                await db.execute(delete(PackageEvent).where(PackageEvent.package_id.in_(ids)))
+                await db.execute(delete(PackageRegistry).where(PackageRegistry.package_id.in_(ids)))
+                await db.execute(delete(PackageVersion).where(PackageVersion.package_id.in_(ids)))
+                await db.execute(delete(Package).where(Package.id.in_(ids)))
+                await db.commit()
+            await engine.dispose()
+
+    asyncio.run(run())
+
+
+def test_sync_states_are_written_in_one_order_whichever_source_answered(monkeypatch) -> None:
+    """Regression (#78): a package of one source and a package of the other locked the two rows crosswise."""
+    written: list[str] = []
+    real_upsert = pipeline._upsert_sync_state
+
+    async def record(db: AsyncSession, registry_id: str, now) -> None:
+        written.append(registry_id)
+        await real_upsert(db, registry_id, now)
+
+    monkeypatch.setattr(pipeline, "_upsert_sync_state", record)
+
+    async def test(db: AsyncSession, pypi: str, mirror: str) -> None:
+        await _write(db, _snapshot(_name(), pypi, [_version("1.0", [])]), missing=(mirror,))
+        first = list(written)
+        written.clear()
+        await _write(db, _snapshot(_name(), mirror, [_version("1.0", [])]), missing=(pypi,))
+        assert first == written == sorted([pypi, mirror])
 
     _in_rolled_back_transaction(test)
