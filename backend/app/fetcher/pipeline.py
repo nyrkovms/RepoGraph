@@ -40,7 +40,7 @@ from app.ecosystems.versions_common import fallback_sort_key
 from app.fetcher import discovery, sources
 from app.fetcher.events import EventDraft, PackageSnapshot, diff_package
 from app.models.artifact import Artifact, DistTag
-from app.models.author import Author, PackageAuthor
+from app.models.author import AUTHOR_FIELD_MAX_LENGTH, Author, PackageAuthor
 from app.models.dependency import Dependency
 from app.models.enums import (
     DependenciesState,
@@ -744,18 +744,27 @@ async def _replace_dist_tags(db: AsyncSession, package_id, tags: Mapping[str, st
         await db.execute(stmt)
 
 
+def _fit_author_field(value: str | None) -> str | None:
+    """Author fields are free text, on PyPI often a whole comma-separated list. A list too long for the column keeps
+    its leading whole items: one long field must not cost the package its sync (#77)."""
+    if value is None or len(value) <= AUTHOR_FIELD_MAX_LENGTH:
+        return value
+    head = value[:AUTHOR_FIELD_MAX_LENGTH]
+    return head.rpartition(",")[0].rstrip() or head
+
+
 async def _upsert_authors(db: AsyncSession, package_id, authors) -> None:
     await db.execute(delete(PackageAuthor).where(PackageAuthor.package_id == package_id))
 
     for author in authors:
-        if not author.name:
+        name = _fit_author_field(author.name)
+        email = _fit_author_field(author.email)
+        if not name:
             continue
 
-        author_row = await db.scalar(
-            select(Author).where(Author.name == author.name, Author.email == author.email)
-        )
+        author_row = await db.scalar(select(Author).where(Author.name == name, Author.email == email))
         if not author_row:
-            author_row = Author(name=author.name, email=author.email, url=author.url)
+            author_row = Author(name=name, email=email, url=author.url)
             db.add(author_row)
             await db.flush()
 
