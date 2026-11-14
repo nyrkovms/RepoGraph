@@ -15,6 +15,7 @@
 - [`docs/ecosystems.md`](docs/ecosystems.md): адресация пакетов и resolve по экосистемам
 - [`PRODUCTION-CHECKLIST.md`](PRODUCTION-CHECKLIST.md): чек-лист выката
 - [`docs/REVIEW-2026-11.md`](docs/REVIEW-2026-11.md): обзор проекта от 14 ноября 2026: оценка функциональности, недостатки, предложения
+- [`docs/PRODUCT-ASSESSMENT-2026-11.md`](docs/PRODUCT-ASSESSMENT-2026-11.md): продуктовая оценка от 14 ноября 2026: рамка оценки, сравнение с deps.dev, Socket и Dependency-Track, варианты развития
 - `docs/archive/`: история MVP
 
 ## Prerequisites
