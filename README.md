@@ -14,6 +14,7 @@
 - [`RESOLVER.md`](RESOLVER.md): dependency resolve
 - [`docs/ecosystems.md`](docs/ecosystems.md): адресация пакетов и resolve по экосистемам
 - [`PRODUCTION-CHECKLIST.md`](PRODUCTION-CHECKLIST.md): чек-лист выката
+- [`docs/REVIEW-2026-11.md`](docs/REVIEW-2026-11.md): обзор проекта от 14 ноября 2026: оценка функциональности, недостатки, предложения
 - `docs/archive/`: история MVP
 
 ## Prerequisites
