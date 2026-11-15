@@ -116,7 +116,8 @@ The owner wants the work automated end to end. Ask only for:
 - anything that loses data or history: the stand's volumes or database, force-push, rewriting `main`, deleting
   issues or releases;
 - a new runtime dependency or external service;
-- a choice the owner reserved for themselves, or work they said to hold.
+- a choice the owner reserved for themselves, or work they said to hold. The merge of a research PR is such a
+  choice (*Pull requests*, *Research*).
 
 Everything else is the session's call. A reversible choice with a clear recommendation is made, recorded (spec or PR
 description) and reported, not asked. Steps this file pre-approves (PRs, auto-fix, auto-merge, stand update, cleanup)
@@ -144,7 +145,8 @@ Applies to all work in the repo: stages, hotfixes, investigations, stand checks,
 
 ## Pull requests
 
-Every PR takes the same path, whatever it carries: stage, fix, hotfix, docs, spec or process.
+Every PR takes the same path, whatever it carries: stage, fix, hotfix, docs, spec or process. The one exception is
+research, which is not merged step by step (*Research* below).
 
 1. **Branch** from `origin/main`, one topic: `claude/me-<stage>`, `claude/fix-<topic>`, `claude/hotfix-<topic>`,
    `claude/docs-<topic>`, `claude/spec-<topic>`. A stage is one branch; its WPs are commits inside it. A branch the
@@ -157,13 +159,31 @@ Every PR takes the same path, whatever it carries: stage, fix, hotfix, docs, spe
    the PR; the review summary goes into the PR description.
 4. **Done**: docs per rule 10, `make check` green locally, description up to date (what, why, review, checks).
 5. **Ready and auto-merge** (merge commit, `--delete-branch`) without asking. Required CI checks gate the merge.
+   A research PR waits for the owner instead (*Research*).
 6. **After merge** (the monitor reports failures, nobody watches a green merge; a step that needs the merged code
    checks `gh pr view <n> --json state` when it starts and, if the PR is not merged yet, takes other steps first): if
    the PR changes what the stand runs (backend, frontend, workers, migrations), update the stand
    (*Commands*); a stage also gets the stand check of `IMPL-MULTI-ECOSYSTEM.md` §0. Delete the local branch and its
    worktrees, prune stale builds (*Housekeeping*).
 
-A PR stays draft only while an owner question (*When to ask the owner*) is open on it or the owner said to hold it.
+A PR stays draft only while an owner question (*When to ask the owner*) is open on it, the owner said to hold it, or
+it is research.
+
+### Research
+
+Research is work whose result is a proposal the owner has not accepted: a direction study, an assessment, a draft
+spec (`docs/PRODUCT-*`, `docs/DRAFT-*`). It ends when the owner has answered its questions, not when the checks
+pass, so it is not merged step by step:
+
+- One research topic is one branch `claude/research-<topic>` and one draft PR, opened at the first push with the
+  monitor on. Every document of the topic, every review fix and every recorded owner answer is a commit in it. An
+  owner answer never gets a PR of its own.
+- Steps 3 and 4 apply as usual: a new document or a substantial rewrite gets the `reviewer` subagent before it is
+  reported to the owner; a commit that only records an answer Opus reviews itself. The description is kept current.
+- The PR stays draft and is not merged until the owner says the research round is closed. Do not ask for the merge
+  after each answer; each report names the open PR and what is still unanswered.
+- If `main` moves under it, merge `origin/main` into the branch; never rebase a pushed branch.
+- A new round on a topic already in `main` starts a new branch of the same kind.
 
 ## Working through a plan
 
