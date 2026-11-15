@@ -120,7 +120,7 @@ The owner wants the work automated end to end. Ask only for:
 
 Everything else is the session's call. A reversible choice with a clear recommendation is made, recorded (spec or PR
 description) and reported, not asked. Steps this file pre-approves (PRs, auto-fix, auto-merge, stand update, cleanup)
-are never asked about.
+are never asked about; the merge of a research PR is the owner's (*Pull requests*, *Research*).
 
 ## Models and subagents
 
@@ -144,11 +144,13 @@ Applies to all work in the repo: stages, hotfixes, investigations, stand checks,
 
 ## Pull requests
 
-Every PR takes the same path, whatever it carries: stage, fix, hotfix, docs, spec or process.
+Every PR takes the same path, whatever it carries: stage, fix, hotfix, docs, spec or process. The one exception is
+research, which is not merged step by step (*Research* below).
 
 1. **Branch** from `origin/main`, one topic: `claude/me-<stage>`, `claude/fix-<topic>`, `claude/hotfix-<topic>`,
-   `claude/docs-<topic>`, `claude/spec-<topic>`. A stage is one branch; its WPs are commits inside it. A branch the
-   app created for the session (`claude/<name>`) is used as is when the session's work is one topic.
+   `claude/docs-<topic>`, `claude/spec-<topic>`, `claude/research-<topic>`. A stage is one branch; its WPs are
+   commits inside it. A branch the app created for the session (`claude/<name>`) is used as is when the session's
+   work is one topic.
 2. **Draft PR** at the first push, with the PR monitor (auto-fix) turned on at once: CI failures, conflicts and
    review comments then wake the session.
 3. **Review** before ready. The `reviewer` subagent checks stages, migrations, algorithms, contracts, specs, process
@@ -157,19 +159,44 @@ Every PR takes the same path, whatever it carries: stage, fix, hotfix, docs, spe
    the PR; the review summary goes into the PR description.
 4. **Done**: docs per rule 10, `make check` green locally, description up to date (what, why, review, checks).
 5. **Ready and auto-merge** (merge commit, `--delete-branch`) without asking. Required CI checks gate the merge.
+   A research PR waits for the owner instead (*Research*).
 6. **After merge** (the monitor reports failures, nobody watches a green merge; a step that needs the merged code
    checks `gh pr view <n> --json state` when it starts and, if the PR is not merged yet, takes other steps first): if
    the PR changes what the stand runs (backend, frontend, workers, migrations), update the stand
    (*Commands*); a stage also gets the stand check of `IMPL-MULTI-ECOSYSTEM.md` §0. Delete the local branch and its
    worktrees, prune stale builds (*Housekeeping*).
 
-A PR stays draft only while an owner question (*When to ask the owner*) is open on it or the owner said to hold it.
+A PR stays draft only while an owner question (*When to ask the owner*) is open on it, the owner said to hold it, or
+it is research.
+
+### Research
+
+Research is a document written to get the owner's decisions; it changes no behaviour: a direction study, an
+assessment, a draft spec (`docs/PRODUCT-*`, `docs/DRAFT-*`). A review backlog, a spec correction or a README update
+is not research, and a spec PR with an open owner question simply stays draft. Research ends when the owner closes
+the round:
+
+- One topic is one branch `claude/research-<topic>` (never the session's own branch: later sessions find it by the
+  prefix) and one draft PR. Every document of the topic, its rule 10 entries (README, the Documents table), every
+  review fix and every recorded owner answer is a commit in it. A document derived from open research joins its PR;
+  an owner answer never gets a PR of its own.
+- Before starting research or recording an answer, look for an open one (`gh pr list --draft`, head
+  `claude/research-*`) and continue in its branch.
+- Steps 3 and 4 apply: a new document or a substantial rewrite gets the `reviewer` subagent before it is reported to
+  the owner; a commit that only records an answer Opus reviews itself.
+- The PR is not merged until the owner says the round is closed or asks to merge; then steps 5 and 6 follow (no
+  stand update). Do not ask for the merge after each answer; each report names the open PR and what is still
+  unanswered.
+- If `main` moves under it, merge `origin/main` into the branch; never rebase a pushed branch.
+- A new round on a topic already in `main` starts a new branch of the same kind. Code never depends on research: an
+  accepted result first goes into a spec by an ordinary spec PR.
 
 ## Working through a plan
 
 A task with several steps (a stage, a list of fixes, an audit) runs to the end in one turn: step, checks, review,
-auto-merge, stand, next step. Do not stop after a step to report or ask for a go-ahead. The turn ends only for an
-owner question, a failure Opus cannot fix, or the end of the plan; short progress notes go out along the way.
+auto-merge, stand, next step; a research step ends at its draft PR (*Research*). Do not stop after a step to report
+or ask for a go-ahead. The turn ends only for an owner question, a failure Opus cannot fix, or the end of the plan;
+short progress notes go out along the way.
 
 ## Housekeeping
 
