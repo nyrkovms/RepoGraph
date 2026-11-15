@@ -19,6 +19,7 @@ FastAPI + SQLAlchemy async + Alembic + Celery + Postgres 16 + Redis; React/Vite 
 | `RESOLVER.md` | Reference: per-ecosystem dependency resolution algorithms (RPM: SPEC-MULTI §9.8) |
 | `docs/REVIEW-2026-11.md` | Project review of 2026-11-14: findings and proposals by area (IDs F, W, A, R, U, O, T, D), bugs #81–#90. A backlog, not a source of behaviour |
 | `docs/PRODUCT-ASSESSMENT-2026-11.md` | Product assessment of 2026-11-14: evaluation lenses, gaps against the vulnerability-response goal, development options A–D, open owner questions. A proposal, not a source of behaviour |
+| `docs/PRODUCT-VECTOR-2026-11.md` | Exploration of a possible direction (2026-11-15): proxy + PackageHub as a preventive dependency gate, variants В1–В5, a short path Э0–Э4. Changes no spec and is not a source of behaviour; direction research goes here, never into the specs |
 | `docs/archive/` | MVP-era specs (PyPI-only), history only: do not use as a source of behaviour |
 
 ## Layout
